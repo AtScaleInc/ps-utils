@@ -1,0 +1,13 @@
+name: Operation CLI
+description: Run operation-cli operations with structured parameters.
+inputs:
+  operation:
+    description: Operation name to execute.
+    required: true
+  parameters:
+    description: JSON object of parameters (string, number, boolean).
+    required: false
+    default: "{}"
+runs:
+  using: node20
+  main: dist/action.js

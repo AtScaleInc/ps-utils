@@ -1,0 +1,559 @@
+Telemetry:
+  data_source: ats_connection
+  mdx:
+    metrics:
+      - query_name: m_cube_name_distinct
+        caption: DC Cube Name
+        agg_type: 8
+        agg_type_string: count
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: m_days_since_last_query_min
+        caption: Days Since Last Query
+        agg_type: 3
+        agg_type_string: min
+        format_string: ""
+        description: ""
+        data_type: 3
+        data_type_string: INT4
+        folder: ""
+      - query_name: m_epoch_estimated_post_plan_time_avg
+        caption: Avg Estimated Post Plan Time
+        agg_type: 5
+        agg_type_string: avg
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_estimated_post_plan_time_sum
+        caption: Sum Estimated Post Plan Time
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_post_plan_time_avg
+        caption: Avg Post Plan Time
+        agg_type: 5
+        agg_type_string: avg
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_post_plan_time_sum
+        caption: Sum Post Plan Time
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_sql_wall_time_avg
+        caption: Avg SQL Wall Time
+        agg_type: 5
+        agg_type_string: avg
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_sql_wall_time_sum
+        caption: Sum SQL Wall Time
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_wall_time_avg
+        caption: Avg Wall Time
+        agg_type: 5
+        agg_type_string: avg
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_epoch_wall_time_sum
+        caption: Sum Wall Time
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: m_failed_count_sum
+        caption: Sum Failed Count
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 3
+        data_type_string: INT4
+        folder: ""
+      - query_name: m_local_cache_subquery_hits_sum
+        caption: Sum Subquery Local Cache Count
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: m_organization_id_distinct
+        caption: DC Organization ID
+        agg_type: 8
+        agg_type_string: count
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: m_project_id_distinct
+        caption: DC Project ID
+        agg_type: 8
+        agg_type_string: count
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: m_query_date_max
+        caption: Latest Query Date
+        agg_type: 4
+        agg_type_string: max
+        format_string: ""
+        description: ""
+        data_type: 7
+        data_type_string: DATE_DOUBLE
+        folder: ""
+      - query_name: m_query_id_count
+        caption: Total Queries
+        agg_type: 2
+        agg_type_string: count
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: m_subquery_count_sum
+        caption: Sum Subquery Count
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: m_succeeded_count_sum
+        caption: Sum Succeeded Count
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 3
+        data_type_string: INT4
+        folder: ""
+      - query_name: m_used_aggregate_sum
+        caption: Sum Used Aggregate Count
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 3
+        data_type_string: INT4
+        folder: ""
+      - query_name: m_user_hash_distinct
+        caption: DC User Hash
+        agg_type: 8
+        agg_type_string: count
+        format_string: ""
+        description: ""
+        data_type: 20
+        data_type_string: INT8
+        folder: ""
+      - query_name: cm_query_success_pct
+        caption: Pct Query Success
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: cm_sum_estimated_post_plan_time_squared
+        caption: Sum Estimated Post Plan Time Squared
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: cm_sum_post_plan_time_squared
+        caption: Sum Post Plan Time Squared
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: cm_sum_sql_wall_time_squared
+        caption: Sum SQL Wall Time Squared
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+      - query_name: cm_sum_wall_time_squared
+        caption: Sum Wall Time Squared
+        agg_type: 1
+        agg_type_string: sum
+        format_string: ""
+        description: ""
+        data_type: 5
+        data_type_string: FLOAT64
+        folder: ""
+    attributes:
+      Project_ID:
+        Project_ID Hierarchy:
+          - query_name: project_id
+            caption: Project ID
+            level_number: 1
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+      Query_Hour:
+        Query_Hour Hierarchy:
+          - query_name: query_hour
+            caption: Query_Hour
+            level_number: 1
+            description: ""
+            data_type_string: DATETIME
+            folder: ""
+      Query_ID:
+        Query_ID Hierarchy:
+          - query_name: organization_id
+            caption: Organization ID
+            level_number: 1
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+          - query_name: cube_name
+            caption: Cube Name
+            level_number: 2
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+          - query_name: query_id
+            caption: Query_ID
+            level_number: 3
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+      Query_Language:
+        Query_Language Hierarchy:
+          - query_name: query_language
+            caption: Query_Language
+            level_number: 1
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+      Service:
+        Service Hierarchy:
+          - query_name: service
+            caption: Service
+            level_number: 1
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+      Succeeded:
+        Succeeded Hierarchy:
+          - query_name: succeeded
+            caption: Succeeded
+            level_number: 1
+            description: ""
+            data_type_string: BOOL
+            folder: ""
+      User_Hash:
+        User_Hash Hierarchy:
+          - query_name: user_hash
+            caption: User_Hash
+            level_number: 1
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+      User_ID:
+        User_ID Hierarchy:
+          - query_name: User_ID Level
+            caption: User_ID Level
+            level_number: 1
+            description: ""
+            data_type_string: WSTR
+            folder: ""
+  sql:
+    table_name: Telemetry
+    columns:
+      m_cube_name_distinct:
+        alias: false
+        name: m_cube_name_distinct
+        data_type: INT8
+        label: DC Cube Name
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: count
+        folder: ""
+      m_days_since_last_query_min:
+        alias: false
+        name: m_days_since_last_query_min
+        data_type: INT4
+        label: Days Since Last Query
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: min
+        folder: ""
+      m_epoch_estimated_post_plan_time_avg:
+        alias: false
+        name: m_epoch_estimated_post_plan_time_avg
+        data_type: FLOAT64
+        label: Avg Estimated Post Plan Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: avg
+        folder: ""
+      m_epoch_estimated_post_plan_time_sum:
+        alias: false
+        name: m_epoch_estimated_post_plan_time_sum
+        data_type: FLOAT64
+        label: Sum Estimated Post Plan Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_epoch_post_plan_time_avg:
+        alias: false
+        name: m_epoch_post_plan_time_avg
+        data_type: FLOAT64
+        label: Avg Post Plan Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: avg
+        folder: ""
+      m_epoch_post_plan_time_sum:
+        alias: false
+        name: m_epoch_post_plan_time_sum
+        data_type: FLOAT64
+        label: Sum Post Plan Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_epoch_sql_wall_time_avg:
+        alias: false
+        name: m_epoch_sql_wall_time_avg
+        data_type: FLOAT64
+        label: Avg SQL Wall Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: avg
+        folder: ""
+      m_epoch_sql_wall_time_sum:
+        alias: false
+        name: m_epoch_sql_wall_time_sum
+        data_type: FLOAT64
+        label: Sum SQL Wall Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_epoch_wall_time_avg:
+        alias: false
+        name: m_epoch_wall_time_avg
+        data_type: FLOAT64
+        label: Avg Wall Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: avg
+        folder: ""
+      m_epoch_wall_time_sum:
+        alias: false
+        name: m_epoch_wall_time_sum
+        data_type: FLOAT64
+        label: Sum Wall Time
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_failed_count_sum:
+        alias: false
+        name: m_failed_count_sum
+        data_type: INT4
+        label: Sum Failed Count
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_local_cache_subquery_hits_sum:
+        alias: false
+        name: m_local_cache_subquery_hits_sum
+        data_type: INT8
+        label: Sum Subquery Local Cache Count
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_organization_id_distinct:
+        alias: false
+        name: m_organization_id_distinct
+        data_type: INT8
+        label: DC Organization ID
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: count
+        folder: ""
+      m_project_id_distinct:
+        alias: false
+        name: m_project_id_distinct
+        data_type: INT8
+        label: DC Project ID
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: count
+        folder: ""
+      m_query_date_max:
+        alias: false
+        name: m_query_date_max
+        data_type: DATE_DOUBLE
+        label: Latest Query Date
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: max
+        folder: ""
+      m_query_id_count:
+        alias: false
+        name: m_query_id_count
+        data_type: INT8
+        label: Total Queries
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: count
+        folder: ""
+      m_subquery_count_sum:
+        alias: false
+        name: m_subquery_count_sum
+        data_type: INT8
+        label: Sum Subquery Count
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_succeeded_count_sum:
+        alias: false
+        name: m_succeeded_count_sum
+        data_type: INT4
+        label: Sum Succeeded Count
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_used_aggregate_sum:
+        alias: false
+        name: m_used_aggregate_sum
+        data_type: INT4
+        label: Sum Used Aggregate Count
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      m_user_hash_distinct:
+        alias: false
+        name: m_user_hash_distinct
+        data_type: INT8
+        label: DC User Hash
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: count
+        folder: ""
+      cm_query_success_pct:
+        alias: false
+        name: cm_query_success_pct
+        data_type: FLOAT64
+        label: Pct Query Success
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      cm_sum_estimated_post_plan_time_squared:
+        alias: false
+        name: cm_sum_estimated_post_plan_time_squared
+        data_type: FLOAT64
+        label: Sum Estimated Post Plan Time Squared
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      cm_sum_post_plan_time_squared:
+        alias: false
+        name: cm_sum_post_plan_time_squared
+        data_type: FLOAT64
+        label: Sum Post Plan Time Squared
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      cm_sum_sql_wall_time_squared:
+        alias: false
+        name: cm_sum_sql_wall_time_squared
+        data_type: FLOAT64
+        label: Sum SQL Wall Time Squared
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
+      cm_sum_wall_time_squared:
+        alias: false
+        name: cm_sum_wall_time_squared
+        data_type: FLOAT64
+        label: Sum Wall Time Squared
+        description: ""
+        role: measure
+        type: quantitative
+        aggregation: sum
+        folder: ""
