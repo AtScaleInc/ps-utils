@@ -1,0 +1,76 @@
+#!/usr/bin/env sh
+
+set -eu
+
+show_completion_usage() {
+  echo "Usage: $0 --completion {bash|zsh|fish}" >&2
+}
+
+install_completion() {
+  shell="$1"
+  case "$shell" in
+    bash)
+      target_dir="$HOME/.bash_completion.d"
+      target_file="$target_dir/atscale-utils"
+      mkdir -p "$target_dir"
+      "$(dirname "$0")/atscale-utils" --print-completion bash > "$target_file"
+      echo "Installed bash completions to $target_file"
+      echo "To enable in this session: source $target_file"
+      ;;
+    zsh)
+      target_dir="$HOME/.zsh/completions"
+      target_file="$target_dir/_atscale-utils"
+      mkdir -p "$target_dir"
+      "$(dirname "$0")/atscale-utils" --print-completion zsh > "$target_file"
+      echo "Installed zsh completions to $target_file"
+      echo "To enable in this session: fpath=($target_dir $fpath) && autoload -Uz compinit && compinit"
+      ;;
+    fish)
+      target_dir="$HOME/.config/fish/completions"
+      target_file="$target_dir/atscale-utils.fish"
+      mkdir -p "$target_dir"
+      "$(dirname "$0")/atscale-utils" --print-completion fish > "$target_file"
+      echo "Installed fish completions to $target_file"
+      echo "To enable in this session: source $target_file"
+      ;;
+    *)
+      show_completion_usage
+      exit 1
+      ;;
+  esac
+}
+
+if [ "$#" -ge 1 ] && [ "$1" = "--completion" ]; then
+  if [ "$#" -ne 2 ]; then
+    show_completion_usage
+    exit 1
+  fi
+  install_completion "$2"
+  exit 0
+fi
+
+if [ "$#" -ge 1 ] && [ "$1" = "--print-completion" ]; then
+  if [ "$#" -ne 2 ]; then
+    show_completion_usage
+    exit 1
+  fi
+  case "$2" in
+    bash)
+      cat completions/atscale-utils.bash
+      ;;
+    zsh)
+      cat completions/atscale-utils.zsh
+      ;;
+    fish)
+      cat completions/atscale-utils.fish
+      ;;
+    *)
+      show_completion_usage
+      exit 1
+      ;;
+  esac
+  exit 0
+fi
+
+npm run build
+node dist/cli.js "$@"

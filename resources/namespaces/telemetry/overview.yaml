@@ -1,0 +1,252 @@
+---
+version: 1
+title: Telemetry Dashboard (Tableau Template)
+description: Template for building a Tableau dashboard mirroring the app's KPIs and
+  visualizations.
+
+# -- Project Specific
+# connections.yaml
+# models.yaml (mdx + sql columns): Auto generated
+# aliases.yaml (aliases for measures) : Optional, recommended for AtScale PS team to use
+
+# -- Functional Specific / Visualizations
+# Telemetry.yaml (worksheet definitions)
+
+# -- BI Tool Specific - Should not be modified unless new BI tool
+# tableau.yaml (worksheet interpretation)
+
+worksheets:
+  # Summary Statistics - Single number displays
+  summary_total_orgs:
+    title: Total Organizations
+    model: Telemetry
+    graphType: text
+    measures:
+      - m_organization_id_distinct
+    format: "integer"
+    description: Count of unique organization_id values
+
+  summary_total_cubes:
+    title: Total Cubes
+    model: Telemetry
+    graphType: text
+    measures:
+      - m_cube_name_distinct
+    format: "integer"
+    description: Count of unique cube_name values
+
+  summary_total_users:
+    title: Total Users
+    model: Telemetry
+    graphType: text
+    measures:
+      - m_user_hash_distinct
+    format: "integer"
+    description: Count of unique user_hash values
+
+  summary_avg_queries_per_day:
+    title: Avg Queries/Day
+    model: Telemetry
+    graphType: text
+    measures:
+      - m_query_id_count
+    format: "decimal:2"
+    description: Daily average of TotalQueries over the entire time period
+
+  summary_success_rate:
+    title: Success Rate (%)
+    model: Telemetry
+    graphType: text
+    measures:
+      - cm_query_success_pct
+    format: "percent:2"
+    description: Percentage of succeeded queries to two decimal places
+
+  summary_avg_wall_time:
+    title: Avg WallTime (ms)
+    model: Telemetry
+    graphType: text
+    measures:
+      - m_epoch_sql_wall_time_avg
+    format: "decimal:2"
+    description: Average WallTime to two decimal places
+
+  # KPI Visuals
+  kpi_query_success_rate:
+    title: Query Success Rate
+    model: Telemetry
+    graphType: line
+    xAxis: query_hour
+    yAxis: succeeded
+
+  kpi_total_queries_per_day:
+    title: TotalQueries per Day
+    model: Telemetry
+    graphType: line
+    xAxis: query_hour
+    yAxis: m_subquery_count_sum
+
+  kpi_response_time:
+    title: ResponseTime(ms)
+    model: Telemetry
+    graphType: line
+    xAxis: query_hour
+    yAxis: m_epoch_sql_wall_time_avg
+
+  # Additional Information (Top 10s)
+  top_10_active_users:
+    title: Top 10 Most Active Users
+    model: Telemetry
+    graphType: bar
+    xAxis: m_subquery_count_sum
+    yAxis: user_hash
+
+  top_10_cubes_by_avg_wall_time:
+    title: Top 10 CubeNames by AvgWallTime
+    model: Telemetry
+    graphType: bar
+    xAxis: m_epoch_sql_wall_time_avg
+    yAxis: cube_name
+
+  top_10_users_by_avg_wall_time:
+    title: Top 10 UserHash by AvgWallTime
+    model: Telemetry
+    graphType: bar
+    xAxis: m_epoch_sql_wall_time_avg
+    yAxis: user_hash
+
+  top_10_orgs_by_avg_wall_time:
+    title: Top 10 OrganizationId by AvgWallTime
+    model: Telemetry
+    graphType: bar
+    xAxis: m_epoch_sql_wall_time_avg
+    yAxis: organization_id
+
+  top_10_projects_by_avg_wall_time:
+    title: Top 10 ProjectId by AvgWallTime
+    model: Telemetry
+    graphType: bar
+    xAxis: m_epoch_sql_wall_time_avg
+    yAxis: project_id
+
+dashboards:
+  # ============================================================================
+  # COMPREHENSIVE TELEMETRY DASHBOARD
+  # Layout: Summary Statistics (3x2 grid at top), KPI and Additional Info stacked vertically
+  # Note: Section headers (Summary Statistics, KPI, Additional Information) should be 
+  #       added manually in Tableau Desktop with bold formatting
+  # ============================================================================
+  Telemetry_comprehensive:
+    title: Telemetry Dashboard
+    description: Comprehensive view of Telemetry metrics organized by Summary Statistics, KPIs, and Additional Information
+    
+    # Sizing adjusted for vertical stacking layout
+    # KPI + Additional Information = 4200px total height
+    size:
+      width: 1800
+      height: 4600
+      # Grid: 3 columns for summary (600px each), 46 vertical segments (100px each)
+      hSegments: 3
+      vSegments: 46
+    
+    tiles:
+      # ------------------------------------------
+      # SUMMARY STATISTICS (3x2 grid at top)
+      # Each cell: 600px wide x 200px tall
+      # Row 1: Users | Organizations | Cubes
+      # Row 2: Avg Queries | Success Rate | Avg WallTime
+      # ------------------------------------------
+      - worksheet: summary_total_users
+        x: 0
+        y: 0
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: summary_total_orgs
+        x: 1
+        y: 0
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: summary_total_cubes
+        x: 2
+        y: 0
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: summary_avg_queries_per_day
+        x: 0
+        y: 2
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: summary_success_rate
+        x: 1
+        y: 2
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: summary_avg_wall_time
+        x: 2
+        y: 2
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      
+      # ------------------------------------------
+      # KPI VISUALS (Vertically stacked)
+      # Each chart: 1800px wide x 500px tall (1500px total)
+      # ------------------------------------------
+      - worksheet: kpi_query_success_rate
+        x: 0
+        y: 4
+        colSpan: 3
+        rowSpan: 5
+        category: KPI
+      - worksheet: kpi_total_queries_per_day
+        x: 0
+        y: 9
+        colSpan: 3
+        rowSpan: 5
+        category: KPI
+      - worksheet: kpi_response_time
+        x: 0
+        y: 14
+        colSpan: 3
+        rowSpan: 5
+        category: KPI
+      
+      # ------------------------------------------
+      # ADDITIONAL INFORMATION (Vertically stacked)
+      # Top 10 bar charts: 1800px wide x 500-700px tall (2700px total)
+      # ------------------------------------------
+      - worksheet: top_10_active_users
+        x: 0
+        y: 19
+        colSpan: 3
+        rowSpan: 5
+        category: Additional Information
+      - worksheet: top_10_cubes_by_avg_wall_time
+        x: 0
+        y: 24
+        colSpan: 3
+        rowSpan: 5
+        category: Additional Information
+      - worksheet: top_10_users_by_avg_wall_time
+        x: 0
+        y: 29
+        colSpan: 3
+        rowSpan: 5
+        category: Additional Information
+      - worksheet: top_10_orgs_by_avg_wall_time
+        x: 0
+        y: 34
+        colSpan: 3
+        rowSpan: 5
+        category: Additional Information
+      - worksheet: top_10_projects_by_avg_wall_time
+        x: 0
+        y: 39
+        colSpan: 3
+        rowSpan: 7
+        category: Additional Information
