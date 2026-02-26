@@ -4,3 +4,4 @@ dist/
 .DS_Store
 example/connections.yaml
 resources/keys/
+resources/drivers/
