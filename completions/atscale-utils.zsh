@@ -20,7 +20,7 @@ case $state in
     _values 'params' --logfile --output --verbose --model --connection-file --connection-name --output-model-file
     ;;
   generate-tableau-from-namespace)
-    _values 'params' --logfile --output --verbose --namespace --model-file --connection-file --target-file --tableau-version --target-file
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --target-file --tableau-version --connection-name --target-file
     ;;
   echo-connection-metadata)
     _values 'params' --logfile --output --verbose --connection-file --connection-name --schema

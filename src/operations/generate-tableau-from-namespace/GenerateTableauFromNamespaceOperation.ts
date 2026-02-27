@@ -31,6 +31,12 @@ class GenerateTableauParameterSet extends TemplateParameterSet {
       }
     })(),
     new (class extends StringParameter {
+      name = "connection-name";
+      description = "The name of the connection to use";
+      required = false;
+      defaultValue = "default";
+    })(),
+    new (class extends StringParameter {
       name = "target-file";
       description = "Target file to output the workbook";
       required = false;
@@ -41,6 +47,7 @@ class GenerateTableauParameterSet extends TemplateParameterSet {
 
 type GenerateTableauParams = TemplateOperationParams & {
   "tableau-version": string;
+  "connection-name": string;
 };
 
 /**
@@ -68,23 +75,94 @@ export class GenerateTableauFromNamespaceOperation extends TemplateOperation<Gen
     const modelData = yaml.readFromFile<Record<string, unknown>>(modelFile);
 
     this.logger.verbose(`Reading connection file: ${connectionFile}`);
-    const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile);
+    const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile) as any;
+    var connection = connectionData.connections[params["connection-name"]] as any;
+    if (!connection) {
+      this.logger.error(`Connection ${params["connection-name"]} not found in ${connectionFile}`);
+      return;
+    }
+    /*
+    sql:
+      dialect: postgres
+      port: 15432
+      server: template.atscale-se-demo.com
+      database: atscale
+      schema: Telemetry
+      user: admin
 
-    this.logger.verbose("Reading overview namespace: " + params.namespace);
-    const overviewData = yaml.readFromFile<Record<string, unknown>>(params.namespace);
+<named-connection caption='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
+<connection class='genericjdbc' dbname='atscale' dialect='postgres' jdbcproperties='' 
+jdbcurl='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' port='15432' 
+schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin' warehouse=''>
+
+      
+*/
+    connection={...connection, jdbcUrl: `jdbc:${connection.sql.dialect}ql://${connection.sql.server}:${connection.sql.port}/${connection.sql.schema}`};
+    connection={...connection, class: "genericjdbc"};
+    connection={...connection, user: connectionData.users[connection.sql.user]};
+
+    this.logger.verbose("Reading overview namespace: " + params["namespace-file"]);
+    const overviewData = yaml.readFromFile<Record<string, unknown>>(params["namespace-file"]);
 
     const templatePath = `${__dirname}/tableau.${version}.twb.ejs`;
     this.logger.verbose(`Reading EJS template: ${templatePath}`);
     const template = fs.readFileSync(templatePath, "utf8");
 
-    try  {
+    try {
       const models = modelData as Record<string, any>;
       const namespace = this.sanitizeNamespace(overviewData as Record<string, any>, models);
 
+      const functions = {
+        typeMap: {
+          "STRING": "string",
+          "INT1": "integer",
+          "INT2": "integer",
+          "INT4": "integer",
+          "INT8": "integer",
+          "INT_UNSIGNED1": "integer",
+          "INT_UNSIGNED2": "integer",
+          "INT_UNSIGNED4": "integer",
+          "INT_UNSIGNED8": "integer",
+          "FLOAT32": "real",
+          "FLOAT64": "real",
+          "DATE_DOUBLE": "date",
+          "BSTR": "string",
+          "BOOL": "boolean",
+          "DECIMAL": "decimal",
+          "GUID": "string",
+          "BYTES": "binary",
+          "WSTR": "string",
+          "NUMERIC": "numeric",
+          "TIME": "time",
+          "DATETIME": "datetime"
+        } as Record<string, string>,
+
+        derivationMap: {
+          "sum": "Sum",
+          "avg": "Avg",
+          "max": "Max",
+          "min": "Min",
+          "count": "Count",
+          "countd": "CountD",
+          "median": "Median",
+          "std": "Stdev",
+          "var": "Var",
+        } as Record<string, string>,
+
+        toTableauType: function (type: string): string {
+          return this.typeMap[type] || "string";
+        },
+        toTableauDerivation: function (derivation: string): string {
+          return this.derivationMap[derivation] || "None";
+        }
+      };
+
       const output = ejs.render(template, {
         models,
+        connection,
         connections: connectionData,
         namespace,
+        functions,
       });
       fs.writeFileSync(targetFile, output, "utf8");
       this.logger.info(`Wrote Tableau workbook to ${targetFile}`);
@@ -93,100 +171,4 @@ export class GenerateTableauFromNamespaceOperation extends TemplateOperation<Gen
     }
   }
 
-  private sanitizeNamespace(
-    namespace: Record<string, any>,
-    models: Record<string, any>
-  ): Record<string, any> {
-    if (!namespace.worksheets || typeof namespace.worksheets !== "object") {
-      return namespace;
-    }
-
-    const sanitizedWorksheets: Record<string, any> = {};
-    for (const [name, worksheet] of Object.entries(namespace.worksheets)) {
-      if (!worksheet || typeof worksheet !== "object") {
-        this.logger.verbose(`Skipping worksheet ${name}: invalid definition.`);
-        continue;
-      }
-      const worksheetObj = worksheet as Record<string, any>;
-      const modelName = worksheetObj.model;
-      const columns = models?.[modelName]?.sql?.columns;
-      if (!columns) {
-        this.logger.verbose(`Skipping worksheet ${name}: model ${modelName} not found.`);
-        continue;
-      }
-
-      const nextWorksheet = { ...worksheetObj };
-
-      if (Array.isArray(nextWorksheet.measures)) {
-        const filtered = nextWorksheet.measures.filter((measure: string) => {
-          if (columns[measure]) return true;
-          this.logger.verbose(`Missing measure ${measure} for worksheet ${name}, dropping.`);
-          return false;
-        });
-        nextWorksheet.measures = filtered;
-      }
-
-      if (nextWorksheet.xAxis && !columns[nextWorksheet.xAxis]) {
-        this.logger.verbose(`Missing xAxis ${nextWorksheet.xAxis} for worksheet ${name}, dropping.`);
-        continue;
-      }
-      if (nextWorksheet.yAxis && !columns[nextWorksheet.yAxis]) {
-        this.logger.verbose(`Missing yAxis ${nextWorksheet.yAxis} for worksheet ${name}, dropping.`);
-        continue;
-      }
-
-      if (Array.isArray(nextWorksheet.measures) && nextWorksheet.measures.length === 0) {
-        this.logger.verbose(`Skipping worksheet ${name}: no valid measures.`);
-        continue;
-      }
-
-      const requiresAxes = nextWorksheet.graphType === "bar" || nextWorksheet.graphType === "line";
-      if (requiresAxes && (!nextWorksheet.xAxis || !nextWorksheet.yAxis)) {
-        this.logger.verbose(`Skipping worksheet ${name}: missing xAxis or yAxis for ${nextWorksheet.graphType}.`);
-        continue;
-      }
-
-      sanitizedWorksheets[name] = nextWorksheet;
-    }
-
-    const sanitizedDashboards: Record<string, any> = {};
-    if (namespace.dashboards && typeof namespace.dashboards === "object") {
-      for (const [name, dashboard] of Object.entries(namespace.dashboards)) {
-        if (!dashboard || typeof dashboard !== "object") {
-          this.logger.verbose(`Skipping dashboard ${name}: invalid definition.`);
-          continue;
-        }
-        const dashboardObj = dashboard as Record<string, any>;
-        if (!Array.isArray(dashboardObj.tiles)) {
-          sanitizedDashboards[name] = dashboardObj;
-          continue;
-        }
-
-        const nextDashboard = { ...dashboardObj };
-        nextDashboard.tiles = dashboardObj.tiles.filter((tile: any) => {
-          const worksheetName = tile?.worksheet;
-          if (worksheetName && sanitizedWorksheets[worksheetName]) {
-            return true;
-          }
-          this.logger.verbose(
-            `Dropping dashboard tile for missing worksheet ${worksheetName ?? "<unknown>"} in ${name}.`
-          );
-          return false;
-        });
-
-        if (nextDashboard.tiles.length === 0) {
-          this.logger.verbose(`Skipping dashboard ${name}: no valid tiles.`);
-          continue;
-        }
-
-        sanitizedDashboards[name] = nextDashboard;
-      }
-    }
-
-    return {
-      ...namespace,
-      worksheets: sanitizedWorksheets,
-      dashboards: Object.keys(sanitizedDashboards).length > 0 ? sanitizedDashboards : namespace.dashboards,
-    };
-  }
 }

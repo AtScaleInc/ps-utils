@@ -21,7 +21,7 @@ _atscale_utils_complete() {
       params="--logfile --output --verbose --model --connection-file --connection-name --output-model-file"
       ;;
     generate-tableau-from-namespace)
-      params="--logfile --output --verbose --namespace --model-file --connection-file --target-file --tableau-version --target-file"
+      params="--logfile --output --verbose --namespace-file --model-file --connection-file --target-file --tableau-version --connection-name --target-file"
       ;;
     echo-connection-metadata)
       params="--logfile --output --verbose --connection-file --connection-name --schema"

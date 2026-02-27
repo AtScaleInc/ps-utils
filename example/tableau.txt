@@ -538,75 +538,75 @@
       <aliases enabled='yes' />
 
       
-        <column caption='DC Cube Name' datatype='INT8' name='[m_cube_name_distinct]' role='measure' type='quantitative' />
+        <column caption='DC Cube Name' datatype='integer' name='[m_cube_name_distinct]' role='measure' type='quantitative' />
       
-        <column caption='Days Since Last Query' datatype='INT4' name='[m_days_since_last_query_min]' role='measure' type='quantitative' />
+        <column caption='Days Since Last Query' datatype='integer' name='[m_days_since_last_query_min]' role='measure' type='quantitative' />
       
-        <column caption='Avg Estimated Post Plan Time' datatype='FLOAT64' name='[m_epoch_estimated_post_plan_time_avg]' role='measure' type='quantitative' />
+        <column caption='Avg Estimated Post Plan Time' datatype='real' name='[m_epoch_estimated_post_plan_time_avg]' role='measure' type='quantitative' />
       
-        <column caption='Sum Estimated Post Plan Time' datatype='FLOAT64' name='[m_epoch_estimated_post_plan_time_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Estimated Post Plan Time' datatype='real' name='[m_epoch_estimated_post_plan_time_sum]' role='measure' type='quantitative' />
       
-        <column caption='Avg Post Plan Time' datatype='FLOAT64' name='[m_epoch_post_plan_time_avg]' role='measure' type='quantitative' />
+        <column caption='Avg Post Plan Time' datatype='real' name='[m_epoch_post_plan_time_avg]' role='measure' type='quantitative' />
       
-        <column caption='Sum Post Plan Time' datatype='FLOAT64' name='[m_epoch_post_plan_time_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Post Plan Time' datatype='real' name='[m_epoch_post_plan_time_sum]' role='measure' type='quantitative' />
       
-        <column caption='Avg SQL Wall Time' datatype='FLOAT64' name='[m_epoch_sql_wall_time_avg]' role='measure' type='quantitative' />
+        <column caption='Avg SQL Wall Time' datatype='real' name='[m_epoch_sql_wall_time_avg]' role='measure' type='quantitative' />
       
-        <column caption='Sum SQL Wall Time' datatype='FLOAT64' name='[m_epoch_sql_wall_time_sum]' role='measure' type='quantitative' />
+        <column caption='Sum SQL Wall Time' datatype='real' name='[m_epoch_sql_wall_time_sum]' role='measure' type='quantitative' />
       
-        <column caption='Avg Wall Time' datatype='FLOAT64' name='[m_epoch_wall_time_avg]' role='measure' type='quantitative' />
+        <column caption='Avg Wall Time' datatype='real' name='[m_epoch_wall_time_avg]' role='measure' type='quantitative' />
       
-        <column caption='Sum Wall Time' datatype='FLOAT64' name='[m_epoch_wall_time_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Wall Time' datatype='real' name='[m_epoch_wall_time_sum]' role='measure' type='quantitative' />
       
-        <column caption='Sum Failed Count' datatype='INT4' name='[m_failed_count_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Failed Count' datatype='integer' name='[m_failed_count_sum]' role='measure' type='quantitative' />
       
-        <column caption='Sum Subquery Local Cache Count' datatype='INT8' name='[m_local_cache_subquery_hits_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Subquery Local Cache Count' datatype='integer' name='[m_local_cache_subquery_hits_sum]' role='measure' type='quantitative' />
       
-        <column caption='DC Organization ID' datatype='INT8' name='[m_organization_id_distinct]' role='measure' type='quantitative' />
+        <column caption='DC Organization ID' datatype='integer' name='[m_organization_id_distinct]' role='measure' type='quantitative' />
       
-        <column caption='DC Project ID' datatype='INT8' name='[m_project_id_distinct]' role='measure' type='quantitative' />
+        <column caption='DC Project ID' datatype='integer' name='[m_project_id_distinct]' role='measure' type='quantitative' />
       
-        <column caption='Latest Query Date' datatype='DATE_DOUBLE' name='[m_query_date_max]' role='measure' type='quantitative' />
+        <column caption='Latest Query Date' datatype='date' name='[m_query_date_max]' role='measure' type='quantitative' />
       
-        <column caption='Total Queries' datatype='INT8' name='[m_query_id_count]' role='measure' type='quantitative' />
+        <column caption='Total Queries' datatype='integer' name='[m_query_id_count]' role='measure' type='quantitative' />
       
-        <column caption='Sum Subquery Count' datatype='INT8' name='[m_subquery_count_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Subquery Count' datatype='integer' name='[m_subquery_count_sum]' role='measure' type='quantitative' />
       
-        <column caption='Sum Succeeded Count' datatype='INT4' name='[m_succeeded_count_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Succeeded Count' datatype='integer' name='[m_succeeded_count_sum]' role='measure' type='quantitative' />
       
-        <column caption='Sum Used Aggregate Count' datatype='INT4' name='[m_used_aggregate_sum]' role='measure' type='quantitative' />
+        <column caption='Sum Used Aggregate Count' datatype='integer' name='[m_used_aggregate_sum]' role='measure' type='quantitative' />
       
-        <column caption='DC User Hash' datatype='INT8' name='[m_user_hash_distinct]' role='measure' type='quantitative' />
+        <column caption='DC User Hash' datatype='integer' name='[m_user_hash_distinct]' role='measure' type='quantitative' />
       
-        <column caption='Pct Query Success' datatype='FLOAT64' name='[cm_query_success_pct]' role='measure' type='quantitative' />
+        <column caption='Pct Query Success' datatype='real' name='[cm_query_success_pct]' role='measure' type='quantitative' />
       
-        <column caption='Sum Estimated Post Plan Time Squared' datatype='FLOAT64' name='[cm_sum_estimated_post_plan_time_squared]' role='measure' type='quantitative' />
+        <column caption='Sum Estimated Post Plan Time Squared' datatype='real' name='[cm_sum_estimated_post_plan_time_squared]' role='measure' type='quantitative' />
       
-        <column caption='Sum Post Plan Time Squared' datatype='FLOAT64' name='[cm_sum_post_plan_time_squared]' role='measure' type='quantitative' />
+        <column caption='Sum Post Plan Time Squared' datatype='real' name='[cm_sum_post_plan_time_squared]' role='measure' type='quantitative' />
       
-        <column caption='Sum SQL Wall Time Squared' datatype='FLOAT64' name='[cm_sum_sql_wall_time_squared]' role='measure' type='quantitative' />
+        <column caption='Sum SQL Wall Time Squared' datatype='real' name='[cm_sum_sql_wall_time_squared]' role='measure' type='quantitative' />
       
-        <column caption='Sum Wall Time Squared' datatype='FLOAT64' name='[cm_sum_wall_time_squared]' role='measure' type='quantitative' />
+        <column caption='Sum Wall Time Squared' datatype='real' name='[cm_sum_wall_time_squared]' role='measure' type='quantitative' />
       
-        <column caption='Project ID' datatype='WSTR' name='[project_id]' role='dimension' type='nominal' />
+        <column caption='Project ID' datatype='string' name='[project_id]' role='dimension' type='nominal' />
       
-        <column caption='Query_Hour' datatype='DATETIME' name='[query_hour]' role='dimension' type='nominal' />
+        <column caption='Query_Hour' datatype='datetime' name='[query_hour]' role='dimension' type='nominal' />
       
-        <column caption='Organization ID' datatype='WSTR' name='[organization_id]' role='dimension' type='nominal' />
+        <column caption='Organization ID' datatype='string' name='[organization_id]' role='dimension' type='nominal' />
       
-        <column caption='Cube Name' datatype='WSTR' name='[cube_name]' role='dimension' type='nominal' />
+        <column caption='Cube Name' datatype='string' name='[cube_name]' role='dimension' type='nominal' />
       
-        <column caption='Query_ID' datatype='WSTR' name='[query_id]' role='dimension' type='nominal' />
+        <column caption='Query_ID' datatype='string' name='[query_id]' role='dimension' type='nominal' />
       
-        <column caption='Query_Language' datatype='WSTR' name='[query_language]' role='dimension' type='nominal' />
+        <column caption='Query_Language' datatype='string' name='[query_language]' role='dimension' type='nominal' />
       
-        <column caption='Service' datatype='WSTR' name='[service]' role='dimension' type='nominal' />
+        <column caption='Service' datatype='string' name='[service]' role='dimension' type='nominal' />
       
-        <column caption='Succeeded' datatype='BOOL' name='[succeeded]' role='dimension' type='nominal' />
+        <column caption='Succeeded' datatype='boolean' name='[succeeded]' role='dimension' type='nominal' />
       
-        <column caption='User_Hash' datatype='WSTR' name='[user_hash]' role='dimension' type='nominal' />
+        <column caption='User_Hash' datatype='string' name='[user_hash]' role='dimension' type='nominal' />
       
-        <column caption='User_ID Level' datatype='WSTR' name='[User_ID Level]' role='dimension' type='nominal' />
+        <column caption='User_ID Level' datatype='string' name='[User_ID Level]' role='dimension' type='nominal' />
       
 
       <layout dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
@@ -671,7 +671,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{6024e1ae-7d97-47e3-ad46-aeb873e3ee41}' />
+          <simple-id uuid='{4ffeaf11-3b98-4412-8224-3a9b89ed22cf}' />
         </worksheet>
       
     
@@ -720,7 +720,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{e6dbcf9e-12d7-4e6b-8adc-c001aa71520f}' />
+          <simple-id uuid='{78cafae5-43a0-454f-b5a9-2c65465c09b3}' />
         </worksheet>
       
     
@@ -769,7 +769,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{87375147-22bd-4a0b-8787-0afb7eb5f433}' />
+          <simple-id uuid='{317eb152-6d00-49ce-849c-5c6aa32833e9}' />
         </worksheet>
       
     
@@ -818,7 +818,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{c5ed8cf9-0fe4-4580-b689-bbda651a1113}' />
+          <simple-id uuid='{cfcc8db6-07cf-4d86-910d-2e5a556f09a9}' />
         </worksheet>
       
     
@@ -867,7 +867,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{1d279d25-50ac-46cd-b869-91d92b624353}' />
+          <simple-id uuid='{170465b4-3320-4024-97d5-6ce0a1c55f01}' />
         </worksheet>
       
     
@@ -916,7 +916,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{316e6e82-5511-4621-888b-ba5b68cfc28b}' />
+          <simple-id uuid='{c5334aab-0fec-4aad-8548-d922546e90ab}' />
         </worksheet>
       
     
@@ -961,7 +961,7 @@
             <rows>[ats_connection].[succeeded]</rows>
             <cols>[ats_connection].[query_hour]</cols>
           </table>
-          <simple-id uuid='{9b7ae472-b7a3-4321-aa91-4982d3aca4cb}' />
+          <simple-id uuid='{e77543df-c36b-45d6-918c-00d453764334}' />
         </worksheet>
       
     
@@ -1006,7 +1006,7 @@
             <rows>[ats_connection].[m_subquery_count_sum]</rows>
             <cols>[ats_connection].[query_hour]</cols>
           </table>
-          <simple-id uuid='{c2a9fe6f-4683-4a08-b3bc-1210e5bcef64}' />
+          <simple-id uuid='{1fbebb43-689e-466e-bb06-126090c68f63}' />
         </worksheet>
       
     
@@ -1051,7 +1051,7 @@
             <rows>[ats_connection].[m_epoch_sql_wall_time_avg]</rows>
             <cols>[ats_connection].[query_hour]</cols>
           </table>
-          <simple-id uuid='{349d15d2-8930-4446-ade5-1cacefe3dfc8}' />
+          <simple-id uuid='{9288c303-969e-45e0-81e6-80e52c156d2a}' />
         </worksheet>
       
     
@@ -1096,7 +1096,7 @@
             <rows>[ats_connection].[user_hash]</rows>
             <cols>[ats_connection].[m_subquery_count_sum]</cols>
           </table>
-          <simple-id uuid='{d8cc4989-26e2-478e-8815-df240069b6b9}' />
+          <simple-id uuid='{13bc5f65-c9e2-492d-b867-495d5f60ee37}' />
         </worksheet>
       
     
@@ -1141,7 +1141,7 @@
             <rows>[ats_connection].[cube_name]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{37edc241-d207-4e8d-9cb8-91bc221633bb}' />
+          <simple-id uuid='{5a5d04b5-f831-4715-8d7a-d28bc69cd7b8}' />
         </worksheet>
       
     
@@ -1186,7 +1186,7 @@
             <rows>[ats_connection].[user_hash]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{285b4e24-6c5e-40b9-91bf-3249c94f2370}' />
+          <simple-id uuid='{b1166b3e-0702-45ef-9032-c3d858dc9349}' />
         </worksheet>
       
     
@@ -1231,7 +1231,7 @@
             <rows>[ats_connection].[organization_id]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{157396ca-2ec6-47d2-9ecc-511fd9c0cb3d}' />
+          <simple-id uuid='{7ac01642-d350-4f7e-958e-cfb9f4b987b6}' />
         </worksheet>
       
     
@@ -1276,7 +1276,7 @@
             <rows>[ats_connection].[project_id]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{5c70512d-e750-422b-996d-d287fe802d32}' />
+          <simple-id uuid='{e466b4b4-578d-4503-9b46-816e159f9937}' />
         </worksheet>
       
     
@@ -1414,7 +1414,7 @@
 
           </zone>
         </zones>
-        <simple-id uuid='{8009c39b-e40c-4476-9a96-3411b96b09ad}' />
+        <simple-id uuid='{9100efa2-3db4-465a-aad6-f285d88d8db9}' />
       </dashboard>
     
   </dashboards>
@@ -1442,7 +1442,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{e2237894-6455-49a1-93da-c094fb5020d3}' />
+        <simple-id uuid='{1629607a-e886-486a-b912-ccc57ec9f0eb}' />
       </window>
     
       <window class='worksheet'  name='summary_total_cubes'>
@@ -1466,7 +1466,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{e5e38302-77cd-4d28-89c6-e150c9a55fc0}' />
+        <simple-id uuid='{a3b57f91-f2e5-40e8-9f0f-acb334c36ecf}' />
       </window>
     
       <window class='worksheet'  name='summary_total_users'>
@@ -1490,7 +1490,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{f3a484aa-41dd-4636-93a3-fadc1e99d341}' />
+        <simple-id uuid='{feaba115-b599-42e6-8f89-23dd87c1a04b}' />
       </window>
     
       <window class='worksheet'  name='summary_avg_queries_per_day'>
@@ -1514,7 +1514,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{c67253f0-2c24-4731-be51-e0147a6bec07}' />
+        <simple-id uuid='{8b4a8c25-96ef-4457-8f79-600b541778fa}' />
       </window>
     
       <window class='worksheet'  name='summary_success_rate'>
@@ -1538,7 +1538,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{734d7412-95c5-4a22-a429-6bf6783b5812}' />
+        <simple-id uuid='{f74a126a-3f19-4e54-a036-7f9800df237c}' />
       </window>
     
       <window class='worksheet'  name='summary_avg_wall_time'>
@@ -1562,7 +1562,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{a421e773-bc68-4141-bb34-3a3889b27250}' />
+        <simple-id uuid='{4cebcad1-1d8d-4b26-bea8-66b80d8449c4}' />
       </window>
     
       <window class='worksheet'  name='kpi_query_success_rate'>
@@ -1586,7 +1586,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{27ce8ad9-6afd-4878-a9a7-0b3ccdd6e389}' />
+        <simple-id uuid='{8da2b297-f2a4-4dc4-9683-96e331366735}' />
       </window>
     
       <window class='worksheet'  name='kpi_total_queries_per_day'>
@@ -1610,7 +1610,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{c8696d7e-a6bd-43bd-bfbc-33cad9ff18d6}' />
+        <simple-id uuid='{9eab33a5-5ea9-4282-b675-d2fc99305a91}' />
       </window>
     
       <window class='worksheet'  name='kpi_response_time'>
@@ -1634,7 +1634,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{a62d5772-022a-4b94-9cff-b019975fbc45}' />
+        <simple-id uuid='{71757309-1d18-4640-866a-c0b0349da264}' />
       </window>
     
       <window class='worksheet'  name='top_10_active_users'>
@@ -1658,7 +1658,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{74a238b7-d321-4dc3-af94-21139b38b186}' />
+        <simple-id uuid='{7a9c1a91-0172-4b67-96f2-01498f2e3ebd}' />
       </window>
     
       <window class='worksheet'  name='top_10_cubes_by_avg_wall_time'>
@@ -1682,7 +1682,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{832e0959-c476-4c98-b8b5-95d1f14ecb10}' />
+        <simple-id uuid='{87f45813-c5db-48d5-9dd1-d83537431a0b}' />
       </window>
     
       <window class='worksheet'  name='top_10_users_by_avg_wall_time'>
@@ -1706,7 +1706,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{8ba648f2-2882-4576-afd8-cdccf84a8533}' />
+        <simple-id uuid='{436091a3-6452-4273-b1fd-adc1cc51d680}' />
       </window>
     
       <window class='worksheet'  name='top_10_orgs_by_avg_wall_time'>
@@ -1730,7 +1730,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{ec221533-de82-436b-a91a-10e38d506746}' />
+        <simple-id uuid='{82afcb45-1bfe-447a-a95c-531db5084081}' />
       </window>
     
       <window class='worksheet'  name='top_10_projects_by_avg_wall_time'>
@@ -1754,7 +1754,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{f116a6ca-4918-41a6-8514-65d62afdcbc6}' />
+        <simple-id uuid='{4ba0bbbc-df54-48ad-94c9-2e2ccdf1e6e8}' />
       </window>
     
 
@@ -1793,7 +1793,7 @@
           
         </viewpoints>
         <active id='-1' />
-        <simple-id uuid='{59e4dfa5-2d33-4d38-b340-d1dd77740081}' />
+        <simple-id uuid='{61c879af-06ca-44ae-80ae-e2a63b89afcb}' />
       </window>
     
 

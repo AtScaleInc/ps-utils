@@ -22,8 +22,10 @@
     <datasource caption='Telemetry (Telemetry)' inline='true' name='ats_connection' version='18.1'>
       <connection class='federated'>
         <named-connections>
-          <named-connection caption='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
-            <connection class='genericjdbc' dbname='atscale' dialect='postgres' jdbcproperties='' jdbcurl='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' port='15432' schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin' warehouse=''>
+          <named-connection caption='<%= connection.jdbcUrl %>' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
+            <connection class='genericjdbc' dbname='<%= connection.sql.database %>' dialect='<%= connection.sql.dialect %>' jdbcproperties='' 
+                jdbcurl='<%= connection.jdbcUrl %>' port='<%= connection.sql.port %>' schema='<%= connection.sql.schema %>' 
+                server='<%= connection.sql.server %>' username='<%= connection.user.username %>' warehouse=''>
               <connection-customization class='genericjdbc' enabled='false' version='18.1'>
                 <vendor name='genericjdbc' />
                 <driver name='postgresql' />
@@ -124,7 +126,7 @@
         Object.entries(models).forEach(([modelName, model]) => {
           Object.entries(model.sql.columns).forEach(([columnName, column]) => {
         %>
-        <column caption='<%= column.label %>' datatype='<%= column.data_type %>' name='[<%= columnName %>]' role='<%= column.role %>' type='<%= column.type %>' />
+        <column caption='<%= column.label %>' datatype='<%= functions.toTableauType(column.data_type) %>' name='[<%= columnName %>]' role='<%= column.role %>' type='<%= column.type %>' />
       <% }) }) %>
 
       <layout dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
@@ -158,21 +160,21 @@
               </datasources>
               <datasource-dependencies datasource='<%= models[worksheet.model].data_source %>'>
                 <column-instance column='[<%= worksheet.yAxis %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[worksheet.yAxis].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[worksheet.yAxis].aggregation) %>' 
                   name='[<%= worksheet.yAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.yAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.yAxis].data_type %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.yAxis].data_type) %>' 
                   name='[<%= worksheet.yAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.yAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
 
                 <column-instance column='[<%= worksheet.xAxis %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[worksheet.xAxis].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[worksheet.xAxis].aggregation) %>' 
                   name='[<%= worksheet.xAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.xAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.xAxis].data_type %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.xAxis].data_type) %>' 
                   name='[<%= worksheet.xAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.xAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
@@ -201,7 +203,7 @@
         const xAxisCol = models[worksheet.model].sql.columns[worksheet.xAxis];
         const yAxisCol = models[worksheet.model].sql.columns[worksheet.yAxis];
         // Use Week derivation for datetime columns to show weekly ticks
-        const xAxisDerivation = xAxisCol.data_type === 'datetime' ? 'Week' : xAxisCol.aggregation;
+        const xAxisDerivation = xAxisCol.data_type === 'DATETIME' ? 'Week' : functions.toTableauDerivation(xAxisCol.aggregation);
       %>
         <worksheet name='<%= worksheet.title %>'>
           <table>
@@ -215,17 +217,17 @@
                   name='[<%= worksheet.xAxis %>]' pivot='key'
                   type='<%= xAxisCol.type %>' />
                 <column caption='<%= xAxisCol.label %>' 
-                  datatype='<%= xAxisCol.data_type %>' 
+                  datatype='<%= functions.toTableauType(xAxisCol.data_type) %>' 
                   name='[<%= worksheet.xAxis %>]' 
                   role='<%= xAxisCol.role %>' 
                   type='<%= xAxisCol.type %>' />
 
                 <column-instance column='[<%= worksheet.yAxis %>]' 
-                  derivation='<%= yAxisCol.aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(yAxisCol.aggregation) %>' 
                   name='[<%= worksheet.yAxis %>]' pivot='key'
                   type='<%= yAxisCol.type %>' />
                 <column caption='<%= yAxisCol.label %>' 
-                  datatype='<%= yAxisCol.data_type %>' 
+                  datatype='<%= functions.toTableauType(yAxisCol.data_type) %>' 
                   name='[<%= worksheet.yAxis %>]' 
                   role='<%= yAxisCol.role %>' 
                   type='<%= yAxisCol.type %>' />
@@ -264,28 +266,28 @@
                   name='[<%= worksheet.xAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.xAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.xAxis].data_type %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.xAxis].data_type) %>' 
                   name='[<%= worksheet.xAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.xAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
 
                 <column-instance column='[<%= worksheet.yAxis %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[worksheet.yAxis].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[worksheet.yAxis].aggregation) %>' 
                   name='[<%= worksheet.yAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.yAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.yAxis].data_type %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.yAxis].data_type) %>' 
                   name='[<%= worksheet.yAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.yAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
                 <% } else if (worksheet.measures) { 
                   worksheet.measures.forEach((measure, idx) => { %>
                 <column-instance column='[<%= measure %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[measure].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[measure].aggregation) %>' 
                   name='[<%= measure %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[measure].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[measure].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[measure].data_type %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[measure].data_type) %>' 
                   name='[<%= measure %>]' 
                   role='<%= models[worksheet.model].sql.columns[measure].role %>' 
                   type='<%= models[worksheet.model].sql.columns[measure].type %>' />
