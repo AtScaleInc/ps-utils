@@ -33,7 +33,7 @@ runs:
       working-directory: ${{ github.action_path }}
 
     - name: Write connection file
-      run: echo "${{ inputs.connection-file }}" > "${{ github.action_path }}/connection.yml"
+      run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
     - name: Extract AtScale model
