@@ -91,6 +91,50 @@ Example echo-connection-metadata with schema override:
 node dist/cli.js echo-connection-metadata --connection-file "./example/connections.yaml" --connection-name "snow_demo" --schema "RUN_LOG"
 ```
 
+## Extract AtScale Model Workflow
+
+The `extract-atscale-model` workflow (`.github/workflows/extract-atscale-model.yml`) runs manually from the Actions tab and extracts an AtScale model's metrics and attributes into a YAML file.
+
+### Setup
+
+Add a repository secret named `ATSCALE_CONNECTION_FILE` containing the full contents of your connection YAML file:
+
+> Settings → Secrets and variables → Actions → New repository secret
+
+### Inputs
+
+| Input | Required | Description |
+|---|---|---|
+| `model` | Yes | AtScale model identifier |
+| `connection-name` | Yes | Connection name within the connection file |
+| `output-model-file` | No | Output file path (defaults to `model.yml`) |
+
+### Running the workflow
+
+1. Go to **Actions → Extract AtScale Model → Run workflow**
+2. Fill in the inputs and click **Run workflow**
+3. Once complete, download the extracted model from the **Artifacts** section of the run
+
+### Example (calling from another workflow)
+
+```yaml
+- uses: actions/checkout@v4
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+    cache: npm
+- run: npm install && npm run build
+- name: Write connection file
+  run: echo "${{ secrets.ATSCALE_CONNECTION_FILE }}" > connection.yml
+- name: Extract AtScale model
+  run: |
+    node dist/cli.js extract-atscale-model \
+      --model "sales-model" \
+      --connection-file connection.yml \
+      --connection-name "prod" \
+      --output-model-file "model.yml"
+```
+
 ## GitHub Action
 
 `action.yml` exposes two inputs:
