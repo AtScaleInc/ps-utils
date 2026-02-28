@@ -42,5 +42,6 @@ runs:
           --model "${{ inputs.model }}" \
           --connection-file "${{ github.action_path }}/connection.yml" \
           --connection-name "${{ inputs.connection-name }}" \
-          --output-model-file "${{ inputs.output-model-file }}"
+          --output-model-file "${{ inputs.output-model-file }}" \
+          --verbose true
       shell: bash
