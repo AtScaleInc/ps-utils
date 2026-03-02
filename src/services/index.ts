@@ -1,3 +1,6 @@
+/**
+ * Service registry factory for shared CLI services.
+ */
 import { EjsTemplateService } from "./EjsTemplateService.js";
 import { YamlService } from "./YamlService.js";
 import { ServiceRegistry } from "./registry.js";

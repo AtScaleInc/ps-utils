@@ -1,3 +1,6 @@
+/**
+ * Toggle operation implementation.
+ */
 import { Operation } from "../Operation.js";
 import { BooleanParameter, ParameterSet } from "../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";

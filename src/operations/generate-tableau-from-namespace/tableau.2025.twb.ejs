@@ -22,8 +22,10 @@
     <datasource caption='Telemetry (Telemetry)' inline='true' name='ats_connection' version='18.1'>
       <connection class='federated'>
         <named-connections>
-          <named-connection caption='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
-            <connection class='genericjdbc' dbname='atscale' dialect='postgres' jdbcproperties='' jdbcurl='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' port='15432' schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin' warehouse=''>
+          <named-connection caption='<%= connection.jdbcUrl %>' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
+            <connection class='genericjdbc' dbname='<%= connection.sql.database %>' dialect='<%= connection.sql.dialect %>' jdbcproperties='' 
+                jdbcurl='<%= connection.jdbcUrl %>' port='<%= connection.sql.port %>' schema='<%= connection.sql.schema %>' 
+                server='<%= connection.sql.server %>' username='<%= connection.user.username %>' warehouse=''>
               <connection-customization class='genericjdbc' enabled='false' version='18.1'>
                 <vendor name='genericjdbc' />
                 <driver name='postgresql' />
@@ -88,7 +90,7 @@
                 <!-- Needs Investigation -->
                 <ordinal>10</ordinal>
 
-                <% if (column.dataType == 'string') { %>
+                <% if (column.data_type == 'string') { %>
                   <remote-type>129</remote-type>
                   <aggregation>Count</aggregation>
                   <local-type>string</local-type>
@@ -99,13 +101,13 @@
                     <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
                   </attributes>
 
-                <% } else if (column.dataType == 'real') { %>
+                <% } else if (column.data_type == 'real') { %>
                   <local-type>real</local-type>
                   <remote-type>131</remote-type>
                   <aggregation>Sum</aggregation>
                   <scale>0</scale>
 
-                <% } else if (column.dataType == 'datetime') { %>
+                <% } else if (column.data_type == 'datetime') { %>
                   <local-type>datetime</local-type>
                   <remote-type>135</remote-type>
                   <aggregation>Year</aggregation>
@@ -124,7 +126,7 @@
         Object.entries(models).forEach(([modelName, model]) => {
           Object.entries(model.sql.columns).forEach(([columnName, column]) => {
         %>
-        <column caption='<%= column.label %>' datatype='<%= column.dataType %>' name='[<%= columnName %>]' role='<%= column.role %>' type='<%= column.type %>' />
+        <column caption='<%= column.label %>' datatype='<%= functions.toTableauType(column.data_type) %>' name='[<%= columnName %>]' role='<%= column.role %>' type='<%= column.type %>' />
       <% }) }) %>
 
       <layout dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
@@ -144,7 +146,7 @@
   </datasources>
   <worksheets>
     <%
-      Object.entries(visuals.worksheets).forEach(([worksheetName, worksheet]) => {
+      Object.entries(namespace.worksheets).forEach(([worksheetName, worksheet]) => {
       // =============================================
       // BAR CHART WORKSHEETS
       // Note: Top 10 filtering should be applied manually in Tableau Desktop
@@ -154,25 +156,25 @@
           <table>
             <view>
               <datasources>
-                <datasource name='<%= models[worksheet.model].dataSource %>' />
+                <datasource name='<%= models[worksheet.model].data_source %>' />
               </datasources>
-              <datasource-dependencies datasource='<%= models[worksheet.model].dataSource %>'>
+              <datasource-dependencies datasource='<%= models[worksheet.model].data_source %>'>
                 <column-instance column='[<%= worksheet.yAxis %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[worksheet.yAxis].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[worksheet.yAxis].aggregation) %>' 
                   name='[<%= worksheet.yAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.yAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.yAxis].dataType %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.yAxis].data_type) %>' 
                   name='[<%= worksheet.yAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.yAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
 
                 <column-instance column='[<%= worksheet.xAxis %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[worksheet.xAxis].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[worksheet.xAxis].aggregation) %>' 
                   name='[<%= worksheet.xAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.xAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.xAxis].dataType %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.xAxis].data_type) %>' 
                   name='[<%= worksheet.xAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.xAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
@@ -188,8 +190,8 @@
                 <mark class='Bar' />
               </pane>
             </panes>
-            <rows>[<%= models[worksheet.model].dataSource %>].[<%= worksheet.yAxis %>]</rows>
-            <cols>[<%= models[worksheet.model].dataSource %>].[<%= worksheet.xAxis %>]</cols>
+            <rows>[<%= models[worksheet.model].data_source %>].[<%= worksheet.yAxis %>]</rows>
+            <cols>[<%= models[worksheet.model].data_source %>].[<%= worksheet.xAxis %>]</cols>
           </table>
           <simple-id uuid='{<%= crypto.randomUUID()%>}' />
         </worksheet>
@@ -201,31 +203,31 @@
         const xAxisCol = models[worksheet.model].sql.columns[worksheet.xAxis];
         const yAxisCol = models[worksheet.model].sql.columns[worksheet.yAxis];
         // Use Week derivation for datetime columns to show weekly ticks
-        const xAxisDerivation = xAxisCol.dataType === 'datetime' ? 'Week' : xAxisCol.aggregation;
+        const xAxisDerivation = xAxisCol.data_type === 'DATETIME' ? 'Week' : functions.toTableauDerivation(xAxisCol.aggregation);
       %>
         <worksheet name='<%= worksheet.title %>'>
           <table>
             <view>
               <datasources>
-                <datasource name='<%= models[worksheet.model].dataSource %>' />
+                <datasource name='<%= models[worksheet.model].data_source %>' />
               </datasources>
-              <datasource-dependencies datasource='<%= models[worksheet.model].dataSource %>'>
+              <datasource-dependencies datasource='<%= models[worksheet.model].data_source %>'>
                 <column-instance column='[<%= worksheet.xAxis %>]' 
                   derivation='<%= xAxisDerivation %>' 
                   name='[<%= worksheet.xAxis %>]' pivot='key'
                   type='<%= xAxisCol.type %>' />
                 <column caption='<%= xAxisCol.label %>' 
-                  datatype='<%= xAxisCol.dataType %>' 
+                  datatype='<%= functions.toTableauType(xAxisCol.data_type) %>' 
                   name='[<%= worksheet.xAxis %>]' 
                   role='<%= xAxisCol.role %>' 
                   type='<%= xAxisCol.type %>' />
 
                 <column-instance column='[<%= worksheet.yAxis %>]' 
-                  derivation='<%= yAxisCol.aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(yAxisCol.aggregation) %>' 
                   name='[<%= worksheet.yAxis %>]' pivot='key'
                   type='<%= yAxisCol.type %>' />
                 <column caption='<%= yAxisCol.label %>' 
-                  datatype='<%= yAxisCol.dataType %>' 
+                  datatype='<%= functions.toTableauType(yAxisCol.data_type) %>' 
                   name='[<%= worksheet.yAxis %>]' 
                   role='<%= yAxisCol.role %>' 
                   type='<%= yAxisCol.type %>' />
@@ -241,8 +243,8 @@
                 <mark class='Line' />
               </pane>
             </panes>
-            <rows>[<%= models[worksheet.model].dataSource %>].[<%= worksheet.yAxis %>]</rows>
-            <cols>[<%= models[worksheet.model].dataSource %>].[<%= worksheet.xAxis %>]</cols>
+            <rows>[<%= models[worksheet.model].data_source %>].[<%= worksheet.yAxis %>]</rows>
+            <cols>[<%= models[worksheet.model].data_source %>].[<%= worksheet.xAxis %>]</cols>
           </table>
           <simple-id uuid='{<%= crypto.randomUUID()%>}' />
         </worksheet>
@@ -255,37 +257,37 @@
           <table>
             <view>
               <datasources>
-                <datasource name='<%= models[worksheet.model].dataSource %>' />
+                <datasource name='<%= models[worksheet.model].data_source %>' />
               </datasources>
-              <datasource-dependencies datasource='<%= models[worksheet.model].dataSource %>'>
+              <datasource-dependencies datasource='<%= models[worksheet.model].data_source %>'>
                 <% if (worksheet.xAxis && worksheet.yAxis) { %>
                 <column-instance column='[<%= worksheet.xAxis %>]' 
                   derivation='<%= models[worksheet.model].sql.columns[worksheet.xAxis].aggregation %>' 
                   name='[<%= worksheet.xAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.xAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.xAxis].dataType %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.xAxis].data_type) %>' 
                   name='[<%= worksheet.xAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.xAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.xAxis].type %>' />
 
                 <column-instance column='[<%= worksheet.yAxis %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[worksheet.yAxis].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[worksheet.yAxis].aggregation) %>' 
                   name='[<%= worksheet.yAxis %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[worksheet.yAxis].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[worksheet.yAxis].dataType %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[worksheet.yAxis].data_type) %>' 
                   name='[<%= worksheet.yAxis %>]' 
                   role='<%= models[worksheet.model].sql.columns[worksheet.yAxis].role %>' 
                   type='<%= models[worksheet.model].sql.columns[worksheet.yAxis].type %>' />
                 <% } else if (worksheet.measures) { 
                   worksheet.measures.forEach((measure, idx) => { %>
                 <column-instance column='[<%= measure %>]' 
-                  derivation='<%= models[worksheet.model].sql.columns[measure].aggregation %>' 
+                  derivation='<%= functions.toTableauDerivation(models[worksheet.model].sql.columns[measure].aggregation) %>' 
                   name='[<%= measure %>]' pivot='key'
                   type='<%= models[worksheet.model].sql.columns[measure].type %>' />
                 <column caption='<%= models[worksheet.model].sql.columns[measure].label %>' 
-                  datatype='<%= models[worksheet.model].sql.columns[measure].dataType %>' 
+                  datatype='<%= functions.toTableauType(models[worksheet.model].sql.columns[measure].data_type) %>' 
                   name='[<%= measure %>]' 
                   role='<%= models[worksheet.model].sql.columns[measure].role %>' 
                   type='<%= models[worksheet.model].sql.columns[measure].type %>' />
@@ -310,12 +312,12 @@
                 </view>
                 <mark class='Text' />
                 <encodings>
-                  <text column='<%= worksheet.yAxis ? "[" + models[worksheet.model].dataSource + "].[" + worksheet.yAxis + "]" : "[" + models[worksheet.model].dataSource + "].[" + (worksheet.measures ? worksheet.measures[0] : "") + "]" %>' />
+                  <text column='<%= worksheet.yAxis ? "[" + models[worksheet.model].data_source + "].[" + worksheet.yAxis + "]" : "[" + models[worksheet.model].data_source + "].[" + (worksheet.measures ? worksheet.measures[0] : "") + "]" %>' />
                 </encodings>
               </pane>
             </panes>
             <rows></rows>
-            <cols><% if (worksheet.xAxis) { %>[<%= models[worksheet.model].dataSource %>].[<%= worksheet.xAxis %>]<% } %></cols>
+            <cols><% if (worksheet.xAxis) { %>[<%= models[worksheet.model].data_source %>].[<%= worksheet.xAxis %>]<% } %></cols>
           </table>
           <simple-id uuid='{<%= crypto.randomUUID()%>}' />
         </worksheet>
@@ -324,7 +326,7 @@
   </worksheets>
   
   <dashboards>
-    <% Object.entries(visuals.dashboards).forEach(([dashboardName, dashboard]) => { 
+    <% Object.entries(namespace.dashboards).forEach(([dashboardName, dashboard]) => { 
       const segmentWidth = dashboard.size.width / dashboard.size.hSegments;
       const segmentHeight = dashboard.size.height / dashboard.size.vSegments;
       let zoneId = 0;
@@ -349,7 +351,7 @@
             %>
               <zone
                 id='<%= zoneId++ %>' 
-                name='<%= visuals.worksheets[tile.worksheet].title %>'
+                name='<%= namespace.worksheets[tile.worksheet].title %>'
                 w='<%= colSpan * segmentWidth %>' 
                 h='<%= rowSpan * segmentHeight %>' 
                 x='<%= tile.x * segmentWidth %>' 
@@ -364,7 +366,7 @@
   </dashboards>
 
   <windows>
-    <%       Object.entries(visuals.worksheets).forEach(([worksheetName, worksheet]) => { %>
+    <%       Object.entries(namespace.worksheets).forEach(([worksheetName, worksheet]) => { %>
       <window class='worksheet'  name='<%= worksheetName %>'>
         <cards>
           <edge name='left'>
@@ -391,11 +393,11 @@
     <% }) %>
 
 
-    <% Object.entries(visuals.dashboards).forEach(([dashboardName, dashboard]) => { %>
+    <% Object.entries(namespace.dashboards).forEach(([dashboardName, dashboard]) => { %>
       <window class='dashboard' maximized='true' name='<%= dashboard.title %>'>
         <viewpoints>
           <% dashboard.tiles.forEach((tile, index) => { %>
-            <viewpoint name='<%= visuals.worksheets[tile.worksheet].title %>' />
+            <viewpoint name='<%= namespace.worksheets[tile.worksheet].title %>' />
           <% }) %>
         </viewpoints>
         <active id='-1' />

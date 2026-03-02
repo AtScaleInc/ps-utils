@@ -1,13 +1,47 @@
-name: Operation CLI
-description: Run operation-cli operations with structured parameters.
+name: Extract AtScale Model
+description: Extracts an AtScale model's metrics and attributes and serializes it to YAML.
 inputs:
-  operation:
-    description: Operation name to execute.
+  model:
+    description: AtScale model identifier.
     required: true
-  parameters:
-    description: JSON object of parameters (string, number, boolean).
+  connection-file:
+    description: Contents of the connection YAML file (store as a secret).
+    required: true
+  connection-name:
+    description: Connection name within the connection file.
+    required: true
+  output-model-file:
+    description: Output file path for the extracted model. Defaults to model.yml.
     required: false
-    default: "{}"
+    default: model.yml
 runs:
-  using: node20
-  main: dist/action.js
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: npm
+
+    - name: Install dependencies
+      run: npm install
+      shell: bash
+      working-directory: ${{ github.action_path }}
+
+    - name: Build
+      run: npm run build
+      shell: bash
+      working-directory: ${{ github.action_path }}
+
+    - name: Write connection file
+      run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
+      shell: bash
+
+    - name: Extract AtScale model
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" extract-atscale-model \
+          --model "${{ inputs.model }}" \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --connection-name "${{ inputs.connection-name }}" \
+          --output-model-file "${{ inputs.output-model-file }}" \
+          --verbose true
+      shell: bash

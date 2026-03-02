@@ -1,3 +1,6 @@
+/**
+ * Tests for ExtractAtScaleModelOperation parameter handling.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { buildServiceRegistry } from "../../services/index.js";
 import { ExtractAtScaleModelOperation } from "../extract-atscale-model/ExtractAtScaleModelOperation.js";

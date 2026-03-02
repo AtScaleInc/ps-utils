@@ -11,7 +11,7 @@
     "action.yml"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run generate:completions",
+    "build": "tsc -p tsconfig.json && node scripts/copy-ejs.mjs && npm run generate:completions",
     "start": "npm run build && node dist/cli.js",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run",

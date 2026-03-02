@@ -1,3 +1,6 @@
+/**
+ * CLI runner that resolves operations, validates params, and dispatches execution.
+ */
 import { buildRegistry } from "./operations/index.js";
 import type { Operation, OperationParams } from "./operations/Operation.js";
 import { globalInputFilter } from "./global-input.js";

@@ -557,3 +557,93 @@ Telemetry:
         type: quantitative
         aggregation: sum
         folder: ""
+      project_id:
+        alias: false
+        name: project_id
+        data_type: WSTR
+        label: Project ID
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      query_hour:
+        alias: false
+        name: query_hour
+        data_type: DATETIME
+        label: Query_Hour
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      organization_id:
+        alias: false
+        name: organization_id
+        data_type: WSTR
+        label: Organization ID
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      cube_name:
+        alias: false
+        name: cube_name
+        data_type: WSTR
+        label: Cube Name
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      query_id:
+        alias: false
+        name: query_id
+        data_type: WSTR
+        label: Query_ID
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      query_language:
+        alias: false
+        name: query_language
+        data_type: WSTR
+        label: Query_Language
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      service:
+        alias: false
+        name: service
+        data_type: WSTR
+        label: Service
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      succeeded:
+        alias: false
+        name: succeeded
+        data_type: BOOL
+        label: Succeeded
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      user_hash:
+        alias: false
+        name: user_hash
+        data_type: WSTR
+        label: User_Hash
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""
+      User_ID Level:
+        alias: false
+        name: User_ID Level
+        data_type: WSTR
+        label: User_ID Level
+        description: ""
+        role: dimension
+        type: nominal
+        folder: ""

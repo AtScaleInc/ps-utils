@@ -1,3 +1,6 @@
+/**
+ * JDBC-based SQL service for Snowflake and Postgres connections.
+ */
 import Jdbc from "jdbc";
 import jinst from "jdbc/lib/jinst.js";
 import path from "path";

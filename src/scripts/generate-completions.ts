@@ -1,3 +1,6 @@
+/**
+ * Generate shell completion scripts from the registered operations list.
+ */
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

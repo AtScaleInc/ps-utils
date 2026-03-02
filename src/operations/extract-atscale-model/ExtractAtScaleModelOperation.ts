@@ -1,3 +1,6 @@
+/**
+ * Extract AtScale model metadata and serialize it into YAML.
+ */
 import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter } from "../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
@@ -269,11 +272,26 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       sqlObjects[objType.query_name]["type"] = "quantitative";
       sqlObjects[objType.query_name]["aggregation"] = objType.agg_type_string;
       sqlObjects[objType.query_name]["folder"] = objType.folder;
-    })
-    Object.keys(mdxObjects.attributes || {}).forEach((objType) => {
-      // console.log("ATTRIBUTE TYPE:", objType);
-      // console.log(mdxObjects.attributes[objType]);
     });
+    
+    Object.keys(mdxObjects.attributes || {}).forEach((attributeName) => {
+      const attribute = mdxObjects.attributes[attributeName];
+      Object.keys(attribute || {}).forEach((hierarchyName) => {
+        const hierarchy = attribute[hierarchyName];
+        hierarchy.forEach((level: any) => {
+          sqlObjects[level.query_name] = {};
+          sqlObjects[level.query_name]["alias"] = false;
+          sqlObjects[level.query_name]["name"] = level.query_name;
+          sqlObjects[level.query_name]["data_type"] = level.data_type_string;
+          sqlObjects[level.query_name]["label"] = level.caption;
+          sqlObjects[level.query_name]["description"] = level.description;
+          sqlObjects[level.query_name]["role"] = "dimension";
+          sqlObjects[level.query_name]["type"] = "nominal";
+          sqlObjects[level.query_name]["folder"] = level.folder;
+        });
+      });
+    });
+
     return { table_name: tableName, columns: sqlObjects };
   }
 

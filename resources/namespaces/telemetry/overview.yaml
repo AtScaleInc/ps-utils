@@ -10,7 +10,7 @@ description: Template for building a Tableau dashboard mirroring the app's KPIs 
 # aliases.yaml (aliases for measures) : Optional, recommended for AtScale PS team to use
 
 # -- Functional Specific / Visualizations
-# telemetry.yaml (worksheet definitions)
+# Telemetry.yaml (worksheet definitions)
 
 # -- BI Tool Specific - Should not be modified unless new BI tool
 # tableau.yaml (worksheet interpretation)
@@ -19,7 +19,7 @@ worksheets:
   # Summary Statistics - Single number displays
   summary_total_orgs:
     title: Total Organizations
-    model: telemetry
+    model: Telemetry
     graphType: text
     measures:
       - m_organization_id_distinct
@@ -28,7 +28,7 @@ worksheets:
 
   summary_total_cubes:
     title: Total Cubes
-    model: telemetry
+    model: Telemetry
     graphType: text
     measures:
       - m_cube_name_distinct
@@ -37,7 +37,7 @@ worksheets:
 
   summary_total_users:
     title: Total Users
-    model: telemetry
+    model: Telemetry
     graphType: text
     measures:
       - m_user_hash_distinct
@@ -46,7 +46,7 @@ worksheets:
 
   summary_avg_queries_per_day:
     title: Avg Queries/Day
-    model: telemetry
+    model: Telemetry
     graphType: text
     measures:
       - m_query_id_count
@@ -55,7 +55,7 @@ worksheets:
 
   summary_success_rate:
     title: Success Rate (%)
-    model: telemetry
+    model: Telemetry
     graphType: text
     measures:
       - cm_query_success_pct
@@ -64,7 +64,7 @@ worksheets:
 
   summary_avg_wall_time:
     title: Avg WallTime (ms)
-    model: telemetry
+    model: Telemetry
     graphType: text
     measures:
       - m_epoch_sql_wall_time_avg
@@ -74,21 +74,21 @@ worksheets:
   # KPI Visuals
   kpi_query_success_rate:
     title: Query Success Rate
-    model: telemetry
+    model: Telemetry
     graphType: line
     xAxis: query_hour
     yAxis: succeeded
 
   kpi_total_queries_per_day:
     title: TotalQueries per Day
-    model: telemetry
+    model: Telemetry
     graphType: line
     xAxis: query_hour
     yAxis: m_subquery_count_sum
 
   kpi_response_time:
     title: ResponseTime(ms)
-    model: telemetry
+    model: Telemetry
     graphType: line
     xAxis: query_hour
     yAxis: m_epoch_sql_wall_time_avg
@@ -96,35 +96,35 @@ worksheets:
   # Additional Information (Top 10s)
   top_10_active_users:
     title: Top 10 Most Active Users
-    model: telemetry
+    model: Telemetry
     graphType: bar
     xAxis: m_subquery_count_sum
     yAxis: user_hash
 
   top_10_cubes_by_avg_wall_time:
     title: Top 10 CubeNames by AvgWallTime
-    model: telemetry
+    model: Telemetry
     graphType: bar
     xAxis: m_epoch_sql_wall_time_avg
     yAxis: cube_name
 
   top_10_users_by_avg_wall_time:
     title: Top 10 UserHash by AvgWallTime
-    model: telemetry
+    model: Telemetry
     graphType: bar
     xAxis: m_epoch_sql_wall_time_avg
     yAxis: user_hash
 
   top_10_orgs_by_avg_wall_time:
     title: Top 10 OrganizationId by AvgWallTime
-    model: telemetry
+    model: Telemetry
     graphType: bar
     xAxis: m_epoch_sql_wall_time_avg
     yAxis: organization_id
 
   top_10_projects_by_avg_wall_time:
     title: Top 10 ProjectId by AvgWallTime
-    model: telemetry
+    model: Telemetry
     graphType: bar
     xAxis: m_epoch_sql_wall_time_avg
     yAxis: project_id
@@ -136,9 +136,9 @@ dashboards:
   # Note: Section headers (Summary Statistics, KPI, Additional Information) should be 
   #       added manually in Tableau Desktop with bold formatting
   # ============================================================================
-  telemetry_comprehensive:
+  Telemetry_comprehensive:
     title: Telemetry Dashboard
-    description: Comprehensive view of telemetry metrics organized by Summary Statistics, KPIs, and Additional Information
+    description: Comprehensive view of Telemetry metrics organized by Summary Statistics, KPIs, and Additional Information
     
     # Sizing adjusted for vertical stacking layout
     # KPI + Additional Information = 4200px total height

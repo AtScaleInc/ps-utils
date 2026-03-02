@@ -1,7 +1,9 @@
+/**
+ * Operation registry entrypoint.
+ */
 import { EchoOperation } from "./echo/EchoOperation.js";
 import { ToggleOperation } from "./toggle/ToggleOperation.js";
 import { ExtractAtScaleModelOperation } from "./extract-atscale-model/ExtractAtScaleModelOperation.js";
-import { GeneratePowerBIFromNamespaceOperation } from "./generate-powerbi-from-namespace/GeneratePowerBIFromNamespaceOperation.js";
 import { GenerateTableauFromNamespaceOperation } from "./generate-tableau-from-namespace/GenerateTableauFromNamespaceOperation.js";
 import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOperation.js";
 import { OperationRegistry } from "./registry.js";
@@ -20,7 +22,6 @@ export async function buildRegistry(
   registry.register(new EchoOperation(services, logger));
   registry.register(new ToggleOperation(services, logger));
   registry.register(new ExtractAtScaleModelOperation(services, logger));
-  registry.register(new GeneratePowerBIFromNamespaceOperation(services, logger));
   registry.register(new GenerateTableauFromNamespaceOperation(services, logger));
   registry.register(new EchoConnectionMetaDataOperation(services, logger));
   return registry;

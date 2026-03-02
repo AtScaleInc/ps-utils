@@ -1,3 +1,6 @@
+/**
+ * Shared SQL operation logic for printing database metadata.
+ */
 import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter } from "../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
