@@ -1,0 +1,1804 @@
+<?xml version='1.0' encoding='utf-8' ?>
+
+<!-- build 20252.25.0818.1050                     -->
+<workbook original-version='18.1' source-build='2025.2.2 (20252.25.0818.1050)' source-platform='mac' version='18.1' xmlns:user='http://www.tableausoftware.com/xml/user'>
+  <document-format-change-manifest>
+    <AccessibleZoneTabOrder />
+    <AnimationOnByDefault />
+    <AutoCreateAndUpdateDSDPhoneLayouts />
+    <MarkAnimation />
+    <ObjectModelEncapsulateLegacy />
+    <ObjectModelTableType />
+    <SchemaViewerObjectModel />
+    <SetMembershipControl />
+    <SheetIdentifierTracking />
+    <WindowsPersistSimpleIdentifiers />
+  </document-format-change-manifest>
+  <preferences>
+    <preference name='ui.encoding.shelf.height' value='24' />
+    <preference name='ui.shelf.height' value='26' />
+  </preferences>
+  <datasources>
+    <datasource caption='Telemetry (Telemetry)' inline='true' name='ats_connection' version='18.1'>
+      <connection class='federated'>
+        <named-connections>
+          <named-connection caption='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
+            <connection class='genericjdbc' dbname='atscale' dialect='postgres' jdbcproperties='' jdbcurl='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' port='15432' schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin' warehouse=''>
+              <connection-customization class='genericjdbc' enabled='false' version='18.1'>
+                <vendor name='genericjdbc' />
+                <driver name='postgresql' />
+                <customizations>
+                  <customization name='CAP_CONNECT_CUSTOM_SQL_WITHOUT_SCHEMA' value='no' />
+                  <customization name='CAP_CREATE_TEMP_TABLES' value='no' />
+                  <customization name='CAP_CUSTOM_NOSQL' value='no' />
+                  <customization name='CAP_EXTRACT_ONLY' value='no' />
+                  <customization name='CAP_ISOLATION_LEVEL_READ_COMMITTED' value='no' />
+                  <customization name='CAP_ISOLATION_LEVEL_READ_UNCOMMITTED' value='no' />
+                  <customization name='CAP_ISOLATION_LEVEL_REPEATABLE_READS' value='no' />
+                  <customization name='CAP_ISOLATION_LEVEL_SERIALIZABLE' value='no' />
+                  <customization name='CAP_JDBC_BIND_DETECT_ALIAS_CASE_FOLDING' value='no' />
+                  <customization name='CAP_JDBC_SUPPRESS_EMPTY_CATALOG_NAME' value='no' />
+                  <customization name='CAP_JDBC_SUPPRESS_ENUMERATE_DATABASES' value='no' />
+                  <customization name='CAP_JDBC_SUPPRESS_ENUMERATE_SCHEMAS' value='no' />
+                  <customization name='CAP_JDBC_SUPPRESS_ENUMERATE_TABLES' value='no' />
+                  <customization name='CAP_QUERY_BOOLEXPR_TO_INTEXPR' value='yes' />
+                  <customization name='CAP_QUERY_FROM_REQUIRES_ALIAS' value='no' />
+                  <customization name='CAP_QUERY_GROUP_ALLOW_DUPLICATES' value='yes' />
+                  <customization name='CAP_QUERY_GROUP_BY_ALIAS' value='no' />
+                  <customization name='CAP_QUERY_GROUP_BY_DEGREE' value='yes' />
+                  <customization name='CAP_QUERY_HAVING_REQUIRES_GROUP_BY' value='no' />
+                  <customization name='CAP_QUERY_HAVING_UNSUPPORTED' value='no' />
+                  <customization name='CAP_QUERY_JOIN_ACROSS_SCHEMAS' value='no' />
+                  <customization name='CAP_QUERY_JOIN_REQUIRES_SCOPE' value='no' />
+                  <customization name='CAP_QUERY_NULL_REQUIRES_CAST' value='no' />
+                  <customization name='CAP_QUERY_SELECT_ALIASES_SORTED' value='yes' />
+                  <customization name='CAP_QUERY_SORT_BY_DEGREE' value='yes' />
+                  <customization name='CAP_QUERY_SUBQUERIES' value='yes' />
+                  <customization name='CAP_QUERY_SUBQUERIES_WITH_TOP' value='yes' />
+                  <customization name='CAP_QUERY_SUBQUERY_QUERY_CONTEXT' value='yes' />
+                  <customization name='CAP_QUERY_TOPSTYLE_LIMIT' value='no' />
+                  <customization name='CAP_QUERY_TOPSTYLE_ROWNUM' value='no' />
+                  <customization name='CAP_QUERY_TOPSTYLE_TOP' value='yes' />
+                  <customization name='CAP_QUERY_TOP_0_METADATA' value='no' />
+                  <customization name='CAP_QUERY_TOP_N' value='yes' />
+                  <customization name='CAP_QUERY_WHERE_FALSE_METADATA' value='no' />
+                  <customization name='CAP_SELECT_INTO' value='yes' />
+                  <customization name='CAP_SELECT_TOP_INTO' value='yes' />
+                  <customization name='CAP_SET_ISOLATION_LEVEL_VIA_ODBC_API' value='no' />
+                  <customization name='CAP_SET_ISOLATION_LEVEL_VIA_SQL' value='no' />
+                  <customization name='CAP_SUPPRESS_CONNECTION_POOLING' value='no' />
+                  <customization name='CAP_SUPPRESS_DISCOVERY_QUERIES' value='no' />
+                </customizations>
+              </connection-customization>
+            </connection>
+          </named-connection>
+        </named-connections>
+        <relation connection='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7' name='Telemetry' table='[Telemetry].[Telemetry]' type='table' />
+        <metadata-records>
+
+          
+              <metadata-record class='column'>
+                <remote-name>m_cube_name_distinct</remote-name>
+                <local-name>[m_cube_name_distinct]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_cube_name_distinct</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_days_since_last_query_min</remote-name>
+                <local-name>[m_days_since_last_query_min]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_days_since_last_query_min</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_estimated_post_plan_time_avg</remote-name>
+                <local-name>[m_epoch_estimated_post_plan_time_avg]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_estimated_post_plan_time_avg</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_estimated_post_plan_time_sum</remote-name>
+                <local-name>[m_epoch_estimated_post_plan_time_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_estimated_post_plan_time_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_post_plan_time_avg</remote-name>
+                <local-name>[m_epoch_post_plan_time_avg]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_post_plan_time_avg</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_post_plan_time_sum</remote-name>
+                <local-name>[m_epoch_post_plan_time_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_post_plan_time_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_sql_wall_time_avg</remote-name>
+                <local-name>[m_epoch_sql_wall_time_avg]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_sql_wall_time_avg</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_sql_wall_time_sum</remote-name>
+                <local-name>[m_epoch_sql_wall_time_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_sql_wall_time_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_wall_time_avg</remote-name>
+                <local-name>[m_epoch_wall_time_avg]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_wall_time_avg</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_epoch_wall_time_sum</remote-name>
+                <local-name>[m_epoch_wall_time_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_epoch_wall_time_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_failed_count_sum</remote-name>
+                <local-name>[m_failed_count_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_failed_count_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_local_cache_subquery_hits_sum</remote-name>
+                <local-name>[m_local_cache_subquery_hits_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_local_cache_subquery_hits_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_organization_id_distinct</remote-name>
+                <local-name>[m_organization_id_distinct]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_organization_id_distinct</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_project_id_distinct</remote-name>
+                <local-name>[m_project_id_distinct]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_project_id_distinct</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_query_date_max</remote-name>
+                <local-name>[m_query_date_max]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_query_date_max</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_query_id_count</remote-name>
+                <local-name>[m_query_id_count]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_query_id_count</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_subquery_count_sum</remote-name>
+                <local-name>[m_subquery_count_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_subquery_count_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_succeeded_count_sum</remote-name>
+                <local-name>[m_succeeded_count_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_succeeded_count_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_used_aggregate_sum</remote-name>
+                <local-name>[m_used_aggregate_sum]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_used_aggregate_sum</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>m_user_hash_distinct</remote-name>
+                <local-name>[m_user_hash_distinct]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>m_user_hash_distinct</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>cm_query_success_pct</remote-name>
+                <local-name>[cm_query_success_pct]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>cm_query_success_pct</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>cm_sum_estimated_post_plan_time_squared</remote-name>
+                <local-name>[cm_sum_estimated_post_plan_time_squared]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>cm_sum_estimated_post_plan_time_squared</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>cm_sum_post_plan_time_squared</remote-name>
+                <local-name>[cm_sum_post_plan_time_squared]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>cm_sum_post_plan_time_squared</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>cm_sum_sql_wall_time_squared</remote-name>
+                <local-name>[cm_sum_sql_wall_time_squared]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>cm_sum_sql_wall_time_squared</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>cm_sum_wall_time_squared</remote-name>
+                <local-name>[cm_sum_wall_time_squared]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>cm_sum_wall_time_squared</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>project_id</remote-name>
+                <local-name>[project_id]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>project_id</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>query_hour</remote-name>
+                <local-name>[query_hour]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>query_hour</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>organization_id</remote-name>
+                <local-name>[organization_id]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>organization_id</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>cube_name</remote-name>
+                <local-name>[cube_name]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>cube_name</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>query_id</remote-name>
+                <local-name>[query_id]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>query_id</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>query_language</remote-name>
+                <local-name>[query_language]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>query_language</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>service</remote-name>
+                <local-name>[service]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>service</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>succeeded</remote-name>
+                <local-name>[succeeded]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>succeeded</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>user_hash</remote-name>
+                <local-name>[user_hash]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>user_hash</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+              <metadata-record class='column'>
+                <remote-name>User_ID Level</remote-name>
+                <local-name>[User_ID Level]</local-name>
+                <parent-name>[]</parent-name>
+                <remote-alias>User_ID Level</remote-alias>
+                <!-- Needs Investigation -->
+                <ordinal>10</ordinal>
+
+                
+                <contains-null>true</contains-null>
+                <object-id>[Telemetry_66103C44A6E049F582E83DCC62D8C5CD]</object-id>
+              </metadata-record>
+          
+
+        </metadata-records>
+      </connection>
+      <aliases enabled='yes' />
+
+      
+        <column caption='DC Cube Name' datatype='integer' name='[m_cube_name_distinct]' role='measure' type='quantitative' />
+      
+        <column caption='Days Since Last Query' datatype='integer' name='[m_days_since_last_query_min]' role='measure' type='quantitative' />
+      
+        <column caption='Avg Estimated Post Plan Time' datatype='real' name='[m_epoch_estimated_post_plan_time_avg]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Estimated Post Plan Time' datatype='real' name='[m_epoch_estimated_post_plan_time_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Avg Post Plan Time' datatype='real' name='[m_epoch_post_plan_time_avg]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Post Plan Time' datatype='real' name='[m_epoch_post_plan_time_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Avg SQL Wall Time' datatype='real' name='[m_epoch_sql_wall_time_avg]' role='measure' type='quantitative' />
+      
+        <column caption='Sum SQL Wall Time' datatype='real' name='[m_epoch_sql_wall_time_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Avg Wall Time' datatype='real' name='[m_epoch_wall_time_avg]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Wall Time' datatype='real' name='[m_epoch_wall_time_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Failed Count' datatype='integer' name='[m_failed_count_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Subquery Local Cache Count' datatype='integer' name='[m_local_cache_subquery_hits_sum]' role='measure' type='quantitative' />
+      
+        <column caption='DC Organization ID' datatype='integer' name='[m_organization_id_distinct]' role='measure' type='quantitative' />
+      
+        <column caption='DC Project ID' datatype='integer' name='[m_project_id_distinct]' role='measure' type='quantitative' />
+      
+        <column caption='Latest Query Date' datatype='date' name='[m_query_date_max]' role='measure' type='quantitative' />
+      
+        <column caption='Total Queries' datatype='integer' name='[m_query_id_count]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Subquery Count' datatype='integer' name='[m_subquery_count_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Succeeded Count' datatype='integer' name='[m_succeeded_count_sum]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Used Aggregate Count' datatype='integer' name='[m_used_aggregate_sum]' role='measure' type='quantitative' />
+      
+        <column caption='DC User Hash' datatype='integer' name='[m_user_hash_distinct]' role='measure' type='quantitative' />
+      
+        <column caption='Pct Query Success' datatype='real' name='[cm_query_success_pct]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Estimated Post Plan Time Squared' datatype='real' name='[cm_sum_estimated_post_plan_time_squared]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Post Plan Time Squared' datatype='real' name='[cm_sum_post_plan_time_squared]' role='measure' type='quantitative' />
+      
+        <column caption='Sum SQL Wall Time Squared' datatype='real' name='[cm_sum_sql_wall_time_squared]' role='measure' type='quantitative' />
+      
+        <column caption='Sum Wall Time Squared' datatype='real' name='[cm_sum_wall_time_squared]' role='measure' type='quantitative' />
+      
+        <column caption='Project ID' datatype='string' name='[project_id]' role='dimension' type='nominal' />
+      
+        <column caption='Query_Hour' datatype='datetime' name='[query_hour]' role='dimension' type='nominal' />
+      
+        <column caption='Organization ID' datatype='string' name='[organization_id]' role='dimension' type='nominal' />
+      
+        <column caption='Cube Name' datatype='string' name='[cube_name]' role='dimension' type='nominal' />
+      
+        <column caption='Query_ID' datatype='string' name='[query_id]' role='dimension' type='nominal' />
+      
+        <column caption='Query_Language' datatype='string' name='[query_language]' role='dimension' type='nominal' />
+      
+        <column caption='Service' datatype='string' name='[service]' role='dimension' type='nominal' />
+      
+        <column caption='Succeeded' datatype='boolean' name='[succeeded]' role='dimension' type='nominal' />
+      
+        <column caption='User_Hash' datatype='string' name='[user_hash]' role='dimension' type='nominal' />
+      
+        <column caption='User_ID Level' datatype='string' name='[User_ID Level]' role='dimension' type='nominal' />
+      
+
+      <layout dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
+      <semantic-values>
+        <semantic-value key='[Country].[Name]' value='&quot;United States&quot;' />
+      </semantic-values>
+      <object-graph>
+        <objects>
+          <object caption='Telemetry' id='Telemetry_66103C44A6E049F582E83DCC62D8C5CD'>
+            <properties context=''>
+              <relation connection='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7' name='Telemetry' table='[Telemetry].[Telemetry]' type='table' />
+            </properties>
+          </object>
+        </objects>
+      </object-graph>
+    </datasource>
+  </datasources>
+  <worksheets>
+    
+        <worksheet name='Total Organizations'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                
+                <column-instance column='[m_organization_id_distinct]' 
+                  derivation='count' 
+                  name='[m_organization_id_distinct]' pivot='key'
+                  type='quantitative' />
+                <column caption='DC Organization ID' 
+                  datatype='INT8' 
+                  name='[m_organization_id_distinct]' 
+                  role='measure' 
+                  type='quantitative' />
+                
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style>
+              <style-rule element='cell'>
+                <format attr='text-align' value='center' />
+                <format attr='font-size' value='14' />
+              </style-rule>
+              <style-rule element='label'>
+                <format attr='font-size' value='9' />
+                <format attr='font-weight' value='bold' />
+              </style-rule>
+            </style>
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Text' />
+                <encodings>
+                  <text column='[ats_connection].[m_organization_id_distinct]' />
+                </encodings>
+              </pane>
+            </panes>
+            <rows></rows>
+            <cols></cols>
+          </table>
+          <simple-id uuid='{4ffeaf11-3b98-4412-8224-3a9b89ed22cf}' />
+        </worksheet>
+      
+    
+        <worksheet name='Total Cubes'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                
+                <column-instance column='[m_cube_name_distinct]' 
+                  derivation='count' 
+                  name='[m_cube_name_distinct]' pivot='key'
+                  type='quantitative' />
+                <column caption='DC Cube Name' 
+                  datatype='INT8' 
+                  name='[m_cube_name_distinct]' 
+                  role='measure' 
+                  type='quantitative' />
+                
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style>
+              <style-rule element='cell'>
+                <format attr='text-align' value='center' />
+                <format attr='font-size' value='14' />
+              </style-rule>
+              <style-rule element='label'>
+                <format attr='font-size' value='9' />
+                <format attr='font-weight' value='bold' />
+              </style-rule>
+            </style>
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Text' />
+                <encodings>
+                  <text column='[ats_connection].[m_cube_name_distinct]' />
+                </encodings>
+              </pane>
+            </panes>
+            <rows></rows>
+            <cols></cols>
+          </table>
+          <simple-id uuid='{78cafae5-43a0-454f-b5a9-2c65465c09b3}' />
+        </worksheet>
+      
+    
+        <worksheet name='Total Users'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                
+                <column-instance column='[m_user_hash_distinct]' 
+                  derivation='count' 
+                  name='[m_user_hash_distinct]' pivot='key'
+                  type='quantitative' />
+                <column caption='DC User Hash' 
+                  datatype='INT8' 
+                  name='[m_user_hash_distinct]' 
+                  role='measure' 
+                  type='quantitative' />
+                
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style>
+              <style-rule element='cell'>
+                <format attr='text-align' value='center' />
+                <format attr='font-size' value='14' />
+              </style-rule>
+              <style-rule element='label'>
+                <format attr='font-size' value='9' />
+                <format attr='font-weight' value='bold' />
+              </style-rule>
+            </style>
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Text' />
+                <encodings>
+                  <text column='[ats_connection].[m_user_hash_distinct]' />
+                </encodings>
+              </pane>
+            </panes>
+            <rows></rows>
+            <cols></cols>
+          </table>
+          <simple-id uuid='{317eb152-6d00-49ce-849c-5c6aa32833e9}' />
+        </worksheet>
+      
+    
+        <worksheet name='Avg Queries/Day'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                
+                <column-instance column='[m_query_id_count]' 
+                  derivation='count' 
+                  name='[m_query_id_count]' pivot='key'
+                  type='quantitative' />
+                <column caption='Total Queries' 
+                  datatype='INT8' 
+                  name='[m_query_id_count]' 
+                  role='measure' 
+                  type='quantitative' />
+                
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style>
+              <style-rule element='cell'>
+                <format attr='text-align' value='center' />
+                <format attr='font-size' value='14' />
+              </style-rule>
+              <style-rule element='label'>
+                <format attr='font-size' value='9' />
+                <format attr='font-weight' value='bold' />
+              </style-rule>
+            </style>
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Text' />
+                <encodings>
+                  <text column='[ats_connection].[m_query_id_count]' />
+                </encodings>
+              </pane>
+            </panes>
+            <rows></rows>
+            <cols></cols>
+          </table>
+          <simple-id uuid='{cfcc8db6-07cf-4d86-910d-2e5a556f09a9}' />
+        </worksheet>
+      
+    
+        <worksheet name='Success Rate (%)'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                
+                <column-instance column='[cm_query_success_pct]' 
+                  derivation='sum' 
+                  name='[cm_query_success_pct]' pivot='key'
+                  type='quantitative' />
+                <column caption='Pct Query Success' 
+                  datatype='FLOAT64' 
+                  name='[cm_query_success_pct]' 
+                  role='measure' 
+                  type='quantitative' />
+                
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style>
+              <style-rule element='cell'>
+                <format attr='text-align' value='center' />
+                <format attr='font-size' value='14' />
+              </style-rule>
+              <style-rule element='label'>
+                <format attr='font-size' value='9' />
+                <format attr='font-weight' value='bold' />
+              </style-rule>
+            </style>
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Text' />
+                <encodings>
+                  <text column='[ats_connection].[cm_query_success_pct]' />
+                </encodings>
+              </pane>
+            </panes>
+            <rows></rows>
+            <cols></cols>
+          </table>
+          <simple-id uuid='{170465b4-3320-4024-97d5-6ce0a1c55f01}' />
+        </worksheet>
+      
+    
+        <worksheet name='Avg WallTime (ms)'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                
+                <column-instance column='[m_epoch_sql_wall_time_avg]' 
+                  derivation='avg' 
+                  name='[m_epoch_sql_wall_time_avg]' pivot='key'
+                  type='quantitative' />
+                <column caption='Avg SQL Wall Time' 
+                  datatype='FLOAT64' 
+                  name='[m_epoch_sql_wall_time_avg]' 
+                  role='measure' 
+                  type='quantitative' />
+                
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style>
+              <style-rule element='cell'>
+                <format attr='text-align' value='center' />
+                <format attr='font-size' value='14' />
+              </style-rule>
+              <style-rule element='label'>
+                <format attr='font-size' value='9' />
+                <format attr='font-weight' value='bold' />
+              </style-rule>
+            </style>
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Text' />
+                <encodings>
+                  <text column='[ats_connection].[m_epoch_sql_wall_time_avg]' />
+                </encodings>
+              </pane>
+            </panes>
+            <rows></rows>
+            <cols></cols>
+          </table>
+          <simple-id uuid='{c5334aab-0fec-4aad-8548-d922546e90ab}' />
+        </worksheet>
+      
+    
+        <worksheet name='Query Success Rate'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[query_hour]' 
+                  derivation='' 
+                  name='[query_hour]' pivot='key'
+                  type='nominal' />
+                <column caption='Query_Hour' 
+                  datatype='DATETIME' 
+                  name='[query_hour]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[succeeded]' 
+                  derivation='' 
+                  name='[succeeded]' pivot='key'
+                  type='nominal' />
+                <column caption='Succeeded' 
+                  datatype='BOOL' 
+                  name='[succeeded]' 
+                  role='dimension' 
+                  type='nominal' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Line' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[succeeded]</rows>
+            <cols>[ats_connection].[query_hour]</cols>
+          </table>
+          <simple-id uuid='{e77543df-c36b-45d6-918c-00d453764334}' />
+        </worksheet>
+      
+    
+        <worksheet name='TotalQueries per Day'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[query_hour]' 
+                  derivation='' 
+                  name='[query_hour]' pivot='key'
+                  type='nominal' />
+                <column caption='Query_Hour' 
+                  datatype='DATETIME' 
+                  name='[query_hour]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_subquery_count_sum]' 
+                  derivation='sum' 
+                  name='[m_subquery_count_sum]' pivot='key'
+                  type='quantitative' />
+                <column caption='Sum Subquery Count' 
+                  datatype='INT8' 
+                  name='[m_subquery_count_sum]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Line' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[m_subquery_count_sum]</rows>
+            <cols>[ats_connection].[query_hour]</cols>
+          </table>
+          <simple-id uuid='{1fbebb43-689e-466e-bb06-126090c68f63}' />
+        </worksheet>
+      
+    
+        <worksheet name='ResponseTime(ms)'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[query_hour]' 
+                  derivation='' 
+                  name='[query_hour]' pivot='key'
+                  type='nominal' />
+                <column caption='Query_Hour' 
+                  datatype='DATETIME' 
+                  name='[query_hour]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_epoch_sql_wall_time_avg]' 
+                  derivation='avg' 
+                  name='[m_epoch_sql_wall_time_avg]' pivot='key'
+                  type='quantitative' />
+                <column caption='Avg SQL Wall Time' 
+                  datatype='FLOAT64' 
+                  name='[m_epoch_sql_wall_time_avg]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Line' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[m_epoch_sql_wall_time_avg]</rows>
+            <cols>[ats_connection].[query_hour]</cols>
+          </table>
+          <simple-id uuid='{9288c303-969e-45e0-81e6-80e52c156d2a}' />
+        </worksheet>
+      
+    
+        <worksheet name='Top 10 Most Active Users'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[user_hash]' 
+                  derivation='' 
+                  name='[user_hash]' pivot='key'
+                  type='nominal' />
+                <column caption='User_Hash' 
+                  datatype='WSTR' 
+                  name='[user_hash]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_subquery_count_sum]' 
+                  derivation='sum' 
+                  name='[m_subquery_count_sum]' pivot='key'
+                  type='quantitative' />
+                <column caption='Sum Subquery Count' 
+                  datatype='INT8' 
+                  name='[m_subquery_count_sum]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Bar' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[user_hash]</rows>
+            <cols>[ats_connection].[m_subquery_count_sum]</cols>
+          </table>
+          <simple-id uuid='{13bc5f65-c9e2-492d-b867-495d5f60ee37}' />
+        </worksheet>
+      
+    
+        <worksheet name='Top 10 CubeNames by AvgWallTime'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[cube_name]' 
+                  derivation='' 
+                  name='[cube_name]' pivot='key'
+                  type='nominal' />
+                <column caption='Cube Name' 
+                  datatype='WSTR' 
+                  name='[cube_name]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_epoch_sql_wall_time_avg]' 
+                  derivation='avg' 
+                  name='[m_epoch_sql_wall_time_avg]' pivot='key'
+                  type='quantitative' />
+                <column caption='Avg SQL Wall Time' 
+                  datatype='FLOAT64' 
+                  name='[m_epoch_sql_wall_time_avg]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Bar' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[cube_name]</rows>
+            <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
+          </table>
+          <simple-id uuid='{5a5d04b5-f831-4715-8d7a-d28bc69cd7b8}' />
+        </worksheet>
+      
+    
+        <worksheet name='Top 10 UserHash by AvgWallTime'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[user_hash]' 
+                  derivation='' 
+                  name='[user_hash]' pivot='key'
+                  type='nominal' />
+                <column caption='User_Hash' 
+                  datatype='WSTR' 
+                  name='[user_hash]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_epoch_sql_wall_time_avg]' 
+                  derivation='avg' 
+                  name='[m_epoch_sql_wall_time_avg]' pivot='key'
+                  type='quantitative' />
+                <column caption='Avg SQL Wall Time' 
+                  datatype='FLOAT64' 
+                  name='[m_epoch_sql_wall_time_avg]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Bar' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[user_hash]</rows>
+            <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
+          </table>
+          <simple-id uuid='{b1166b3e-0702-45ef-9032-c3d858dc9349}' />
+        </worksheet>
+      
+    
+        <worksheet name='Top 10 OrganizationId by AvgWallTime'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[organization_id]' 
+                  derivation='' 
+                  name='[organization_id]' pivot='key'
+                  type='nominal' />
+                <column caption='Organization ID' 
+                  datatype='WSTR' 
+                  name='[organization_id]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_epoch_sql_wall_time_avg]' 
+                  derivation='avg' 
+                  name='[m_epoch_sql_wall_time_avg]' pivot='key'
+                  type='quantitative' />
+                <column caption='Avg SQL Wall Time' 
+                  datatype='FLOAT64' 
+                  name='[m_epoch_sql_wall_time_avg]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Bar' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[organization_id]</rows>
+            <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
+          </table>
+          <simple-id uuid='{7ac01642-d350-4f7e-958e-cfb9f4b987b6}' />
+        </worksheet>
+      
+    
+        <worksheet name='Top 10 ProjectId by AvgWallTime'>
+          <table>
+            <view>
+              <datasources>
+                <datasource name='ats_connection' />
+              </datasources>
+              <datasource-dependencies datasource='ats_connection'>
+                <column-instance column='[project_id]' 
+                  derivation='' 
+                  name='[project_id]' pivot='key'
+                  type='nominal' />
+                <column caption='Project ID' 
+                  datatype='WSTR' 
+                  name='[project_id]' 
+                  role='dimension' 
+                  type='nominal' />
+
+                <column-instance column='[m_epoch_sql_wall_time_avg]' 
+                  derivation='avg' 
+                  name='[m_epoch_sql_wall_time_avg]' pivot='key'
+                  type='quantitative' />
+                <column caption='Avg SQL Wall Time' 
+                  datatype='FLOAT64' 
+                  name='[m_epoch_sql_wall_time_avg]' 
+                  role='measure' 
+                  type='quantitative' />
+              </datasource-dependencies>
+              <aggregation value='true' />
+            </view>
+            <style />
+            <panes>
+              <pane selection-relaxation-option='selection-relaxation-allow'>
+                <view>
+                  <breakdown value='auto' />
+                </view>
+                <mark class='Bar' />
+              </pane>
+            </panes>
+            <rows>[ats_connection].[project_id]</rows>
+            <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
+          </table>
+          <simple-id uuid='{e466b4b4-578d-4503-9b46-816e159f9937}' />
+        </worksheet>
+      
+    
+  </worksheets>
+  
+  <dashboards>
+    
+
+      <dashboard enable-sort-zone-taborder='true' name='Telemetry Dashboard'>
+        <style>
+          <style-rule element='title'>
+            <format attr='font-weight' value='bold' />
+            <format attr='font-size' value='14' />
+          </style-rule>
+        </style>
+        <size maxheight='4600' maxwidth='1800' 
+            minheight='4600' minwidth='1800' />
+        <zones>
+
+          <zone h='100000' id='0' type-v2='layout-basic' w='100000' x='0' y='0'>
+            
+            
+              <zone
+                id='1' 
+                name='Total Users'
+                w='600' 
+                h='200' 
+                x='0' 
+                y='0'/>
+            
+              <zone
+                id='2' 
+                name='Total Organizations'
+                w='600' 
+                h='200' 
+                x='600' 
+                y='0'/>
+            
+              <zone
+                id='3' 
+                name='Total Cubes'
+                w='600' 
+                h='200' 
+                x='1200' 
+                y='0'/>
+            
+              <zone
+                id='4' 
+                name='Avg Queries/Day'
+                w='600' 
+                h='200' 
+                x='0' 
+                y='200'/>
+            
+              <zone
+                id='5' 
+                name='Success Rate (%)'
+                w='600' 
+                h='200' 
+                x='600' 
+                y='200'/>
+            
+              <zone
+                id='6' 
+                name='Avg WallTime (ms)'
+                w='600' 
+                h='200' 
+                x='1200' 
+                y='200'/>
+            
+              <zone
+                id='7' 
+                name='Query Success Rate'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='400'/>
+            
+              <zone
+                id='8' 
+                name='TotalQueries per Day'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='900'/>
+            
+              <zone
+                id='9' 
+                name='ResponseTime(ms)'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='1400'/>
+            
+              <zone
+                id='10' 
+                name='Top 10 Most Active Users'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='1900'/>
+            
+              <zone
+                id='11' 
+                name='Top 10 CubeNames by AvgWallTime'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='2400'/>
+            
+              <zone
+                id='12' 
+                name='Top 10 UserHash by AvgWallTime'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='2900'/>
+            
+              <zone
+                id='13' 
+                name='Top 10 OrganizationId by AvgWallTime'
+                w='1800' 
+                h='500' 
+                x='0' 
+                y='3400'/>
+            
+              <zone
+                id='14' 
+                name='Top 10 ProjectId by AvgWallTime'
+                w='1800' 
+                h='700' 
+                x='0' 
+                y='3900'/>
+            
+
+          </zone>
+        </zones>
+        <simple-id uuid='{9100efa2-3db4-465a-aad6-f285d88d8db9}' />
+      </dashboard>
+    
+  </dashboards>
+
+  <windows>
+    
+      <window class='worksheet'  name='summary_total_orgs'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{1629607a-e886-486a-b912-ccc57ec9f0eb}' />
+      </window>
+    
+      <window class='worksheet'  name='summary_total_cubes'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{a3b57f91-f2e5-40e8-9f0f-acb334c36ecf}' />
+      </window>
+    
+      <window class='worksheet'  name='summary_total_users'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{feaba115-b599-42e6-8f89-23dd87c1a04b}' />
+      </window>
+    
+      <window class='worksheet'  name='summary_avg_queries_per_day'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{8b4a8c25-96ef-4457-8f79-600b541778fa}' />
+      </window>
+    
+      <window class='worksheet'  name='summary_success_rate'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{f74a126a-3f19-4e54-a036-7f9800df237c}' />
+      </window>
+    
+      <window class='worksheet'  name='summary_avg_wall_time'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{4cebcad1-1d8d-4b26-bea8-66b80d8449c4}' />
+      </window>
+    
+      <window class='worksheet'  name='kpi_query_success_rate'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{8da2b297-f2a4-4dc4-9683-96e331366735}' />
+      </window>
+    
+      <window class='worksheet'  name='kpi_total_queries_per_day'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{9eab33a5-5ea9-4282-b675-d2fc99305a91}' />
+      </window>
+    
+      <window class='worksheet'  name='kpi_response_time'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{71757309-1d18-4640-866a-c0b0349da264}' />
+      </window>
+    
+      <window class='worksheet'  name='top_10_active_users'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{7a9c1a91-0172-4b67-96f2-01498f2e3ebd}' />
+      </window>
+    
+      <window class='worksheet'  name='top_10_cubes_by_avg_wall_time'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{87f45813-c5db-48d5-9dd1-d83537431a0b}' />
+      </window>
+    
+      <window class='worksheet'  name='top_10_users_by_avg_wall_time'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{436091a3-6452-4273-b1fd-adc1cc51d680}' />
+      </window>
+    
+      <window class='worksheet'  name='top_10_orgs_by_avg_wall_time'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{82afcb45-1bfe-447a-a95c-531db5084081}' />
+      </window>
+    
+      <window class='worksheet'  name='top_10_projects_by_avg_wall_time'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{4ba0bbbc-df54-48ad-94c9-2e2ccdf1e6e8}' />
+      </window>
+    
+
+
+    
+      <window class='dashboard' maximized='true' name='Telemetry Dashboard'>
+        <viewpoints>
+          
+            <viewpoint name='Total Users' />
+          
+            <viewpoint name='Total Organizations' />
+          
+            <viewpoint name='Total Cubes' />
+          
+            <viewpoint name='Avg Queries/Day' />
+          
+            <viewpoint name='Success Rate (%)' />
+          
+            <viewpoint name='Avg WallTime (ms)' />
+          
+            <viewpoint name='Query Success Rate' />
+          
+            <viewpoint name='TotalQueries per Day' />
+          
+            <viewpoint name='ResponseTime(ms)' />
+          
+            <viewpoint name='Top 10 Most Active Users' />
+          
+            <viewpoint name='Top 10 CubeNames by AvgWallTime' />
+          
+            <viewpoint name='Top 10 UserHash by AvgWallTime' />
+          
+            <viewpoint name='Top 10 OrganizationId by AvgWallTime' />
+          
+            <viewpoint name='Top 10 ProjectId by AvgWallTime' />
+          
+        </viewpoints>
+        <active id='-1' />
+        <simple-id uuid='{61c879af-06ca-44ae-80ae-e2a63b89afcb}' />
+      </window>
+    
+
+
+  </windows>
+
+  <thumbnails/>
+</workbook>
