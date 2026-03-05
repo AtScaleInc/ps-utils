@@ -4,5 +4,5 @@ dist/
 .DS_Store
 .env
 example/connections.yaml
-resources/keys/
-resources/drivers/
+resources/keys/*
+resources/drivers/*
