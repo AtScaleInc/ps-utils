@@ -23,7 +23,9 @@
       <connection class='federated'>
         <named-connections>
           <named-connection caption='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' name='genericjdbc.0w0lhpd1d6ifhq10hiwbx0augav7'>
-            <connection class='genericjdbc' dbname='atscale' dialect='postgres' jdbcproperties='' jdbcurl='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' port='15432' schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin' warehouse=''>
+            <connection class='genericjdbc' dbname='atscale' dialect='postgres' jdbcproperties='' 
+                jdbcurl='jdbc:postgresql://class-i.training.atscale-se-demo.com:15432/Telemetry' port='15432' schema='Telemetry' 
+                server='class-i.training.atscale-se-demo.com' username='admin' warehouse=''>
               <connection-customization class='genericjdbc' enabled='false' version='18.1'>
                 <vendor name='genericjdbc' />
                 <driver name='postgresql' />
@@ -635,11 +637,11 @@
               <datasource-dependencies datasource='ats_connection'>
                 
                 <column-instance column='[m_organization_id_distinct]' 
-                  derivation='count' 
+                  derivation='Count' 
                   name='[m_organization_id_distinct]' pivot='key'
                   type='quantitative' />
                 <column caption='DC Organization ID' 
-                  datatype='INT8' 
+                  datatype='integer' 
                   name='[m_organization_id_distinct]' 
                   role='measure' 
                   type='quantitative' />
@@ -671,7 +673,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{4ffeaf11-3b98-4412-8224-3a9b89ed22cf}' />
+          <simple-id uuid='{33d83f9f-2e40-46f5-8e85-c285d9e704b5}' />
         </worksheet>
       
     
@@ -684,11 +686,11 @@
               <datasource-dependencies datasource='ats_connection'>
                 
                 <column-instance column='[m_cube_name_distinct]' 
-                  derivation='count' 
+                  derivation='Count' 
                   name='[m_cube_name_distinct]' pivot='key'
                   type='quantitative' />
                 <column caption='DC Cube Name' 
-                  datatype='INT8' 
+                  datatype='integer' 
                   name='[m_cube_name_distinct]' 
                   role='measure' 
                   type='quantitative' />
@@ -720,7 +722,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{78cafae5-43a0-454f-b5a9-2c65465c09b3}' />
+          <simple-id uuid='{12225290-164f-49e9-b340-3d81d8809537}' />
         </worksheet>
       
     
@@ -733,11 +735,11 @@
               <datasource-dependencies datasource='ats_connection'>
                 
                 <column-instance column='[m_user_hash_distinct]' 
-                  derivation='count' 
+                  derivation='Count' 
                   name='[m_user_hash_distinct]' pivot='key'
                   type='quantitative' />
                 <column caption='DC User Hash' 
-                  datatype='INT8' 
+                  datatype='integer' 
                   name='[m_user_hash_distinct]' 
                   role='measure' 
                   type='quantitative' />
@@ -769,7 +771,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{317eb152-6d00-49ce-849c-5c6aa32833e9}' />
+          <simple-id uuid='{399d6684-fe4e-4e3e-b262-211aebc3bda2}' />
         </worksheet>
       
     
@@ -782,11 +784,11 @@
               <datasource-dependencies datasource='ats_connection'>
                 
                 <column-instance column='[m_query_id_count]' 
-                  derivation='count' 
+                  derivation='Count' 
                   name='[m_query_id_count]' pivot='key'
                   type='quantitative' />
                 <column caption='Total Queries' 
-                  datatype='INT8' 
+                  datatype='integer' 
                   name='[m_query_id_count]' 
                   role='measure' 
                   type='quantitative' />
@@ -818,7 +820,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{cfcc8db6-07cf-4d86-910d-2e5a556f09a9}' />
+          <simple-id uuid='{9ed81e7e-78b1-4bdf-b743-155b33f89ac4}' />
         </worksheet>
       
     
@@ -831,11 +833,11 @@
               <datasource-dependencies datasource='ats_connection'>
                 
                 <column-instance column='[cm_query_success_pct]' 
-                  derivation='sum' 
+                  derivation='Sum' 
                   name='[cm_query_success_pct]' pivot='key'
                   type='quantitative' />
                 <column caption='Pct Query Success' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[cm_query_success_pct]' 
                   role='measure' 
                   type='quantitative' />
@@ -867,7 +869,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{170465b4-3320-4024-97d5-6ce0a1c55f01}' />
+          <simple-id uuid='{424cf694-44c0-45ba-87d7-c02e20b4d2ac}' />
         </worksheet>
       
     
@@ -880,11 +882,11 @@
               <datasource-dependencies datasource='ats_connection'>
                 
                 <column-instance column='[m_epoch_sql_wall_time_avg]' 
-                  derivation='avg' 
+                  derivation='Avg' 
                   name='[m_epoch_sql_wall_time_avg]' pivot='key'
                   type='quantitative' />
                 <column caption='Avg SQL Wall Time' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[m_epoch_sql_wall_time_avg]' 
                   role='measure' 
                   type='quantitative' />
@@ -916,7 +918,7 @@
             <rows></rows>
             <cols></cols>
           </table>
-          <simple-id uuid='{c5334aab-0fec-4aad-8548-d922546e90ab}' />
+          <simple-id uuid='{d608b883-41cd-4c69-abcc-47459310dff6}' />
         </worksheet>
       
     
@@ -928,21 +930,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[query_hour]' 
-                  derivation='' 
+                  derivation='Week' 
                   name='[query_hour]' pivot='key'
                   type='nominal' />
                 <column caption='Query_Hour' 
-                  datatype='DATETIME' 
+                  datatype='datetime' 
                   name='[query_hour]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[succeeded]' 
-                  derivation='' 
+                  derivation='None' 
                   name='[succeeded]' pivot='key'
                   type='nominal' />
                 <column caption='Succeeded' 
-                  datatype='BOOL' 
+                  datatype='boolean' 
                   name='[succeeded]' 
                   role='dimension' 
                   type='nominal' />
@@ -961,7 +963,7 @@
             <rows>[ats_connection].[succeeded]</rows>
             <cols>[ats_connection].[query_hour]</cols>
           </table>
-          <simple-id uuid='{e77543df-c36b-45d6-918c-00d453764334}' />
+          <simple-id uuid='{cec0319d-a383-41bc-8394-8c73aa317171}' />
         </worksheet>
       
     
@@ -973,21 +975,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[query_hour]' 
-                  derivation='' 
+                  derivation='Week' 
                   name='[query_hour]' pivot='key'
                   type='nominal' />
                 <column caption='Query_Hour' 
-                  datatype='DATETIME' 
+                  datatype='datetime' 
                   name='[query_hour]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_subquery_count_sum]' 
-                  derivation='sum' 
+                  derivation='Sum' 
                   name='[m_subquery_count_sum]' pivot='key'
                   type='quantitative' />
                 <column caption='Sum Subquery Count' 
-                  datatype='INT8' 
+                  datatype='integer' 
                   name='[m_subquery_count_sum]' 
                   role='measure' 
                   type='quantitative' />
@@ -1006,7 +1008,7 @@
             <rows>[ats_connection].[m_subquery_count_sum]</rows>
             <cols>[ats_connection].[query_hour]</cols>
           </table>
-          <simple-id uuid='{1fbebb43-689e-466e-bb06-126090c68f63}' />
+          <simple-id uuid='{26f60922-85d5-44c1-9a94-3ad8ac53f954}' />
         </worksheet>
       
     
@@ -1018,21 +1020,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[query_hour]' 
-                  derivation='' 
+                  derivation='Week' 
                   name='[query_hour]' pivot='key'
                   type='nominal' />
                 <column caption='Query_Hour' 
-                  datatype='DATETIME' 
+                  datatype='datetime' 
                   name='[query_hour]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_epoch_sql_wall_time_avg]' 
-                  derivation='avg' 
+                  derivation='Avg' 
                   name='[m_epoch_sql_wall_time_avg]' pivot='key'
                   type='quantitative' />
                 <column caption='Avg SQL Wall Time' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[m_epoch_sql_wall_time_avg]' 
                   role='measure' 
                   type='quantitative' />
@@ -1051,7 +1053,7 @@
             <rows>[ats_connection].[m_epoch_sql_wall_time_avg]</rows>
             <cols>[ats_connection].[query_hour]</cols>
           </table>
-          <simple-id uuid='{9288c303-969e-45e0-81e6-80e52c156d2a}' />
+          <simple-id uuid='{851a3ba5-2ef0-470a-84be-05c84fd43b88}' />
         </worksheet>
       
     
@@ -1063,21 +1065,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[user_hash]' 
-                  derivation='' 
+                  derivation='None' 
                   name='[user_hash]' pivot='key'
                   type='nominal' />
                 <column caption='User_Hash' 
-                  datatype='WSTR' 
+                  datatype='string' 
                   name='[user_hash]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_subquery_count_sum]' 
-                  derivation='sum' 
+                  derivation='Sum' 
                   name='[m_subquery_count_sum]' pivot='key'
                   type='quantitative' />
                 <column caption='Sum Subquery Count' 
-                  datatype='INT8' 
+                  datatype='integer' 
                   name='[m_subquery_count_sum]' 
                   role='measure' 
                   type='quantitative' />
@@ -1096,7 +1098,7 @@
             <rows>[ats_connection].[user_hash]</rows>
             <cols>[ats_connection].[m_subquery_count_sum]</cols>
           </table>
-          <simple-id uuid='{13bc5f65-c9e2-492d-b867-495d5f60ee37}' />
+          <simple-id uuid='{bd38ebc0-d9c6-4af9-b4ac-63ade6900bb0}' />
         </worksheet>
       
     
@@ -1108,21 +1110,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[cube_name]' 
-                  derivation='' 
+                  derivation='None' 
                   name='[cube_name]' pivot='key'
                   type='nominal' />
                 <column caption='Cube Name' 
-                  datatype='WSTR' 
+                  datatype='string' 
                   name='[cube_name]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_epoch_sql_wall_time_avg]' 
-                  derivation='avg' 
+                  derivation='Avg' 
                   name='[m_epoch_sql_wall_time_avg]' pivot='key'
                   type='quantitative' />
                 <column caption='Avg SQL Wall Time' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[m_epoch_sql_wall_time_avg]' 
                   role='measure' 
                   type='quantitative' />
@@ -1141,7 +1143,7 @@
             <rows>[ats_connection].[cube_name]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{5a5d04b5-f831-4715-8d7a-d28bc69cd7b8}' />
+          <simple-id uuid='{6123f87d-5653-4cf3-90e4-4f6899a0d3bb}' />
         </worksheet>
       
     
@@ -1153,21 +1155,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[user_hash]' 
-                  derivation='' 
+                  derivation='None' 
                   name='[user_hash]' pivot='key'
                   type='nominal' />
                 <column caption='User_Hash' 
-                  datatype='WSTR' 
+                  datatype='string' 
                   name='[user_hash]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_epoch_sql_wall_time_avg]' 
-                  derivation='avg' 
+                  derivation='Avg' 
                   name='[m_epoch_sql_wall_time_avg]' pivot='key'
                   type='quantitative' />
                 <column caption='Avg SQL Wall Time' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[m_epoch_sql_wall_time_avg]' 
                   role='measure' 
                   type='quantitative' />
@@ -1186,7 +1188,7 @@
             <rows>[ats_connection].[user_hash]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{b1166b3e-0702-45ef-9032-c3d858dc9349}' />
+          <simple-id uuid='{35080672-4db7-446b-b836-55ad960c3e0e}' />
         </worksheet>
       
     
@@ -1198,21 +1200,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[organization_id]' 
-                  derivation='' 
+                  derivation='None' 
                   name='[organization_id]' pivot='key'
                   type='nominal' />
                 <column caption='Organization ID' 
-                  datatype='WSTR' 
+                  datatype='string' 
                   name='[organization_id]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_epoch_sql_wall_time_avg]' 
-                  derivation='avg' 
+                  derivation='Avg' 
                   name='[m_epoch_sql_wall_time_avg]' pivot='key'
                   type='quantitative' />
                 <column caption='Avg SQL Wall Time' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[m_epoch_sql_wall_time_avg]' 
                   role='measure' 
                   type='quantitative' />
@@ -1231,7 +1233,7 @@
             <rows>[ats_connection].[organization_id]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{7ac01642-d350-4f7e-958e-cfb9f4b987b6}' />
+          <simple-id uuid='{0a482aea-0044-4198-bf1b-b2432184e69d}' />
         </worksheet>
       
     
@@ -1243,21 +1245,21 @@
               </datasources>
               <datasource-dependencies datasource='ats_connection'>
                 <column-instance column='[project_id]' 
-                  derivation='' 
+                  derivation='None' 
                   name='[project_id]' pivot='key'
                   type='nominal' />
                 <column caption='Project ID' 
-                  datatype='WSTR' 
+                  datatype='string' 
                   name='[project_id]' 
                   role='dimension' 
                   type='nominal' />
 
                 <column-instance column='[m_epoch_sql_wall_time_avg]' 
-                  derivation='avg' 
+                  derivation='Avg' 
                   name='[m_epoch_sql_wall_time_avg]' pivot='key'
                   type='quantitative' />
                 <column caption='Avg SQL Wall Time' 
-                  datatype='FLOAT64' 
+                  datatype='real' 
                   name='[m_epoch_sql_wall_time_avg]' 
                   role='measure' 
                   type='quantitative' />
@@ -1276,7 +1278,7 @@
             <rows>[ats_connection].[project_id]</rows>
             <cols>[ats_connection].[m_epoch_sql_wall_time_avg]</cols>
           </table>
-          <simple-id uuid='{e466b4b4-578d-4503-9b46-816e159f9937}' />
+          <simple-id uuid='{56c9ec9e-6fba-4422-9c1e-5d9d29f311d5}' />
         </worksheet>
       
     
@@ -1414,7 +1416,7 @@
 
           </zone>
         </zones>
-        <simple-id uuid='{9100efa2-3db4-465a-aad6-f285d88d8db9}' />
+        <simple-id uuid='{1fbef2a4-cedc-4db8-94b1-584e04e24985}' />
       </dashboard>
     
   </dashboards>
@@ -1442,7 +1444,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{1629607a-e886-486a-b912-ccc57ec9f0eb}' />
+        <simple-id uuid='{29d0bb26-35ad-44aa-ae0e-2be898e69379}' />
       </window>
     
       <window class='worksheet'  name='summary_total_cubes'>
@@ -1466,7 +1468,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{a3b57f91-f2e5-40e8-9f0f-acb334c36ecf}' />
+        <simple-id uuid='{c8df9e67-b85b-4f34-997d-416bb648d0e3}' />
       </window>
     
       <window class='worksheet'  name='summary_total_users'>
@@ -1490,7 +1492,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{feaba115-b599-42e6-8f89-23dd87c1a04b}' />
+        <simple-id uuid='{90450eae-4eae-422d-b1fb-4eed9dd22167}' />
       </window>
     
       <window class='worksheet'  name='summary_avg_queries_per_day'>
@@ -1514,7 +1516,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{8b4a8c25-96ef-4457-8f79-600b541778fa}' />
+        <simple-id uuid='{8d0a65cc-de3a-4d05-b1fc-062fffb5c9fd}' />
       </window>
     
       <window class='worksheet'  name='summary_success_rate'>
@@ -1538,7 +1540,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{f74a126a-3f19-4e54-a036-7f9800df237c}' />
+        <simple-id uuid='{a095a685-fdad-4c4f-a030-aa0d931e90f1}' />
       </window>
     
       <window class='worksheet'  name='summary_avg_wall_time'>
@@ -1562,7 +1564,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{4cebcad1-1d8d-4b26-bea8-66b80d8449c4}' />
+        <simple-id uuid='{f7402a98-627f-484b-8cfa-a1fdeb1f5276}' />
       </window>
     
       <window class='worksheet'  name='kpi_query_success_rate'>
@@ -1586,7 +1588,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{8da2b297-f2a4-4dc4-9683-96e331366735}' />
+        <simple-id uuid='{67b12b6a-01ef-477a-bb52-14fd87a760dd}' />
       </window>
     
       <window class='worksheet'  name='kpi_total_queries_per_day'>
@@ -1610,7 +1612,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{9eab33a5-5ea9-4282-b675-d2fc99305a91}' />
+        <simple-id uuid='{59aa4a87-0ef3-40ce-97cc-93965ceef949}' />
       </window>
     
       <window class='worksheet'  name='kpi_response_time'>
@@ -1634,7 +1636,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{71757309-1d18-4640-866a-c0b0349da264}' />
+        <simple-id uuid='{a41e24e3-120c-4ba8-a8ce-bbc4d513911f}' />
       </window>
     
       <window class='worksheet'  name='top_10_active_users'>
@@ -1658,7 +1660,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{7a9c1a91-0172-4b67-96f2-01498f2e3ebd}' />
+        <simple-id uuid='{523bd098-c92c-4465-92f8-dd90140f0065}' />
       </window>
     
       <window class='worksheet'  name='top_10_cubes_by_avg_wall_time'>
@@ -1682,7 +1684,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{87f45813-c5db-48d5-9dd1-d83537431a0b}' />
+        <simple-id uuid='{30124178-f895-439a-82bb-ae304d725c21}' />
       </window>
     
       <window class='worksheet'  name='top_10_users_by_avg_wall_time'>
@@ -1706,7 +1708,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{436091a3-6452-4273-b1fd-adc1cc51d680}' />
+        <simple-id uuid='{ee177221-9659-47b3-8469-d6ba12555652}' />
       </window>
     
       <window class='worksheet'  name='top_10_orgs_by_avg_wall_time'>
@@ -1730,7 +1732,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{82afcb45-1bfe-447a-a95c-531db5084081}' />
+        <simple-id uuid='{c5c14d40-d287-4f20-ab12-0e40aece6f19}' />
       </window>
     
       <window class='worksheet'  name='top_10_projects_by_avg_wall_time'>
@@ -1754,7 +1756,7 @@
             </strip>
           </edge>
         </cards>
-        <simple-id uuid='{4ba0bbbc-df54-48ad-94c9-2e2ccdf1e6e8}' />
+        <simple-id uuid='{1280f6f9-7513-4a1d-8ffb-ad9f0591b473}' />
       </window>
     
 
@@ -1793,7 +1795,7 @@
           
         </viewpoints>
         <active id='-1' />
-        <simple-id uuid='{61c879af-06ca-44ae-80ae-e2a63b89afcb}' />
+        <simple-id uuid='{4e0fa767-ffdb-45a7-bd48-61ae24b0446e}' />
       </window>
     
 

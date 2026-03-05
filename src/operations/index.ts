@@ -6,6 +6,7 @@ import { ToggleOperation } from "./toggle/ToggleOperation.js";
 import { ExtractAtScaleModelOperation } from "./extract-atscale-model/ExtractAtScaleModelOperation.js";
 import { GenerateTableauFromNamespaceOperation } from "./generate-tableau-from-namespace/GenerateTableauFromNamespaceOperation.js";
 import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOperation.js";
+import { PythonHelloWorldOperation } from "./python/PythonHelloWorldOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -24,5 +25,6 @@ export async function buildRegistry(
   registry.register(new ExtractAtScaleModelOperation(services, logger));
   registry.register(new GenerateTableauFromNamespaceOperation(services, logger));
   registry.register(new EchoConnectionMetaDataOperation(services, logger));
+  registry.register(new PythonHelloWorldOperation(services, logger));
   return registry;
 }

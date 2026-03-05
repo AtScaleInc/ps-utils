@@ -3,6 +3,7 @@
  */
 import { EjsTemplateService } from "./EjsTemplateService.js";
 import { YamlService } from "./YamlService.js";
+import { PythonService } from "./PythonService.js";
 import { ServiceRegistry } from "./registry.js";
 
 export type ServiceRegistryOptions = {
@@ -18,6 +19,7 @@ export async function buildServiceRegistry(
   const registry = new ServiceRegistry();
   registry.register(new EjsTemplateService());
   registry.register(new YamlService());
+  registry.register(new PythonService());
   if (options.includeSql !== false) {
     const { SqlService } = await import("./SqlService.js");
     registry.register(new SqlService());

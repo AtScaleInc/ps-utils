@@ -11,7 +11,7 @@ async function walk(dir) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await walk(fullPath)));
-    } else if (entry.isFile() && entry.name.endsWith(".ejs")) {
+    } else if (entry.isFile() && (entry.name.endsWith(".ejs") || entry.name.endsWith(".py"))) {
       files.push(fullPath);
     }
   }

@@ -91,6 +91,62 @@ Example echo-connection-metadata with schema override:
 node dist/cli.js echo-connection-metadata --connection-file "./example/connections.yaml" --connection-name "snow_demo" --schema "RUN_LOG"
 ```
 
+## Python Operations
+
+Operations can run Python scripts via `PythonService`, which spawns `python3` and passes parameters as `--key value` CLI arguments.
+
+### Reference operation
+
+```bash
+node dist/cli.js python-hello-world --name "Alice"
+# Hello, Alice!
+
+node dist/cli.js python-hello-world
+# Hello, World!
+```
+
+### Extending with your own Python operation
+
+1. Add a `.py` script next to your operation file (it will be copied to `dist/` automatically):
+
+```python
+# src/operations/my-op/my_script.py
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--input")
+args = parser.parse_args()
+print(f"Result: {args.input}")
+```
+
+2. Create the operation and call `PythonService.execute()`:
+
+```ts
+// src/operations/my-op/MyOperation.ts
+import path from "path";
+import { fileURLToPath } from "url";
+import { Operation } from "../Operation.js";
+import { ParameterSet, StringParameter } from "../Parameters.js";
+import type { PythonService } from "../../services/PythonService.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export class MyOperation extends Operation<{ input: string }> {
+  name = "my-operation";
+  description = "Run my Python script";
+  parameters = new MyParameterSet();
+
+  run(params: { input: string }): void {
+    const python = this.services.get<PythonService>("python");
+    const result = python.execute(path.join(__dirname, "my_script.py"), { input: params.input });
+    if (result.exitCode !== 0) throw new Error(result.stderr);
+    this.logger.log(result.stdout.trimEnd());
+  }
+}
+```
+
+3. Register it in `src/operations/index.ts`.
+
 ## Extract AtScale Model Workflow
 
 The `extract-atscale-model` workflow (`.github/workflows/extract-atscale-model.yml`) runs manually from the Actions tab and extracts an AtScale model's metrics and attributes into a YAML file.

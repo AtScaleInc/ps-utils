@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-atscale-model generate-tableau-from-namespace echo-connection-metadata" -- "$cur") )
+    COMPREPLY=( $(compgen -W "echo toggle extract-atscale-model generate-tableau-from-namespace echo-connection-metadata python-hello-world" -- "$cur") )
     return 0
   fi
 
@@ -25,6 +25,9 @@ _atscale_utils_complete() {
       ;;
     echo-connection-metadata)
       params="--logfile --output --verbose --connection-file --connection-name --schema"
+      ;;
+    python-hello-world)
+      params="--logfile --output --verbose --name"
       ;;
     *)
       params="--logfile --output --verbose"

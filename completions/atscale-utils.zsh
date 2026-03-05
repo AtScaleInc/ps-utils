@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-atscale-model generate-tableau-from-namespace echo-connection-metadata
+    _values 'operations' echo toggle extract-atscale-model generate-tableau-from-namespace echo-connection-metadata python-hello-world
     ;;
   args)
     case "$words[2]" in
@@ -24,6 +24,9 @@ case $state in
     ;;
   echo-connection-metadata)
     _values 'params' --logfile --output --verbose --connection-file --connection-name --schema
+    ;;
+  python-hello-world)
+    _values 'params' --logfile --output --verbose --name
     ;;
     *)
       _values 'params' --logfile --output --verbose
