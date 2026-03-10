@@ -6,3 +6,4 @@ dist/
 example/connections.yaml
 resources/keys/*
 resources/drivers/*
+~*

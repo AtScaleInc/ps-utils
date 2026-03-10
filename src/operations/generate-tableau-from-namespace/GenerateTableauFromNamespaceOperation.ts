@@ -149,12 +149,49 @@ schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin
           "var": "Var",
         } as Record<string, string>,
 
+        remoteTypeMap: {
+          "STRING": 129, "WSTR": 129, "BSTR": 129, "GUID": 129,
+          "INT1": 20, "INT2": 20, "INT4": 20, "INT8": 20,
+          "INT_UNSIGNED1": 20, "INT_UNSIGNED2": 20, "INT_UNSIGNED4": 20, "INT_UNSIGNED8": 20,
+          "FLOAT32": 5, "FLOAT64": 5,
+          "DATE_DOUBLE": 7, "DATETIME": 7,
+          "BOOL": 11,
+          "DECIMAL": 131, "NUMERIC": 131,
+        } as Record<string, number>,
+
+        metadataAggMap: {
+          "STRING": "Count", "WSTR": "Count", "BSTR": "Count", "GUID": "Count",
+          "BOOL": "Count",
+          "DATE_DOUBLE": "Year", "DATETIME": "Year",
+        } as Record<string, string>,
+
+        derivationPrefixMap: {
+          "Sum": "sum", "Avg": "avg", "Count": "cnt", "CountD": "ctd",
+          "Max": "max", "Min": "min", "Median": "med", "Stdev": "std",
+          "Var": "var", "None": "none", "Week": "wk", "Year": "yr",
+        } as Record<string, string>,
+
+        typeSuffixMap: {
+          "quantitative": "qk", "nominal": "nk", "ordinal": "ok",
+        } as Record<string, string>,
+
         toTableauType: function (type: string): string {
           return this.typeMap[type] || "string";
         },
         toTableauDerivation: function (derivation: string): string {
           return this.derivationMap[derivation] || "None";
-        }
+        },
+        toRemoteType: function (dataType: string): number {
+          return this.remoteTypeMap[dataType] || 129;
+        },
+        toMetadataAggregation: function (dataType: string): string {
+          return this.metadataAggMap[dataType] || "Sum";
+        },
+        toColumnInstanceName: function (derivation: string, columnName: string, type: string): string {
+          const prefix = this.derivationPrefixMap[derivation] || derivation.toLowerCase();
+          const suffix = this.typeSuffixMap[type] || "qk";
+          return `${prefix}:${columnName}:${suffix}`;
+        },
       };
 
       const output = ejs.render(template, {
