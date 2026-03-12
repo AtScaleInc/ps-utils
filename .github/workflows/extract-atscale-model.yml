@@ -39,7 +39,7 @@ jobs:
 
       - name: Extract AtScale model
         run: |
-          node dist/cli.js extract-atscale-model \
+          node dist/cli.js extract-model-from-atscale \
             --model "${{ inputs.model }}" \
             --connection-file connection.yml \
             --connection-name "${{ inputs.connection-name }}" \

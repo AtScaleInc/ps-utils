@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { buildServiceRegistry } from "../../services/index.js";
-import { ExtractAtScaleModelOperation } from "../extract-atscale-model/ExtractAtScaleModelOperation.js";
+import { ExtractAtScaleModelOperation } from "../extract-model-from-atscale/ExtractAtScaleModelOperation.js";
 import { buildLogger } from "../../logging.js";
 
 function captureConsole(): { stop: () => string[] } {

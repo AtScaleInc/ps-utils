@@ -46,7 +46,7 @@ type ExtractAtScaleParams = {
  * Stub operation for extracting an AtScale model.
  */
 export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams> {
-  name = "extract-atscale-model";
+  name = "extract-model-from-atscale";
   description = "Extract an AtScale model (stub)";
   parameters = new ExtractAtScaleParameterSet();
 

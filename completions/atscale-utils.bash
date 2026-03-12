@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-atscale-model generate-tableau-from-namespace echo-connection-metadata python-hello-world" -- "$cur") )
+    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml" -- "$cur") )
     return 0
   fi
 
@@ -17,7 +17,7 @@ _atscale_utils_complete() {
     toggle)
       params="--logfile --output --verbose --enabled"
       ;;
-    extract-atscale-model)
+    extract-model-from-atscale)
       params="--logfile --output --verbose --model --connection-file --connection-name --output-model-file"
       ;;
     generate-tableau-from-namespace)
@@ -28,6 +28,15 @@ _atscale_utils_complete() {
       ;;
     python-hello-world)
       params="--logfile --output --verbose --name"
+      ;;
+    generate-sml-from-connection)
+      params="--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size"
+      ;;
+    generate-sml-from-ddl)
+      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema"
+      ;;
+    extract-model-from-sml)
+      params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"
       ;;
     *)
       params="--logfile --output --verbose"

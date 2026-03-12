@@ -3,7 +3,7 @@ node_modules/
 dist/
 .DS_Store
 .env
-example/connections.yaml
+example/*
 resources/keys/*
 resources/drivers/*
 ~*

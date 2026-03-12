@@ -1,0 +1,698 @@
+// ============================================================
+// AtScale SML (Semantic Modeling Language) Serializer
+//
+// Converts a SemanticModel into a set of YAML files conforming
+// to the AtScale SML specification (v1.5).
+//
+// Output file layout:
+//   catalog.yml
+//   connections/{connectionName}.yml
+//   datasets/{sourceTable}.yml          (one per fact + dimension table)
+//   dimensions/{dimensionName}.yml      (one per dimension)
+//   metrics/{metricUniqueName}.yml      (one per measure)
+//   models/{modelName}.yml
+//
+// Reference: https://github.com/semanticdatalayer/SML
+// ============================================================
+
+import {
+  JdbcColumnMeta,
+  SemanticModel,
+  isBinaryType,
+  SemanticDimension,
+  SemanticFact,
+  SemanticMeasure,
+  SemanticHierarchy,
+  SemanticAttribute,
+  SemanticRelationship,
+  AggregationType,
+} from "./types.js";
+
+// ----------------------------------------------------------
+// Public types
+// ----------------------------------------------------------
+
+export interface SmlSerializerOptions {
+  /**
+   * The unique_name of the SML Connection object all datasets will reference.
+   * Must match an existing connection configured in AtScale.
+   */
+  connectionName: string;
+
+  /**
+   * Display label for the generated catalog.  Defaults to the model name.
+   */
+  catalogName?: string;
+
+  /**
+   * Raw column metadata keyed by table name (snake_case).
+   * When provided, dataset files include the full column list with data types.
+   * When omitted, dataset files include only the columns referenced by the
+   * semantic model (measures, hierarchy levels, attributes).
+   */
+  columnsByTable?: Map<string, JdbcColumnMeta[]>;
+
+  /**
+   * Prefix for metric unique_names.  Default: "m_".
+   * e.g. "m_revenue_sum", "m_quantity_average"
+   */
+  metricPrefix?: string;
+
+  /**
+   * Prefix for level_attribute unique_names within dimensions.  Default: "la_".
+   * e.g. "la_year", "la_category"
+   */
+  levelAttributePrefix?: string;
+}
+
+/** Map of relative file path → YAML content. */
+export type SmlOutput = Map<string, string>;
+
+// ----------------------------------------------------------
+// Internal helpers — YAML serialisation
+// ----------------------------------------------------------
+
+/** Values that YAML would misinterpret without quoting. */
+const YAML_SPECIAL_VALUES = new Set([
+  "yes", "no", "true", "false", "null", "~", "on", "off",
+]);
+
+function needsQuoting(s: string): boolean {
+  if (s === "") return true;
+  if (YAML_SPECIAL_VALUES.has(s.toLowerCase())) return true;
+  if (/^[\d\-+.]/.test(s)) return true; // looks numeric
+  if (/[:#\[\]{},|>&*!%@`"']/.test(s)) return true;
+  if (s.startsWith(" ") || s.endsWith(" ")) return true;
+  if (s.includes("\n")) return true;
+  return false;
+}
+
+function yamlStr(s: string): string {
+  if (!needsQuoting(s)) return s;
+  // Use double-quoted style
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+}
+
+type YamlPrimitive = string | number | boolean | null | undefined;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type YamlValue = any;
+
+/**
+ * Serialize a plain JS object tree to a YAML string.
+ * Keys with `undefined` values are omitted.
+ * Arrays always use block style.
+ */
+function toYaml(value: YamlValue, indent = 0): string {
+  const pad = " ".repeat(indent);
+
+  if (value === null || value === undefined) return "~";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return yamlStr(value);
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "[]";
+    return value
+      .map((item) => {
+        const rendered = toYaml(item, indent + 2);
+        if (rendered.includes("\n")) {
+          // Multi-line block item: first line on same line as `-`
+          const [first, ...rest] = rendered.split("\n");
+          return `${pad}- ${first}\n${rest.map((l) => `${pad}  ${l}`).join("\n")}`;
+        }
+        return `${pad}- ${rendered}`;
+      })
+      .join("\n");
+  }
+
+  // Object
+  const entries = Object.entries(value as Record<string, YamlValue>).filter(
+    ([, v]) => v !== undefined,
+  );
+  if (entries.length === 0) return "{}";
+
+  return entries
+    .map(([k, v]) => {
+      const renderedVal = toYaml(v, indent + 2);
+      if (
+        Array.isArray(v) && (v as unknown[]).length > 0
+      ) {
+        // Block arrays: key on its own line, items indented
+        return `${pad}${k}:\n${renderedVal}`;
+      }
+      if (
+        v !== null &&
+        typeof v === "object" &&
+        !Array.isArray(v) &&
+        Object.keys(v as object).length > 0
+      ) {
+        return `${pad}${k}:\n${renderedVal}`;
+      }
+      return `${pad}${k}: ${renderedVal}`;
+    })
+    .join("\n");
+}
+
+/** Wrap a YAML object with an optional header comment. */
+function yamlDoc(obj: Record<string, YamlValue>, comment?: string): string {
+  const header = comment ? `# ${comment}\n` : "";
+  return `${header}${toYaml(obj)}\n`;
+}
+
+// ----------------------------------------------------------
+// Naming helpers
+// ----------------------------------------------------------
+
+function toKebab(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function laName(columnName: string, prefix: string): string {
+  return `${prefix}${columnName.toLowerCase()}`;
+}
+
+function metricUniqueName(measure: SemanticMeasure, prefix: string): string {
+  return `${prefix}${measure.sourceColumn.toLowerCase()}_${measure.aggregation.toLowerCase()}`;
+}
+
+// ----------------------------------------------------------
+// Data type mappings
+// ----------------------------------------------------------
+
+const JDBC_TO_SML: Record<string, string> = {
+  // Character types
+  VARCHAR: "string",    CHAR: "string",     NVARCHAR: "string",
+  NCHAR: "string",      TEXT: "string",     NTEXT: "string",
+  CLOB: "string",       STRING: "string",   XML: "string",
+  SYSNAME: "string",    UNIQUEIDENTIFIER: "string",
+  TINYTEXT: "string",   MEDIUMTEXT: "string", LONGTEXT: "string",
+  ENUM: "string",       SET: "string",
+  CHARACTER: "string",
+  // Integer types
+  INTEGER: "int",       INT: "int",         SMALLINT: "int",
+  TINYINT: "int",       MEDIUMINT: "int",   INT2: "int",
+  INT4: "int",
+  BIGINT: "bigint",     INT8: "bigint",
+  // Floating-point types
+  FLOAT: "float",       REAL: "float",
+  DOUBLE: "double",
+  // Decimal types
+  DECIMAL: "decimal",   NUMERIC: "decimal", NUMBER: "decimal",
+  MONEY: "decimal",     SMALLMONEY: "decimal",
+  // Boolean
+  BOOLEAN: "boolean",   BOOL: "boolean",    BIT: "boolean",
+  // Date / time
+  DATE: "date",
+  TIMESTAMP: "datetime",  DATETIME: "datetime",   SMALLDATETIME: "datetime",
+  DATETIME2: "datetime",  DATETIMEOFFSET: "datetime",
+  "TIMESTAMP WITH TIME ZONE": "datetime",
+  "TIMESTAMP WITHOUT TIME ZONE": "datetime",
+  // Snowflake types
+  TIMESTAMP_NTZ: "datetime",   TIMESTAMP_LTZ: "datetime",   TIMESTAMP_TZ: "datetime",
+};
+
+function smlDataType(jdbcType: string): string {
+  return JDBC_TO_SML[jdbcType.toUpperCase()] ?? "string";
+}
+
+const AGG_TO_SML: Record<AggregationType, string> = {
+  SUM:   "sum",
+  AVG:   "average",
+  MIN:   "minimum",
+  MAX:   "maximum",
+  COUNT: "count non-null",
+};
+
+// ----------------------------------------------------------
+// Time dimension helpers
+// ----------------------------------------------------------
+
+const TIME_UNIT_MAP: Record<string, string> = {
+  year: "year",        yr: "year",         fiscal_year: "year",
+  quarter: "quarter",  qtr: "quarter",     fiscal_quarter: "quarter",
+  month: "month",      mon: "month",       fiscal_month: "month",
+  week: "week",        wk: "week",         fiscal_week: "week",
+  day: "day",          date: "day",        dt: "day",
+  hour: "hour",        hr: "hour",
+  minute: "minute",    min: "minute",
+  second: "second",    sec: "second",
+};
+
+function inferTimeUnit(levelName: string): string | undefined {
+  const lower = levelName.toLowerCase().replace(/\s+/g, "_");
+  return TIME_UNIT_MAP[lower];
+}
+
+function isTimeDimension(dim: SemanticDimension): boolean {
+  const nameHint = /date|time|fiscal|calendar|period/i.test(dim.name);
+  const levelHint = dim.hierarchies.some((h) =>
+    h.levels.some((l) => inferTimeUnit(l.name) !== undefined),
+  );
+  return nameHint || levelHint;
+}
+
+// ----------------------------------------------------------
+// 1. Catalog file
+// ----------------------------------------------------------
+
+function buildCatalog(model: SemanticModel, opts: SmlSerializerOptions): string {
+  return yamlDoc(
+    {
+      unique_name: toKebab(opts.catalogName ?? model.name),
+      object_type: "catalog",
+      label: opts.catalogName ?? model.name,
+      version: "1.0",
+      aggressive_agg_promotion: false,
+      build_speculative_aggs: false,
+      hidden_models: [],
+    },
+    "AtScale SML Catalog — generated by jdbc-semantic-model",
+  );
+}
+
+// ----------------------------------------------------------
+// 2. Connection file
+// ----------------------------------------------------------
+
+function buildConnection(opts: SmlSerializerOptions): string {
+  return yamlDoc({
+    unique_name: opts.connectionName,
+    object_type: "connection",
+    label: opts.connectionName,
+    as_connection: opts.connectionName,
+  });
+}
+
+// ----------------------------------------------------------
+// 3. Dataset files
+// ----------------------------------------------------------
+
+/**
+ * Collect all column names referenced by a dimension or fact so we can
+ * produce a minimal dataset file when raw column metadata is unavailable.
+ */
+function columnsFromDimension(dim: SemanticDimension): string[] {
+  const cols = new Set<string>();
+  for (const h of dim.hierarchies) {
+    for (const l of h.levels) cols.add(l.sourceColumn);
+  }
+  for (const a of dim.attributes) {
+    cols.add(a.sourceColumn);
+    for (const lbl of a.labels ?? []) cols.add(lbl.sourceColumn);
+  }
+  return Array.from(cols);
+}
+
+function columnsFromFact(fact: SemanticFact): string[] {
+  const cols = new Set<string>();
+  if (fact.primaryKey) cols.add(fact.primaryKey);
+  for (const m of fact.measures) cols.add(m.sourceColumn);
+  for (const d of fact.degenerateDimensions) cols.add(d.sourceColumn);
+  return Array.from(cols);
+}
+
+function buildDataset(
+  tableName: string,
+  referencedColumns: string[],
+  opts: SmlSerializerOptions,
+): string {
+  const rawCols = opts.columnsByTable?.get(tableName);
+
+  let columns: Array<Record<string, YamlValue>>;
+
+  if (rawCols && rawCols.length > 0) {
+    // Full column list from JDBC metadata
+    columns = rawCols.map((c) => ({
+      name: c.columnName,
+      data_type: smlDataType(c.dataType),
+    }));
+  } else {
+    // Fallback: only columns we know about from the semantic model
+    columns = referencedColumns.map((colName) => ({
+      name: colName,
+      data_type: "string", // unknown — mark for review
+    }));
+  }
+
+  return yamlDoc({
+    unique_name: tableName,
+    object_type: "dataset",
+    label: tableName,
+    connection_id: opts.connectionName,
+    table: tableName,
+    columns,
+  });
+}
+
+// ----------------------------------------------------------
+// 4. Dimension files
+// ----------------------------------------------------------
+
+interface LevelAttributeDef {
+  unique_name: string;
+  label: string;
+  dataset: string;
+  name_column: string;
+  key_columns: string[];
+  sort_column?: string;
+  time_unit?: string;
+  secondary_attributes?: Array<Record<string, YamlValue>>;
+}
+
+function buildDimensionFile(
+  dim: SemanticDimension,
+  opts: SmlSerializerOptions,
+): string {
+  const laPrefix = opts.levelAttributePrefix ?? "la_";
+  const isTime = isTimeDimension(dim);
+
+  // Collect all level attributes needed:
+  // - One per hierarchy level
+  // - One per flat attribute (not already in a hierarchy)
+  const levelAttrMap = new Map<string, LevelAttributeDef>();
+  const hierarchyLevelColumns = new Set<string>();
+
+  // Collect hierarchy level columns first
+  for (const h of dim.hierarchies) {
+    for (const l of h.levels) {
+      hierarchyLevelColumns.add(l.sourceColumn);
+    }
+  }
+
+  // Build level_attributes from hierarchy levels
+  for (const h of dim.hierarchies) {
+    for (const l of h.levels) {
+      const key = l.sourceColumn;
+      if (levelAttrMap.has(key)) continue; // shared across hierarchies
+
+      const la: LevelAttributeDef = {
+        unique_name: laName(l.sourceColumn, laPrefix),
+        label: l.name,
+        dataset: dim.sourceTable,
+        name_column: l.sourceColumn,
+        key_columns: [l.sourceColumn],
+      };
+
+      const tu = inferTimeUnit(l.name);
+      if (isTime && tu) la.time_unit = tu;
+
+      levelAttrMap.set(key, la);
+    }
+  }
+
+  // Build secondary_attributes from labels on flat attributes
+  // and attach them to the appropriate level_attribute
+  for (const attr of dim.attributes) {
+    if (!attr.labels?.length) continue;
+    const parentLa = levelAttrMap.get(attr.sourceColumn);
+    if (!parentLa) continue;
+
+    parentLa.secondary_attributes = attr.labels.map((lbl) => ({
+      unique_name: laName(lbl.sourceColumn, laPrefix),
+      label: lbl.name,
+      dataset: dim.sourceTable,
+      name_column: lbl.sourceColumn,
+      key_columns: [lbl.sourceColumn],
+    }));
+  }
+
+  // Add flat attributes (not already in a hierarchy) as standalone level_attributes
+  for (const attr of dim.attributes) {
+    if (hierarchyLevelColumns.has(attr.sourceColumn)) continue;
+    if (levelAttrMap.has(attr.sourceColumn)) continue;
+
+    levelAttrMap.set(attr.sourceColumn, {
+      unique_name: laName(attr.sourceColumn, laPrefix),
+      label: attr.name,
+      dataset: dim.sourceTable,
+      name_column: attr.sourceColumn,
+      key_columns: [attr.sourceColumn],
+    });
+  }
+
+  // PK as a level_attribute if not already included
+  if (!levelAttrMap.has(dim.primaryKey)) {
+    levelAttrMap.set(dim.primaryKey, {
+      unique_name: laName(dim.primaryKey, laPrefix),
+      label: dim.primaryKey,
+      dataset: dim.sourceTable,
+      name_column: dim.primaryKey,
+      key_columns: [dim.primaryKey],
+    });
+  }
+
+  // Serialise level_attributes
+  const level_attributes: Array<Record<string, YamlValue>> = Array.from(
+    levelAttrMap.values(),
+  ).map((la) => {
+    const obj: Record<string, YamlValue> = {
+      unique_name: la.unique_name,
+      label: la.label,
+      dataset: la.dataset,
+      name_column: la.name_column,
+      key_columns: la.key_columns,
+    };
+    if (la.sort_column) obj.sort_column = la.sort_column;
+    if (la.time_unit) obj.time_unit = la.time_unit;
+    if (la.secondary_attributes?.length) {
+      obj.secondary_attributes = la.secondary_attributes as unknown as YamlValue;
+    }
+    return obj;
+  });
+
+  // Build hierarchy definitions
+  const hierarchies: Array<Record<string, YamlValue>> = dim.hierarchies.map(
+    (h) => ({
+      unique_name: h.name,
+      label: h.name,
+      filter_empty: "yes",
+      levels: h.levels.map((l) => ({
+        unique_name: laName(l.sourceColumn, laPrefix),
+      })),
+    }),
+  );
+
+  const dimObj: Record<string, YamlValue> = {
+    unique_name: dim.name,
+    object_type: "dimension",
+    label: dim.name,
+    ...(isTime ? { type: "time" } : {}),
+    level_attributes: level_attributes as unknown as YamlValue,
+    hierarchies: hierarchies as unknown as YamlValue,
+  };
+
+  return yamlDoc(dimObj);
+}
+
+// ----------------------------------------------------------
+// 5. Metric files
+// ----------------------------------------------------------
+
+function buildMetricFile(
+  measure: SemanticMeasure,
+  fact: SemanticFact,
+  opts: SmlSerializerOptions,
+): string {
+  const prefix = opts.metricPrefix ?? "m_";
+
+  return yamlDoc({
+    unique_name: metricUniqueName(measure, prefix),
+    object_type: "metric",
+    label: measure.name,
+    calculation_method: AGG_TO_SML[measure.aggregation],
+    dataset: fact.sourceTable,
+    column: measure.sourceColumn,
+    is_hidden: false,
+    unrelated_dimensions_handling: "empty",
+  });
+}
+
+// ----------------------------------------------------------
+// 6. Model file
+// ----------------------------------------------------------
+
+function buildModelFile(
+  model: SemanticModel,
+  opts: SmlSerializerOptions,
+): string {
+  const laPrefix = opts.levelAttributePrefix ?? "la_";
+  const metricPrefix = opts.metricPrefix ?? "m_";
+
+  // Build a quick lookup: dimension name → dimension object
+  const dimByName = new Map(model.dimensions.map((d) => [d.name, d]));
+  // Build a quick lookup: fact name → fact object
+  const factByName = new Map(model.facts.map((f) => [f.name, f]));
+
+  // Relationships
+  const relationships: Array<Record<string, YamlValue>> = [];
+  for (const rel of model.relationships) {
+    const fact = factByName.get(rel.fromDataset);
+    const dim = dimByName.get(rel.toDataset);
+    if (!fact || !dim) continue;
+
+    // Find which level_attribute in the dimension the FK joins to.
+    // We look for the level whose key_columns contains rel.toColumn.
+    // Fall back to the last level of the first hierarchy (most granular).
+    let joinLevel: string = laName(dim.primaryKey, laPrefix);
+
+    for (const h of dim.hierarchies) {
+      const match = h.levels.find(
+        (l) => l.sourceColumn.toLowerCase() === rel.toColumn.toLowerCase(),
+      );
+      if (match) {
+        joinLevel = laName(match.sourceColumn, laPrefix);
+        break;
+      }
+    }
+
+    const relUniqueName =
+      `${fact.sourceTable}_${toKebab(dim.name)}_${rel.fromColumn}`;
+
+    relationships.push({
+      unique_name: relUniqueName,
+      from: {
+        dataset: fact.sourceTable,
+        join_columns: [rel.fromColumn],
+      } as unknown as YamlValue,
+      to: {
+        dimension: dim.name,
+        level: joinLevel,
+      } as unknown as YamlValue,
+    });
+  }
+
+  // Degenerate dimensions (dimension names listed under model.dimensions in SML)
+  // We detect these as dimensions that have no incoming relationship from any fact
+  const dimensionsWithRelationships = new Set(
+    model.relationships.map((r) => r.toDataset),
+  );
+  const degenerateDimNames = model.dimensions
+    .filter((d) => !dimensionsWithRelationships.has(d.name))
+    .map((d) => d.name);
+
+  // Collect all unique metric unique_names across all facts
+  const allMetrics = model.facts.flatMap((f) =>
+    f.measures.map((m) => ({
+      unique_name: metricUniqueName(m, metricPrefix),
+    })),
+  );
+
+  // Deduplicate metrics by unique_name
+  const seenMetrics = new Set<string>();
+  const uniqueMetrics = allMetrics.filter(({ unique_name }) => {
+    if (seenMetrics.has(unique_name)) return false;
+    seenMetrics.add(unique_name);
+    return true;
+  });
+
+  const modelObj: Record<string, YamlValue> = {
+    unique_name: model.name,
+    object_type: "model",
+    label: model.name,
+    relationships: relationships as unknown as YamlValue,
+    metrics: uniqueMetrics as unknown as YamlValue,
+  };
+
+  if (degenerateDimNames.length > 0) {
+    modelObj.dimensions = degenerateDimNames;
+  }
+
+  return yamlDoc(modelObj);
+}
+
+// ----------------------------------------------------------
+// Main entry point
+// ----------------------------------------------------------
+
+/**
+ * Convert a SemanticModel into a set of AtScale SML YAML files.
+ *
+ * @returns SmlOutput — a Map<relative-file-path, yaml-content>.
+ *
+ * @example
+ * import { serializeToSml } from "./sml-serializer.js";
+ * import { createDefaultEngine } from "./inference.js";
+ *
+ * const engine = createDefaultEngine();
+ * const model = await proposeSemanticModel(db, "SalesModel", {
+ *   inferenceEngine: engine,
+ *   suggestions: true,
+ * });
+ *
+ * const sml = serializeToSml(model, {
+ *   connectionName: "My Snowflake Connection",
+ *   columnsByTable: rawColumnMap,
+ * });
+ *
+ * for (const [path, yaml] of sml) {
+ *   await fs.writeFile(path, yaml, "utf8");
+ * }
+ */
+export function serializeToSml(
+  model: SemanticModel,
+  opts: SmlSerializerOptions,
+): SmlOutput {
+  const output: SmlOutput = new Map();
+  const laPrefix = opts.levelAttributePrefix ?? "la_";
+  const metricPrefix = opts.metricPrefix ?? "m_";
+
+  // catalog.yml
+  output.set("catalog.yml", buildCatalog(model, opts));
+
+  // connections/{name}.yml
+  output.set(
+    `connections/${toKebab(opts.connectionName)}.yml`,
+    buildConnection(opts),
+  );
+
+  // datasets/{table}.yml — one per dimension table
+  for (const dim of model.dimensions) {
+    const referencedCols = columnsFromDimension(dim);
+    output.set(
+      `datasets/${dim.sourceTable}.yml`,
+      buildDataset(dim.sourceTable, referencedCols, opts),
+    );
+  }
+
+  // datasets/{table}.yml — one per fact table
+  for (const fact of model.facts) {
+    const referencedCols = columnsFromFact(fact);
+    output.set(
+      `datasets/${fact.sourceTable}.yml`,
+      buildDataset(fact.sourceTable, referencedCols, opts),
+    );
+  }
+
+  // dimensions/{name}.yml
+  for (const dim of model.dimensions) {
+    output.set(
+      `dimensions/${toKebab(dim.name)}.yml`,
+      buildDimensionFile(dim, opts),
+    );
+  }
+
+  // metrics/{uniqueName}.yml — one per unique measure
+  const seenMetrics = new Set<string>();
+  for (const fact of model.facts) {
+    for (const measure of fact.measures) {
+      const uniqueName = metricUniqueName(measure, metricPrefix);
+      if (seenMetrics.has(uniqueName)) continue;
+      seenMetrics.add(uniqueName);
+      output.set(
+        `metrics/${toKebab(uniqueName)}.yml`,
+        buildMetricFile(measure, fact, opts),
+      );
+    }
+  }
+
+  // models/{name}.yml
+  output.set(
+    `models/${toKebab(model.name)}.yml`,
+    buildModelFile(model, opts),
+  );
+
+  return output;
+}

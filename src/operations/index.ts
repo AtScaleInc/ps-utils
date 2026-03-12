@@ -3,10 +3,13 @@
  */
 import { EchoOperation } from "./echo/EchoOperation.js";
 import { ToggleOperation } from "./toggle/ToggleOperation.js";
-import { ExtractAtScaleModelOperation } from "./extract-atscale-model/ExtractAtScaleModelOperation.js";
+import { ExtractAtScaleModelOperation } from "./extract-model-from-atscale/ExtractAtScaleModelOperation.js";
 import { GenerateTableauFromNamespaceOperation } from "./generate-tableau-from-namespace/GenerateTableauFromNamespaceOperation.js";
 import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOperation.js";
 import { PythonHelloWorldOperation } from "./python/PythonHelloWorldOperation.js";
+import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connection/GenerateSMLFromConnectionOperation.js";
+import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
+import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractModelFromSMLOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -26,5 +29,8 @@ export async function buildRegistry(
   registry.register(new GenerateTableauFromNamespaceOperation(services, logger));
   registry.register(new EchoConnectionMetaDataOperation(services, logger));
   registry.register(new PythonHelloWorldOperation(services, logger));
+  registry.register(new GenerateSMLFromConnectionOperation(services, logger));
+  registry.register(new GenerateSMLFromDDLOperation(services, logger));
+  registry.register(new ExtractModelFromSMLOperation(services, logger));
   return registry;
 }
