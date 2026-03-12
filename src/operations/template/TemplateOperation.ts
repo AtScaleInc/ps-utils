@@ -102,6 +102,10 @@ export abstract class TemplateOperation<TParams extends TemplateOperationParams>
         this.logger.verbose(`Missing yAxis ${nextWorksheet.yAxis} for worksheet ${name}, dropping.`);
         continue;
       }
+      if (nextWorksheet.colorField && !columns[nextWorksheet.colorField]) {
+        this.logger.verbose(`Missing colorField ${nextWorksheet.colorField} for worksheet ${name}, clearing.`);
+        nextWorksheet.colorField = undefined;
+      }
 
       if (Array.isArray(nextWorksheet.measures) && nextWorksheet.measures.length === 0) {
         this.logger.verbose(`Skipping worksheet ${name}: no valid measures.`);
