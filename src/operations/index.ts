@@ -10,6 +10,8 @@ import { PythonHelloWorldOperation } from "./python/PythonHelloWorldOperation.js
 import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connection/GenerateSMLFromConnectionOperation.js";
 import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
 import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractModelFromSMLOperation.js";
+import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-model/GenerateNamespaceFromModelOperation.js";
+import { ExecuteSQLOnConnectionOperation } from "./execute-sql-on-connection/ExecuteSQLOnConnectionOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -32,5 +34,7 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromConnectionOperation(services, logger));
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
   registry.register(new ExtractModelFromSMLOperation(services, logger));
+  registry.register(new GenerateNamespaceFromModelOperation(services, logger));
+  registry.register(new ExecuteSQLOnConnectionOperation(services, logger));
   return registry;
 }

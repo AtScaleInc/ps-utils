@@ -26,11 +26,30 @@ flowchart TD
     ATS -->|extract-model-from-atscale| MODEL["model.yaml"]
     SML -->|extract-model-from-sml| MODEL
 
+    MODEL -->|generate-namespace-from-model| NS
     MODEL --> TWB
     NS    --> TWB
     CONN  --> TWB
     TWB["generate-tableau-from-namespace\n→ tableau.twb"]
 ```
+
+## Table of Contents
+
+- [Setup](#setup)
+- [Operations](#operations)
+  - [`extract-model-from-atscale`](#extract-model-from-atscale)
+  - [`extract-model-from-sml`](#extract-model-from-sml)
+  - [`generate-namespace-from-model`](#generate-namespace-from-model)
+  - [`execute-sql-on-connection`](#execute-sql-on-connection)
+  - [`generate-sml-from-connection`](#generate-sml-from-connection)
+  - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+  - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
+- [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
+- [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
+- [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
+- [Namespace YAML (`namespace.yaml`)](#namespace-yaml-namespaceyaml)
+
+---
 
 ## Setup
 
@@ -178,6 +197,86 @@ node dist/cli.js generate-sml-from-ddl \
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
 
 **Output layout:** Same as `generate-sml-from-connection`.
+
+---
+
+### `generate-namespace-from-model`
+
+Reads a `model.yaml` file and automatically generates a namespace YAML by running the analysis-suggestions engine against the model's measures and dimensions. The output is ready to pass directly to `generate-tableau-from-namespace`.
+
+Each suggestion becomes a worksheet:
+- **trend** → `graphType: line` (measure over time)
+- **comparison** → `graphType: line` with `colorField` (measure over time, broken down by a second dimension)
+- **breakdown / distribution** → `graphType: bar`
+- **ranking** → `graphType: bar` with `limit: 10` and `sortDirection: desc`
+
+Up to six summary-statistic scorecards (`graphType: text`) are prepended automatically. All worksheets are arranged in a single auto-sized dashboard.
+
+```bash
+node dist/cli.js generate-namespace-from-model \
+  --model-file "./model.yaml" \
+  --output-file "./namespace.yaml"
+```
+
+With optional overrides:
+
+```bash
+node dist/cli.js generate-namespace-from-model \
+  --model-file "./model.yaml" \
+  --model-name "SalesModel" \
+  --title "Sales Analytics" \
+  --max-suggestions 20 \
+  --min-score 0.6 \
+  --output-file "./namespace.yaml"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--model-file` | Yes | | Path to the `model.yaml` file |
+| `--model-name` | No | First model | Model name when `model.yaml` contains multiple models |
+| `--title` | No | `<ModelName> Analysis` | Workbook title written into the namespace |
+| `--max-suggestions` | No | `25` | Maximum number of analysis suggestions to generate |
+| `--min-score` | No | `0.5` | Minimum relevance score `[0–1]` for a suggestion to be included |
+| `--output-file` | No | stdout | Output path for the namespace YAML |
+
+---
+
+### `execute-sql-on-connection`
+
+Reads a SQL file, splits it into individual statements, and executes each one against a named database connection. Works with DDL (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE`, `CREATE VIEW`), DML (`INSERT`, `UPDATE`, `DELETE`), and mixed files.
+
+```bash
+node dist/cli.js execute-sql-on-connection \
+  --sql-file "./schema/migrations/001_init.sql" \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo"
+```
+
+Preview statements without running them:
+
+```bash
+node dist/cli.js execute-sql-on-connection \
+  --sql-file "./schema.sql" \
+  --connection-name "snow_demo" \
+  --dry-run true
+```
+
+Skip failed statements and continue:
+
+```bash
+node dist/cli.js execute-sql-on-connection \
+  --sql-file "./schema.sql" \
+  --connection-name "snow_demo" \
+  --on-error continue
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sql-file` | Yes | | Path to the SQL file to execute |
+| `--connection-file` | No | `connections.yaml` | Path to connections file |
+| `--connection-name` | Yes | | Connection name in the file |
+| `--on-error` | No | `stop` | `stop` halts on first failure; `continue` logs errors and proceeds |
+| `--dry-run` | No | | Pass `true` to print statements without executing them |
 
 ---
 

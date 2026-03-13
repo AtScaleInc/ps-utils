@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml" -- "$cur") )
+    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection" -- "$cur") )
     return 0
   fi
 
@@ -37,6 +37,12 @@ _atscale_utils_complete() {
       ;;
     extract-model-from-sml)
       params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"
+      ;;
+    generate-namespace-from-model)
+      params="--logfile --output --verbose --model-file --model-name --title --max-suggestions --min-score --output-file"
+      ;;
+    execute-sql-on-connection)
+      params="--logfile --output --verbose --sql-file --connection-file --connection-name --on-error --dry-run"
       ;;
     *)
       params="--logfile --output --verbose"

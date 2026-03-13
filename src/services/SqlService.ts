@@ -221,6 +221,28 @@ export class SqlService extends ServiceProvider {
     });
   }
 
+  /**
+   * Execute a single SQL statement that does not return rows (DDL, DML).
+   * Returns the update count (0 for DDL, N for INSERT/UPDATE/DELETE).
+   * Use `query()` for SELECT statements.
+   */
+  async execute(connection: SqlConnection, sql: string): Promise<number> {
+    const { conn } = connection;
+    const statement = await new Promise<any>((resolve, reject) => {
+      conn.conn.createStatement((err: Error | null, stmt: any) => {
+        if (err) reject(err);
+        else resolve(stmt);
+      });
+    });
+
+    return new Promise<number>((resolve, reject) => {
+      statement.executeUpdate(sql, (err: Error | null, updateCount: number) => {
+        if (err) reject(err);
+        else resolve(updateCount ?? 0);
+      });
+    });
+  }
+
   async close(connection: SqlConnection): Promise<void> {
     const { jdbc, conn } = connection;
     await new Promise<void>((resolve, reject) => {

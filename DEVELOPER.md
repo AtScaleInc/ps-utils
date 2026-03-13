@@ -2,6 +2,41 @@
 
 This document covers the CLI framework architecture, extending the tool with new operations and services, diagnostic operations, and the semantic model inference engine.
 
+## Table of Contents
+
+- [CLI Framework](#cli-framework)
+  - [YAML on stdin](#yaml-on-stdin)
+  - [Global parameters](#global-parameters)
+- [Diagnostic Operations](#diagnostic-operations)
+  - [`echo`](#echo)
+  - [`echo-connection-metadata`](#echo-connection-metadata)
+  - [`python-hello-world`](#python-hello-world)
+- [Adding a New Service](#adding-a-new-service)
+- [Adding a New Operation](#adding-a-new-operation)
+  - [Parameter types](#parameter-types)
+  - [Custom parameter validation](#custom-parameter-validation)
+- [Python Operations](#python-operations)
+- [GitHub Action](#github-action)
+- [Semantic Model Inference Engine (`src/algorithm/`)](#semantic-model-inference-engine-srcalgorithm)
+  - [Architecture overview](#architecture-overview)
+  - [Inference pipeline (per dimension table)](#inference-pipeline-per-dimension-table)
+  - [File reference](#file-reference)
+  - [Using the inference engine directly](#using-the-inference-engine-directly)
+  - [Detection threshold](#detection-threshold)
+  - [Multiple verticals per table](#multiple-verticals-per-table)
+  - [Diagnostics](#diagnostics)
+  - [Replacing / removing a built-in plugin](#replacing--removing-a-built-in-plugin)
+  - [Extending with a custom vertical plugin](#extending-with-a-custom-vertical-plugin)
+    - [Option A — Extend `AbstractVerticalPlugin` (recommended)](#option-a--extend-abstractverticalplugin-recommended)
+    - [Option B — Implement `InferencePlugin` directly](#option-b--implement-inferenceplugin-directly)
+    - [Hierarchy level pattern tips](#hierarchy-level-pattern-tips)
+  - [Built-in verticals](#built-in-verticals)
+  - [AtScale SML output](#atscale-sml-output)
+  - [DDL Reader](#ddl-reader)
+  - [Analysis suggestions](#analysis-suggestions)
+  - [PII and HIPAA column exclusion](#pii-and-hipaa-column-exclusion)
+  - [Semantic model output reference](#semantic-model-output-reference)
+
 ---
 
 ## CLI Framework
@@ -659,6 +694,13 @@ const model = await proposeSemanticModel(db, "SalesModel", {
 | `comparison` | Measure × time + at least one other | "Total Revenue by Product Category Over Time" |
 | `distribution` | Ratio/AVG measure × any hierarchy | "Average Conversion Rate by Channel" |
 | `ranking` | Measure × 2+ non-time hierarchies | "Total Revenue by Product and Geography" |
+
+**`generate-namespace-from-model` exposes this engine as a CLI operation.** It reads a `model.yaml` file, reconstructs a `SemanticModel` from its `mdx` and `sql` sections, calls `generateAnalysisSuggestions`, and emits a namespace YAML ready for `generate-tableau-from-namespace`.
+
+Each `AnalysisSuggestion` maps to a worksheet:
+- `trend` / `comparison` → `graphType: line`
+- `breakdown` / `distribution` / `ranking` → `graphType: bar` (`ranking` also sets `limit: 10`)
+- Up to six `graphType: text` scorecards are prepended from the model's measures
 
 ---
 
