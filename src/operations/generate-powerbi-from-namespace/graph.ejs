@@ -9,8 +9,28 @@
     "width": 280,
     "tabOrder": 0
   },
+  <%=
+    if (worksheet.graphType == 'bar') { 
+      const measure = worksheet.xAxis;
+      const level = worksheet.yAxis;
+    }
+    else {
+      const measure = worksheet.yAxis;
+      const level = worksheet.xAxis;
+    }
+    Object.entries(model.mdx.attributes).forEach((dimensionName, dimension: any) => {
+      Object.entries(dimension).forEach((hierarchyName, hierarchy: any) => {
+        for (const attribute of hierarchy) {
+          if (attribute.queryName == level) {
+            const dimension = dimensionName;
+            const hierarchy = hierarchyName;
+          };
+        };
+      });
+    });
+  %>
   "visual": {
-    "visualType": "columnChart",
+    "visualType": "<%= visualType %>",
     "query": {
       "queryState": {
         "Category": {
@@ -22,17 +42,17 @@
                     "Hierarchy": {
                       "Expression": {
                         "SourceRef": {
-                          "Entity": "Product Dimension"
+                          "Entity": "<%= dimension %>"
                         }
                       },
-                      "Hierarchy": "Product Dimension"
+                      "Hierarchy": "<%= hierarchy %>"
                     }
                   },
-                  "Level": "I Category"
+                  "Level": "<%= level %>"
                 }
               },
-              "queryRef": "Product Dimension.Product Dimension.I Category",
-              "nativeQueryRef": "Product Dimension Product Category",
+              "queryRef": "<%= dimension %>.<%= hierarchy %>.<%= level %>",
+              "nativeQueryRef": "<%= hierarchy %> <%= level %>",
               "active": true
             }
           ]
@@ -47,11 +67,11 @@
                       "Entity": "CubeMeasures"
                     }
                   },
-                  "Property": "Web Sales"
+                  "Property": "<%= measure %>"
                 }
               },
-              "queryRef": "CubeMeasures.Web Sales",
-              "nativeQueryRef": "Web Sales"
+              "queryRef": "CubeMeasures.<%= measure %>",
+              "nativeQueryRef": "<%= measure %>"
             }
           ]
         }
@@ -66,7 +86,7 @@
                     "Entity": "CubeMeasures"
                   }
                 },
-                "Property": "Web Sales"
+                "Property": "<%= measure %>"
               }
             },
             "direction": "Descending"
@@ -88,7 +108,7 @@
                 "Entity": "CubeMeasures"
               }
             },
-            "Property": "Web Sales"
+            "Property": "<%= measure %>"
           }
         },
         "type": "Advanced"
@@ -101,13 +121,13 @@
               "Hierarchy": {
                 "Expression": {
                   "SourceRef": {
-                    "Entity": "Product Dimension"
+                    "Entity": "<%= dimension %>"
                   }
                 },
-                "Hierarchy": "Product Dimension"
+                "Hierarchy": "<%= hierarchy %>"
               }
             },
-            "Level": "I Category"
+            "Level": "<%= level %>"
           }
         },
         "type": "Categorical"

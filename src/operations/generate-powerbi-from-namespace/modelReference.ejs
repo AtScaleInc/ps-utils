@@ -1,6 +1,5 @@
-<% var conn = model.data_source; %>
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/semanticModel/modelReference/2.0.0/schema.json",
-  "connectionString": "Data Source=<%= connection.conn.mdx.url %>;Initial Catalog=\"<%= connection.[model.data_source].mdx.catalog_name %>\";Cube=\"<%= model.modelName %>\"",
+  "connectionString": "Data Source=<%= connection.mdx.url %>;Initial Catalog=\"<%= connection.mdx.catalog_name %>\";Cube=\"<%= model.modelName %>\"",
   "connectionType": "atScaleDatabaseLive"
 }

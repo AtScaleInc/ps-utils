@@ -5,6 +5,11 @@ import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { EjsTemplateService } from "../../services/EjsTemplateService.js";
 import fs from "fs";
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 class GeneratePowerBIParameterSet extends TemplateParameterSet {
   parameters = [
@@ -15,11 +20,18 @@ class GeneratePowerBIParameterSet extends TemplateParameterSet {
       required = false;
       defaultValue = "powerbi";
     })(),
+    new (class extends StringParameter {
+      name = "connection-name";
+      description = "The name of the connection to use";
+      required = false;
+      defaultValue = "default";
+    })(),
   ];
 }
 
 type GeneratePowerBIParams = TemplateOperationParams & {
-  "powerbi-version": string;
+  "connection-name": string;
+  "target-folder": string;
 };
 
 /**
@@ -41,61 +53,109 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
     const modelFile = params["model-file"] ?? "model.yaml";
     const connectionFile = params["connection-file"] ?? "connections.yaml";
     const targetFolder = params["target-folder"] ?? "powerbi";
-    const version = params["powerbi-version"];
 
     this.logger.verbose(`Reading model file: ${modelFile}`);
     const modelData = yaml.readFromFile<Record<string, unknown>>(modelFile);
 
     this.logger.verbose(`Reading connection file: ${connectionFile}`);
-    const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile);
+    const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile) as any;
+    let connection = connectionData.connections[params["connection-name"]] as any;
+    if (!connection) {
+      this.logger.error(`Connection ${params["connection-name"]} not found in ${connectionFile}`);
+      return;
+    }
 
-    this.logger.verbose("Reading overview template: resources/namespaces/telemetry/overview.yaml");
-    const overviewData = yaml.readFromFile<Record<string, unknown>>(
-      "resources/namespaces/telemetry/overview.yaml"
-    );
+    this.logger.verbose("Reading overview namespace: " + params["namespace-file"]);
+    const overviewData = yaml.readFromFile<Record<string, unknown>>(params["namespace-file"]);
 
-    const templatePath = `resources/namespaces/telemetry/powerbi.${version}.twb.ejs`;
-    this.logger.verbose(`Reading EJS template: ${templatePath}`);
-    const template = fs.readFileSync(templatePath, "utf8");
+    try {
+      const models = modelData as Record<string, any>;
+      const namespace = this.sanitizeNamespace(overviewData as Record<string, any>, models);
+      const model = models[Object.values(namespace.worksheets as Record<string, any>)[0].model];
 
-    const output = ejs.render(template, {
-      model: modelData,
-      connections: connectionData,
-      overview: overviewData,
-      namespace: params.namespace,
-    });
-    
-    fs.mkdirSync('output/' + targetFolder, { recursive: true });
-    fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.SemanticModel', { recursive: true });
-    fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report', { recursive: true });
-    fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition', { recursive: true });
-    fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages', { recursive: true });
+      
+      fs.mkdirSync('output/' + targetFolder, { recursive: true });
+      fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.SemanticModel', { recursive: true });
+      fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report', { recursive: true });
+      fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition', { recursive: true });
+      fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages', { recursive: true });
 
-    functions.writeTemplateFromRepo("pbi/pbip.ejs", {visuals}, 'output/' + targetFolder + '/' + targetFolder + '.pbip');
-    functions.writeTemplateFromRepo("pbi/definition.ejs", {}, 'output/' + targetFolder + '/' + targetFolder + '.SemanticModel/definition.pbism');
-    functions.writeTemplateFromRepo("pbi/modelReference.ejs", {model, connection}, 'output/' + targetFolder + '/' + targetFolder + '.SemanticModel/modelReference.json');
-    functions.writeTemplateFromRepo("pbi/report.ejs", {}, 'output/' + targetFolder + '/' + targetFolder + '.Report/definition/report.json');
-    functions.writeTemplateFromRepo("pbi/version.ejs", {}, 'output/' + targetFolder + '/' + targetFolder + '.Report/definition/version.json');
+      let template = fs.readFileSync(`${__dirname}/pbip.ejs`, "utf8");
+      let output = ejs.render(template, {
+        targetFolder
+      });
+      fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.pbip', output, "utf8");
 
-    fs.writeFileSync(targetFile, output, "utf8");
+      template = fs.readFileSync(`${__dirname}/definition.ejs`, "utf8");
+      output = ejs.render(template, {
+      });
+      fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.SemanticModel/definition.pbism', output, "utf8");
+
+      template = fs.readFileSync(`${__dirname}/modelReference.ejs`, "utf8");
+      output = ejs.render(template, {
+        model, connection
+      });
+      fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.SemanticModel/modelReference.json', output, "utf8");
+
+      template = fs.readFileSync(`${__dirname}/report.ejs`, "utf8");
+      output = ejs.render(template, {
+      });
+      fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/report.json', output, "utf8");
+
+      template = fs.readFileSync(`${__dirname}/version.ejs`, "utf8");
+      output = ejs.render(template, {
+      });
+      fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/version.json', output, "utf8");
+      
+      let pageNames = [] as any[];
+      Object.entries(namespace.worksheets).forEach((worksheetName, worksheet: any) => {
+        let pageName = crypto.randomUUID()
+        pageNames.push(pageName);
+        fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName, { recursive: true });
+        template = fs.readFileSync(`${__dirname}/page.ejs`, "utf8");
+        output = ejs.render(template, {
+          pageName,
+          worksheet
+        });
+        fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName + '/page.json', output, "utf8");
+        
+        let visualName = crypto.randomUUID()
+        let visualType = 'cardVisual'
+        fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName + '/visuals/' + visualName, { recursive: true });
+        if (worksheet.graphType == 'bar') {
+          if (model.mdx.metrics.map((metric: any) => metric.query_name).includes(worksheet.xAxis)) {
+            visualType = 'columnChart'
+          }
+          else {
+            visualType = 'barChart'
+          }
+          template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
+        }
+        else if (worksheet.graphType == 'line') {
+          visualType = 'lineChart'
+          template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
+        }
+        else {
+          visualType = 'cardVisual'
+          template = fs.readFileSync(`${__dirname}/card.ejs`, "utf8");
+        }
+        output = ejs.render(template, {
+          visualName,
+          visualType,
+          model,
+          worksheet
+        });
+        fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName + '/visuals/' + visualName + '/visual.json', output, "utf8");
+      });
+
+      template = fs.readFileSync(`${__dirname}/pages.ejs`, "utf8");
+      output = ejs.render(template, {
+        pageNames,
+      });
+      fs.writeFileSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/pages.json', output, "utf8");
+    } catch (error) {
+      this.logger.error(`Failed to generate Tableau workbook: ${error}`);
+    }
     this.logger.info(`Wrote PowerBI report to ${targetFolder}`);
   }
 }
-
-
-  functions.writeTemplateFromRepo("pbi/pbip.ejs", {visuals}, 'output/' + targetFolder + '/' + targetFolder + '.pbip');
-  functions.writeTemplateFromRepo("pbi/definition.ejs", {}, 'output/' + targetFolder + '/' + targetFolder + '.SemanticModel/definition.pbism');
-  functions.writeTemplateFromRepo("pbi/modelReference.ejs", {model, connection}, 'output/' + targetFolder + '/' + targetFolder + '.SemanticModel/modelReference.json');
-  functions.writeTemplateFromRepo("pbi/report.ejs", {}, 'output/' + targetFolder + '/' + targetFolder + '.Report/definition/report.json');
-  functions.writeTemplateFromRepo("pbi/version.ejs", {}, 'output/' + targetFolder + '/' + targetFolder + '.Report/definition/version.json');
-
-  Object.entries(visuals.dashboards).forEach(([dashboardName, dashboard]) => {
-    pageName = crypto.randomUUID()
-    fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName, { recursive: true });
-    functions.writeTemplateFromRepo("pbi/page.ejs", {...ref, pageName, dashboard}, 'output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName + '/page.json');
-    Object.entries(dashboard.tiles).forEach((tile) => {
-        visualName = crypto.randomUUID()
-        fs.mkdirSync('output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName + '/visuals/' + visualName , { recursive: true });
-        functions.writeTemplateFromRepo("pbi/visual.ejs", {...ref, visualName, tile}, 'output/' + targetFolder + '/' + targetFolder + '.Report/definition/pages/' + pageName + '/visuals/' + visualName + '/visual.json');
-    });
-  });
