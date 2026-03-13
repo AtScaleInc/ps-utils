@@ -32,7 +32,7 @@ case $state in
     _values 'params' --logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size
     ;;
   generate-sml-from-ddl)
-    _values 'params' --logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema
+    _values 'params' --logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database
     ;;
   extract-model-from-sml)
     _values 'params' --logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file

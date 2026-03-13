@@ -45,6 +45,18 @@ export interface SmlSerializerOptions {
   catalogName?: string;
 
   /**
+   * Database (catalog) name to embed in the connection file.
+   * Required by AtScale when datasets reference tables (not SQL expressions).
+   */
+  database?: string;
+
+  /**
+   * Schema name to embed in the connection file.
+   * Required by AtScale when datasets reference tables (not SQL expressions).
+   */
+  schema?: string;
+
+  /**
    * Raw column metadata keyed by table name (snake_case).
    * When provided, dataset files include the full column list with data types.
    * When omitted, dataset files include only the columns referenced by the
@@ -230,28 +242,43 @@ const AGG_TO_SML: Record<AggregationType, string> = {
 // Time dimension helpers
 // ----------------------------------------------------------
 
-const TIME_UNIT_MAP: Record<string, string> = {
-  year: "year",        yr: "year",         fiscal_year: "year",
-  quarter: "quarter",  qtr: "quarter",     fiscal_quarter: "quarter",
-  month: "month",      mon: "month",       fiscal_month: "month",
-  week: "week",        wk: "week",         fiscal_week: "week",
-  day: "day",          date: "day",        dt: "day",
-  hour: "hour",        hr: "hour",
-  minute: "minute",    min: "minute",
-  second: "second",    sec: "second",
-};
+/**
+ * Ordered list of [pattern, time_unit] pairs.
+ * Word-boundary patterns are tried first (e.g. "Calendar Year"), then
+ * substring fallbacks for concatenated column names (e.g. "calendaryear").
+ * "semester" has no SML equivalent and is intentionally excluded.
+ */
+const TIME_UNIT_PATTERNS: Array<[RegExp, string]> = [
+  [/\byear\b|\byr\b/i,          "year"],
+  [/\bquarter\b|\bqtr\b/i,      "quarter"],
+  [/\bsemester\b/i,             "quarter"],  // SML has no semester; nearest is quarter
+  [/\bmonth\b/i,                "month"],
+  [/\bweek\b|\bwk\b/i,          "week"],
+  [/\bday\b|\bdate\b/i,         "day"],
+  [/\bhour\b|\bhr\b/i,          "hour"],
+  [/\bminute\b|\bmin\b/i,       "minute"],
+  [/\bsecond\b|\bsec\b/i,       "second"],
+  // Substring fallbacks for concatenated names like "calendaryear", "datekey"
+  [/year/i,                      "year"],
+  [/quarter/i,                   "quarter"],
+  [/semester/i,                  "quarter"],
+  [/month/i,                     "month"],
+  [/week/i,                      "week"],
+  [/date|day/i,                  "day"],
+  [/hour/i,                      "hour"],
+  [/minute/i,                    "minute"],
+  [/second/i,                    "second"],
+];
 
 function inferTimeUnit(levelName: string): string | undefined {
-  const lower = levelName.toLowerCase().replace(/\s+/g, "_");
-  return TIME_UNIT_MAP[lower];
+  for (const [pattern, unit] of TIME_UNIT_PATTERNS) {
+    if (pattern.test(levelName)) return unit;
+  }
+  return undefined;
 }
 
 function isTimeDimension(dim: SemanticDimension): boolean {
-  const nameHint = /date|time|fiscal|calendar|period/i.test(dim.name);
-  const levelHint = dim.hierarchies.some((h) =>
-    h.levels.some((l) => inferTimeUnit(l.name) !== undefined),
-  );
-  return nameHint || levelHint;
+  return /date|time|fiscal|calendar|period/i.test(dim.name);
 }
 
 // ----------------------------------------------------------
@@ -264,7 +291,7 @@ function buildCatalog(model: SemanticModel, opts: SmlSerializerOptions): string 
       unique_name: toKebab(opts.catalogName ?? model.name),
       object_type: "catalog",
       label: opts.catalogName ?? model.name,
-      version: "1.0",
+      version: 1.5,
       aggressive_agg_promotion: false,
       build_speculative_aggs: false,
       hidden_models: [],
@@ -283,6 +310,8 @@ function buildConnection(opts: SmlSerializerOptions): string {
     object_type: "connection",
     label: opts.connectionName,
     as_connection: opts.connectionName,
+    database: opts.database ?? "database_name",
+    schema:   opts.schema   ?? "default",
   });
 }
 
@@ -424,24 +453,34 @@ function buildDimensionFile(
     if (hierarchyLevelColumns.has(attr.sourceColumn)) continue;
     if (levelAttrMap.has(attr.sourceColumn)) continue;
 
-    levelAttrMap.set(attr.sourceColumn, {
+    const la: LevelAttributeDef = {
       unique_name: laName(attr.sourceColumn, laPrefix),
       label: attr.name,
       dataset: dim.sourceTable,
       name_column: attr.sourceColumn,
       key_columns: [attr.sourceColumn],
-    });
+    };
+
+    const tu = inferTimeUnit(attr.name) ?? inferTimeUnit(attr.sourceColumn);
+    if (isTime && tu) la.time_unit = tu;
+
+    levelAttrMap.set(attr.sourceColumn, la);
   }
 
   // PK as a level_attribute if not already included
   if (!levelAttrMap.has(dim.primaryKey)) {
-    levelAttrMap.set(dim.primaryKey, {
+    const la: LevelAttributeDef = {
       unique_name: laName(dim.primaryKey, laPrefix),
       label: dim.primaryKey,
       dataset: dim.sourceTable,
       name_column: dim.primaryKey,
       key_columns: [dim.primaryKey],
-    });
+    };
+
+    const tu = inferTimeUnit(dim.primaryKey);
+    if (isTime && tu) la.time_unit = tu;
+
+    levelAttrMap.set(dim.primaryKey, la);
   }
 
   // Serialise level_attributes
@@ -514,6 +553,22 @@ function buildMetricFile(
 // 6. Model file
 // ----------------------------------------------------------
 
+/**
+ * Returns true for dimensions whose source table is itself a fact-like table
+ * (name starts with "Fact" or matches a known fact source table).
+ * These are bridge/junction tables that cannot be cleanly modeled as either
+ * regular or degenerate dimensions in AtScale SML.
+ */
+function isFactLikeDimension(
+  dim: SemanticDimension,
+  factSourceTables: Set<string>,
+): boolean {
+  return (
+    /^fact/i.test(dim.sourceTable) ||
+    factSourceTables.has(dim.sourceTable.toLowerCase())
+  );
+}
+
 function buildModelFile(
   model: SemanticModel,
   opts: SmlSerializerOptions,
@@ -521,72 +576,100 @@ function buildModelFile(
   const laPrefix = opts.levelAttributePrefix ?? "la_";
   const metricPrefix = opts.metricPrefix ?? "m_";
 
-  // Build a quick lookup: dimension name → dimension object
   const dimByName = new Map(model.dimensions.map((d) => [d.name, d]));
-  // Build a quick lookup: fact name → fact object
   const factByName = new Map(model.facts.map((f) => [f.name, f]));
+  const factSourceTables = new Set(model.facts.map((f) => f.sourceTable.toLowerCase()));
 
-  // Relationships
-  const relationships: Array<Record<string, YamlValue>> = [];
+  // ---- Build relationships -----------------------------------------------
+
+  type RelEntry = {
+    rel: Record<string, YamlValue>;
+    dimName: string;
+    fromCol: string;
+  };
+  const relEntries: RelEntry[] = [];
+
   for (const rel of model.relationships) {
     const fact = factByName.get(rel.fromDataset);
-    const dim = dimByName.get(rel.toDataset);
+    const dim  = dimByName.get(rel.toDataset);
     if (!fact || !dim) continue;
 
-    // Find which level_attribute in the dimension the FK joins to.
-    // We look for the level whose key_columns contains rel.toColumn.
-    // Fall back to the last level of the first hierarchy (most granular).
-    let joinLevel: string = laName(dim.primaryKey, laPrefix);
+    // Bridge/junction tables classified as dimensions are excluded — they
+    // cannot be modeled as regular or degenerate dimensions in AtScale SML.
+    if (isFactLikeDimension(dim, factSourceTables)) continue;
 
+    // Resolve the join level: prefer the level whose source column matches
+    // the FK column; fall back to the dimension's primary key.
+    let joinLevel: string = laName(dim.primaryKey, laPrefix);
     for (const h of dim.hierarchies) {
       const match = h.levels.find(
         (l) => l.sourceColumn.toLowerCase() === rel.toColumn.toLowerCase(),
       );
-      if (match) {
-        joinLevel = laName(match.sourceColumn, laPrefix);
-        break;
-      }
+      if (match) { joinLevel = laName(match.sourceColumn, laPrefix); break; }
     }
 
-    const relUniqueName =
-      `${fact.sourceTable}_${toKebab(dim.name)}_${rel.fromColumn}`;
-
-    relationships.push({
-      unique_name: relUniqueName,
-      from: {
-        dataset: fact.sourceTable,
-        join_columns: [rel.fromColumn],
-      } as unknown as YamlValue,
-      to: {
-        dimension: dim.name,
-        level: joinLevel,
-      } as unknown as YamlValue,
+    const relUniqueName = `${fact.sourceTable}_${toKebab(dim.name)}_${rel.fromColumn}`;
+    relEntries.push({
+      rel: {
+        unique_name: relUniqueName,
+        from: { dataset: fact.sourceTable, join_columns: [rel.fromColumn] } as unknown as YamlValue,
+        to:   { dimension: dim.name, level: joinLevel }                     as unknown as YamlValue,
+      },
+      dimName: dim.name,
+      fromCol: rel.fromColumn,
     });
   }
 
-  // Degenerate dimensions (dimension names listed under model.dimensions in SML)
-  // We detect these as dimensions that have no incoming relationship from any fact
-  const dimensionsWithRelationships = new Set(
-    model.relationships.map((r) => r.toDataset),
-  );
+  // ---- Role-playing dimensions -------------------------------------------
+  // When the same dimension is referenced by more than one relationship,
+  // each relationship gets a `role_play` template string (e.g. "Order {0}").
+  // AtScale substitutes {0} with dimension/level names in the UI.
+  // No separate role_playing_dimensions block is needed.
+
+  const dimRelCount = new Map<string, number>();
+  for (const { dimName } of relEntries) {
+    dimRelCount.set(dimName, (dimRelCount.get(dimName) ?? 0) + 1);
+  }
+
+  for (const entry of relEntries) {
+    if ((dimRelCount.get(entry.dimName) ?? 0) <= 1) continue;
+    // Humanise the FK column name and strip a trailing "Key" suffix for brevity
+    // e.g. OrderDateKey → "Order Date", ShipDateKey → "Ship Date"
+    const label = entry.fromCol
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+      .replace(/_/g, " ")
+      .replace(/\s*Key$/i, "")
+      .trim();
+    entry.rel.role_play = `${label} {0}`;
+  }
+
+  const relationships = relEntries.map((e) => e.rel);
+
+  // ---- Degenerate dimensions ---------------------------------------------
+  // Dimensions that have no incoming relationship from any fact are degenerate
+  // (their columns live on the fact table itself).  Bridge/junction tables
+  // that look like facts are excluded — they are omitted from the model entirely.
+
+  const dimensionsWithRelationships = new Set(model.relationships.map((r) => r.toDataset));
   const degenerateDimNames = model.dimensions
     .filter((d) => !dimensionsWithRelationships.has(d.name))
+    .filter((d) => !isFactLikeDimension(d, factSourceTables))
     .map((d) => d.name);
 
-  // Collect all unique metric unique_names across all facts
-  const allMetrics = model.facts.flatMap((f) =>
-    f.measures.map((m) => ({
-      unique_name: metricUniqueName(m, metricPrefix),
-    })),
-  );
+  // ---- Metrics -----------------------------------------------------------
 
-  // Deduplicate metrics by unique_name
+  const allMetrics = model.facts.flatMap((f) =>
+    f.measures.map((m) => ({ unique_name: metricUniqueName(m, metricPrefix) })),
+  );
   const seenMetrics = new Set<string>();
   const uniqueMetrics = allMetrics.filter(({ unique_name }) => {
     if (seenMetrics.has(unique_name)) return false;
     seenMetrics.add(unique_name);
     return true;
   });
+
+  // ---- Assemble model object ---------------------------------------------
 
   const modelObj: Record<string, YamlValue> = {
     unique_name: model.name,
@@ -639,6 +722,8 @@ export function serializeToSml(
   const laPrefix = opts.levelAttributePrefix ?? "la_";
   const metricPrefix = opts.metricPrefix ?? "m_";
 
+  const factSourceTables = new Set(model.facts.map((f) => f.sourceTable.toLowerCase()));
+
   // catalog.yml
   output.set("catalog.yml", buildCatalog(model, opts));
 
@@ -648,8 +733,9 @@ export function serializeToSml(
     buildConnection(opts),
   );
 
-  // datasets/{table}.yml — one per dimension table
+  // datasets/{table}.yml — one per dimension table (skip bridge/junction tables)
   for (const dim of model.dimensions) {
+    if (isFactLikeDimension(dim, factSourceTables)) continue;
     const referencedCols = columnsFromDimension(dim);
     output.set(
       `datasets/${dim.sourceTable}.yml`,
@@ -666,8 +752,9 @@ export function serializeToSml(
     );
   }
 
-  // dimensions/{name}.yml
+  // dimensions/{name}.yml (skip bridge/junction tables)
   for (const dim of model.dimensions) {
+    if (isFactLikeDimension(dim, factSourceTables)) continue;
     output.set(
       `dimensions/${toKebab(dim.name)}.yml`,
       buildDimensionFile(dim, opts),

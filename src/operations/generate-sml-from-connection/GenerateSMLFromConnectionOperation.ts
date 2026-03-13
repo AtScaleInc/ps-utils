@@ -12,7 +12,6 @@
  *   <output-dir>/metrics/<metric>.yml
  *   <output-dir>/models/<modelName>.yml
  */
-import fs from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter, NumberParameter } from "../Parameters.js";
@@ -21,8 +20,7 @@ import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { SqlService, type ConnectionConfig } from "../../services/SqlService.js";
 import { SqlJdbcAdapter } from "./SqlJdbcAdapter.js";
-import { proposeSemanticModel } from "../../algorithm/jdbc-semantic-model.js";
-import { createDefaultEngine } from "../../algorithm/inference/index.js";
+import { resolvePiiSeverity, runInferenceAndWrite } from "../generate-sml-shared.js";
 
 // ----------------------------------------------------------
 // Parameter declarations
@@ -109,7 +107,6 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
     const modelName      = params["model-name"];
     const outputDir      = path.resolve(params["output-dir"]);
 
-    // Read connection config and establish connection
     const config = yaml.readFromFile<ConnectionConfig>(connectionFile);
     const conn   = await sql.connect(config, connectionName);
 
@@ -120,76 +117,34 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
       "PUBLIC"
     ).toUpperCase();
 
+    // Resolve database name from connection config
+    const database =
+      (config.connections?.[connectionName]?.sql?.database as string | undefined) ??
+      (config.connections?.[connectionName]?.sql?.dbname   as string | undefined);
+
     this.logger.log(`[GenerateSMLFromConnection] Connected to "${connectionName}" (schema: ${schema})`);
 
     try {
-      // Build the JDBC adapter that wraps SqlService
-      const adapter = new SqlJdbcAdapter(sql, conn, schema);
-
-      // Resolve PII severity
-      const piiRaw = (params["pii-severity"] ?? "MEDIUM").toUpperCase();
-      const piiExclusionSeverity =
-        piiRaw === "NONE"   ? false as const :
-        piiRaw === "HIGH"   ? "HIGH" as const :
-        piiRaw === "LOW"    ? "LOW"  as const :
-                              "MEDIUM" as const;
-
-      // Run semantic model inference
-      this.logger.log(`[GenerateSMLFromConnection] Running inference on "${modelName}"…`);
-      const model = await proposeSemanticModel(adapter, modelName, {
-        schemaPattern: schema,
-        inferenceEngine: createDefaultEngine(),
-        piiExclusionSeverity,
-        sampleSize: params["sample-size"],
-        suggestions: true,
-        sml: {
-          connectionName,
-          catalogName: params["catalog-name"] ?? modelName,
+      await runInferenceAndWrite(
+        new SqlJdbcAdapter(sql, conn, schema),
+        modelName,
+        {
+          schemaPattern:        schema,
+          piiExclusionSeverity: resolvePiiSeverity(params["pii-severity"]),
+          sampleSize:           params["sample-size"],
+          sml: {
+            connectionName,
+            catalogName: params["catalog-name"] ?? modelName,
+            database,
+            schema,
+          },
         },
-      });
-
-      // Surface inference warnings
-      if (model.warnings.length > 0) {
-        this.logger.log(`\n[GenerateSMLFromConnection] Inference warnings:`);
-        for (const w of model.warnings) {
-          this.logger.log(`  ⚠  ${w}`);
-        }
-      }
-
-      // Write SML files to disk
-      if (model.sml && model.sml.size > 0) {
-        writeSmlFiles(model.sml, outputDir, this.logger);
-        this.logger.log(`\n[GenerateSMLFromConnection] Wrote ${model.sml.size} SML file(s) to: ${outputDir}`);
-      } else {
-        this.logger.log("[GenerateSMLFromConnection] No SML output was generated.");
-      }
-
-      // Summary
-      this.logger.log(
-        `[GenerateSMLFromConnection] Done — ` +
-        `${model.facts.length} fact(s), ` +
-        `${model.dimensions.length} dimension(s), ` +
-        `${model.facts.reduce((n, f) => n + f.measures.length, 0)} measure(s)`,
+        outputDir,
+        this.logger,
+        "GenerateSMLFromConnection",
       );
-
     } finally {
       await sql.close(conn);
     }
-  }
-}
-
-// ----------------------------------------------------------
-// File writer
-// ----------------------------------------------------------
-
-function writeSmlFiles(sml: Map<string, string>, outputDir: string, logger: Logger): void {
-  for (const [relativePath, yamlContent] of sml) {
-    const absolutePath = path.join(outputDir, relativePath);
-    const dir = path.dirname(absolutePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(absolutePath, yamlContent, "utf8");
-    logger.log(`  → ${relativePath}`);
   }
 }

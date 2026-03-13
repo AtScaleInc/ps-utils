@@ -23,8 +23,7 @@ import { ParameterSet, StringParameter } from "../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { DdlDatabaseMetaData } from "../../algorithm/ddl-reader.js";
-import { proposeSemanticModel } from "../../algorithm/jdbc-semantic-model.js";
-import { createDefaultEngine } from "../../algorithm/inference/index.js";
+import { resolvePiiSeverity, runInferenceAndWrite } from "../generate-sml-shared.js";
 
 // ----------------------------------------------------------
 // Parameter declarations
@@ -69,6 +68,11 @@ class GenerateSMLFromDDLParams extends ParameterSet {
       description = "Schema name used to filter the DDL (only tables in this schema will be included)";
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "database";
+      description = "Database (catalog) name to embed in the SML connection file";
+      required    = false;
+    })(),
   ];
 }
 
@@ -80,6 +84,7 @@ type Params = {
   "catalog-name"?:   string;
   "pii-severity":    string;
   schema?:           string;
+  database?:         string;
 };
 
 // ----------------------------------------------------------
@@ -96,10 +101,8 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
   }
 
   async run(params: Params): Promise<void> {
-    const ddlFile  = path.resolve(params["ddl-file"]);
+    const ddlFile   = path.resolve(params["ddl-file"]);
     const outputDir = path.resolve(params["output-dir"]);
-
-    // Derive model name from filename if not provided
     const modelName = params["model-name"] ?? path.basename(ddlFile, path.extname(ddlFile));
 
     if (!fs.existsSync(ddlFile)) {
@@ -107,8 +110,6 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
     }
 
     this.logger.log(`[GenerateSMLFromDDL] Parsing DDL file: ${ddlFile}`);
-
-    // Parse the DDL into a metadata source
     const db = await DdlDatabaseMetaData.fromFile(ddlFile);
 
     const tableNames = db.getTableNames();
@@ -117,66 +118,23 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
       `[GenerateSMLFromDDL] Found ${tableNames.length} table(s) and ${viewNames.length} view(s)`,
     );
 
-    // Resolve PII severity
-    const piiRaw = (params["pii-severity"] ?? "MEDIUM").toUpperCase();
-    const piiExclusionSeverity =
-      piiRaw === "NONE"   ? false as const :
-      piiRaw === "HIGH"   ? "HIGH" as const :
-      piiRaw === "LOW"    ? "LOW"  as const :
-                            "MEDIUM" as const;
-
-    // Run semantic model inference
-    this.logger.log(`[GenerateSMLFromDDL] Running inference on "${modelName}"…`);
-    const model = await proposeSemanticModel(db, modelName, {
-      schemaPattern: params.schema,
-      inferenceEngine: createDefaultEngine(),
-      piiExclusionSeverity,
-      sampleSize: 0,  // DDL has no row data; disable sampling
-      suggestions: true,
-      sml: {
-        connectionName: params["connection-name"],
-        catalogName:    params["catalog-name"] ?? modelName,
+    await runInferenceAndWrite(
+      db,
+      modelName,
+      {
+        schemaPattern:        params.schema,
+        piiExclusionSeverity: resolvePiiSeverity(params["pii-severity"]),
+        sampleSize:           0,  // DDL has no row data; disable sampling
+        sml: {
+          connectionName: params["connection-name"],
+          catalogName:    params["catalog-name"] ?? modelName,
+          database:       params.database,
+          schema:         params.schema,
+        },
       },
-    });
-
-    // Surface inference warnings
-    if (model.warnings.length > 0) {
-      this.logger.log(`\n[GenerateSMLFromDDL] Inference warnings:`);
-      for (const w of model.warnings) {
-        this.logger.log(`  ⚠  ${w}`);
-      }
-    }
-
-    // Write SML files to disk
-    if (model.sml && model.sml.size > 0) {
-      writeSmlFiles(model.sml, outputDir, this.logger);
-      this.logger.log(`\n[GenerateSMLFromDDL] Wrote ${model.sml.size} SML file(s) to: ${outputDir}`);
-    } else {
-      this.logger.log("[GenerateSMLFromDDL] No SML output was generated.");
-    }
-
-    // Summary
-    this.logger.log(
-      `[GenerateSMLFromDDL] Done — ` +
-      `${model.facts.length} fact(s), ` +
-      `${model.dimensions.length} dimension(s), ` +
-      `${model.facts.reduce((n, f) => n + f.measures.length, 0)} measure(s)`,
+      outputDir,
+      this.logger,
+      "GenerateSMLFromDDL",
     );
-  }
-}
-
-// ----------------------------------------------------------
-// File writer
-// ----------------------------------------------------------
-
-function writeSmlFiles(sml: Map<string, string>, outputDir: string, logger: Logger): void {
-  for (const [relativePath, yamlContent] of sml) {
-    const absolutePath = path.join(outputDir, relativePath);
-    const dir = path.dirname(absolutePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(absolutePath, yamlContent, "utf8");
-    logger.log(`  → ${relativePath}`);
   }
 }

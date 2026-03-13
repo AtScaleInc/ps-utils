@@ -8,7 +8,7 @@ complete -c atscale-utils -n '__fish_seen_subcommand_from generate-tableau-from-
 complete -c atscale-utils -n '__fish_seen_subcommand_from echo-connection-metadata' -a '--logfile --output --verbose --connection-file --connection-name --schema'
 complete -c atscale-utils -n '__fish_seen_subcommand_from python-hello-world' -a '--logfile --output --verbose --name'
 complete -c atscale-utils -n '__fish_seen_subcommand_from generate-sml-from-connection' -a '--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size'
-complete -c atscale-utils -n '__fish_seen_subcommand_from generate-sml-from-ddl' -a '--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema'
+complete -c atscale-utils -n '__fish_seen_subcommand_from generate-sml-from-ddl' -a '--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database'
 complete -c atscale-utils -n '__fish_seen_subcommand_from extract-model-from-sml' -a '--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file'
 complete -c atscale-utils -n '__fish_seen_subcommand_from generate-namespace-from-model' -a '--logfile --output --verbose --model-file --model-name --title --max-suggestions --min-score --output-file'
 complete -c atscale-utils -n '__fish_seen_subcommand_from execute-sql-on-connection' -a '--logfile --output --verbose --sql-file --connection-file --connection-name --on-error --dry-run'

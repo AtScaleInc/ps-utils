@@ -33,7 +33,7 @@ _atscale_utils_complete() {
       params="--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size"
       ;;
     generate-sml-from-ddl)
-      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema"
+      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database"
       ;;
     extract-model-from-sml)
       params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"
