@@ -46,7 +46,7 @@ This document covers the CLI framework architecture, extending the tool with new
 Any operation can be driven via YAML piped to stdin instead of CLI flags:
 
 ```bash
-cat input.yml | node dist/cli.js
+cat input.yml | ./atscale-utils
 ```
 
 ```yaml
@@ -75,7 +75,7 @@ parameters:
 Prints a message. Useful for verifying the CLI is wired up correctly.
 
 ```bash
-node dist/cli.js echo --message "hello"
+./atscale-utils echo --message "hello"
 ```
 
 ### `echo-connection-metadata`
@@ -83,12 +83,12 @@ node dist/cli.js echo --message "hello"
 Connects to a database and echoes back its schema metadata. Useful for testing a connection definition.
 
 ```bash
-node dist/cli.js echo-connection-metadata \
+./atscale-utils echo-connection-metadata \
   --connection-file "./connections.yaml" \
   --connection-name "snow_demo"
 
 # Override schema at runtime
-node dist/cli.js echo-connection-metadata \
+./atscale-utils echo-connection-metadata \
   --connection-file "./connections.yaml" \
   --connection-name "snow_demo" \
   --schema "RUN_LOG"
@@ -99,10 +99,10 @@ node dist/cli.js echo-connection-metadata \
 Reference operation that invokes a Python script via `PythonService`.
 
 ```bash
-node dist/cli.js python-hello-world --name "Alice"
+./atscale-utils python-hello-world --name "Alice"
 # Hello, Alice!
 
-node dist/cli.js python-hello-world
+./atscale-utils python-hello-world
 # Hello, World!
 ```
 

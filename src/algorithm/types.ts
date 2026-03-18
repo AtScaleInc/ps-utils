@@ -19,6 +19,8 @@ export interface JdbcColumnMeta {
   nullable: boolean;
   isPrimaryKey: boolean;
   ordinalPosition: number;
+  /** Optional column remark / comment from JDBC getColumns() REMARKS field. */
+  remarks?: string;
 }
 
 export interface JdbcForeignKeyMeta {
@@ -95,6 +97,10 @@ export interface SemanticAttribute {
   nullable: boolean;
   /** Companion columns that provide a human-readable label for this attribute. */
   labels?: SemanticLabel[];
+  /** Non-empty REMARKS from JDBC getColumns(), emitted as SML description. */
+  description?: string;
+  /** UI folder for grouping this attribute in BI tools (e.g. "Date Attributes"). */
+  folder?: string;
 }
 
 export interface SemanticMeasure {
@@ -119,6 +125,13 @@ export interface SemanticDimension {
   primaryKey: string;
   attributes: SemanticAttribute[];
   hierarchies: SemanticHierarchy[];
+  /** Non-empty table REMARKS from JDBC getTables(), emitted as SML description. */
+  description?: string;
+  /**
+   * FK columns on this dimension table that point to other dimension tables.
+   * These are emitted as snowflake-style relationships in the dimension SML file.
+   */
+  snowflakeRelationships?: SnowflakeRelationship[];
 }
 
 export interface SemanticFact {
@@ -133,10 +146,25 @@ export interface SemanticFact {
 export interface SemanticRelationship {
   fromDataset: string;
   fromColumn: string;
+  /** All FK columns when this is a composite foreign key (multi-column join). */
+  fromColumns?: string[];
   toDataset: string;
   toColumn: string;
   constraintName: string;
   cardinality: "MANY_TO_ONE" | "ONE_TO_ONE";
+}
+
+/**
+ * A dimension-to-dimension join within a snowflake schema dimension.
+ * Emitted as a `relationships:` block inside the dimension SML file.
+ */
+export interface SnowflakeRelationship {
+  /** FK column on the owning (parent) dimension table. */
+  fromColumn: string;
+  /** The lookup table being joined (a sibling dataset within the same dimension). */
+  toTable: string;
+  /** PK column on the lookup table. */
+  toColumn: string;
 }
 
 export interface SemanticView {

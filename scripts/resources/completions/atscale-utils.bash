@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection" -- "$cur") )
+    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection" -- "$cur") )
     return 0
   fi
 
@@ -19,6 +19,9 @@ _atscale_utils_complete() {
       ;;
     extract-model-from-atscale)
       params="--logfile --output --verbose --model --connection-file --connection-name --output-model-file"
+      ;;
+    generate-powerbi-from-namespace)
+      params="--logfile --output --verbose --namespace-file --model-file --connection-file --target-file --target-folder --connection-name"
       ;;
     generate-tableau-from-namespace)
       params="--logfile --output --verbose --namespace-file --model-file --connection-file --target-file --tableau-version --connection-name --target-file"
@@ -33,7 +36,7 @@ _atscale_utils_complete() {
       params="--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size"
       ;;
     generate-sml-from-ddl)
-      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database"
+      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database --dialect"
       ;;
     extract-model-from-sml)
       params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"

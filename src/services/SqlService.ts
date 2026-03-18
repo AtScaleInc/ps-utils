@@ -37,10 +37,7 @@ export type ConnectionConfig = {
 export class SqlService extends ServiceProvider {
   name = "sql";
 
-  private defaultSnowflakeDriver = this.getDefaultSnowflakeDriverPath();
-  private defaultPostgresDriver = this.getDefaultPostgresDriverPath();
-  private defaultSlf4jApi = this.getDefaultSlf4jApiPath();
-  private defaultSlf4jSimple = this.getDefaultSlf4jSimplePath();
+  private defaultDrivers = this.getDefaultDriverPaths();
 
   constructor() {
     super();
@@ -235,6 +232,17 @@ export class SqlService extends ServiceProvider {
       });
     });
 
+    const isQuery = /^\s*select\b/i.test(sql);
+
+    if (isQuery) {
+      return new Promise<number>((resolve, reject) => {
+        statement.executeQuery(sql, (err: Error | null, _rs: any) => {
+          if (err) reject(err);
+          else resolve(0);
+        });
+      });
+    }
+
     return new Promise<number>((resolve, reject) => {
       statement.executeUpdate(sql, (err: Error | null, updateCount: number) => {
         if (err) reject(err);
@@ -359,7 +367,7 @@ export class SqlService extends ServiceProvider {
         drivername: "org.postgresql.Driver",
         user: userConfig?.username ?? jdbc.user ?? jdbc.username,
         password: userConfig?.password ?? jdbc.password,
-        libpath: jdbc.libpath ?? this.getDefaultPostgresDriverPath(),
+        libpath: jdbc.libpath,
       };
     }
 
@@ -436,7 +444,7 @@ export class SqlService extends ServiceProvider {
           ...(resolvedAuthenticator ? { authenticator: resolvedAuthenticator } : {}),
           ...(role ? { role } : {}),
         },
-        libpath: jdbc.libpath ?? this.getDefaultSnowflakeDriverPath(),
+        libpath: jdbc.libpath,
       };
     }
 
@@ -454,38 +462,20 @@ export class SqlService extends ServiceProvider {
     };
   }
 
-  private getDefaultSnowflakeDriverPath(): string {
+  private getDefaultDriverPaths(): string[] {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    return path.resolve(__dirname, "..", "..", "resources", "drivers", "snowflake-jdbc-3.27.0.jar");
-  }
-
-  private getDefaultPostgresDriverPath(): string {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    return path.resolve(__dirname, "..", "..", "resources", "drivers", "postgresql-42.7.3.jar");
-  }
-
-  private getDefaultSlf4jApiPath(): string {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    return path.resolve(__dirname, "..", "..", "resources", "drivers", "slf4j-api-2.0.12.jar");
-  }
-
-  private getDefaultSlf4jSimplePath(): string {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    return path.resolve(__dirname, "..", "..", "resources", "drivers", "slf4j-simple-2.0.12.jar");
+    const driversDir = path.resolve(__dirname, "..", "..", "resources", "drivers");
+    if (!fs.existsSync(driversDir)) return [];
+    return fs
+      .readdirSync(driversDir)
+      .filter((f) => f.endsWith(".jar"))
+      .map((f) => path.join(driversDir, f));
   }
 
   private ensureClasspath(libpath?: string | string[]): void {
     const normalized = this.normalizeLibpath(libpath);
-    const defaults = [
-      this.defaultSnowflakeDriver,
-      this.defaultPostgresDriver,
-      this.defaultSlf4jApi,
-      this.defaultSlf4jSimple,
-    ];
+    const defaults = this.defaultDrivers;
     const jars = [...(normalized ?? []), ...defaults].filter((jar) => fs.existsSync(jar));
 
     if (jinst.isJvmCreated()) {
@@ -501,6 +491,7 @@ export class SqlService extends ServiceProvider {
     }
 
     jinst.addOption("-Xrs");
+    jinst.addOption("--add-opens=java.base/java.nio=ALL-UNNAMED");
     jinst.setupClasspath(jars);
   }
 

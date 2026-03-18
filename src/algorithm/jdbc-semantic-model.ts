@@ -21,6 +21,7 @@ import {
   SemanticFact,
   SemanticAttribute,
   SemanticRelationship,
+  SnowflakeRelationship,
   SemanticView,
   isNumericType,
   toSemanticType,
@@ -381,6 +382,45 @@ export async function proposeSemanticModel(
     // Collapse multilingual variants (_en / _es / _fr …) into SemanticLabel entries.
     applyMultilingualGrouping(attributes);
 
+    // H: Propagate JDBC column remarks as descriptions.
+    for (const attr of attributes) {
+      const colMeta = rawCols.find((c) => c.columnName === attr.sourceColumn);
+      if (colMeta?.remarks?.trim()) {
+        attr.description = colMeta.remarks.trim();
+      }
+    }
+
+    // I: Assign UI folders based on column name prefix patterns.
+    const FOLDER_PREFIXES: Array<[RegExp, string]> = [
+      [/^date_/i,     "Date Attributes"],
+      [/^fiscal_/i,   "Fiscal Attributes"],
+      [/^calendar_/i, "Calendar Attributes"],
+    ];
+    for (const attr of attributes) {
+      for (const [pattern, folder] of FOLDER_PREFIXES) {
+        if (pattern.test(attr.sourceColumn)) {
+          attr.folder = folder;
+          break;
+        }
+      }
+    }
+
+    // F: Detect dimension-to-dimension FK relationships (snowflake schema).
+    // FK columns that point to other dimension tables become snowflake joins.
+    const snowflakeRelationships: SnowflakeRelationship[] = fks
+      .filter((fk) => dimensionTables.has(fk.pkTableName))
+      .map((fk) => ({
+        fromColumn: fk.fkColumnName,
+        toTable:    fk.pkTableName,
+        toColumn:   fk.pkColumnName,
+      }));
+
+    // H: Table-level remarks for dimension description.
+    const tableRemark = rawMetadata.tables
+      .find((t) => t.tableName === tableName)
+      ?.remarks
+      ?.trim();
+
     dimensions.push({
       kind: "dimension",
       name: toTitleCase(tableName),
@@ -388,6 +428,8 @@ export async function proposeSemanticModel(
       primaryKey: pkCol?.columnName ?? "id",
       attributes,
       hierarchies,
+      ...(tableRemark          ? { description:             tableRemark            } : {}),
+      ...(snowflakeRelationships.length > 0 ? { snowflakeRelationships } : {}),
     });
   }
 
@@ -485,27 +527,43 @@ export async function proposeSemanticModel(
       factNameByTable.get(tableName) ?? dimensionNameByTable.get(tableName);
     if (!fromDataset) continue;
 
+    // G: Group FK rows by constraintName so composite foreign keys (multi-column
+    // joins) produce a single relationship with fromColumns instead of many
+    // duplicate single-column relationships.
+    const fksByConstraint = new Map<string, typeof fks>();
     for (const fk of fks) {
-      const toDataset = dimensionNameByTable.get(fk.pkTableName);
+      const group = fksByConstraint.get(fk.constraintName) ?? [];
+      group.push(fk);
+      fksByConstraint.set(fk.constraintName, group);
+    }
+
+    for (const [constraintName, fkGroup] of fksByConstraint) {
+      // Sort by keySeq for deterministic column ordering.
+      fkGroup.sort((a, b) => a.keySeq - b.keySeq);
+
+      const toDataset = dimensionNameByTable.get(fkGroup[0].pkTableName);
       if (!toDataset) {
         warnings.push(
-          `Foreign key "${fk.constraintName}" references "${fk.pkTableName}" ` +
+          `Foreign key "${constraintName}" references "${fkGroup[0].pkTableName}" ` +
           `which was not found as a dimension.`,
         );
         continue;
       }
 
       const fromCols = rawMetadata.columnsByTable.get(tableName) ?? [];
-      const fkColMeta = fromCols.find((c) => c.columnName === fk.fkColumnName);
+      const fkColMeta = fromCols.find((c) => c.columnName === fkGroup[0].fkColumnName);
       const cardinality: SemanticRelationship["cardinality"] =
         fkColMeta?.isPrimaryKey ? "ONE_TO_ONE" : "MANY_TO_ONE";
 
+      const fromColumns = fkGroup.map((fk) => fk.fkColumnName);
+
       relationships.push({
         fromDataset,
-        fromColumn: fk.fkColumnName,
+        fromColumn: fromColumns[0],
+        ...(fromColumns.length > 1 ? { fromColumns } : {}),
         toDataset,
-        toColumn: fk.pkColumnName,
-        constraintName: fk.constraintName,
+        toColumn: fkGroup[0].pkColumnName,
+        constraintName,
         cardinality,
       });
     }

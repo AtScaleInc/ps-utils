@@ -73,6 +73,11 @@ class GenerateSMLFromDDLParams extends ParameterSet {
       description = "Database (catalog) name to embed in the SML connection file";
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "dialect";
+      description = 'Database dialect (e.g. "snowflake", "postgresql"). When "snowflake", dataset table names are uppercased.';
+      required    = false;
+    })(),
   ];
 }
 
@@ -85,7 +90,28 @@ type Params = {
   "pii-severity":    string;
   schema?:           string;
   database?:         string;
+  dialect?:          string;
 };
+
+// ----------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------
+
+const DIALECT_PATTERNS: Array<[RegExp, string]> = [
+  [/snowflake/i, "snowflake"],
+  [/postgres|postgresql|pg\b/i, "postgresql"],
+  [/bigquery|bq\b/i, "bigquery"],
+  [/redshift/i, "redshift"],
+  [/databricks/i, "databricks"],
+];
+
+function detectDialectFromFilename(filePath: string): string | undefined {
+  const name = path.basename(filePath);
+  for (const [pattern, dialect] of DIALECT_PATTERNS) {
+    if (pattern.test(name)) return dialect;
+  }
+  return undefined;
+}
 
 // ----------------------------------------------------------
 // Operation
@@ -130,6 +156,7 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
           catalogName:    params["catalog-name"] ?? modelName,
           database:       params.database,
           schema:         params.schema,
+          dialect:        params.dialect ?? detectDialectFromFilename(ddlFile),
         },
       },
       outputDir,

@@ -56,13 +56,13 @@ if [ "$#" -ge 1 ] && [ "$1" = "--print-completion" ]; then
   fi
   case "$2" in
     bash)
-      cat completions/atscale-utils.bash
+      cat "$(dirname "$0")/scripts/resources/completions/atscale-utils.bash"
       ;;
     zsh)
-      cat completions/atscale-utils.zsh
+      cat "$(dirname "$0")/scripts/resources/completions/atscale-utils.zsh"
       ;;
     fish)
-      cat completions/atscale-utils.fish
+      cat "$(dirname "$0")/scripts/resources/completions/atscale-utils.fish"
       ;;
     *)
       show_completion_usage

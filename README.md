@@ -2,6 +2,19 @@
 
 CLI tool for extracting AtScale models, generating SML semantic models, and generating Tableau workbooks.
 
+Upcoming features:
+1. PBI
+2. Additional BI Tools / Jupyter, Excel, Sheets
+3. Query Testing; python (match Gatling)
+4. Extract Queries
+5. Stat Analysis
+6. Rudy's aggregate util
+7. Complete GitActions
+8. Incorporate atscale-cli for deploy
+9. Investigate sml/converters
+
+
+
 ```mermaid
 flowchart TD
     DDL["DDL File\n(.sql)"]
@@ -43,6 +56,7 @@ flowchart TD
   - [`execute-sql-on-connection`](#execute-sql-on-connection)
   - [`generate-sml-from-connection`](#generate-sml-from-connection)
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+  - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
@@ -65,7 +79,7 @@ npm run build
 Connects to a live AtScale instance via MDX and extracts a model's metrics and attributes into a `model.yaml` file. This file is the input for `generate-tableau-from-namespace`.
 
 ```bash
-node dist/cli.js extract-model-from-atscale \
+./atscale-utils extract-model-from-atscale \
   --model "Telemetry" \
   --connection-file "./connections.yaml" \
   --connection-name "ats_connection" \
@@ -88,7 +102,7 @@ node dist/cli.js extract-model-from-atscale \
 Reads a local SML directory (produced by `generate-sml-from-connection` or `generate-sml-from-ddl`) and outputs a `model.yaml` file in the same format as `extract-model-from-atscale`. Use this to generate a Tableau workbook without a live AtScale connection.
 
 ```bash
-node dist/cli.js extract-model-from-sml \
+./atscale-utils extract-model-from-sml \
   --sml-dir "./sml-output" \
   --output-model-file "./model.yaml"
 ```
@@ -96,7 +110,7 @@ node dist/cli.js extract-model-from-sml \
 With optional overrides:
 
 ```bash
-node dist/cli.js extract-model-from-sml \
+./atscale-utils extract-model-from-sml \
   --sml-dir "./sml-output" \
   --model-name "SalesModel" \
   --connection-name "snow_demo" \
@@ -117,7 +131,7 @@ node dist/cli.js extract-model-from-sml \
 Connects to a live database, introspects its schema, runs semantic model inference, and writes a complete set of AtScale SML files to a directory.
 
 ```bash
-node dist/cli.js generate-sml-from-connection \
+./atscale-utils generate-sml-from-connection \
   --connection-file "./connections.yaml" \
   --connection-name "ats_connection" \
   --model-name "Telemetry" \
@@ -127,7 +141,7 @@ node dist/cli.js generate-sml-from-connection \
 With optional overrides:
 
 ```bash
-node dist/cli.js generate-sml-from-connection \
+./atscale-utils generate-sml-from-connection \
   --connection-file "./connections.yaml" \
   --connection-name "snow_demo" \
   --model-name "SalesModel" \
@@ -168,7 +182,7 @@ node dist/cli.js generate-sml-from-connection \
 Parses a SQL DDL file (`CREATE TABLE` / `CREATE VIEW` statements) and generates AtScale SML files without a live database connection. Useful for offline model generation and CI pipelines.
 
 ```bash
-node dist/cli.js generate-sml-from-ddl \
+./atscale-utils generate-sml-from-ddl \
   --ddl-file "./schema.sql" \
   --output-dir "./sml-output"
 ```
@@ -176,7 +190,7 @@ node dist/cli.js generate-sml-from-ddl \
 With optional overrides:
 
 ```bash
-node dist/cli.js generate-sml-from-ddl \
+./atscale-utils generate-sml-from-ddl \
   --ddl-file "./schema.sql" \
   --model-name "SalesModel" \
   --output-dir "./sml-output" \
@@ -213,7 +227,7 @@ Each suggestion becomes a worksheet:
 Up to six summary-statistic scorecards (`graphType: text`) are prepended automatically. All worksheets are arranged in a single auto-sized dashboard.
 
 ```bash
-node dist/cli.js generate-namespace-from-model \
+./atscale-utils generate-namespace-from-model \
   --model-file "./model.yaml" \
   --output-file "./namespace.yaml"
 ```
@@ -221,7 +235,7 @@ node dist/cli.js generate-namespace-from-model \
 With optional overrides:
 
 ```bash
-node dist/cli.js generate-namespace-from-model \
+./atscale-utils generate-namespace-from-model \
   --model-file "./model.yaml" \
   --model-name "SalesModel" \
   --title "Sales Analytics" \
@@ -246,7 +260,7 @@ node dist/cli.js generate-namespace-from-model \
 Reads a SQL file, splits it into individual statements, and executes each one against a named database connection. Works with DDL (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE`, `CREATE VIEW`), DML (`INSERT`, `UPDATE`, `DELETE`), and mixed files.
 
 ```bash
-node dist/cli.js execute-sql-on-connection \
+./atscale-utils execute-sql-on-connection \
   --sql-file "./schema/migrations/001_init.sql" \
   --connection-file "./connections.yaml" \
   --connection-name "snow_demo"
@@ -255,7 +269,7 @@ node dist/cli.js execute-sql-on-connection \
 Preview statements without running them:
 
 ```bash
-node dist/cli.js execute-sql-on-connection \
+./atscale-utils execute-sql-on-connection \
   --sql-file "./schema.sql" \
   --connection-name "snow_demo" \
   --dry-run true
@@ -264,7 +278,7 @@ node dist/cli.js execute-sql-on-connection \
 Skip failed statements and continue:
 
 ```bash
-node dist/cli.js execute-sql-on-connection \
+./atscale-utils execute-sql-on-connection \
   --sql-file "./schema.sql" \
   --connection-name "snow_demo" \
   --on-error continue
@@ -280,12 +294,28 @@ node dist/cli.js execute-sql-on-connection \
 
 ---
 
+### BI Tool Feature Comparison
+[Link to the header](#BI-Tool-Feature-Comparison)
+
+| Feature | Tableau Desktop | PowerBI Desktop | Excel | Jupyter | Sheets
+|---|---|---|---|---|---|
+| Test Output | Yes | Yes |---|---|---|
+| Bar Chart | Yes | Yes |---|---|---|
+| &nbsp;&nbsp; Ticks as color | Yes | |---|---|---|
+| &nbsp;&nbsp; Filter Nulls | Yes | |---|---|---|
+| &nbsp;&nbsp; Sort Categories | Yes | |---|---|---|
+| Line Chart | Yes | Yes |---|---|---|
+| &nbsp;&nbsp; Ticks as color | Yes | |---|---|---|
+
+
+---
+
 ### `generate-tableau-from-namespace`
 
 Generates a Tableau `.twb` workbook from a namespace YAML definition and a model YAML file.
 
 ```bash
-node dist/cli.js generate-tableau-from-namespace \
+./atscale-utils generate-tableau-from-namespace \
   --namespace-file "./resources/namespaces/telemetry/overview.yaml" \
   --model-file "./model.yaml" \
   --connection-file "./connections.yaml" \
@@ -344,7 +374,7 @@ Add a repository secret named `ATSCALE_CONNECTION_FILE` containing the full cont
   run: echo "${{ secrets.ATSCALE_CONNECTION_FILE }}" > connection.yml
 - name: Extract AtScale model
   run: |
-    node dist/cli.js extract-model-from-atscale \
+    ./atscale-utils extract-model-from-atscale \
       --model "Telemetry" \
       --connection-file connection.yml \
       --connection-name "ats_connection" \

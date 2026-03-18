@@ -115,6 +115,6 @@ function writeFile(relativePath: string, contents: string): void {
 }
 
 const ops = await getOperations();
-writeFile("completions/atscale-utils.bash", buildBash(ops));
-writeFile("completions/atscale-utils.zsh", buildZsh(ops));
-writeFile("completions/atscale-utils.fish", buildFish(ops));
+writeFile("scripts/resources/completions/atscale-utils.bash", buildBash(ops));
+writeFile("scripts/resources/completions/atscale-utils.zsh", buildZsh(ops));
+writeFile("scripts/resources/completions/atscale-utils.fish", buildFish(ops));

@@ -117,10 +117,13 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
       "PUBLIC"
     ).toUpperCase();
 
-    // Resolve database name from connection config
+    // Resolve database name and dialect from connection config
     const database =
       (config.connections?.[connectionName]?.sql?.database as string | undefined) ??
       (config.connections?.[connectionName]?.sql?.dbname   as string | undefined);
+
+    const dialect =
+      (config.connections?.[connectionName]?.sql?.dialect as string | undefined);
 
     this.logger.log(`[GenerateSMLFromConnection] Connected to "${connectionName}" (schema: ${schema})`);
 
@@ -137,6 +140,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
             catalogName: params["catalog-name"] ?? modelName,
             database,
             schema,
+            dialect,
           },
         },
         outputDir,

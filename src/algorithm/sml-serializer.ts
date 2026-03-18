@@ -25,7 +25,11 @@ import {
   SemanticHierarchy,
   SemanticAttribute,
   SemanticRelationship,
+  SnowflakeRelationship,
   AggregationType,
+  STRING_TYPES,
+  NUMERIC_TYPES,
+  isIntegerType,
 } from "./types.js";
 
 // ----------------------------------------------------------
@@ -75,6 +79,12 @@ export interface SmlSerializerOptions {
    * e.g. "la_year", "la_category"
    */
   levelAttributePrefix?: string;
+
+  /**
+   * Database dialect (e.g. "snowflake", "postgresql").
+   * When "snowflake", dataset table names are emitted in UPPER CASE.
+   */
+  dialect?: string;
 }
 
 /** Map of relative file path → YAML content. */
@@ -249,25 +259,27 @@ const AGG_TO_SML: Record<AggregationType, string> = {
  * "semester" has no SML equivalent and is intentionally excluded.
  */
 const TIME_UNIT_PATTERNS: Array<[RegExp, string]> = [
-  [/\byear\b|\byr\b/i,          "year"],
-  [/\bquarter\b|\bqtr\b/i,      "quarter"],
-  [/\bsemester\b/i,             "quarter"],  // SML has no semester; nearest is quarter
-  [/\bmonth\b/i,                "month"],
-  [/\bweek\b|\bwk\b/i,          "week"],
-  [/\bday\b|\bdate\b/i,         "day"],
-  [/\bhour\b|\bhr\b/i,          "hour"],
-  [/\bminute\b|\bmin\b/i,       "minute"],
-  [/\bsecond\b|\bsec\b/i,       "second"],
+  [/\byear\b|\byr\b/i,              "year"],
+  [/\bquarter\b|\bqtr\b/i,          "quarter"],
+  [/\bhalf.?year\b|\bh[12]\b/i,     "halfyear"],   // J: half-year / halfyear / h1 / h2
+  [/\bsemester\b/i,                 "quarter"],     // SML has no semester; nearest is quarter
+  [/\bmonth\b/i,                    "month"],
+  [/\bweek\b|\bwk\b/i,              "week"],
+  [/\bday\b|\bdate\b/i,             "day"],
+  [/\bhour\b|\bhr\b/i,              "hour"],
+  [/\bminute\b|\bmin\b/i,           "minute"],
+  [/\bsecond\b|\bsec\b/i,           "second"],
   // Substring fallbacks for concatenated names like "calendaryear", "datekey"
-  [/year/i,                      "year"],
-  [/quarter/i,                   "quarter"],
-  [/semester/i,                  "quarter"],
-  [/month/i,                     "month"],
-  [/week/i,                      "week"],
-  [/date|day/i,                  "day"],
-  [/hour/i,                      "hour"],
-  [/minute/i,                    "minute"],
-  [/second/i,                    "second"],
+  [/year/i,                          "year"],
+  [/quarter/i,                       "quarter"],
+  [/half.?year|halfyr/i,             "halfyear"],   // J
+  [/semester/i,                      "quarter"],
+  [/month/i,                         "month"],
+  [/week/i,                          "week"],
+  [/date|day/i,                      "day"],
+  [/hour/i,                          "hour"],
+  [/minute/i,                        "minute"],
+  [/second/i,                        "second"],
 ];
 
 function inferTimeUnit(levelName: string): string | undefined {
@@ -348,6 +360,9 @@ function buildDataset(
   referencedColumns: string[],
   opts: SmlSerializerOptions,
 ): string {
+  const physicalTableName = opts.dialect?.toLowerCase() === "snowflake"
+    ? tableName.toUpperCase()
+    : tableName;
   const rawCols = opts.columnsByTable?.get(tableName);
 
   let columns: Array<Record<string, YamlValue>>;
@@ -371,7 +386,9 @@ function buildDataset(
     object_type: "dataset",
     label: tableName,
     connection_id: opts.connectionName,
-    table: tableName,
+    ...(opts.database ? { database: opts.database } : {}),
+    ...(opts.schema   ? { schema:   opts.schema   } : {}),
+    table: physicalTableName,
     columns,
   });
 }
@@ -388,7 +405,71 @@ interface LevelAttributeDef {
   key_columns: string[];
   sort_column?: string;
   time_unit?: string;
+  is_unique_key?: boolean;
+  is_hidden?: boolean;
+  description?: string;
+  folder?: string;
   secondary_attributes?: Array<Record<string, YamlValue>>;
+}
+
+// ----------------------------------------------------------
+// Helpers for surrogate-key pairing (A) and sort-column (C)
+// ----------------------------------------------------------
+
+/**
+ * A: Given an integer key column name, find a string display-name companion
+ * in the same table (e.g. "customerkey" → "fullname", "categoryid" → "category_name").
+ */
+function findNameColumn(
+  sourceCol: string,
+  colByLower: Map<string, JdbcColumnMeta>,
+): string | undefined {
+  const lower = sourceCol.toLowerCase();
+  // Strip common key suffixes to get stem ("productkey" → "product")
+  const stem = lower.replace(/(_?key|_?id)$/i, "");
+  if (!stem || stem === lower) return undefined;
+
+  const nameSuffixes = ["name", "_name", "label", "_label", "description", "_description", "title", "_title"];
+  for (const suffix of nameSuffixes) {
+    const col = colByLower.get(stem + suffix);
+    if (col && STRING_TYPES.has(col.dataType.toUpperCase())) return col.columnName;
+  }
+  // Generic display columns (fullname, displayname) — useful for surrogate customer/person keys
+  for (const generic of ["fullname", "full_name", "displayname", "display_name"]) {
+    const col = colByLower.get(generic);
+    if (col && STRING_TYPES.has(col.dataType.toUpperCase())) return col.columnName;
+  }
+  return undefined;
+}
+
+/**
+ * C: Given a string label column, find a numeric companion to use as sort_column
+ * (e.g. "month_name" → "month_of_year", "month_number").
+ */
+function findSortColumn(
+  sourceCol: string,
+  colByLower: Map<string, JdbcColumnMeta>,
+): string | undefined {
+  const lower = sourceCol.toLowerCase();
+  // Strip common name/label suffixes to get stem
+  const stem = lower.replace(/(_name|_label|_title|name|label|title)$/i, "");
+  if (!stem || stem === lower) return undefined;
+
+  const sortSuffixes = ["_number", "_num", "_id", "_key", "_code", "_sort"];
+  for (const suffix of sortSuffixes) {
+    const col = colByLower.get(stem + suffix);
+    if (col && NUMERIC_TYPES.has(col.dataType.toUpperCase())) return col.columnName;
+  }
+  // "stem_of_*" pattern (e.g. month_of_year as sort for month_name)
+  for (const [candidateLower, col] of colByLower) {
+    if (
+      candidateLower.startsWith(stem + "_of_") &&
+      NUMERIC_TYPES.has(col.dataType.toUpperCase())
+    ) {
+      return col.columnName;
+    }
+  }
+  return undefined;
 }
 
 function buildDimensionFile(
@@ -397,6 +478,17 @@ function buildDimensionFile(
 ): string {
   const laPrefix = opts.levelAttributePrefix ?? "la_";
   const isTime = isTimeDimension(dim);
+
+  // Build column lookup maps for A (surrogate key pairing) and C (sort column).
+  const rawCols = opts.columnsByTable?.get(dim.sourceTable) ?? [];
+  const colByLower = new Map<string, JdbcColumnMeta>(
+    rawCols.map((c) => [c.columnName.toLowerCase(), c]),
+  );
+
+  // Build attribute lookup for description/folder propagation (H, I).
+  const attrByCol = new Map<string, typeof dim.attributes[number]>(
+    dim.attributes.map((a) => [a.sourceColumn, a]),
+  );
 
   // Collect all level attributes needed:
   // - One per hierarchy level
@@ -417,16 +509,43 @@ function buildDimensionFile(
       const key = l.sourceColumn;
       if (levelAttrMap.has(key)) continue; // shared across hierarchies
 
+      const colMeta = colByLower.get(l.sourceColumn.toLowerCase());
+      const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+
+      // A: surrogate key pairing — use a companion name column when the level
+      // column is an integer and a string display companion exists.
+      const nameColName = colIsInt ? findNameColumn(l.sourceColumn, colByLower) : undefined;
+
+      // C: sort column pairing — find a numeric sort companion for string columns.
+      const displayCol = nameColName ?? l.sourceColumn;
+      const displayColMeta = colByLower.get(displayCol.toLowerCase());
+      const sortColName = displayColMeta && STRING_TYPES.has(displayColMeta.dataType.toUpperCase())
+        ? findSortColumn(displayCol, colByLower)
+        : undefined;
+
       const la: LevelAttributeDef = {
         unique_name: laName(l.sourceColumn, laPrefix),
         label: l.name,
         dataset: dim.sourceTable,
-        name_column: l.sourceColumn,
+        name_column: nameColName ?? l.sourceColumn,
         key_columns: [l.sourceColumn],
       };
 
-      const tu = inferTimeUnit(l.name);
+      if (sortColName) la.sort_column = sortColName;
+
+      const tu = inferTimeUnit(l.name) ?? (nameColName ? inferTimeUnit(nameColName) : undefined);
       if (isTime && tu) la.time_unit = tu;
+
+      // H: description from attribute
+      const attr = attrByCol.get(l.sourceColumn);
+      if (attr?.description) la.description = attr.description;
+
+      // I: folder
+      if (isTime) {
+        la.folder = "Date Attributes";
+      } else if (attr?.folder) {
+        la.folder = attr.folder;
+      }
 
       levelAttrMap.set(key, la);
     }
@@ -453,34 +572,100 @@ function buildDimensionFile(
     if (hierarchyLevelColumns.has(attr.sourceColumn)) continue;
     if (levelAttrMap.has(attr.sourceColumn)) continue;
 
+    const colMeta = colByLower.get(attr.sourceColumn.toLowerCase());
+    const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+
+    // A: surrogate key pairing
+    const nameColName = colIsInt ? findNameColumn(attr.sourceColumn, colByLower) : undefined;
+
+    // C: sort column pairing
+    const displayCol = nameColName ?? attr.sourceColumn;
+    const displayColMeta = colByLower.get(displayCol.toLowerCase());
+    const sortColName = displayColMeta && STRING_TYPES.has(displayColMeta.dataType.toUpperCase())
+      ? findSortColumn(displayCol, colByLower)
+      : undefined;
+
     const la: LevelAttributeDef = {
       unique_name: laName(attr.sourceColumn, laPrefix),
       label: attr.name,
       dataset: dim.sourceTable,
-      name_column: attr.sourceColumn,
+      name_column: nameColName ?? attr.sourceColumn,
       key_columns: [attr.sourceColumn],
     };
 
+    if (sortColName) la.sort_column = sortColName;
+
     const tu = inferTimeUnit(attr.name) ?? inferTimeUnit(attr.sourceColumn);
     if (isTime && tu) la.time_unit = tu;
+
+    // H: description
+    if (attr.description) la.description = attr.description;
+
+    // I: folder
+    if (isTime) {
+      la.folder = "Date Attributes";
+    } else if (attr.folder) {
+      la.folder = attr.folder;
+    }
 
     levelAttrMap.set(attr.sourceColumn, la);
   }
 
   // PK as a level_attribute if not already included
   if (!levelAttrMap.has(dim.primaryKey)) {
+    const colMeta = colByLower.get(dim.primaryKey.toLowerCase());
+    const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+
+    // A: surrogate key pairing for the PK
+    const nameColName = colIsInt ? findNameColumn(dim.primaryKey, colByLower) : undefined;
+
+    // C: sort column pairing
+    const displayCol = nameColName ?? dim.primaryKey;
+    const displayColMeta = colByLower.get(displayCol.toLowerCase());
+    const sortColName = displayColMeta && STRING_TYPES.has(displayColMeta.dataType.toUpperCase())
+      ? findSortColumn(displayCol, colByLower)
+      : undefined;
+
     const la: LevelAttributeDef = {
       unique_name: laName(dim.primaryKey, laPrefix),
       label: dim.primaryKey,
       dataset: dim.sourceTable,
-      name_column: dim.primaryKey,
+      name_column: nameColName ?? dim.primaryKey,
       key_columns: [dim.primaryKey],
+      is_unique_key: true,   // B: PK is always the unique key
     };
+
+    if (sortColName) la.sort_column = sortColName;
 
     const tu = inferTimeUnit(dim.primaryKey);
     if (isTime && tu) la.time_unit = tu;
 
+    if (isTime) la.folder = "Date Attributes";
+
     levelAttrMap.set(dim.primaryKey, la);
+  } else {
+    // B: PK may have been added already via a hierarchy level; mark it unique.
+    const existing = levelAttrMap.get(dim.primaryKey);
+    if (existing) existing.is_unique_key = true;
+  }
+
+  // F: Add hidden join-key level_attributes for snowflake FK columns.
+  // These columns are excluded from dim.attributes but are needed in the
+  // dimension file so AtScale can resolve intra-dimension snowflake joins.
+  for (const sr of dim.snowflakeRelationships ?? []) {
+    if (levelAttrMap.has(sr.fromColumn)) continue;
+    const colMeta = colByLower.get(sr.fromColumn.toLowerCase());
+    const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+    // E: FK join keys with no display companion → hidden
+    const nameColName = colIsInt ? findNameColumn(sr.fromColumn, colByLower) : undefined;
+    levelAttrMap.set(sr.fromColumn, {
+      unique_name: laName(sr.fromColumn, laPrefix),
+      label: sr.fromColumn,
+      dataset: dim.sourceTable,
+      name_column: nameColName ?? sr.fromColumn,
+      key_columns: [sr.fromColumn],
+      is_hidden: !nameColName,  // E: hidden when there's no meaningful display name
+    });
   }
 
   // Serialise level_attributes
@@ -494,8 +679,12 @@ function buildDimensionFile(
       name_column: la.name_column,
       key_columns: la.key_columns,
     };
-    if (la.sort_column) obj.sort_column = la.sort_column;
-    if (la.time_unit) obj.time_unit = la.time_unit;
+    if (la.is_unique_key) obj.is_unique_key = true;
+    if (la.is_hidden)     obj.is_hidden = true;
+    if (la.description)   obj.description = la.description;
+    if (la.folder)        obj.folder = la.folder;
+    if (la.sort_column)   obj.sort_column = la.sort_column;
+    if (la.time_unit)     obj.time_unit = la.time_unit;
     if (la.secondary_attributes?.length) {
       obj.secondary_attributes = la.secondary_attributes as unknown as YamlValue;
     }
@@ -508,20 +697,41 @@ function buildDimensionFile(
       unique_name: h.name,
       label: h.name,
       filter_empty: "yes",
+      ...(isTime ? { folder: "Date Attributes" } : {}),
       levels: h.levels.map((l) => ({
         unique_name: laName(l.sourceColumn, laPrefix),
       })),
     }),
   );
 
+  // F: Snowflake relationships within the dimension — dimension-to-dimension joins.
+  const snowflakeRels = (dim.snowflakeRelationships ?? []).map((sr) => ({
+    unique_name: `${dim.sourceTable}_${sr.toTable}_${sr.fromColumn}`,
+    from: {
+      dataset:      dim.sourceTable,
+      join_columns: [sr.fromColumn],
+    },
+    to: {
+      dimension: toKebab(sr.toTable),
+      level:     laName(sr.toColumn, laPrefix),
+    },
+    type: "snowflake",
+  }));
+
   const dimObj: Record<string, YamlValue> = {
     unique_name: dim.name,
     object_type: "dimension",
     label: dim.name,
-    ...(isTime ? { type: "time" } : {}),
+    ...(dim.description ? { description: dim.description } : {}),
+    type: isTime ? "time" : "standard",   // D: always emit type
     level_attributes: level_attributes as unknown as YamlValue,
     hierarchies: hierarchies as unknown as YamlValue,
   };
+
+  // F: only emit relationships block when there are snowflake joins
+  if (snowflakeRels.length > 0) {
+    dimObj.relationships = snowflakeRels as unknown as YamlValue;
+  }
 
   return yamlDoc(dimObj);
 }
@@ -612,7 +822,7 @@ function buildModelFile(
     relEntries.push({
       rel: {
         unique_name: relUniqueName,
-        from: { dataset: fact.sourceTable, join_columns: [rel.fromColumn] } as unknown as YamlValue,
+        from: { dataset: fact.sourceTable, join_columns: rel.fromColumns ?? [rel.fromColumn] } as unknown as YamlValue,
         to:   { dimension: dim.name, level: joinLevel }                     as unknown as YamlValue,
       },
       dimName: dim.name,

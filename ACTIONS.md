@@ -1086,7 +1086,7 @@ jobs:
             # Run each changed file as a separate composite-action call is not
             # possible inside a loop, so we use the CLI directly here.
             # Install once outside the loop in a real workflow.
-            node dist/cli.js execute-sql-on-connection \
+            ./atscale-utils execute-sql-on-connection \
               --sql-file "$f" \
               --connection-file connections.yml \
               --connection-name "${{ vars.CONNECTION_NAME }}" \
