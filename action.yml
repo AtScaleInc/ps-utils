@@ -173,7 +173,7 @@ inputs:
   vm-admin-password:
     description: >
       Password for the 'atscale' OS user on the MicroK8s server.
-      Pass as a secret: vm-admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}.
+      Pass as a secret — supply via secrets.VM_ADMIN_PASSWORD in the caller workflow.
     required: false
   atscale-version:
     description: "AtScale Helm chart version to deploy (default: 2026.1.0)."
