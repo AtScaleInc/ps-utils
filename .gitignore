@@ -7,3 +7,5 @@ example/*
 resources/keys/*
 resources/drivers/*
 ~*
+example/tableau.twb
+example/model.yaml
