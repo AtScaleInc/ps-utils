@@ -58,10 +58,10 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   // ----------------------------------------------------------
 
   async getColumns(tableName: string): Promise<JdbcColumnMeta[]> {
-    const [colRows, pkSet] = await Promise.all([
-      this.sql.getColumns(this.conn, this.schema, tableName),
-      this.fetchPrimaryKeys(tableName),
-    ]);
+    // Sequential awaits: JDBC connections do not support concurrent operations
+    // on the same connection — running these in parallel would deadlock.
+    const colRows = await this.sql.getColumns(this.conn, this.schema, tableName);
+    const pkSet   = await this.fetchPrimaryKeys(tableName);
 
     return colRows
       .map((r) => ({

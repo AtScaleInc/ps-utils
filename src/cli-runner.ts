@@ -7,6 +7,26 @@ import { globalInputFilter } from "./global-input.js";
 import { parse } from "yaml";
 
 /**
+ * Extract a human-readable message from an error, stripping Java stack traces.
+ * For JVM exceptions the relevant text is on the line matching "SomeException: message";
+ * everything indented with "at " is a stack frame and is discarded.
+ */
+function formatError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  // Prefer the message portion of the first Java exception line ("Foo.BarException: text")
+  for (const line of lines) {
+    const match = line.match(/^[\w$.]+Exception:\s*(.+)/);
+    if (match) return match[1];
+  }
+
+  // Fall back: drop stack-frame lines and return what remains
+  const meaningful = lines.filter((l) => !/^at\s/.test(l));
+  return meaningful.join("\n") || raw;
+}
+
+/**
  * Execute the CLI with the given argv arguments and return an exit code.
  */
 type StdinInput = {
@@ -119,10 +139,14 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
     console.log(lines.join("\n"));
   }
 
+  /** Parameters that act as boolean flags — present without a value means true. */
+  const FLAG_PARAMS = new Set(["verbose", "dry-run"]);
+
   /**
    * Parse `--key value` or `--key=value` arguments into a map.
+   * knownKeys is used to distinguish "unknown parameter" from "missing value".
    */
-  function parseParams(args: string[]): OperationParams {
+  function parseParams(args: string[], knownKeys?: Set<string>): OperationParams {
     const params: OperationParams = {};
     for (let i = 0; i < args.length; i += 1) {
       const arg = args[i];
@@ -144,6 +168,14 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       const key = withoutPrefix.trim();
       const value = args[i + 1];
       if (!key || !value || value.startsWith("--")) {
+        if (knownKeys && !knownKeys.has(key)) {
+          throw new Error(`Unknown parameter: --${key}`);
+        }
+        // Allow bare --verbose (and similar boolean flags) without an explicit value
+        if (FLAG_PARAMS.has(key)) {
+          params[key] = "true";
+          continue;
+        }
         throw new Error(`Missing value for parameter: --${key}`);
       }
       params[key] = value;
@@ -155,10 +187,11 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
   const operationName = argv[0];
   if (!operationName) {
     if (stdinData && stdinData.trim().length > 0) {
+      let stdinOperation: Operation<Record<string, unknown>> | undefined;
       try {
         const input = parseStdinInput(stdinData);
         const opRegistry = await buildRegistry(globalInputFilter({}).logger);
-        const stdinOperation = opRegistry.get(input.operation);
+        stdinOperation = opRegistry.get(input.operation);
         if (!stdinOperation) {
           throw new Error(`Unknown operation: ${input.operation}`);
         }
@@ -177,7 +210,11 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(message);
-        printUsage();
+        if (stdinOperation) {
+          printOperationHelp(stdinOperation);
+        } else {
+          printUsage();
+        }
         return 1;
       }
     }
@@ -198,21 +235,30 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
     return 0;
   }
 
+  let params: Record<string, unknown>;
+  let resolvedOperation: Operation<Record<string, unknown>>;
   try {
-    const rawParams = parseParams(argv.slice(1));
+    const knownKeys = new Set([
+      ...operation.parameters.parameters.map((p) => p.name),
+      "logfile", "output", "verbose",
+    ]);
+    const rawParams = parseParams(argv.slice(1), knownKeys);
     const { params: filteredParams, logger } = globalInputFilter(rawParams);
     const opRegistry = await buildRegistry(logger);
-    const resolvedOperation = opRegistry.get(operationName);
-    if (!resolvedOperation) {
-      throw new Error(`Unknown operation: ${operationName}`);
-    }
-    const params = resolvedOperation.parseParams(filteredParams);
-    await resolvedOperation.run(params);
-    return 0;
+    resolvedOperation = opRegistry.get(operationName)!;
+    params = resolvedOperation.parseParams(filteredParams);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
-    printUsage();
+    printOperationHelp(operation);
+    return 1;
+  }
+
+  try {
+    await resolvedOperation.run(params);
+    return 0;
+  } catch (error) {
+    console.error(formatError(error));
     return 1;
   }
 }

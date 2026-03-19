@@ -16,6 +16,8 @@ inputs:
         generate-namespace-from-model
         generate-tableau-from-namespace
         execute-sql-on-connection
+        extract-ddl-from-connection
+        deploy-atscale-microk8s
     required: true
 
   # ── Shared ────────────────────────────────────────────────────────────────
@@ -23,14 +25,15 @@ inputs:
     description: >
       Contents of the connections YAML file (store as a secret).
       Used by: extract-model-from-atscale, generate-sml-from-connection,
-               generate-tableau-from-namespace, execute-sql-on-connection.
+               generate-tableau-from-namespace, execute-sql-on-connection,
+               extract-ddl-from-connection.
     required: false
   connection-name:
     description: >
       Name of the connection within the connections file.
       Used by: extract-model-from-atscale, generate-sml-from-connection,
                generate-sml-from-ddl, generate-tableau-from-namespace,
-               execute-sql-on-connection.
+               execute-sql-on-connection, extract-ddl-from-connection.
     required: false
 
   # ── extract-model-from-atscale ────────────────────────────────────────────
@@ -74,6 +77,27 @@ inputs:
     description: Number of rows to sample per table for PII detection.
     required: false
 
+  # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
+  fact-tables:
+    description: >
+      Comma-separated list of table names to treat as fact tables, overriding
+      automatic classification. Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+  camel-case-files:
+    description: >
+      Set to "true" to use camelCase of the source table name for dataset and
+      dimension filenames. Default: raw table name.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+    default: "false"
+  camel-case-measures:
+    description: >
+      Set to "true" to use camelCase of the source column name for metric labels.
+      Default: raw column name.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+    default: "false"
+
   # ── generate-sml-from-ddl ────────────────────────────────────────────────
   ddl-file:
     description: Path to the DDL SQL file to parse for SML generation.
@@ -95,9 +119,10 @@ inputs:
     required: false
     default: "0.5"
   output-file:
-    description: "Output path for the generated namespace YAML (default: namespace.yaml)."
+    description: >
+      Output file path. For generate-namespace-from-model: namespace YAML output (omit to print to stdout).
+      For extract-ddl-from-connection: DDL output (omit to print to stdout).
     required: false
-    default: namespace.yaml
 
   # ── generate-tableau-from-namespace ──────────────────────────────────────
   namespace-file:
@@ -112,6 +137,16 @@ inputs:
     required: false
     default: tableau.twb
 
+  # ── generate-sml-from-ddl (additional) ───────────────────────────────────
+  database:
+    description: Database (catalog) name to embed in the SML connection file.
+    required: false
+  dialect:
+    description: >
+      Database dialect (e.g. snowflake, postgresql). When snowflake, dataset
+      table names are uppercased. Auto-detected from the DDL filename if omitted.
+    required: false
+
   # ── execute-sql-on-connection ────────────────────────────────────────────
   sql-file:
     description: Path to the SQL file to execute.
@@ -124,22 +159,46 @@ inputs:
     description: Set to "true" to print statements without executing them.
     required: false
 
+  # ── extract-ddl-from-connection ───────────────────────────────────────────
+  tables:
+    description: >
+      Comma-separated table names or wildcard patterns to extract (e.g. "Dim*,FactSales").
+      Omit to extract all tables in the schema.
+    required: false
+
+  # ── deploy-atscale-microk8s ───────────────────────────────────────────────
+  microk8s-hostname:
+    description: IP address or hostname of the MicroK8s server.
+    required: false
+  vm-admin-password:
+    description: >
+      Password for the 'atscale' OS user on the MicroK8s server.
+      Pass as a secret: vm-admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}.
+    required: false
+  atscale-version:
+    description: "AtScale Helm chart version to deploy (default: 2026.1.0)."
+    required: false
+    default: "2026.1.0"
+
 runs:
   using: composite
   steps:
 
-    # ── Setup (always) ───────────────────────────────────────────────────────
+    # ── Setup (CLI operations only — not needed for deploy-atscale-microk8s) ──
     - uses: actions/setup-node@v4
+      if: inputs.operation != 'deploy-atscale-microk8s'
       with:
         node-version: 18
         cache: npm
 
     - name: Install dependencies
+      if: inputs.operation != 'deploy-atscale-microk8s'
       run: npm install
       shell: bash
       working-directory: ${{ github.action_path }}
 
     - name: Build
+      if: inputs.operation != 'deploy-atscale-microk8s'
       run: npm run build
       shell: bash
       working-directory: ${{ github.action_path }}
@@ -151,7 +210,8 @@ runs:
         (inputs.operation == 'extract-model-from-atscale' ||
          inputs.operation == 'generate-sml-from-connection' ||
          inputs.operation == 'generate-tableau-from-namespace' ||
-         inputs.operation == 'execute-sql-on-connection')
+         inputs.operation == 'execute-sql-on-connection' ||
+         inputs.operation == 'extract-ddl-from-connection')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -196,6 +256,9 @@ runs:
         [[ -n "${{ inputs.catalog-name }}" ]]  && ARGS+=(--catalog-name  "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.pii-severity }}" ]]  && ARGS+=(--pii-severity  "${{ inputs.pii-severity }}")
         [[ -n "${{ inputs.sample-size }}" ]]   && ARGS+=(--sample-size   "${{ inputs.sample-size }}")
+        [[ -n "${{ inputs.fact-tables }}" ]]   && ARGS+=(--fact-tables   "${{ inputs.fact-tables }}")
+        [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
+        [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-connection "${ARGS[@]}"
       shell: bash
 
@@ -212,7 +275,12 @@ runs:
         [[ -n "${{ inputs.connection-name }}" ]] && ARGS+=(--connection-name "${{ inputs.connection-name }}")
         [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.schema }}" ]]          && ARGS+=(--schema          "${{ inputs.schema }}")
+        [[ -n "${{ inputs.database }}" ]]        && ARGS+=(--database        "${{ inputs.database }}")
+        [[ -n "${{ inputs.dialect }}" ]]         && ARGS+=(--dialect         "${{ inputs.dialect }}")
         [[ -n "${{ inputs.pii-severity }}" ]]    && ARGS+=(--pii-severity    "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
+        [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
+        [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
       shell: bash
 
@@ -224,11 +292,11 @@ runs:
           --model-file      "${{ inputs.model-file }}"
           --max-suggestions "${{ inputs.max-suggestions }}"
           --min-score       "${{ inputs.min-score }}"
-          --output-file     "${{ inputs.output-file }}"
           --verbose true
         )
-        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
-        [[ -n "${{ inputs.title }}" ]]      && ARGS+=(--title      "${{ inputs.title }}")
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name  "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.title }}" ]]      && ARGS+=(--title       "${{ inputs.title }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" generate-namespace-from-model "${ARGS[@]}"
       shell: bash
 
@@ -262,3 +330,79 @@ runs:
         [[ "${{ inputs.dry-run }}" == "true" ]] && ARGS+=(--dry-run true)
         node "${{ github.action_path }}/dist/cli.js" execute-sql-on-connection "${ARGS[@]}"
       shell: bash
+
+    # ── extract-ddl-from-connection ───────────────────────────────────────────
+    - name: Extract DDL from connection
+      if: inputs.operation == 'extract-ddl-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --schema          "${{ inputs.schema }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.tables }}" ]]      && ARGS+=(--tables      "${{ inputs.tables }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── deploy-atscale-microk8s ───────────────────────────────────────────────
+    - name: Copy files to MicroK8s server
+      if: inputs.operation == 'deploy-atscale-microk8s'
+      uses: appleboy/scp-action@v1
+      with:
+        host:     ${{ inputs.microk8s-hostname }}
+        username: atscale
+        password: ${{ inputs.vm-admin-password }}
+        source:   "genCerts.sh,values.yaml"
+        target:   "/home/atscale/"
+
+    - name: Install MicroK8s toolchain
+      if: inputs.operation == 'deploy-atscale-microk8s'
+      uses: appleboy/ssh-action@master
+      with:
+        host:     ${{ inputs.microk8s-hostname }}
+        username: atscale
+        password: ${{ inputs.vm-admin-password }}
+        script: |
+          sudo snap install microk8s --classic
+          sudo snap install kubectl --classic
+          sudo snap install helm --classic
+          sudo snap install yq
+          sudo apt install net-tools
+
+          echo ${{ inputs.microk8s-hostname }} > hostname
+
+          sudo groupadd microk8s
+          sudo usermod -a -G microk8s atscale
+
+    - name: Configure MicroK8s and deploy AtScale
+      if: inputs.operation == 'deploy-atscale-microk8s'
+      uses: appleboy/ssh-action@master
+      with:
+        host:     ${{ inputs.microk8s-hostname }}
+        username: atscale
+        password: ${{ inputs.vm-admin-password }}
+        script: |
+          chmod +x genCerts.sh
+          ./genCerts.sh
+
+          microk8s kubectl get pods
+          microk8s enable hostpath-storage
+          microk8s enable metallb:10.0.0.4/32
+          microk8s status --wait-ready
+
+          microk8s config --use-loopback > kube.config
+          microk8s config --use-loopback > .kube/config
+          export ATSCALE_HOSTNAME=`cat hostname`
+          yq -i '.clusters.[0].cluster.server="https://"+strenv(ATSCALE_HOSTNAME)+":16443"' kube.config
+          yq -i '.clusters.[0].cluster.insecure-skip-tls-verify=true' kube.config
+          yq -i 'del(.clusters.[0].cluster.certificate-authority-data)' kube.config
+
+          helm install atscale oci://registry-1.docker.io/atscaleinc/atscale \
+            --version ${{ inputs.atscale-version }} \
+            -n atscale --create-namespace \
+            --values ./values.yaml
+          sleep 10
+          microk8s kubectl patch svc atscale-ingress-gateway -n atscale \
+            -p '{"spec": {"type": "LoadBalancer"}}'

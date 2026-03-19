@@ -85,6 +85,19 @@ export interface SmlSerializerOptions {
    * When "snowflake", dataset table names are emitted in UPPER CASE.
    */
   dialect?: string;
+
+  /**
+   * When true, dataset and dimension filenames are derived from the source
+   * table name converted to camelCase (e.g. "factInternetSales.yml").
+   * When false (default), the raw source table name is used as-is.
+   */
+  camelCaseFiles?: boolean;
+
+  /**
+   * When true, metric labels use the source column name converted to camelCase
+   * (e.g. "totalRevenue").  When false (default), the raw column name is used.
+   */
+  camelCaseMeasures?: boolean;
 }
 
 /** Map of relative file path → YAML content. */
@@ -190,6 +203,19 @@ function toKebab(s: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function toCamelCase(s: string): string {
+  const words = s
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(/[_\-\s]+/)
+    .filter(Boolean);
+  return words
+    .map((w, i) =>
+      i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+    )
+    .join("");
 }
 
 function laName(columnName: string, prefix: string): string {
@@ -746,11 +772,14 @@ function buildMetricFile(
   opts: SmlSerializerOptions,
 ): string {
   const prefix = opts.metricPrefix ?? "m_";
+  const label = opts.camelCaseMeasures
+    ? toCamelCase(measure.sourceColumn)
+    : measure.sourceColumn;
 
   return yamlDoc({
     unique_name: metricUniqueName(measure, prefix),
     object_type: "metric",
-    label: measure.name,
+    label,
     calculation_method: AGG_TO_SML[measure.aggregation],
     dataset: fact.sourceTable,
     column: measure.sourceColumn,
@@ -947,8 +976,9 @@ export function serializeToSml(
   for (const dim of model.dimensions) {
     if (isFactLikeDimension(dim, factSourceTables)) continue;
     const referencedCols = columnsFromDimension(dim);
+    const dsFilename = opts.camelCaseFiles ? toCamelCase(dim.sourceTable) : dim.sourceTable;
     output.set(
-      `datasets/${dim.sourceTable}.yml`,
+      `datasets/${dsFilename}.yml`,
       buildDataset(dim.sourceTable, referencedCols, opts),
     );
   }
@@ -956,8 +986,9 @@ export function serializeToSml(
   // datasets/{table}.yml — one per fact table
   for (const fact of model.facts) {
     const referencedCols = columnsFromFact(fact);
+    const dsFilename = opts.camelCaseFiles ? toCamelCase(fact.sourceTable) : fact.sourceTable;
     output.set(
-      `datasets/${fact.sourceTable}.yml`,
+      `datasets/${dsFilename}.yml`,
       buildDataset(fact.sourceTable, referencedCols, opts),
     );
   }
@@ -965,8 +996,9 @@ export function serializeToSml(
   // dimensions/{name}.yml (skip bridge/junction tables)
   for (const dim of model.dimensions) {
     if (isFactLikeDimension(dim, factSourceTables)) continue;
+    const dimFilename = opts.camelCaseFiles ? toCamelCase(dim.sourceTable) : dim.sourceTable;
     output.set(
-      `dimensions/${toKebab(dim.name)}.yml`,
+      `dimensions/${dimFilename}.yml`,
       buildDimensionFile(dim, opts),
     );
   }

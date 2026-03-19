@@ -19,7 +19,7 @@
 import fs from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter, BooleanParameter } from "../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { DdlDatabaseMetaData } from "../../algorithm/ddl-reader.js";
@@ -78,19 +78,39 @@ class GenerateSMLFromDDLParams extends ParameterSet {
       description = 'Database dialect (e.g. "snowflake", "postgresql"). When "snowflake", dataset table names are uppercased.';
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "fact-tables";
+      description = "Comma-separated list of table names to treat as fact tables, overriding automatic classification";
+      required    = false;
+    })(),
+    new (class extends BooleanParameter {
+      name         = "camel-case-files";
+      description  = "When true, dataset and dimension filenames use camelCase of the source table name (default: false, raw table name)";
+      required     = false;
+      defaultValue = false;
+    })(),
+    new (class extends BooleanParameter {
+      name         = "camel-case-measures";
+      description  = "When true, metric labels use camelCase of the source column name (default: false, raw column name)";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
 type Params = {
-  "ddl-file":        string;
-  "model-name"?:     string;
-  "output-dir":      string;
-  "connection-name": string;
-  "catalog-name"?:   string;
-  "pii-severity":    string;
-  schema?:           string;
-  database?:         string;
-  dialect?:          string;
+  "ddl-file":            string;
+  "model-name"?:         string;
+  "output-dir":          string;
+  "connection-name":     string;
+  "catalog-name"?:       string;
+  "pii-severity":        string;
+  schema?:               string;
+  database?:             string;
+  dialect?:              string;
+  "fact-tables"?:        string;
+  "camel-case-files":    boolean;
+  "camel-case-measures": boolean;
 };
 
 // ----------------------------------------------------------
@@ -144,6 +164,10 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
       `[GenerateSMLFromDDL] Found ${tableNames.length} table(s) and ${viewNames.length} view(s)`,
     );
 
+    const factTablesOverride = params["fact-tables"]
+      ? params["fact-tables"].split(",").map((t) => t.trim()).filter(Boolean)
+      : undefined;
+
     await runInferenceAndWrite(
       db,
       modelName,
@@ -151,12 +175,15 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
         schemaPattern:        params.schema,
         piiExclusionSeverity: resolvePiiSeverity(params["pii-severity"]),
         sampleSize:           0,  // DDL has no row data; disable sampling
+        factTables:           factTablesOverride,
         sml: {
-          connectionName: params["connection-name"],
-          catalogName:    params["catalog-name"] ?? modelName,
-          database:       params.database,
-          schema:         params.schema,
-          dialect:        params.dialect ?? detectDialectFromFilename(ddlFile),
+          connectionName:    params["connection-name"],
+          catalogName:       params["catalog-name"] ?? modelName,
+          database:          params.database,
+          schema:            params.schema,
+          dialect:           params.dialect ?? detectDialectFromFilename(ddlFile),
+          camelCaseFiles:    params["camel-case-files"],
+          camelCaseMeasures: params["camel-case-measures"],
         },
       },
       outputDir,

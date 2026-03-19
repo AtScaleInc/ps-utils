@@ -37,12 +37,6 @@ export abstract class TemplateParameterSet extends ParameterSet {
         required = false;
         defaultValue = "connections.yaml";
       })(),
-      new (class extends StringParameter {
-        name = "target-file";
-        description = "Target file to output the workbook";
-        required = false;
-        defaultValue = "output.txt";
-      })(),
     ];
   }
 

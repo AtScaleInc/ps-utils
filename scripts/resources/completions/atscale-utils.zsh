@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection
+    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection
     ;;
   args)
     case "$words[2]" in
@@ -20,10 +20,10 @@ case $state in
     _values 'params' --logfile --output --verbose --model --connection-file --connection-name --output-model-file
     ;;
   generate-powerbi-from-namespace)
-    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --target-file --target-folder --connection-name
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --target-folder --connection-name
     ;;
   generate-tableau-from-namespace)
-    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --target-file --tableau-version --connection-name --target-file
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --tableau-version --connection-name --target-file
     ;;
   echo-connection-metadata)
     _values 'params' --logfile --output --verbose --connection-file --connection-name --schema
@@ -32,10 +32,10 @@ case $state in
     _values 'params' --logfile --output --verbose --name
     ;;
   generate-sml-from-connection)
-    _values 'params' --logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size
+    _values 'params' --logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size --fact-tables --camel-case-files --camel-case-measures
     ;;
   generate-sml-from-ddl)
-    _values 'params' --logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database --dialect
+    _values 'params' --logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database --dialect --fact-tables --camel-case-files --camel-case-measures
     ;;
   extract-model-from-sml)
     _values 'params' --logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file
@@ -45,6 +45,9 @@ case $state in
     ;;
   execute-sql-on-connection)
     _values 'params' --logfile --output --verbose --sql-file --connection-file --connection-name --on-error --dry-run
+    ;;
+  extract-ddl-from-connection)
+    _values 'params' --logfile --output --verbose --connection-file --connection-name --schema --tables --output-file
     ;;
     *)
       _values 'params' --logfile --output --verbose

@@ -184,6 +184,13 @@ export interface ProposeOptions {
    *   false    — disable PII filtering entirely (not recommended)
    */
   piiExclusionSeverity?: PiiSeverity | false;
+
+  /**
+   * Override the automatic fact/dimension classification.
+   * When provided, exactly these table names (case-insensitive) are treated as
+   * fact tables; all other tables are treated as dimensions.
+   */
+  factTables?: string[];
 }
 
 // ----------------------------------------------------------
@@ -265,11 +272,19 @@ export async function proposeSemanticModel(
   // Fact tables have FKs to ≥2 distinct tables AND at least one numeric non-FK column.
   // Everything else is treated as a dimension (or skipped if unclassifiable).
   // ==========================================================================
-  const { factTables, dimensionTables } = classifyTables(
+  let { factTables, dimensionTables } = classifyTables(
     rawMetadata.tables,
     rawMetadata.columnsByTable,
     rawMetadata.foreignKeysByTable,
   );
+
+  // Apply explicit fact table override when provided
+  if (opts.factTables?.length) {
+    const overrideSet = new Set(opts.factTables.map((t) => t.toLowerCase()));
+    const allTableNames = rawMetadata.tables.map((t) => t.tableName);
+    factTables      = new Set(allTableNames.filter((n) => overrideSet.has(n.toLowerCase())));
+    dimensionTables = new Set(allTableNames.filter((n) => !overrideSet.has(n.toLowerCase())));
+  }
 
   if (factTables.size === 0) {
     warnings.push(

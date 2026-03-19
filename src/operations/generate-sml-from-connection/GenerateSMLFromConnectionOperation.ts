@@ -14,7 +14,7 @@
  */
 import path from "path";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter, NumberParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter, NumberParameter, BooleanParameter } from "../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
@@ -71,18 +71,38 @@ class GenerateSMLFromConnectionParams extends ParameterSet {
       required    = false;
       defaultValue = 250;
     })(),
+    new (class extends StringParameter {
+      name        = "fact-tables";
+      description = "Comma-separated list of table names to treat as fact tables, overriding automatic classification";
+      required    = false;
+    })(),
+    new (class extends BooleanParameter {
+      name         = "camel-case-files";
+      description  = "When true, dataset and dimension filenames use camelCase of the source table name (default: false, raw table name)";
+      required     = false;
+      defaultValue = false;
+    })(),
+    new (class extends BooleanParameter {
+      name         = "camel-case-measures";
+      description  = "When true, metric labels use camelCase of the source column name (default: false, raw column name)";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
 type Params = {
-  "connection-file": string;
-  "connection-name": string;
-  "model-name":      string;
-  "output-dir":      string;
-  schema?:           string;
-  "catalog-name"?:   string;
-  "pii-severity":    string;
-  "sample-size":     number;
+  "connection-file":   string;
+  "connection-name":   string;
+  "model-name":        string;
+  "output-dir":        string;
+  schema?:             string;
+  "catalog-name"?:     string;
+  "pii-severity":      string;
+  "sample-size":       number;
+  "fact-tables"?:      string;
+  "camel-case-files":  boolean;
+  "camel-case-measures": boolean;
 };
 
 // ----------------------------------------------------------
@@ -127,6 +147,10 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
 
     this.logger.log(`[GenerateSMLFromConnection] Connected to "${connectionName}" (schema: ${schema})`);
 
+    const factTablesOverride = params["fact-tables"]
+      ? params["fact-tables"].split(",").map((t) => t.trim()).filter(Boolean)
+      : undefined;
+
     try {
       await runInferenceAndWrite(
         new SqlJdbcAdapter(sql, conn, schema),
@@ -135,12 +159,15 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
           schemaPattern:        schema,
           piiExclusionSeverity: resolvePiiSeverity(params["pii-severity"]),
           sampleSize:           params["sample-size"],
+          factTables:           factTablesOverride,
           sml: {
             connectionName,
-            catalogName: params["catalog-name"] ?? modelName,
+            catalogName:       params["catalog-name"] ?? modelName,
             database,
             schema,
             dialect,
+            camelCaseFiles:    params["camel-case-files"],
+            camelCaseMeasures: params["camel-case-measures"],
           },
         },
         outputDir,

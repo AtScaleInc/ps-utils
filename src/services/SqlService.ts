@@ -8,6 +8,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { createPrivateKey, createHash } from "crypto";
 import { ServiceProvider } from "./ServiceProvider.js";
+import type { Logger } from "../logging.js";
 
 export type JdbcConfig = {
   url: string;
@@ -38,9 +39,11 @@ export class SqlService extends ServiceProvider {
   name = "sql";
 
   private defaultDrivers = this.getDefaultDriverPaths();
+  private logger: Logger | undefined;
 
-  constructor() {
+  constructor(logger?: Logger) {
     super();
+    this.logger = logger;
   }
 
   async connect(
@@ -77,6 +80,7 @@ export class SqlService extends ServiceProvider {
   }
 
   async query(connection: SqlConnection, sql: string, params: unknown[] = []): Promise<any[]> {
+    this.logger?.verbose(`[SQL] ${sql.trim()}`);
     const { conn } = connection;
     const statement = await new Promise<any>((resolve, reject) => {
       conn.conn.createStatement((err: Error | null, stmt: any) => {
@@ -224,6 +228,7 @@ export class SqlService extends ServiceProvider {
    * Use `query()` for SELECT statements.
    */
   async execute(connection: SqlConnection, sql: string): Promise<number> {
+    this.logger?.verbose(`[SQL] ${sql.trim()}`);
     const { conn } = connection;
     const statement = await new Promise<any>((resolve, reject) => {
       conn.conn.createStatement((err: Error | null, stmt: any) => {
@@ -329,6 +334,24 @@ export class SqlService extends ServiceProvider {
     };
   }
 
+  /**
+   * Resolve a user entry from config.users.
+   * `userKey` may be a key in config.users (e.g. "atscale_user") — if found,
+   * that entry wins over the explicit userConfig passed to connect().
+   * Falls back to userConfig if no matching key exists.
+   */
+  private resolveUserEntry(
+    config: ConnectionConfig,
+    userKey: string | undefined,
+    userConfig?: Record<string, any>
+  ): Record<string, any> | undefined {
+    if (userKey) {
+      const entry = (config.users ?? {})[userKey];
+      if (entry) return entry;
+    }
+    return userConfig;
+  }
+
   private normalizeJdbcConfig(
     config: ConnectionConfig,
     jdbc: Record<string, any>,
@@ -342,12 +365,13 @@ export class SqlService extends ServiceProvider {
     libpath?: string;
   } {
     if (jdbc.url && jdbc.drivername) {
+      const userEntry = this.resolveUserEntry(config, jdbc.user ?? jdbc.username, userConfig);
       return {
         url: jdbc.url,
         drivername: jdbc.drivername,
         properties: jdbc.properties,
-        user: userConfig?.username ?? jdbc.user ?? jdbc.username,
-        password: userConfig?.password ?? jdbc.password,
+        user: userEntry?.username ?? jdbc.user ?? jdbc.username,
+        password: userEntry?.password ?? jdbc.password,
         libpath: jdbc.libpath,
       };
     }
@@ -361,12 +385,13 @@ export class SqlService extends ServiceProvider {
         throw new Error("Postgres JDBC config requires server and database.");
       }
 
+      const userEntry = this.resolveUserEntry(config, jdbc.user ?? jdbc.username, userConfig);
       const schemaParam = schema ? `?currentSchema=${schema}` : "";
       return {
         url: `jdbc:postgresql://${server}:${port}/${database}${schemaParam}`,
         drivername: "org.postgresql.Driver",
-        user: userConfig?.username ?? jdbc.user ?? jdbc.username,
-        password: userConfig?.password ?? jdbc.password,
+        user: userEntry?.username ?? jdbc.user ?? jdbc.username,
+        password: userEntry?.password ?? jdbc.password,
         libpath: jdbc.libpath,
       };
     }

@@ -93,7 +93,7 @@ export abstract class ParameterSet {
     const known = this.getParameterNames();
     for (const key of Object.keys(raw)) {
       if (!known.has(key)) {
-        throw new Error(`Unknown parameter: ${key}`);
+        throw new Error(`Unknown parameter: --${key}`);
       }
     }
 

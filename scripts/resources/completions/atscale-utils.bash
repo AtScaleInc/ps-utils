@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection" -- "$cur") )
+    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection" -- "$cur") )
     return 0
   fi
 
@@ -21,10 +21,10 @@ _atscale_utils_complete() {
       params="--logfile --output --verbose --model --connection-file --connection-name --output-model-file"
       ;;
     generate-powerbi-from-namespace)
-      params="--logfile --output --verbose --namespace-file --model-file --connection-file --target-file --target-folder --connection-name"
+      params="--logfile --output --verbose --namespace-file --model-file --connection-file --target-folder --connection-name"
       ;;
     generate-tableau-from-namespace)
-      params="--logfile --output --verbose --namespace-file --model-file --connection-file --target-file --tableau-version --connection-name --target-file"
+      params="--logfile --output --verbose --namespace-file --model-file --connection-file --tableau-version --connection-name --target-file"
       ;;
     echo-connection-metadata)
       params="--logfile --output --verbose --connection-file --connection-name --schema"
@@ -33,10 +33,10 @@ _atscale_utils_complete() {
       params="--logfile --output --verbose --name"
       ;;
     generate-sml-from-connection)
-      params="--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size"
+      params="--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --schema --catalog-name --pii-severity --sample-size --fact-tables --camel-case-files --camel-case-measures"
       ;;
     generate-sml-from-ddl)
-      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database --dialect"
+      params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --catalog-name --pii-severity --schema --database --dialect --fact-tables --camel-case-files --camel-case-measures"
       ;;
     extract-model-from-sml)
       params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"
@@ -46,6 +46,9 @@ _atscale_utils_complete() {
       ;;
     execute-sql-on-connection)
       params="--logfile --output --verbose --sql-file --connection-file --connection-name --on-error --dry-run"
+      ;;
+    extract-ddl-from-connection)
+      params="--logfile --output --verbose --connection-file --connection-name --schema --tables --output-file"
       ;;
     *)
       params="--logfile --output --verbose"

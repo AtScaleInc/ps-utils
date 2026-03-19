@@ -12,6 +12,7 @@ Upcoming features:
 7. Complete GitActions
 8. Incorporate atscale-cli for deploy
 9. Investigate sml/converters
+10. SSO
 
 
 
@@ -54,6 +55,7 @@ flowchart TD
   - [`extract-model-from-sml`](#extract-model-from-sml)
   - [`generate-namespace-from-model`](#generate-namespace-from-model)
   - [`execute-sql-on-connection`](#execute-sql-on-connection)
+  - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
   - [`generate-sml-from-connection`](#generate-sml-from-connection)
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
   - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
@@ -89,9 +91,9 @@ Connects to a live AtScale instance via MDX and extracts a model's metrics and a
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--model` | Yes | | AtScale model/cube name |
-| `--connection-file` | No | `connections.yaml` | Path to connections file |
+| `--connection-file` | Yes | | Path to connections file |
 | `--connection-name` | Yes | | Connection name in the file |
-| `--output-model-file` | No | `model.yml` | Output path for the model YAML |
+| `--output-model-file` | No | stdout | Output path for the model YAML |
 
 **GitHub Actions workflow:** See [Extract AtScale Model Workflow](#extract-model-from-atscale-workflow).
 
@@ -149,7 +151,10 @@ With optional overrides:
   --schema "SALES" \
   --catalog-name "Sales Analytics" \
   --pii-severity "HIGH" \
-  --sample-size 500
+  --sample-size 500 \
+  --fact-tables "FactInternetSales,FactResellerSales" \
+  --camel-case-files true \
+  --camel-case-measures true
 ```
 
 | Parameter | Required | Default | Description |
@@ -162,6 +167,9 @@ With optional overrides:
 | `--catalog-name` | No | `model-name` | Display name for the generated catalog |
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
 | `--sample-size` | No | `250` | Rows to sample per table for type inference (`0` to disable) |
+| `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
+| `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
+| `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
 
 **Output layout:**
 
@@ -197,7 +205,10 @@ With optional overrides:
   --connection-name "my_warehouse" \
   --catalog-name "Sales Analytics" \
   --schema "SALES" \
-  --pii-severity "LOW"
+  --pii-severity "LOW" \
+  --fact-tables "FactInternetSales,FactResellerSales" \
+  --camel-case-files true \
+  --camel-case-measures true
 ```
 
 | Parameter | Required | Default | Description |
@@ -208,7 +219,12 @@ With optional overrides:
 | `--connection-name` | No | `my_connection` | Connection name to embed in SML files |
 | `--catalog-name` | No | `model-name` | Display name for the generated catalog |
 | `--schema` | No | | Filter DDL to only tables in this schema |
+| `--database` | No | | Database name to embed in the SML connection file |
+| `--dialect` | No | Auto-detected from filename | Database dialect (`snowflake`, `postgresql`). When `snowflake`, dataset table names are uppercased. |
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
+| `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
+| `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
+| `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
 
 **Output layout:** Same as `generate-sml-from-connection`.
 
@@ -294,6 +310,39 @@ Skip failed statements and continue:
 
 ---
 
+### `extract-ddl-from-connection`
+
+Connects to a live database, reads JDBC metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file (or stdout). Useful for capturing schema snapshots, seeding DDL files for `generate-sml-from-ddl`, or comparing schema drift.
+
+```bash
+./atscale-utils extract-ddl-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --schema "PUBLIC" \
+  --output-file "./schema.ddl"
+```
+
+Extract only specific tables or wildcard patterns:
+
+```bash
+./atscale-utils extract-ddl-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --schema "PUBLIC" \
+  --tables "Dim*,FactInternetSales" \
+  --output-file "./schema.ddl"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Connection name in the file |
+| `--schema` | Yes | | Database schema to introspect |
+| `--connection-file` | No | `connections.yaml` | Path to connections file |
+| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-insensitive. |
+| `--output-file` | No | stdout | Output path for the DDL |
+
+---
+
 ### BI Tool Feature Comparison
 [Link to the header](#BI-Tool-Feature-Comparison)
 
@@ -328,10 +377,10 @@ Generates a Tableau `.twb` workbook from a namespace YAML definition and a model
 |---|---|---|---|
 | `--namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
 | `--model-file` | No | `model.yaml` | Path to the model YAML |
-| `--connection-file` | No | `connections.yaml` | Path to connections file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--connection-name` | No | `default` | Connection name in the file |
 | `--tableau-version` | No | `2025` | Target Tableau version: `2025` or `2024` |
-| `--target-file` | No | `tableau.twb` | Output path for the workbook |
+| `--target-file` | No | `tableau.twb` | Output path for the generated workbook |
 
 See [Namespace YAML](#namespace-yaml-namespaceyaml) for the full namespace format reference.
 
@@ -442,7 +491,7 @@ users:
 | `database` | Yes | Database name |
 | `schema` | Yes | Schema name |
 | `user` | Yes | Key from `users` section |
-| `libpath` | No | JDBC driver JAR path. Default: `resources/drivers/postgresql-42.7.3.jar` |
+| `libpath` | No | Additional JDBC driver JAR path(s). All JARs in `resources/drivers/` are loaded automatically. |
 
 ### Snowflake `sql` fields
 
@@ -456,7 +505,7 @@ users:
 | `snowflake_user` | Yes | Key from `users` section |
 | `role` | No | Snowflake role (e.g. `SYSADMIN`) |
 | `authenticator` | No | Authentication method |
-| `libpath` | No | JDBC driver JAR path. Default: `resources/drivers/snowflake-jdbc-4.0.1.jar` |
+| `libpath` | No | Additional JDBC driver JAR path(s). All JARs in `resources/drivers/` are loaded automatically. |
 
 ### Full Postgres example
 

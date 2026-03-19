@@ -5,9 +5,11 @@ import { EjsTemplateService } from "./EjsTemplateService.js";
 import { YamlService } from "./YamlService.js";
 import { PythonService } from "./PythonService.js";
 import { ServiceRegistry } from "./registry.js";
+import type { Logger } from "../logging.js";
 
 export type ServiceRegistryOptions = {
   includeSql?: boolean;
+  logger?: Logger;
 };
 
 /**
@@ -22,7 +24,7 @@ export async function buildServiceRegistry(
   registry.register(new PythonService());
   if (options.includeSql !== false) {
     const { SqlService } = await import("./SqlService.js");
-    registry.register(new SqlService());
+    registry.register(new SqlService(options.logger));
   }
   return registry;
 }

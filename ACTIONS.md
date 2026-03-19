@@ -1,21 +1,22 @@
 # GitHub Actions Guide
 
-This document describes how to run every CLI operation as a GitHub Actions workflow — either via the **composite action** (`action.yml`) bundled in this repository, as a standalone `workflow_dispatch` job with raw CLI steps, or as steps embedded in a larger pipeline.
+This document describes how to run every CLI operation as a GitHub Actions workflow via the **composite action** (`action.yml`) bundled in this repository.
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
   - [Required secrets](#required-secrets)
   - [Using the composite action](#using-the-composite-action)
-  - [Shared setup steps](#shared-setup-steps)
 - [Operations](#operations)
   - [`execute-sql-on-connection`](#execute-sql-on-connection)
+  - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
   - [`extract-model-from-atscale`](#extract-model-from-atscale)
   - [`extract-model-from-sml`](#extract-model-from-sml)
   - [`generate-namespace-from-model`](#generate-namespace-from-model)
   - [`generate-sml-from-connection`](#generate-sml-from-connection)
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
+  - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
   - [Database → Tableau](#database--tableau)
@@ -33,7 +34,8 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `execute-sql-on-connection` | Full contents of your `connections.yaml` file |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection` | Full contents of your `connections.yaml` file |
+| `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
 
@@ -59,31 +61,6 @@ The `operation` input is required. All other inputs are optional and operation-s
 
 ---
 
-### Shared setup steps
-
-When **not** using the composite action, every workflow needs Node.js and a built CLI. Use these steps at the start of any job:
-
-```yaml
-- uses: actions/checkout@v4
-
-- uses: actions/setup-node@v4
-  with:
-    node-version: 20
-    cache: npm
-
-- name: Install and build
-  run: npm install && npm run build
-```
-
-When a connections file is needed, write it from the secret immediately after the build step:
-
-```yaml
-- name: Write connections file
-  run: echo "${{ secrets.CONNECTIONS_FILE }}" > connections.yml
-```
-
----
-
 ## Operations
 
 ### `extract-model-from-atscale`
@@ -93,60 +70,6 @@ Connects to a live AtScale instance via MDX and extracts a model's metrics and a
 **Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
 
 #### Using the composite action
-
-```yaml
-- uses: AtScaleInc/ps-template@main
-  with:
-    operation: extract-model-from-atscale
-    connection-file: ${{ secrets.CONNECTIONS_FILE }}
-    connection-name: ats_connection
-    model: Telemetry
-    output-model-file: model.yaml
-```
-
-#### Standalone workflow
-
-```yaml
-# .github/workflows/extract-model-from-atscale.yml
-name: Extract AtScale Model
-
-on:
-  workflow_dispatch:
-    inputs:
-      model:
-        description: AtScale model identifier
-        required: true
-        type: string
-      connection-name:
-        description: Connection name within the connections file
-        required: true
-        type: string
-      output-model-file:
-        description: Output file path for the extracted model
-        required: false
-        type: string
-        default: model.yml
-
-jobs:
-  extract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: extract-model-from-atscale
-          connection-file: ${{ secrets.CONNECTIONS_FILE }}
-          connection-name: ${{ inputs.connection-name }}
-          model: ${{ inputs.model }}
-          output-model-file: ${{ inputs.output-model-file }}
-
-      - name: Upload model artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: atscale-model
-          path: ${{ inputs.output-model-file }}
-```
-
-#### As steps in another workflow
 
 ```yaml
 - uses: AtScaleInc/ps-template@main
@@ -179,60 +102,6 @@ Reads a local SML directory and outputs a `model.yaml` in the same format as `ex
     output-model-file: model.yaml
 ```
 
-#### Standalone workflow
-
-```yaml
-# .github/workflows/extract-model-from-sml.yml
-name: Extract Model from SML
-
-on:
-  workflow_dispatch:
-    inputs:
-      sml-dir:
-        description: Path to the SML directory in the repository
-        required: true
-        type: string
-        default: sml-output
-      model-name:
-        description: Model name to extract (leave blank for first model found)
-        required: false
-        type: string
-      output-model-file:
-        description: Output path for model.yaml
-        required: false
-        type: string
-        default: model.yml
-
-jobs:
-  extract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: extract-model-from-sml
-          sml-dir: ${{ inputs.sml-dir }}
-          model-name: ${{ inputs.model-name }}
-          output-model-file: ${{ inputs.output-model-file }}
-
-      - name: Upload model artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sml-model
-          path: ${{ inputs.output-model-file }}
-```
-
-#### As steps in another workflow
-
-```yaml
-- uses: AtScaleInc/ps-template@main
-  with:
-    operation: extract-model-from-sml
-    sml-dir: sml-output
-    output-model-file: model.yaml
-```
-
 ---
 
 ### `generate-namespace-from-model`
@@ -253,79 +122,6 @@ Reads a `model.yaml` file and auto-generates a namespace YAML using the analysis
     title: "Sales Analytics"      # optional
     max-suggestions: "20"         # optional, default 25
     min-score: "0.5"              # optional, default 0.5
-    output-file: namespace.yaml
-```
-
-#### Standalone workflow
-
-```yaml
-# .github/workflows/generate-namespace-from-model.yml
-name: Generate Namespace from Model
-
-on:
-  workflow_dispatch:
-    inputs:
-      model-file:
-        description: Path to the model.yaml file
-        required: false
-        type: string
-        default: model.yml
-      model-name:
-        description: Model name to use (leave blank for first model in file)
-        required: false
-        type: string
-      title:
-        description: Workbook title (defaults to "<ModelName> Analysis")
-        required: false
-        type: string
-      max-suggestions:
-        description: Maximum number of analysis suggestions (default 25)
-        required: false
-        type: string
-        default: "25"
-      min-score:
-        description: Minimum relevance score 0-1 (default 0.5)
-        required: false
-        type: string
-        default: "0.5"
-      output-file:
-        description: Output path for the namespace YAML
-        required: false
-        type: string
-        default: namespace.yml
-
-jobs:
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: generate-namespace-from-model
-          model-file: ${{ inputs.model-file }}
-          model-name: ${{ inputs.model-name }}
-          title: ${{ inputs.title }}
-          max-suggestions: ${{ inputs.max-suggestions }}
-          min-score: ${{ inputs.min-score }}
-          output-file: ${{ inputs.output-file }}
-
-      - name: Upload namespace artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-namespace
-          path: ${{ inputs.output-file }}
-```
-
-#### As steps in another workflow
-
-```yaml
-- uses: AtScaleInc/ps-template@main
-  with:
-    operation: generate-namespace-from-model
-    model-file: model.yaml
-    title: "Sales Analytics"
-    max-suggestions: "20"
     output-file: namespace.yaml
 ```
 
@@ -363,69 +159,39 @@ Reads a SQL file, splits it into individual statements (handling string literals
     dry-run: "true"
 ```
 
-#### Standalone workflow
+---
+
+### `extract-ddl-from-connection`
+
+Connects to a live database, reads JDBC metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file. Use `--tables` to limit extraction to specific tables or wildcard patterns.
+
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
+
+#### Using the composite action
 
 ```yaml
-# .github/workflows/execute-sql-on-connection.yml
-name: Execute SQL on Connection
+- uses: actions/checkout@v4
 
-on:
-  workflow_dispatch:
-    inputs:
-      sql-file:
-        description: Path to the SQL file in the repository
-        required: true
-        type: string
-      connection-name:
-        description: Connection name within CONNECTIONS_FILE
-        required: true
-        type: string
-      on-error:
-        description: "Behaviour on failure: stop or continue"
-        required: false
-        type: string
-        default: stop
-      dry-run:
-        description: Print statements without executing (true/false)
-        required: false
-        type: boolean
-        default: false
-
-jobs:
-  execute:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: execute-sql-on-connection
-          connection-file: ${{ secrets.CONNECTIONS_FILE }}
-          connection-name: ${{ inputs.connection-name }}
-          sql-file: ${{ inputs.sql-file }}
-          on-error: ${{ inputs.on-error }}
-          dry-run: ${{ inputs.dry-run && 'true' || '' }}
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-ddl-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+    schema: PUBLIC
+    output-file: schema/extracted.ddl
 ```
 
-#### Trigger automatically on SQL file changes
-
-```yaml
-on:
-  push:
-    paths:
-      - 'migrations/**/*.sql'
-```
-
-#### As steps in another workflow
+With table filtering:
 
 ```yaml
 - uses: AtScaleInc/ps-template@main
   with:
-    operation: execute-sql-on-connection
+    operation: extract-ddl-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
     connection-name: snow_demo
-    sql-file: migrations/001_init.sql
-    on-error: stop
+    schema: PUBLIC
+    tables: "Dim*,FactInternetSales"
+    output-file: schema/extracted.ddl
 ```
 
 ---
@@ -446,84 +212,11 @@ Connects to a live database, introspects its schema, runs semantic model inferen
     connection-name: snow_demo
     model-name: SalesModel
     output-dir: sml-output
-    pii-severity: MEDIUM          # optional
-    schema: PUBLIC                # optional
-```
-
-#### Standalone workflow
-
-```yaml
-# .github/workflows/generate-sml-from-connection.yml
-name: Generate SML from Connection
-
-on:
-  workflow_dispatch:
-    inputs:
-      connection-name:
-        description: Connection name within the connections file
-        required: true
-        type: string
-      model-name:
-        description: Name for the generated semantic model
-        required: true
-        type: string
-      output-dir:
-        description: Directory to write SML files
-        required: false
-        type: string
-        default: sml-output
-      schema:
-        description: Override the database schema to introspect
-        required: false
-        type: string
-      pii-severity:
-        description: Minimum PII severity to exclude (HIGH, MEDIUM, LOW, none)
-        required: false
-        type: string
-        default: MEDIUM
-
-jobs:
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: generate-sml-from-connection
-          connection-file: ${{ secrets.CONNECTIONS_FILE }}
-          connection-name: ${{ inputs.connection-name }}
-          model-name: ${{ inputs.model-name }}
-          output-dir: ${{ inputs.output-dir }}
-          schema: ${{ inputs.schema }}
-          pii-severity: ${{ inputs.pii-severity }}
-
-      - name: Upload SML artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sml-output
-          path: ${{ inputs.output-dir }}/
-
-      - name: Commit SML files
-        if: github.ref == 'refs/heads/main'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${{ inputs.output-dir }}"
-          git diff --cached --quiet || git commit -m "chore: regenerate SML from ${{ inputs.connection-name }}"
-          git push
-```
-
-#### As steps in another workflow
-
-```yaml
-- uses: AtScaleInc/ps-template@main
-  with:
-    operation: generate-sml-from-connection
-    connection-file: ${{ secrets.CONNECTIONS_FILE }}
-    connection-name: snow_demo
-    model-name: SalesModel
-    output-dir: sml-output
+    pii-severity: MEDIUM                              # optional
+    schema: PUBLIC                                    # optional
+    fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
+    camel-case-files: "true"                          # optional — camelCase filenames
+    camel-case-measures: "true"                       # optional — camelCase metric labels
 ```
 
 ---
@@ -547,87 +240,9 @@ Parses a SQL DDL file from the repository and generates SML files without a live
     output-dir: sml-output
     connection-name: snow_demo    # optional — embedded in SML files
     pii-severity: MEDIUM          # optional
-```
-
-#### Standalone workflow
-
-```yaml
-# .github/workflows/generate-sml-from-ddl.yml
-name: Generate SML from DDL
-
-on:
-  push:
-    paths:
-      - '**.sql'
-  workflow_dispatch:
-    inputs:
-      ddl-file:
-        description: Path to the SQL DDL file
-        required: true
-        type: string
-      model-name:
-        description: Name for the generated semantic model
-        required: false
-        type: string
-      output-dir:
-        description: Directory to write SML files
-        required: false
-        type: string
-        default: sml-output
-      connection-name:
-        description: Connection name to embed in SML files
-        required: false
-        type: string
-        default: my_connection
-      pii-severity:
-        description: Minimum PII severity to exclude (HIGH, MEDIUM, LOW, none)
-        required: false
-        type: string
-        default: MEDIUM
-
-jobs:
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: generate-sml-from-ddl
-          ddl-file: ${{ inputs.ddl-file }}
-          model-name: ${{ inputs.model-name }}
-          output-dir: ${{ inputs.output-dir }}
-          connection-name: ${{ inputs.connection-name }}
-          pii-severity: ${{ inputs.pii-severity }}
-
-      - name: Upload SML artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sml-output
-          path: ${{ inputs.output-dir }}/
-```
-
-#### On push to any `.sql` file (automatic trigger)
-
-```yaml
-on:
-  push:
-    paths:
-      - '**.sql'
-```
-
-This triggers the workflow automatically whenever a DDL file is committed to the repository. Pair this with a commit step to keep the SML directory in sync with the schema.
-
-#### As steps in another workflow
-
-```yaml
-- uses: AtScaleInc/ps-template@main
-  with:
-    operation: generate-sml-from-ddl
-    ddl-file: schema/sales.sql
-    model-name: SalesModel
-    output-dir: sml-output
-    connection-name: snow_demo
+    fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
+    camel-case-files: "true"      # optional — camelCase filenames
+    camel-case-measures: "true"   # optional — camelCase metric labels
 ```
 
 ---
@@ -654,76 +269,37 @@ Generates a Tableau `.twb` workbook from a namespace YAML and a model YAML.
     target-file: tableau.twb
 ```
 
-#### Standalone workflow
+---
+
+### `deploy-atscale-microk8s`
+
+Installs MicroK8s, configures it, and deploys AtScale via Helm on a remote VM over SSH. The VM must already exist and be reachable (see `1_create-vm` for provisioning). `genCerts.sh` and `values.yaml` must be present in the repository root.
+
+**Requires:** `VM_ADMIN_PASSWORD` secret passed as `vm-admin-password`.
+
+#### Using the composite action
 
 ```yaml
-# .github/workflows/generate-tableau-from-namespace.yml
-name: Generate Tableau Workbook
+- uses: actions/checkout@v4
 
-on:
-  workflow_dispatch:
-    inputs:
-      namespace-file:
-        description: Path to the namespace YAML file
-        required: false
-        type: string
-        default: namespace.yml
-      model-file:
-        description: Path to the model YAML file
-        required: false
-        type: string
-        default: model.yml
-      connection-name:
-        description: Connection name within the connections file
-        required: false
-        type: string
-        default: default
-      tableau-version:
-        description: Target Tableau version (2025 or 2024)
-        required: false
-        type: string
-        default: "2025"
-      target-file:
-        description: Output path for the Tableau workbook
-        required: false
-        type: string
-        default: tableau.twb
-
-jobs:
-  generate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: AtScaleInc/ps-template@main
-        with:
-          operation: generate-tableau-from-namespace
-          connection-file: ${{ secrets.CONNECTIONS_FILE }}
-          connection-name: ${{ inputs.connection-name }}
-          namespace-file: ${{ inputs.namespace-file }}
-          model-file: ${{ inputs.model-file }}
-          tableau-version: ${{ inputs.tableau-version }}
-          target-file: ${{ inputs.target-file }}
-
-      - name: Upload Tableau workbook artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tableau-workbook
-          path: ${{ inputs.target-file }}
-```
-
-#### As steps in another workflow
-
-```yaml
 - uses: AtScaleInc/ps-template@main
   with:
-    operation: generate-tableau-from-namespace
-    connection-file: ${{ secrets.CONNECTIONS_FILE }}
-    connection-name: ats_connection
-    namespace-file: namespace.yaml
-    model-file: model.yaml
-    target-file: tableau.twb
+    operation: deploy-atscale-microk8s
+    microk8s-hostname: ${{ inputs.hostname }}
+    vm-admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}
+    atscale-version: "2026.1.0"   # optional, default 2026.1.0
 ```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `microk8s-hostname` | Yes | | IP address or hostname of the target VM |
+| `vm-admin-password` | Yes | | Password for the `atscale` OS user (pass via secret) |
+| `atscale-version` | No | `2026.1.0` | AtScale Helm chart version to install |
+
+**What it does:**
+1. Copies `genCerts.sh` and `values.yaml` from the repo to `/home/atscale/` on the remote host via SCP
+2. Installs `microk8s`, `kubectl`, `helm`, `yq`, and `net-tools` via SSH
+3. Generates TLS certs, enables `hostpath-storage` and `metallb`, patches the ingress gateway service, and deploys AtScale via `helm install`
 
 ---
 

@@ -13,6 +13,7 @@ import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSML
 import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractModelFromSMLOperation.js";
 import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-model/GenerateNamespaceFromModelOperation.js";
 import { ExecuteSQLOnConnectionOperation } from "./execute-sql-on-connection/ExecuteSQLOnConnectionOperation.js";
+import { ExtractDDLFromConnectionOperation } from "./extract-ddl-from-connection/ExtractDDLFromConnectionOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -24,7 +25,7 @@ export async function buildRegistry(
   logger: Logger,
   serviceOptions: ServiceRegistryOptions = {}
 ): Promise<OperationRegistry> {
-  const services = await buildServiceRegistry(serviceOptions);
+  const services = await buildServiceRegistry({ ...serviceOptions, logger });
   const registry = new OperationRegistry();
   registry.register(new EchoOperation(services, logger));
   registry.register(new ToggleOperation(services, logger));
@@ -38,5 +39,6 @@ export async function buildRegistry(
   registry.register(new ExtractModelFromSMLOperation(services, logger));
   registry.register(new GenerateNamespaceFromModelOperation(services, logger));
   registry.register(new ExecuteSQLOnConnectionOperation(services, logger));
+  registry.register(new ExtractDDLFromConnectionOperation(services, logger));
   return registry;
 }
