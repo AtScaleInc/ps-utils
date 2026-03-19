@@ -9,21 +9,28 @@
     "width": 280,
     "tabOrder": 0
   },
-  <%=
+  <%
+    let measure;
+    let level;
+    let dimension;
+    let hierarchy;
     if (worksheet.graphType == 'bar') { 
-      const measure = worksheet.xAxis;
-      const level = worksheet.yAxis;
+      measure = worksheet.xAxis;
+      level = worksheet.yAxis;
     }
     else {
-      const measure = worksheet.yAxis;
-      const level = worksheet.xAxis;
+      measure = worksheet.yAxis;
+      level = worksheet.xAxis;
     }
-    Object.entries(model.mdx.attributes).forEach((dimensionName, dimension: any) => {
-      Object.entries(dimension).forEach((hierarchyName, hierarchy: any) => {
-        for (const attribute of hierarchy) {
-          if (attribute.queryName == level) {
-            const dimension = dimensionName;
-            const hierarchy = hierarchyName;
+    let shouldBreak = false;
+    Object.entries(model.mdx.attributes).forEach(([dimensionName, dimensionInfo]) => {
+      if (shouldBreak) return;
+      Object.entries(dimensionInfo).forEach(([hierarchyName, hierarchyInfo]) => {
+        for (let attribute of hierarchyInfo) {
+          if (attribute.query_name === level) {
+            dimension = dimensionName;
+            hierarchy = hierarchyName;
+            shouldBreak = true;
           };
         };
       });
