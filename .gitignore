@@ -1,7 +1,8 @@
 .vscode/
 node_modules/
+output/
 dist/
-.DS_Store
+**/.DS_Store
 .env
 example/*
 resources/keys/*
