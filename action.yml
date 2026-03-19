@@ -200,7 +200,9 @@ runs:
 
     - name: Install dependencies
       if: inputs.operation != 'deploy-atscale-microk8s'
-      run: npm install
+      run: |
+        export LD_LIBRARY_PATH="$JAVA_HOME/lib/server:$LD_LIBRARY_PATH"
+        npm install
       shell: bash
       working-directory: ${{ github.action_path }}
 
