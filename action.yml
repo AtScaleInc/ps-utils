@@ -185,6 +185,13 @@ runs:
   steps:
 
     # ── Setup (CLI operations only — not needed for deploy-atscale-microk8s) ──
+    - name: Set up Java
+      if: inputs.operation != 'deploy-atscale-microk8s'
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '18'
+
     - uses: actions/setup-node@v4
       if: inputs.operation != 'deploy-atscale-microk8s'
       with:
