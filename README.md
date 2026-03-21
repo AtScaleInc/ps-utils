@@ -359,6 +359,8 @@ Extract only specific tables or wildcard patterns:
 | &nbsp;&nbsp; Sort Categories | Yes | |---|---|---|
 | Line Chart | Yes | Yes |---|---|---|
 | &nbsp;&nbsp; Ticks as color | Yes | |---|---|---|
+| Text | Yes | Yes |Yes|---|---|
+| &nbsp;&nbsp; Format Options | --- | --- | Yes |---|---|
 
 
 ---

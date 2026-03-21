@@ -188,7 +188,7 @@ export class ExcelService extends ServiceProvider {
       // Data sections: one column block per unique worksheet on this dashboard.
       // Placed at far-right columns (starting 3 past the tile grid), rows 1-11.
       // Row 1 = column headers; rows 2-11 = CUBE formula data.
-      type DataSection = { dataCol: number; measureUniques: string[] };
+      type DataSection = { dataCol: number; measureUniques: string[]; numFmt: string | null };
       const wsDataSections = new Map<string, DataSection>();
       let nextDataCol = bannerEndCol + 3;
 
@@ -243,6 +243,7 @@ export class ExcelService extends ServiceProvider {
           const modelName  = (wsDef["model"]      as string | undefined) ?? "";
           const measures   = measRaw.length > 0 ? measRaw : (yAxis ? [yAxis] : []);
           const headers    = [...(xAxis ? [xAxis] : []), ...measures];
+          const numFmt     = toExcelNumFmt((wsDef["format"] as string | undefined) ?? "");
 
           const anchorCol = LEFT_COL + resolvedXVal * TILE_COL_STEP;
 
@@ -291,19 +292,23 @@ export class ExcelService extends ServiceProvider {
                 };
                 for (let mi = 0; mi < measureUniques.length; mi++) {
                   const rankCellRef = colLetter(dataCol) + r;
-                  dashWs.getCell(r, dataCol + 1 + mi).value = {
+                  const mc = dashWs.getCell(r, dataCol + 1 + mi);
+                  mc.value = {
                     formula: `CUBEVALUE("${connectionName}","${measureUniques[mi]}",${rankCellRef})`,
                   };
+                  if (numFmt) mc.numFmt = numFmt;
                 }
               }
             } else if (measureUniques.length > 0) {
               // Text / KPI tile: grand total in first data cell
-              dashWs.getCell(2, dataCol).value = {
+              const gc = dashWs.getCell(2, dataCol);
+              gc.value = {
                 formula: `CUBEVALUE("${connectionName}","${measureUniques[0]}")`,
               };
+              if (numFmt) gc.numFmt = numFmt;
             }
 
-            wsDataSections.set(te.wsName, { dataCol, measureUniques });
+            wsDataSections.set(te.wsName, { dataCol, measureUniques, numFmt });
 
             // One pivot table per unique model — placed on the _Connections sheet.
             // Skip when hierarchies are empty (model not found): an empty pivot table
@@ -345,6 +350,7 @@ export class ExcelService extends ServiceProvider {
                 formula: `CUBEVALUE("${connectionName}","${section.measureUniques[0]}")`,
               };
             }
+            if (section.numFmt) valueCell.numFmt = section.numFmt;
             valueCell.font      = { bold: true, size: 20, color: { argb: TITLE_COLOR } };
             valueCell.fill      = solidFill(KPI_VALUE_BG);
             valueCell.alignment = { horizontal: "center", vertical: "middle" };
@@ -482,4 +488,26 @@ function safeName(name: string): string {
 
 function solidFill(argb: string): ExcelJS.Fill {
   return { type: "pattern", pattern: "solid", fgColor: { argb } };
+}
+
+/**
+ * Convert a namespace format string to an Excel number format code.
+ *   integer      → #,##0
+ *   decimal:N    → #,##0.000…  (N decimal places)
+ *   percent:N    → 0.000…%
+ *   currency:N   → $#,##0.000…
+ * Returns null when the format string is empty or unrecognised.
+ */
+function toExcelNumFmt(format: string): string | null {
+  if (!format) return null;
+  const [kind, precStr] = format.split(":");
+  const prec = precStr !== undefined ? Math.max(0, parseInt(precStr, 10) || 0) : 0;
+  const dec  = prec > 0 ? "." + "0".repeat(prec) : "";
+  switch (kind) {
+    case "integer":  return "#,##0";
+    case "decimal":  return `#,##0${dec}`;
+    case "percent":  return `0${dec}%`;
+    case "currency": return `$#,##0${dec}`;
+    default:         return null;
+  }
 }
