@@ -19,7 +19,7 @@
 import fs from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter, BooleanParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter, BooleanParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { DdlDatabaseMetaData } from "../../algorithm/ddl-reader.js";

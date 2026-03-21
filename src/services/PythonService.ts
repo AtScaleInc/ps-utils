@@ -25,9 +25,13 @@ export class PythonService extends ServiceProvider {
 
     const result = spawnSync("python3", args, { encoding: "utf8" });
 
+    // spawnSync sets result.error when the process could not be spawned at all
+    // (e.g. python3 not found).  Surface that so callers see a useful message.
+    const spawnError = result.error ? `\n${result.error.message}` : "";
+
     return {
       stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
+      stderr: (result.stderr ?? "") + spawnError,
       exitCode: result.status ?? 1,
     };
   }

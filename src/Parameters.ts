@@ -1,4 +1,4 @@
-import type { OperationParams } from "./Operation.js";
+import type { OperationParams } from "./operations/Operation.js";
 
 /**
  * Supported parsed parameter value types.

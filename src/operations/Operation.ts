@@ -1,4 +1,4 @@
-import type { ParameterSet } from "./Parameters.js";
+import type { ParameterSet } from "../Parameters.js";
 import type { ServiceRegistry } from "../services/registry.js";
 import type { Logger } from "../logging.js";
 

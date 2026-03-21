@@ -2,7 +2,7 @@
  * Extract AtScale model metadata and serialize it into YAML.
  */
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";

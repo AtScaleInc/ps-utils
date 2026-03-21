@@ -16,6 +16,7 @@ This document describes how to run every CLI operation as a GitHub Actions workf
   - [`generate-sml-from-connection`](#generate-sml-from-connection)
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
+  - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
@@ -34,7 +35,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection` | Full contents of your `connections.yaml` file |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection` | Full contents of your `connections.yaml` file |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -268,6 +269,41 @@ Generates a Tableau `.twb` workbook from a namespace YAML and a model YAML.
     tableau-version: "2025"       # optional, default 2025
     target-file: tableau.twb
 ```
+
+---
+
+### `generate-excel-from-namespace`
+
+Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Each dashboard in the namespace becomes a sheet containing:
+
+- An OLAP pivot table whose data source is the AtScale XMLA/MDX endpoint — refresh in Excel to populate live data
+- One chart per dashboard tile, styled according to the worksheet `graphType` (`bar`, `line`, `pie`, `area`)
+- A hidden `_Connections` sheet with the full MDX connection string for manual reference
+
+**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection. Python 3 must be available in the runner; `openpyxl` is installed automatically if not already present.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-excel-from-namespace
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    namespace-file: analysis/namespace.yaml
+    model-file: model.yaml
+    target-file: analysis/workbook.xlsx
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | No | `default` | Connection name in the file |
+| `namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
+| `model-file` | No | `model.yaml` | Path to the model YAML |
+| `target-file` | No | `analysis/workbook.xlsx` | Output path for the Excel workbook |
 
 ---
 

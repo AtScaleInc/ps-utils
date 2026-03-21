@@ -1,4 +1,4 @@
-import { StringParameter } from "../Parameters.js";
+import { StringParameter } from "../../Parameters.js";
 import { TemplateOperation, TemplateOperationParams, TemplateParameterSet } from "../template/TemplateOperation.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";

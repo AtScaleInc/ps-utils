@@ -43,8 +43,11 @@ flowchart TD
     MODEL -->|generate-namespace-from-model| NS
     MODEL --> TWB
     NS    --> TWB
+    NS    --> XLSX
     CONN  --> TWB
+    CONN  --> XLSX
     TWB["generate-tableau-from-namespace\n→ tableau.twb"]
+    XLSX["generate-excel-from-namespace\n→ workbook.xlsx"]
 ```
 
 ## Table of Contents
@@ -60,6 +63,7 @@ flowchart TD
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
   - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
+  - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
@@ -383,6 +387,36 @@ Generates a Tableau `.twb` workbook from a namespace YAML definition and a model
 | `--target-file` | No | `tableau.twb` | Output path for the generated workbook |
 
 See [Namespace YAML](#namespace-yaml-namespaceyaml) for the full namespace format reference.
+
+---
+
+### `generate-excel-from-namespace`
+
+Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Requires Python 3; `openpyxl` is installed automatically if not already present.
+
+Each dashboard in the namespace produces one sheet containing:
+- An **OLAP pivot table** connected to AtScale via MDX/XMLA — click **Refresh All** in Excel to populate live data
+- One **chart** per dashboard tile (`bar`, `line`, `pie`, or `area`) styled from the worksheet `graphType`
+- A hidden **`_Connections`** sheet with the full MDX connection string
+
+```bash
+./atscale-utils generate-excel-from-namespace \
+  --namespace-file "analysis/namespace.yaml" \
+  --model-file     "model.yaml" \
+  --connection-file "connections.yaml" \
+  --connection-name "ats_connection" \
+  --target-file    "analysis/workbook.xlsx"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
+| `--model-file` | No | `model.yaml` | Path to the model YAML |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--connection-name` | No | `default` | Connection name in the file |
+| `--target-file` | No | `analysis/workbook.xlsx` | Output path for the Excel workbook |
+
+The MDX connection in the workbook uses `Provider=MSOLAP.8` pointed at the AtScale XMLA endpoint (`<mdx.url>/xmla/<organization_id>`). Open the workbook in Excel and click **Data → Refresh All** to load live data into the pivot tables.
 
 ---
 

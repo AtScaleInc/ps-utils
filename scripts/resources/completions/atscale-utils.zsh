@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection
+    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace
     ;;
   args)
     case "$words[2]" in
@@ -48,6 +48,9 @@ case $state in
     ;;
   extract-ddl-from-connection)
     _values 'params' --logfile --output --verbose --connection-file --connection-name --schema --tables --output-file
+    ;;
+  generate-excel-from-namespace)
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --connection-name --target-file
     ;;
     *)
       _values 'params' --logfile --output --verbose

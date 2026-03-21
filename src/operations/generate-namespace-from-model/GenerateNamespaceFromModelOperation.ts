@@ -19,7 +19,7 @@
  * "Summary Statistics", "Trends", and "Rankings & Breakdowns".
  */
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
@@ -118,6 +118,19 @@ function toAggType(agg: string): AggregationType {
 /** Determine xAxisGranularity based on column data type. */
 function granularityFor(dataType: string): string {
   return dataType === "DATE_DOUBLE" ? "day" : "week";
+}
+
+/** Embed the granularity word into a worksheet title.
+ *  "Sum Errors Over Time" → "Sum Errors by Week"
+ *  "Sum Errors by Host Over Time" → "Sum Errors by Host by Week"
+ *  Titles without "Over Time" get " by <Gran>" appended.
+ */
+function titleWithGranularity(title: string, gran: string): string {
+  const cap = gran.charAt(0).toUpperCase() + gran.slice(1);
+  if (title.endsWith(" Over Time")) {
+    return title.slice(0, -" Over Time".length) + ` by ${cap}`;
+  }
+  return `${title} by ${cap}`;
 }
 
 /** Determine a sensible format hint for a measure column. */
@@ -328,16 +341,18 @@ function buildNamespace(
       // measure over a single time hierarchy
       const hier      = s.hierarchies[0];
       const timeLevel = resolveLevel(hier.dimensionName, hier.levels[0]);
+      const gran      = granularityFor(colTypeMap.get(timeLevel) ?? "DATETIME");
+      const wsTitle   = titleWithGranularity(s.title, gran);
       const ws: Record<string, any> = {
-        title:             s.title,
+        title:             wsTitle,
         model:             modelName,
         graphType:         "line",
         xAxis:             timeLevel,
-        xAxisGranularity:  granularityFor(colTypeMap.get(timeLevel) ?? "DATETIME"),
+        xAxisGranularity:  gran,
         yAxis:             measureCol,
         description:       s.description,
       };
-      lineWs[keyGen(s.title)] = ws;
+      lineWs[keyGen(wsTitle)] = ws;
 
     } else if (s.analysisType === "comparison") {
       // measure over time, broken down by a second dimension
@@ -348,20 +363,22 @@ function buildNamespace(
 
       const otherHier = s.hierarchies.find((h) => h !== timeHier);
       const timeLevel = resolveLevel(timeHier.dimensionName, timeHier.levels[0]);
+      const gran      = granularityFor(colTypeMap.get(timeLevel) ?? "DATETIME");
+      const wsTitle   = titleWithGranularity(s.title, gran);
 
       const ws: Record<string, any> = {
-        title:             s.title,
+        title:             wsTitle,
         model:             modelName,
         graphType:         "line",
         xAxis:             timeLevel,
-        xAxisGranularity:  granularityFor(colTypeMap.get(timeLevel) ?? "DATETIME"),
+        xAxisGranularity:  gran,
         yAxis:             measureCol,
         description:       s.description,
       };
       if (otherHier) {
         ws.colorField = resolveLevel(otherHier.dimensionName, otherHier.levels[0]);
       }
-      lineWs[keyGen(s.title)] = ws;
+      lineWs[keyGen(wsTitle)] = ws;
 
     } else {
       // breakdown, distribution, ranking → bar chart

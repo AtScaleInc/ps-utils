@@ -15,6 +15,7 @@ inputs:
         generate-sml-from-ddl
         generate-namespace-from-model
         generate-tableau-from-namespace
+        generate-excel-from-namespace
         execute-sql-on-connection
         extract-ddl-from-connection
         deploy-atscale-microk8s
@@ -331,6 +332,21 @@ runs:
           --verbose true
         )
         node "${{ github.action_path }}/dist/cli.js" generate-tableau-from-namespace "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-excel-from-namespace ────────────────────────────────────────
+    - name: Generate Excel workbook from namespace
+      if: inputs.operation == 'generate-excel-from-namespace'
+      run: |
+        ARGS=(
+          --namespace-file  "${{ inputs.namespace-file }}"
+          --model-file      "${{ inputs.model-file }}"
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --target-file     "${{ inputs.target-file }}"
+          --verbose true
+        )
+        node "${{ github.action_path }}/dist/cli.js" generate-excel-from-namespace "${ARGS[@]}"
       shell: bash
 
     # ── execute-sql-on-connection ─────────────────────────────────────────────

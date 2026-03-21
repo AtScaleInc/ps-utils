@@ -14,6 +14,7 @@ import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractMo
 import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-model/GenerateNamespaceFromModelOperation.js";
 import { ExecuteSQLOnConnectionOperation } from "./execute-sql-on-connection/ExecuteSQLOnConnectionOperation.js";
 import { ExtractDDLFromConnectionOperation } from "./extract-ddl-from-connection/ExtractDDLFromConnectionOperation.js";
+import { GenerateExcelFromNamespaceOperation } from "./generate-excel-from-namespace/GenerateExcelFromNamespaceOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -40,5 +41,6 @@ export async function buildRegistry(
   registry.register(new GenerateNamespaceFromModelOperation(services, logger));
   registry.register(new ExecuteSQLOnConnectionOperation(services, logger));
   registry.register(new ExtractDDLFromConnectionOperation(services, logger));
+  registry.register(new GenerateExcelFromNamespaceOperation(services, logger));
   return registry;
 }

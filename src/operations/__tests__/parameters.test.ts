@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BooleanParameter, NumberParameter, ParameterSet, StringParameter } from "../Parameters.js";
+import { BooleanParameter, NumberParameter, ParameterSet, StringParameter } from "../../Parameters.js";
 
 /**
  * Tests for parameter parsing, defaults, and validation.

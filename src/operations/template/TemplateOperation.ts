@@ -2,7 +2,7 @@
  * Shared base types for operations that render templates from YAML inputs.
  */
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 

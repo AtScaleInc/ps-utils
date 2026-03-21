@@ -4,7 +4,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../Parameters.js";
+import { ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import type { PythonService } from "../../services/PythonService.js";

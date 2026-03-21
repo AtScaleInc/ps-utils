@@ -4,6 +4,7 @@
 import { EjsTemplateService } from "./EjsTemplateService.js";
 import { YamlService } from "./YamlService.js";
 import { PythonService } from "./PythonService.js";
+import { ExcelService } from "./ExcelService.js";
 import { ServiceRegistry } from "./registry.js";
 import type { Logger } from "../logging.js";
 
@@ -21,7 +22,8 @@ export async function buildServiceRegistry(
   const registry = new ServiceRegistry();
   registry.register(new EjsTemplateService());
   registry.register(new YamlService());
-  registry.register(new PythonService());
+  registry.register(new PythonService());  // retained for PythonHelloWorldOperation
+  registry.register(new ExcelService());
   if (options.includeSql !== false) {
     const { SqlService } = await import("./SqlService.js");
     registry.register(new SqlService(options.logger));
