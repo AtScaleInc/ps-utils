@@ -20,10 +20,10 @@ case $state in
     _values 'params' --logfile --output --verbose --model --connection-file --connection-name --output-model-file
     ;;
   generate-powerbi-from-namespace)
-    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --target-folder --connection-name
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --aliases-file --target-folder --connection-name
     ;;
   generate-tableau-from-namespace)
-    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --tableau-version --connection-name --target-file
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --aliases-file --tableau-version --connection-name --target-file
     ;;
   echo-connection-metadata)
     _values 'params' --logfile --output --verbose --connection-file --connection-name --schema
@@ -50,7 +50,7 @@ case $state in
     _values 'params' --logfile --output --verbose --connection-file --connection-name --schema --tables --output-file
     ;;
   generate-excel-from-namespace)
-    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --connection-name --target-file
+    _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --aliases-file --connection-name --target-file
     ;;
     *)
       _values 'params' --logfile --output --verbose

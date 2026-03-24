@@ -77,7 +77,12 @@ export class GenerateExcelFromNamespaceOperation
     const namespace = yaml.readFromFile<Record<string, unknown>>(namespaceFile);
 
     this.logger.verbose(`Reading model:      ${modelFile}`);
-    const models = yaml.readFromFile<Record<string, unknown>>(modelFile);
+    const rawModels   = yaml.readFromFile<Record<string, unknown>>(modelFile);
+    const aliasesFile = params["aliases-file"];
+    const aliasesData = aliasesFile
+      ? yaml.readFromFile<Record<string, unknown>>(aliasesFile)
+      : null;
+    const models = yaml.augmentModelData(rawModels, aliasesData);
 
     this.logger.verbose(`Reading connection: ${connectionFile}`);
     const connections = yaml.readFromFile<Record<string, unknown>>(connectionFile);

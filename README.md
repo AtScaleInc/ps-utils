@@ -1,10 +1,10 @@
 # AtScale PS Template CLI
 
-CLI tool for extracting AtScale models, generating SML semantic models, and generating Tableau workbooks.
+CLI tool for extracting AtScale models, generating SML semantic models, and generating BI workbooks (Tableau, Excel).
 
 Upcoming features:
 1. PBI
-2. Additional BI Tools / Jupyter, Excel, Sheets
+2. Google Sheets
 3. Query Testing; python (match Gatling)
 4. Extract Queries
 5. Stat Analysis
@@ -23,6 +23,7 @@ flowchart TD
     ATS["AtScale\nInstance"]
     NS["Namespace YAML\n(namespace.yaml)"]
     CONN["Connections YAML\n(connections.yaml)"]
+    ALIASES["Aliases YAML\n(aliases.yaml)\n[optional]"]
 
     DDL -->|generate-sml-from-ddl| SML
     DB  -->|generate-sml-from-connection| SML
@@ -42,10 +43,13 @@ flowchart TD
 
     MODEL -->|generate-namespace-from-model| NS
     MODEL --> TWB
+    MODEL --> XLSX
     NS    --> TWB
     NS    --> XLSX
     CONN  --> TWB
     CONN  --> XLSX
+    ALIASES -.->|optional| TWB
+    ALIASES -.->|optional| XLSX
     TWB["generate-tableau-from-namespace\n→ tableau.twb"]
     XLSX["generate-excel-from-namespace\n→ workbook.xlsx"]
 ```
@@ -68,6 +72,7 @@ flowchart TD
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
 - [Namespace YAML (`namespace.yaml`)](#namespace-yaml-namespaceyaml)
+- [Aliases YAML (`aliases.yaml`)](#aliases-yaml-aliasesyaml)
 
 ---
 
@@ -236,15 +241,15 @@ With optional overrides:
 
 ### `generate-namespace-from-model`
 
-Reads a `model.yaml` file and automatically generates a namespace YAML by running the analysis-suggestions engine against the model's measures and dimensions. The output is ready to pass directly to `generate-tableau-from-namespace`.
+Reads a `model.yaml` file and automatically generates a namespace YAML by running the analysis-suggestions engine against the model's measures and dimensions. The output is ready to pass directly to `generate-tableau-from-namespace` or `generate-excel-from-namespace`.
 
 Each suggestion becomes a worksheet:
-- **trend** → `graphType: line` (measure over time)
+- **trend** → `graphType: line` (measure over time, title suffixed with granularity e.g. "by Week")
 - **comparison** → `graphType: line` with `colorField` (measure over time, broken down by a second dimension)
 - **breakdown / distribution** → `graphType: bar`
 - **ranking** → `graphType: bar` with `limit: 10` and `sortDirection: desc`
 
-Up to six summary-statistic scorecards (`graphType: text`) are prepended automatically. All worksheets are arranged in a single auto-sized dashboard.
+Up to six summary-statistic scorecards (`graphType: text`) are prepended automatically. All worksheets are arranged in a single auto-sized dashboard. Time-based line charts include an `xAxisGranularity` field (`"day"` for `DATE_DOUBLE` columns, `"week"` for `DATETIME` columns).
 
 ```bash
 ./atscale-utils generate-namespace-from-model \
@@ -348,20 +353,21 @@ Extract only specific tables or wildcard patterns:
 ---
 
 ### BI Tool Feature Comparison
-[Link to the header](#BI-Tool-Feature-Comparison)
 
-| Feature | Tableau Desktop | PowerBI Desktop | Excel | Jupyter | Sheets
+| Feature | Tableau Desktop | PowerBI Desktop | Excel | Jupyter | Sheets |
 |---|---|---|---|---|---|
-| Test Output | Yes | Yes |---|---|---|
-| Bar Chart | Yes | Yes |---|---|---|
-| &nbsp;&nbsp; Ticks as color | Yes | |---|---|---|
-| &nbsp;&nbsp; Filter Nulls | Yes | |---|---|---|
-| &nbsp;&nbsp; Sort Categories | Yes | |---|---|---|
-| Line Chart | Yes | Yes |---|---|---|
-| &nbsp;&nbsp; Ticks as color | Yes | |---|---|---|
-| Text | Yes | Yes |Yes|---|---|
-| &nbsp;&nbsp; Format Options | --- | --- | Yes |---|---|
-
+| Text Output | Yes | Yes | Yes | — | — |
+| Bar Chart | Yes | Yes | — | — | — |
+| &nbsp;&nbsp; Ticks as color | Yes | | — | — | — |
+| &nbsp;&nbsp; Filter Nulls | Yes | | — | — | — |
+| &nbsp;&nbsp; Sort Categories | Yes | | — | — | — |
+| Line Chart | Yes | Yes | Yes | — | — |
+| &nbsp;&nbsp; Ticks as color | Yes | | — | — | — |
+| Text / KPI | Yes | Yes | Yes | — | — |
+| &nbsp;&nbsp; Format Options | — | — | Yes | — | — |
+| &nbsp;&nbsp; Number Format | — | — | Yes | — | — |
+| OLAP Pivot Table | — | — | Yes | — | — |
+| xAxisGranularity | — | — | Yes | — | — |
 
 ---
 
@@ -379,12 +385,25 @@ Generates a Tableau `.twb` workbook from a namespace YAML definition and a model
   --target-file "./tableau.twb"
 ```
 
+With an aliases file:
+
+```bash
+./atscale-utils generate-tableau-from-namespace \
+  --namespace-file "./namespace.yaml" \
+  --model-file "./model.yaml" \
+  --connection-file "./connections.yaml" \
+  --connection-name "ats_connection" \
+  --aliases-file "./aliases.yaml" \
+  --target-file "./tableau.twb"
+```
+
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
 | `--model-file` | No | `model.yaml` | Path to the model YAML |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--connection-name` | No | `default` | Connection name in the file |
+| `--aliases-file` | No | | Path to an optional aliases YAML (see [Aliases YAML](#aliases-yaml-aliasesyaml)) |
 | `--tableau-version` | No | `2025` | Target Tableau version: `2025` or `2024` |
 | `--target-file` | No | `tableau.twb` | Output path for the generated workbook |
 
@@ -394,12 +413,14 @@ See [Namespace YAML](#namespace-yaml-namespaceyaml) for the full namespace forma
 
 ### `generate-excel-from-namespace`
 
-Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Requires Python 3; `openpyxl` is installed automatically if not already present.
+Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. No external dependencies beyond the npm packages.
 
-Each dashboard in the namespace produces one sheet containing:
-- An **OLAP pivot table** connected to AtScale via MDX/XMLA — click **Refresh All** in Excel to populate live data
-- One **chart** per dashboard tile (`bar`, `line`, `pie`, or `area`) styled from the worksheet `graphType`
-- A hidden **`_Connections`** sheet with the full MDX connection string
+Each dashboard in the namespace produces one visible sheet containing:
+- One **chart** per tile (`bar`, `line`, `pie`, or `area`) styled from the worksheet `graphType`
+- **CUBE formula data sections** in far-right columns of the dashboard sheet — Excel evaluates these against AtScale via MDX/XMLA when the workbook is connected
+- An **OLAP pivot table** on the hidden `_Connections` sheet — click **Data → Refresh All** in Excel to load live data
+- **Number formatting** applied from the worksheet `format` field (`integer`, `decimal:N`, `percent:N`, `currency:N`)
+- **Granularity-aware set expressions** for time axes when `xAxisGranularity` is set and the model hierarchy has a matching level
 
 ```bash
 ./atscale-utils generate-excel-from-namespace \
@@ -410,15 +431,28 @@ Each dashboard in the namespace produces one sheet containing:
   --target-file    "analysis/workbook.xlsx"
 ```
 
+With an aliases file:
+
+```bash
+./atscale-utils generate-excel-from-namespace \
+  --namespace-file "analysis/namespace.yaml" \
+  --model-file     "model.yaml" \
+  --connection-file "connections.yaml" \
+  --connection-name "ats_connection" \
+  --aliases-file   "aliases.yaml" \
+  --target-file    "analysis/workbook.xlsx"
+```
+
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
 | `--model-file` | No | `model.yaml` | Path to the model YAML |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--connection-name` | No | `default` | Connection name in the file |
+| `--aliases-file` | No | | Path to an optional aliases YAML (see [Aliases YAML](#aliases-yaml-aliasesyaml)) |
 | `--target-file` | No | `analysis/workbook.xlsx` | Output path for the Excel workbook |
 
-The MDX connection in the workbook uses `Provider=MSOLAP.8` pointed at the AtScale XMLA endpoint (`<mdx.url>/xmla/<organization_id>`). Open the workbook in Excel and click **Data → Refresh All** to load live data into the pivot tables.
+The MDX connection uses `Provider=MSOLAP.8` pointed at the AtScale XMLA endpoint (`<mdx.url>/xmla/<organization_id>`). Open the workbook in Excel and click **Data → Refresh All** to load live data.
 
 ---
 
@@ -594,7 +628,7 @@ connections:
 
 ## Model YAML (`model.yaml`)
 
-Auto-generated by `extract-model-from-atscale`. Describes one or more AtScale models with two parallel sections per model: `mdx` (MDX query metadata) and `sql` (column metadata used by the Tableau generator).
+Auto-generated by `extract-model-from-atscale` or `extract-model-from-sml`. Describes one or more AtScale models with two parallel sections per model: `mdx` (MDX query metadata) and `sql` (column metadata used by the BI generators).
 
 ### Structure
 
@@ -619,7 +653,7 @@ Auto-generated by `extract-model-from-atscale`. Describes one or more AtScale mo
         folder: ""
 ```
 
-Column names in `sql.columns` are what you reference in namespace YAML fields (`xAxis`, `yAxis`, `measures`, `colorField`, `filters[].field`).
+Column names in `sql.columns` are what you reference in namespace YAML fields (`xAxis`, `yAxis`, `measures`, `colorField`, `filters[].field`). When an `--aliases-file` is supplied, `sql.columns` is extended with alias entries and the original columns are preserved under `sql.rawColumns`.
 
 ### Supported `data_type` values
 
@@ -666,7 +700,7 @@ Telemetry:
 
 ## Namespace YAML (`namespace.yaml`)
 
-Drives the Tableau workbook generator. Defines worksheets and dashboards.
+Drives the BI workbook generators. Defines worksheets and dashboards.
 
 ### Structure
 
@@ -677,7 +711,7 @@ description: <Description>
 
 worksheets:
   <worksheet_key>:
-    title: <Display name in Tableau>
+    title: <Display name>
     model: <ModelName>          # key from model.yaml
     graphType: bar | line | text
     ...
@@ -709,11 +743,11 @@ top_users:
 
 ### `graphType: line`
 
-Time-series line chart.
+Time-series line chart. `xAxisGranularity` selects a specific level from the time hierarchy when the AtScale model has named levels (e.g. "Day", "Week"). If the hierarchy has only one level the field is recorded but has no effect on the set expression.
 
 ```yaml
 queries_over_time:
-  title: Queries Over Time
+  title: Queries by Week
   model: Telemetry
   graphType: line
   xAxis: query_hour             # typically a DATETIME dimension
@@ -736,14 +770,25 @@ total_queries:
   graphType: text
   measures:
     - m_query_id_count
-  format: integer
+  format: integer               # optional: integer | decimal:N | percent:N | currency:N
 ```
+
+### `format` field
+
+Applies a number format to measure values in Excel. Accepted values:
+
+| Value | Excel format | Example |
+|---|---|---|
+| `integer` | `#,##0` | `1,234` |
+| `decimal:N` | `#,##0.00…` | `1,234.56` |
+| `percent:N` | `0.00…%` | `98.76%` |
+| `currency:N` | `$#,##0.00…` | `$1,234.56` |
 
 ### `filters` array
 
 ```yaml
 filters:
-  - field: <column_name>        # must exist in model's sql.columns
+  - field: <column_name>        # must exist in model's sql.columns (or aliases)
     excludeNull: true           # exclude null/blank members
 ```
 
@@ -782,3 +827,37 @@ Grid cell size = `width / hSegments` × `height / vSegments` px. `x + colSpan` m
 ### Full example
 
 See [`resources/namespaces/telemetry/overview.yaml`](resources/namespaces/telemetry/overview.yaml).
+
+---
+
+## Aliases YAML (`aliases.yaml`)
+
+An optional file passed via `--aliases-file` to `generate-tableau-from-namespace` and `generate-excel-from-namespace`. It lets you define friendly names for model columns so that namespace files can reference an alias instead of the underlying column key.
+
+### How it works
+
+When an aliases file is provided, `sql.columns` in the model is extended: each alias entry adds a copy of the referenced column under the alias name. The original columns remain unchanged. The pre-merge snapshot is preserved as `sql.rawColumns`, and the aliases map is attached as `model.aliases`.
+
+Any field in the namespace that accepts a column name (`xAxis`, `yAxis`, `measures`, `colorField`, `filters[].field`) can use either the original column key or any defined alias.
+
+### Structure
+
+The file is a flat YAML map of `alias_name: original_column_key`:
+
+```yaml
+<alias>: <original_column_key>
+```
+
+### Example
+
+```yaml
+query_time: query_hour
+total_queries: m_query_id_count
+response_time_avg: m_epoch_sql_wall_time_avg
+subquery_count: m_subquery_count_sum
+success_rate: cm_query_success_pct
+```
+
+With this file, a namespace worksheet can use `response_time_avg` as a `yAxis` and it will resolve to the `m_epoch_sql_wall_time_avg` column in the model.
+
+See [`example/aliases.yaml`](example/aliases.yaml) for the full example.

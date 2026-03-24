@@ -11,6 +11,7 @@ export type TemplateOperationParams = {
   "connection-file"?: string;
   "model-file"?: string;
   "target-file"?: string;
+  "aliases-file"?: string;
 };
 
 /**
@@ -36,6 +37,11 @@ export abstract class TemplateParameterSet extends ParameterSet {
         description = "The file where the connections are defined";
         required = false;
         defaultValue = "connections.yaml";
+      })(),
+      new (class extends StringParameter {
+        name = "aliases-file";
+        description = "Optional YAML file containing column aliases (global / worksheets / dashboards sections)";
+        required = false;
       })(),
     ];
   }
