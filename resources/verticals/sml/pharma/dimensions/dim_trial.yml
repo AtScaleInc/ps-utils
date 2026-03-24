@@ -1,0 +1,85 @@
+unique_name: Dim Trial
+object_type: dimension
+label: Dim Trial
+type: standard
+level_attributes:
+  -     unique_name: la_study_type
+        label: Study Type
+        dataset: dim_trial
+        name_column: study_type
+        key_columns:
+          - study_type
+  -     unique_name: la_trial_status
+        label: Trial Status
+        dataset: dim_trial
+        name_column: trial_status
+        key_columns:
+          - trial_status
+  -     unique_name: la_clinical_trial_id
+        label: Clinical Trial Id
+        dataset: dim_trial
+        name_column: clinical_trial_id
+        key_columns:
+          - clinical_trial_id
+  -     unique_name: la_study_id
+        label: Study Id
+        dataset: dim_trial
+        name_column: study_id
+        key_columns:
+          - study_id
+  -     unique_name: la_protocol_id
+        label: Protocol Id
+        dataset: dim_trial
+        name_column: protocol_id
+        key_columns:
+          - protocol_id
+  -     unique_name: la_ind_number
+        label: Ind Number
+        dataset: dim_trial
+        name_column: ind_number
+        key_columns:
+          - ind_number
+  -     unique_name: la_nda_number
+        label: Nda Number
+        dataset: dim_trial
+        name_column: nda_number
+        key_columns:
+          - nda_number
+  -     unique_name: la_phase_name
+        label: Phase Name
+        dataset: dim_trial
+        name_column: phase_name
+        key_columns:
+          - phase_name
+  -     unique_name: la_cohort_id
+        label: Cohort Id
+        dataset: dim_trial
+        name_column: cohort_id
+        key_columns:
+          - cohort_id
+  -     unique_name: la_arm_id
+        label: Arm Id
+        dataset: dim_trial
+        name_column: arm_id
+        key_columns:
+          - arm_id
+  -     unique_name: la_treatment_group
+        label: Treatment Group
+        dataset: dim_trial
+        name_column: treatment_group
+        key_columns:
+          - treatment_group
+  -     unique_name: la_trial_id
+        label: trial_id
+        dataset: dim_trial
+        name_column: trial_id
+        key_columns:
+          - trial_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Clinical Phase Hierarchy
+        label: Clinical Phase Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_study_type
+          -         unique_name: la_trial_status

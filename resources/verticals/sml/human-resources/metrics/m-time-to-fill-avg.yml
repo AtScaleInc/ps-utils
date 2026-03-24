@@ -1,0 +1,8 @@
+unique_name: m_time_to_fill_avg
+object_type: metric
+label: time_to_fill
+calculation_method: average
+dataset: hr_workforce_fact
+column: time_to_fill
+is_hidden: false
+unrelated_dimensions_handling: empty

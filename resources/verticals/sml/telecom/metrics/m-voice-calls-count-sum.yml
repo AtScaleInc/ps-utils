@@ -1,0 +1,8 @@
+unique_name: m_voice_calls_count_sum
+object_type: metric
+label: voice_calls_count
+calculation_method: sum
+dataset: telecom_cdr_fact
+column: voice_calls_count
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,20 @@
+unique_name: dim_destination
+object_type: dataset
+label: dim_destination
+connection_id: my_connection
+table: dim_destination
+columns:
+  -     name: destination_id
+        data_type: bigint
+  -     name: dest_country
+        data_type: string
+  -     name: dest_state
+        data_type: string
+  -     name: dest_city
+        data_type: string
+  -     name: dest_zip
+        data_type: string
+  -     name: destination_port
+        data_type: string
+  -     name: destination_location
+        data_type: string

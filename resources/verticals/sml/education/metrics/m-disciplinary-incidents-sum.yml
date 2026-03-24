@@ -1,0 +1,8 @@
+unique_name: m_disciplinary_incidents_sum
+object_type: metric
+label: disciplinary_incidents
+calculation_method: sum
+dataset: education_enrollment_fact
+column: disciplinary_incidents
+is_hidden: false
+unrelated_dimensions_handling: empty

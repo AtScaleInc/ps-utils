@@ -1,0 +1,8 @@
+unique_name: m_reinsurance_ceded_avg
+object_type: metric
+label: reinsurance_ceded
+calculation_method: average
+dataset: insurance_policy_fact
+column: reinsurance_ceded
+is_hidden: false
+unrelated_dimensions_handling: empty

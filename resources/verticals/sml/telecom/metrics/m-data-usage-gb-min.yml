@@ -1,0 +1,8 @@
+unique_name: m_data_usage_gb_min
+object_type: metric
+label: data_usage_gb
+calculation_method: minimum
+dataset: telecom_cdr_fact
+column: data_usage_gb
+is_hidden: false
+unrelated_dimensions_handling: empty

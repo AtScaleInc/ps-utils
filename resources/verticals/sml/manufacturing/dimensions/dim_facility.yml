@@ -1,0 +1,100 @@
+unique_name: Dim Facility
+object_type: dimension
+label: Dim Facility
+type: standard
+level_attributes:
+  -     unique_name: la_enterprise_name
+        label: Enterprise Name
+        dataset: dim_facility
+        name_column: enterprise_name
+        key_columns:
+          - enterprise_name
+  -     unique_name: la_region_name
+        label: Region Name
+        dataset: dim_facility
+        name_column: region_name
+        key_columns:
+          - region_name
+  -     unique_name: la_plant_id
+        label: Plant Id
+        dataset: dim_facility
+        name_column: plant_name
+        key_columns:
+          - plant_id
+        sort_column: plant_id
+  -     unique_name: la_work_center_id
+        label: Work Center Id
+        dataset: dim_facility
+        name_column: work_center_name
+        key_columns:
+          - work_center_id
+        sort_column: work_center_id
+  -     unique_name: la_machine_id
+        label: Machine Id
+        dataset: dim_facility
+        name_column: machine_name
+        key_columns:
+          - machine_id
+        sort_column: machine_id
+  -     unique_name: la_plant_code
+        label: Plant Code
+        dataset: dim_facility
+        name_column: plant_code
+        key_columns:
+          - plant_code
+  -     unique_name: la_plant_name
+        label: Plant Name
+        dataset: dim_facility
+        name_column: plant_name
+        key_columns:
+          - plant_name
+        sort_column: plant_id
+  -     unique_name: la_building_name
+        label: Building Name
+        dataset: dim_facility
+        name_column: building_name
+        key_columns:
+          - building_name
+  -     unique_name: la_work_center_code
+        label: Work Center Code
+        dataset: dim_facility
+        name_column: work_center_code
+        key_columns:
+          - work_center_code
+  -     unique_name: la_work_center_name
+        label: Work Center Name
+        dataset: dim_facility
+        name_column: work_center_name
+        key_columns:
+          - work_center_name
+        sort_column: work_center_id
+  -     unique_name: la_machine_code
+        label: Machine Code
+        dataset: dim_facility
+        name_column: machine_code
+        key_columns:
+          - machine_code
+  -     unique_name: la_machine_name
+        label: Machine Name
+        dataset: dim_facility
+        name_column: machine_name
+        key_columns:
+          - machine_name
+        sort_column: machine_id
+  -     unique_name: la_facility_id
+        label: facility_id
+        dataset: dim_facility
+        name_column: facility_id
+        key_columns:
+          - facility_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Manufacturing Facility Hierarchy
+        label: Manufacturing Facility Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_enterprise_name
+          -         unique_name: la_region_name
+          -         unique_name: la_plant_id
+          -         unique_name: la_work_center_id
+          -         unique_name: la_machine_id

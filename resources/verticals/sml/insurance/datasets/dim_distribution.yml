@@ -1,0 +1,16 @@
+unique_name: dim_distribution
+object_type: dataset
+label: dim_distribution
+connection_id: my_connection
+table: dim_distribution
+columns:
+  -     name: distribution_id
+        data_type: bigint
+  -     name: channel_name
+        data_type: string
+  -     name: agency_name
+        data_type: string
+  -     name: agent_id
+        data_type: bigint
+  -     name: agent_name
+        data_type: string

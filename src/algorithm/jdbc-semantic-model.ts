@@ -108,7 +108,8 @@ function classifyTables(
   columnsByTable: Map<string, JdbcColumnMeta[]>,
   foreignKeysByTable: Map<string, import("./types").JdbcForeignKeyMeta[]>,
 ): { factTables: Set<string>; dimensionTables: Set<string> } {
-  // FACT: has FKs to ≥2 distinct tables AND at least one numeric non-FK column.
+  // FACT: table name ends with "fact" (word boundary), OR has FKs to ≥2 distinct
+  // tables AND at least one numeric non-FK column.
   // DIMENSION: everything else.
   const factTables = new Set<string>();
   const dimensionTables = new Set<string>();
@@ -119,12 +120,13 @@ function classifyTables(
     const fkColumns = new Set(fks.map((fk) => fk.fkColumnName));
     const uniqueParentTables = new Set(fks.map((fk) => fk.pkTableName));
 
+    const hasFactSuffix = /(?:^|[_\s])fact$/i.test(table.tableName);
     const hasMultipleFKs = uniqueParentTables.size >= 2;
     const hasNumericNonFKCols = cols.some(
       (c) => !fkColumns.has(c.columnName) && isNumericType(c.dataType),
     );
 
-    if (hasMultipleFKs && hasNumericNonFKCols) {
+    if (hasFactSuffix || (hasMultipleFKs && hasNumericNonFKCols)) {
       factTables.add(table.tableName);
     } else {
       dimensionTables.add(table.tableName);

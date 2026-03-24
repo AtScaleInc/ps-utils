@@ -1,0 +1,8 @@
+unique_name: m_price_open_min
+object_type: metric
+label: price_open
+calculation_method: minimum
+dataset: financial_securities_fact
+column: price_open
+is_hidden: false
+unrelated_dimensions_handling: empty

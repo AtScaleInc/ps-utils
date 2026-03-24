@@ -1,0 +1,8 @@
+unique_name: m_gross_rent_avg
+object_type: metric
+label: gross_rent
+calculation_method: average
+dataset: real_estate_transaction_fact
+column: gross_rent
+is_hidden: false
+unrelated_dimensions_handling: empty

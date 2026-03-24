@@ -1,0 +1,8 @@
+unique_name: m_adverse_event_id_min
+object_type: metric
+label: adverse_event_id
+calculation_method: minimum
+dataset: pharma_clinical_fact
+column: adverse_event_id
+is_hidden: false
+unrelated_dimensions_handling: empty

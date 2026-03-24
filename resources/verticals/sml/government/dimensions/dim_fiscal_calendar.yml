@@ -1,0 +1,77 @@
+unique_name: Dim Fiscal Calendar
+object_type: dimension
+label: Dim Fiscal Calendar
+type: time
+level_attributes:
+  -     unique_name: la_fiscal_year
+        label: Fiscal Year
+        dataset: dim_fiscal_calendar
+        name_column: fiscal_year
+        key_columns:
+          - fiscal_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_fiscal_quarter
+        label: Fiscal Quarter
+        dataset: dim_fiscal_calendar
+        name_column: fiscal_quarter
+        key_columns:
+          - fiscal_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_fiscal_period
+        label: Fiscal Period
+        dataset: dim_fiscal_calendar
+        name_column: fiscal_period
+        key_columns:
+          - fiscal_period
+        folder: Date Attributes
+  -     unique_name: la_fiscal_week
+        label: Fiscal Week
+        dataset: dim_fiscal_calendar
+        name_column: fiscal_week
+        key_columns:
+          - fiscal_week
+        folder: Date Attributes
+        time_unit: week
+  -     unique_name: la_fiscal_month
+        label: Fiscal Month
+        dataset: dim_fiscal_calendar
+        name_column: fiscal_month
+        key_columns:
+          - fiscal_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_accounting_period
+        label: Accounting Period
+        dataset: dim_fiscal_calendar
+        name_column: accounting_period
+        key_columns:
+          - accounting_period
+        folder: Date Attributes
+  -     unique_name: la_budget_date
+        label: Budget Date
+        dataset: dim_fiscal_calendar
+        name_column: budget_date
+        key_columns:
+          - budget_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_fiscal_calendar_id
+        label: fiscal_calendar_id
+        dataset: dim_fiscal_calendar
+        name_column: fiscal_calendar_id
+        key_columns:
+          - fiscal_calendar_id
+        is_unique_key: true
+        folder: Date Attributes
+hierarchies:
+  -     unique_name: Fiscal Calendar Hierarchy
+        label: Fiscal Calendar Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_fiscal_year
+          -         unique_name: la_fiscal_quarter
+          -         unique_name: la_fiscal_period
+          -         unique_name: la_fiscal_week

@@ -1,0 +1,8 @@
+unique_name: m_apportioned_amount_min
+object_type: metric
+label: apportioned_amount
+calculation_method: minimum
+dataset: government_budget_fact
+column: apportioned_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

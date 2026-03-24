@@ -1,0 +1,8 @@
+unique_name: m_pmpm_avg
+object_type: metric
+label: pmpm
+calculation_method: average
+dataset: healthcare_encounter_fact
+column: pmpm
+is_hidden: false
+unrelated_dimensions_handling: empty

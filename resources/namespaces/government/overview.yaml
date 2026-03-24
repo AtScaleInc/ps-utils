@@ -1,0 +1,552 @@
+version: 1
+title: government Analysis
+description: Auto-generated analysis namespace for the government model
+worksheets:
+  grant_id:
+    title: grant_id
+    model: government
+    graphType: text
+    measures:
+      - m_grant_id_sum
+    description: "Summary statistic: grant_id"
+    format: integer
+  grant_id_2:
+    title: grant_id
+    model: government
+    graphType: text
+    measures:
+      - m_grant_id_avg
+    description: "Summary statistic: grant_id"
+    format: integer
+  grant_id_3:
+    title: grant_id
+    model: government
+    graphType: text
+    measures:
+      - m_grant_id_min
+    description: "Summary statistic: grant_id"
+    format: integer
+  grant_id_4:
+    title: grant_id
+    model: government
+    graphType: text
+    measures:
+      - m_grant_id_max
+    description: "Summary statistic: grant_id"
+    format: integer
+  budget_authority:
+    title: budget_authority
+    model: government
+    graphType: text
+    measures:
+      - m_budget_authority_sum
+    description: "Summary statistic: budget_authority"
+    format: decimal:2
+  budget_authority_2:
+    title: budget_authority
+    model: government
+    graphType: text
+    measures:
+      - m_budget_authority_avg
+    description: "Summary statistic: budget_authority"
+    format: decimal:2
+  budget_authority_by_week:
+    title: budget_authority by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_budget_authority_sum
+    description: >-
+      Track how budget_authority changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  budget_authority_by_fund_code_hierarchy_by_week:
+    title: budget_authority by Fund Code Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_code
+    xAxisGranularity: week
+    yAxis: m_budget_authority_sum
+    description: >-
+      Cross-analyse budget_authority by **Fund Code Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  budget_authority_by_fund_type_hierarchy_by_week:
+    title: budget_authority by Fund Type Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_group
+    xAxisGranularity: week
+    yAxis: m_budget_authority_sum
+    description: >-
+      Cross-analyse budget_authority by **Fund Type Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  budget_authority_by_geography_hierarchy_by_week:
+    title: budget_authority by Geography Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_budget_authority_sum
+    description: >-
+      Cross-analyse budget_authority by **Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  obligation_amount_by_week:
+    title: obligation_amount by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_obligation_amount_sum
+    description: >-
+      Track how obligation_amount changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  obligation_amount_by_fund_code_hierarchy_by_week:
+    title: obligation_amount by Fund Code Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_code
+    xAxisGranularity: week
+    yAxis: m_obligation_amount_sum
+    description: >-
+      Cross-analyse obligation_amount by **Fund Code Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  obligation_amount_by_fund_type_hierarchy_by_week:
+    title: obligation_amount by Fund Type Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_group
+    xAxisGranularity: week
+    yAxis: m_obligation_amount_sum
+    description: >-
+      Cross-analyse obligation_amount by **Fund Type Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  obligation_amount_by_geography_hierarchy_by_week:
+    title: obligation_amount by Geography Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_obligation_amount_sum
+    description: >-
+      Cross-analyse obligation_amount by **Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  outlay_amount_by_week:
+    title: outlay_amount by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_outlay_amount_sum
+    description: >-
+      Track how outlay_amount changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  outlay_amount_by_fund_code_hierarchy_by_week:
+    title: outlay_amount by Fund Code Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_code
+    xAxisGranularity: week
+    yAxis: m_outlay_amount_sum
+    description: >-
+      Cross-analyse outlay_amount by **Fund Code Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  outlay_amount_by_fund_type_hierarchy_by_week:
+    title: outlay_amount by Fund Type Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_group
+    xAxisGranularity: week
+    yAxis: m_outlay_amount_sum
+    description: >-
+      Cross-analyse outlay_amount by **Fund Type Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  outlay_amount_by_geography_hierarchy_by_week:
+    title: outlay_amount by Geography Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_outlay_amount_sum
+    description: >-
+      Cross-analyse outlay_amount by **Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  enacted_amount_by_week:
+    title: enacted_amount by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_enacted_amount_sum
+    description: >-
+      Track how enacted_amount changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  enacted_amount_by_fund_code_hierarchy_by_week:
+    title: enacted_amount by Fund Code Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_code
+    xAxisGranularity: week
+    yAxis: m_enacted_amount_sum
+    description: >-
+      Cross-analyse enacted_amount by **Fund Code Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  enacted_amount_by_fund_type_hierarchy_by_week:
+    title: enacted_amount by Fund Type Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_group
+    xAxisGranularity: week
+    yAxis: m_enacted_amount_sum
+    description: >-
+      Cross-analyse enacted_amount by **Fund Type Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  enacted_amount_by_geography_hierarchy_by_week:
+    title: enacted_amount by Geography Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_enacted_amount_sum
+    description: >-
+      Cross-analyse enacted_amount by **Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  apportioned_amount_by_week:
+    title: apportioned_amount by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_apportioned_amount_sum
+    description: >-
+      Track how apportioned_amount changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  apportioned_amount_by_fund_code_hierarchy_by_week:
+    title: apportioned_amount by Fund Code Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_code
+    xAxisGranularity: week
+    yAxis: m_apportioned_amount_sum
+    description: >-
+      Cross-analyse apportioned_amount by **Fund Code Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  apportioned_amount_by_fund_type_hierarchy_by_week:
+    title: apportioned_amount by Fund Type Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_group
+    xAxisGranularity: week
+    yAxis: m_apportioned_amount_sum
+    description: >-
+      Cross-analyse apportioned_amount by **Fund Type Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  apportioned_amount_by_geography_hierarchy_by_week:
+    title: apportioned_amount by Geography Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_apportioned_amount_sum
+    description: >-
+      Cross-analyse apportioned_amount by **Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  allotted_amount_by_week:
+    title: allotted_amount by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_allotted_amount_sum
+    description: >-
+      Track how allotted_amount changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  allotted_amount_by_fund_code_hierarchy_by_week:
+    title: allotted_amount by Fund Code Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_code
+    xAxisGranularity: week
+    yAxis: m_allotted_amount_sum
+    description: >-
+      Cross-analyse allotted_amount by **Fund Code Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  allotted_amount_by_fund_type_hierarchy_by_week:
+    title: allotted_amount by Fund Type Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: fund_group
+    xAxisGranularity: week
+    yAxis: m_allotted_amount_sum
+    description: >-
+      Cross-analyse allotted_amount by **Fund Type Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  allotted_amount_by_geography_hierarchy_by_week:
+    title: allotted_amount by Geography Hierarchy by Week
+    model: government
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_allotted_amount_sum
+    description: >-
+      Cross-analyse allotted_amount by **Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  expenditure_amount_by_week:
+    title: expenditure_amount by Week
+    model: government
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_expenditure_amount_sum
+    description: >-
+      Track how expenditure_amount changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+dashboards:
+  government_dashboard:
+    title: government Analysis Dashboard
+    description: Auto-generated dashboard for government
+    size:
+      width: 1800
+      height: 13100
+      hSegments: 3
+      vSegments: 131
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: grant_id
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: grant_id_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: grant_id_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: grant_id_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: budget_authority
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: budget_authority_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: budget_authority_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: budget_authority_by_fund_code_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: budget_authority_by_fund_type_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: budget_authority_by_geography_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: obligation_amount_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: obligation_amount_by_fund_code_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: obligation_amount_by_fund_type_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: obligation_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: outlay_amount_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: outlay_amount_by_fund_code_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: outlay_amount_by_fund_type_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: outlay_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enacted_amount_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enacted_amount_by_fund_code_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enacted_amount_by_fund_type_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enacted_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: apportioned_amount_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: apportioned_amount_by_fund_code_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: apportioned_amount_by_fund_type_hierarchy_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: apportioned_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allotted_amount_by_week
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allotted_amount_by_fund_code_hierarchy_by_week
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allotted_amount_by_fund_type_hierarchy_by_week
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allotted_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 121
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: expenditure_amount_by_week
+        x: 0
+        "y": 126
+        colSpan: 3
+        rowSpan: 5
+        category: Trends

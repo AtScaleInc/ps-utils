@@ -1,0 +1,8 @@
+unique_name: m_pieces_count_sum
+object_type: metric
+label: pieces_count
+calculation_method: sum
+dataset: logistics_shipment_fact
+column: pieces_count
+is_hidden: false
+unrelated_dimensions_handling: empty

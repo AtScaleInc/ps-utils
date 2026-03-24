@@ -1,0 +1,568 @@
+version: 1
+title: travel-hospitality Analysis
+description: Auto-generated analysis namespace for the travel-hospitality model
+worksheets:
+  daily_rate:
+    title: daily_rate
+    model: travel-hospitality
+    graphType: text
+    measures:
+      - m_daily_rate_avg
+    description: "Summary statistic: daily_rate"
+    format: decimal:2
+  daily_rate_2:
+    title: daily_rate
+    model: travel-hospitality
+    graphType: text
+    measures:
+      - m_daily_rate_min
+    description: "Summary statistic: daily_rate"
+    format: decimal:2
+  daily_rate_3:
+    title: daily_rate
+    model: travel-hospitality
+    graphType: text
+    measures:
+      - m_daily_rate_max
+    description: "Summary statistic: daily_rate"
+    format: decimal:2
+  room_rate:
+    title: room_rate
+    model: travel-hospitality
+    graphType: text
+    measures:
+      - m_room_rate_avg
+    description: "Summary statistic: room_rate"
+    format: decimal:2
+  room_rate_2:
+    title: room_rate
+    model: travel-hospitality
+    graphType: text
+    measures:
+      - m_room_rate_min
+    description: "Summary statistic: room_rate"
+    format: decimal:2
+  room_rate_3:
+    title: room_rate
+    model: travel-hospitality
+    graphType: text
+    measures:
+      - m_room_rate_max
+    description: "Summary statistic: room_rate"
+    format: decimal:2
+  num_nights_by_geography_hierarchy_by_week:
+    title: num_nights by Geography Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: geo_country
+    xAxisGranularity: week
+    yAxis: m_num_nights_sum
+    description: >-
+      Cross-analyse num_nights by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: stay_year
+  num_nights_by_revenue_management_hierarchy_by_week:
+    title: num_nights by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_num_nights_sum
+    description: >-
+      Cross-analyse num_nights by **Revenue Management Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  room_revenue_by_week:
+    title: room_revenue by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: stay_year
+    xAxisGranularity: week
+    yAxis: m_room_revenue_sum
+    description: >-
+      Track how room_revenue changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  room_revenue_by_geography_hierarchy_by_week:
+    title: room_revenue by Geography Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: geo_country
+    xAxisGranularity: week
+    yAxis: m_room_revenue_sum
+    description: >-
+      Cross-analyse room_revenue by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  room_revenue_by_hotel_portfolio_hierarchy_by_week:
+    title: room_revenue by Hotel Portfolio Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: property_id
+    xAxisGranularity: week
+    yAxis: m_room_revenue_sum
+    description: >-
+      Cross-analyse room_revenue by **Hotel Portfolio Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  room_revenue_by_revenue_management_hierarchy_by_week:
+    title: room_revenue by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_room_revenue_sum
+    description: >-
+      Cross-analyse room_revenue by **Revenue Management Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  food_beverage_revenue_by_week:
+    title: food_beverage_revenue by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: stay_year
+    xAxisGranularity: week
+    yAxis: m_food_beverage_revenue_sum
+    description: >-
+      Track how food_beverage_revenue changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  food_beverage_revenue_by_geography_hierarchy_by_week:
+    title: food_beverage_revenue by Geography Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: geo_country
+    xAxisGranularity: week
+    yAxis: m_food_beverage_revenue_sum
+    description: >-
+      Cross-analyse food_beverage_revenue by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  food_beverage_revenue_by_hotel_portfolio_hierarchy_by_week:
+    title: food_beverage_revenue by Hotel Portfolio Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: property_id
+    xAxisGranularity: week
+    yAxis: m_food_beverage_revenue_sum
+    description: >-
+      Cross-analyse food_beverage_revenue by **Hotel Portfolio Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: stay_year
+  food_beverage_revenue_by_revenue_management_hierarchy_by_wee:
+    title: food_beverage_revenue by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_food_beverage_revenue_sum
+    description: >-
+      Cross-analyse food_beverage_revenue by **Revenue Management Hierarchy**
+      and **Date Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: stay_year
+  total_revenue_by_week:
+    title: total_revenue by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: stay_year
+    xAxisGranularity: week
+    yAxis: m_total_revenue_sum
+    description: >-
+      Track how total_revenue changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  total_revenue_by_geography_hierarchy_by_week:
+    title: total_revenue by Geography Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: geo_country
+    xAxisGranularity: week
+    yAxis: m_total_revenue_sum
+    description: >-
+      Cross-analyse total_revenue by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  total_revenue_by_hotel_portfolio_hierarchy_by_week:
+    title: total_revenue by Hotel Portfolio Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: property_id
+    xAxisGranularity: week
+    yAxis: m_total_revenue_sum
+    description: >-
+      Cross-analyse total_revenue by **Hotel Portfolio Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  total_revenue_by_revenue_management_hierarchy_by_week:
+    title: total_revenue by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_total_revenue_sum
+    description: >-
+      Cross-analyse total_revenue by **Revenue Management Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  num_guests_by_geography_hierarchy_by_week:
+    title: num_guests by Geography Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: geo_country
+    xAxisGranularity: week
+    yAxis: m_num_guests_sum
+    description: >-
+      Cross-analyse num_guests by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: stay_year
+  num_guests_by_revenue_management_hierarchy_by_week:
+    title: num_guests by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_num_guests_sum
+    description: >-
+      Cross-analyse num_guests by **Revenue Management Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  daily_rate_by_revenue_management_hierarchy_by_week:
+    title: daily_rate by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_daily_rate_avg
+    description: >-
+      Cross-analyse daily_rate by **Revenue Management Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  room_rate_by_revenue_management_hierarchy_by_week:
+    title: room_rate by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_room_rate_avg
+    description: >-
+      Cross-analyse room_rate by **Revenue Management Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: stay_year
+  average_daily_rate_by_revenue_management_hierarchy_by_week:
+    title: average_daily_rate by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_average_daily_rate_avg
+    description: >-
+      Cross-analyse average_daily_rate by **Revenue Management Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: stay_year
+  occupancy_rate_by_revenue_management_hierarchy_by_week:
+    title: occupancy_rate by Revenue Management Hierarchy by Week
+    model: travel-hospitality
+    graphType: line
+    xAxis: room_category
+    xAxisGranularity: week
+    yAxis: m_occupancy_rate_avg
+    description: >-
+      Cross-analyse occupancy_rate by **Revenue Management Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: stay_year
+  room_revenue_by_geography_hierarchy_and_revenue_management_h:
+    title: room_revenue by Geography Hierarchy and Revenue Management Hierarchy
+    model: travel-hospitality
+    graphType: bar
+    xAxis: m_room_revenue_sum
+    yAxis: geo_country
+    description: >-
+      Rank members of **Geography Hierarchy** and **Revenue Management
+      Hierarchy** by their room_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: room_category
+  food_beverage_revenue_by_geography_hierarchy_and_revenue_man:
+    title: >-
+      food_beverage_revenue by Geography Hierarchy and Revenue Management
+      Hierarchy
+    model: travel-hospitality
+    graphType: bar
+    xAxis: m_food_beverage_revenue_sum
+    yAxis: geo_country
+    description: >-
+      Rank members of **Geography Hierarchy** and **Revenue Management
+      Hierarchy** by their food_beverage_revenue to surface top performers and
+      identify areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: room_category
+  total_revenue_by_geography_hierarchy_and_revenue_management_:
+    title: total_revenue by Geography Hierarchy and Revenue Management Hierarchy
+    model: travel-hospitality
+    graphType: bar
+    xAxis: m_total_revenue_sum
+    yAxis: geo_country
+    description: >-
+      Rank members of **Geography Hierarchy** and **Revenue Management
+      Hierarchy** by their total_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: room_category
+  num_nights_by_geography_hierarchy_and_revenue_management_hie:
+    title: num_nights by Geography Hierarchy and Revenue Management Hierarchy
+    model: travel-hospitality
+    graphType: bar
+    xAxis: m_num_nights_sum
+    yAxis: geo_country
+    description: >-
+      Rank members of **Geography Hierarchy** and **Revenue Management
+      Hierarchy** by their num_nights to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: room_category
+  num_guests_by_geography_hierarchy_and_revenue_management_hie:
+    title: num_guests by Geography Hierarchy and Revenue Management Hierarchy
+    model: travel-hospitality
+    graphType: bar
+    xAxis: m_num_guests_sum
+    yAxis: geo_country
+    description: >-
+      Rank members of **Geography Hierarchy** and **Revenue Management
+      Hierarchy** by their num_guests to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: room_category
+dashboards:
+  travelhospitality_dashboard:
+    title: travel-hospitality Analysis Dashboard
+    description: Auto-generated dashboard for travel-hospitality
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: daily_rate
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: daily_rate_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: daily_rate_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: room_rate
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: room_rate_2
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: room_rate_3
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: num_nights_by_geography_hierarchy_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: num_nights_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: room_revenue_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: room_revenue_by_geography_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: room_revenue_by_hotel_portfolio_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: room_revenue_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: food_beverage_revenue_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: food_beverage_revenue_by_geography_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: food_beverage_revenue_by_hotel_portfolio_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: food_beverage_revenue_by_revenue_management_hierarchy_by_wee
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_revenue_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_revenue_by_geography_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_revenue_by_hotel_portfolio_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_revenue_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: num_guests_by_geography_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: num_guests_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: daily_rate_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: room_rate_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: average_daily_rate_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: occupancy_rate_by_revenue_management_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: room_revenue_by_geography_hierarchy_and_revenue_management_h
+        x: 0
+        "y": 107
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: food_beverage_revenue_by_geography_hierarchy_and_revenue_man
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: total_revenue_by_geography_hierarchy_and_revenue_management_
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: num_nights_by_geography_hierarchy_and_revenue_management_hie
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: num_guests_by_geography_hierarchy_and_revenue_management_hie
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

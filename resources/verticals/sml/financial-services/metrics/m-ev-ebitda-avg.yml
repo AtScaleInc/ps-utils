@@ -1,0 +1,8 @@
+unique_name: m_ev_ebitda_avg
+object_type: metric
+label: ev_ebitda
+calculation_method: average
+dataset: financial_securities_fact
+column: ev_ebitda
+is_hidden: false
+unrelated_dimensions_handling: empty

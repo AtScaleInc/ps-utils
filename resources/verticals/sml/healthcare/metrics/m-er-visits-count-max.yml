@@ -1,0 +1,8 @@
+unique_name: m_er_visits_count_max
+object_type: metric
+label: er_visits_count
+calculation_method: maximum
+dataset: healthcare_encounter_fact
+column: er_visits_count
+is_hidden: false
+unrelated_dimensions_handling: empty

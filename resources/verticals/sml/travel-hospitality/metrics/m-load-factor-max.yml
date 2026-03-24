@@ -1,0 +1,8 @@
+unique_name: m_load_factor_max
+object_type: metric
+label: load_factor
+calculation_method: maximum
+dataset: travel_reservation_fact
+column: load_factor
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_occupancy_rate_avg
+object_type: metric
+label: occupancy_rate
+calculation_method: average
+dataset: real_estate_transaction_fact
+column: occupancy_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

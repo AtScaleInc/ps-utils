@@ -1,0 +1,8 @@
+unique_name: m_oee_max
+object_type: metric
+label: oee
+calculation_method: maximum
+dataset: manufacturing_production_fact
+column: oee
+is_hidden: false
+unrelated_dimensions_handling: empty

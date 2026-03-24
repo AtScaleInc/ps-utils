@@ -1,0 +1,62 @@
+unique_name: financial_securities_fact
+object_type: dataset
+label: financial_securities_fact
+connection_id: my_connection
+table: financial_securities_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: security_id
+        data_type: bigint
+  -     name: issuer_id
+        data_type: bigint
+  -     name: portfolio_id
+        data_type: bigint
+  -     name: price_date_id
+        data_type: bigint
+  -     name: price_close
+        data_type: decimal
+  -     name: price_open
+        data_type: decimal
+  -     name: price_high
+        data_type: decimal
+  -     name: price_low
+        data_type: decimal
+  -     name: volume
+        data_type: bigint
+  -     name: nav
+        data_type: decimal
+  -     name: aum
+        data_type: decimal
+  -     name: market_cap
+        data_type: decimal
+  -     name: enterprise_value
+        data_type: decimal
+  -     name: yield_to_maturity
+        data_type: decimal
+  -     name: ytm
+        data_type: decimal
+  -     name: coupon_rate
+        data_type: decimal
+  -     name: pe_ratio
+        data_type: decimal
+  -     name: pb_ratio
+        data_type: decimal
+  -     name: ps_ratio
+        data_type: decimal
+  -     name: ev_ebitda
+        data_type: decimal
+  -     name: dividend_yield
+        data_type: decimal
+  -     name: sharpe_ratio
+        data_type: decimal
+  -     name: information_ratio
+        data_type: decimal
+  -     name: alpha
+        data_type: decimal
+  -     name: beta
+        data_type: decimal
+  -     name: volatility
+        data_type: decimal
+  -     name: tracking_error
+        data_type: decimal

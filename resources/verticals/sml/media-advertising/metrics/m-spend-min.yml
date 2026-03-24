@@ -1,0 +1,8 @@
+unique_name: m_spend_min
+object_type: metric
+label: spend
+calculation_method: minimum
+dataset: media_ad_performance_fact
+column: spend
+is_hidden: false
+unrelated_dimensions_handling: empty

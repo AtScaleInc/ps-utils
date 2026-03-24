@@ -1,0 +1,8 @@
+unique_name: m_total_charges_sum
+object_type: metric
+label: total_charges
+calculation_method: sum
+dataset: healthcare_encounter_fact
+column: total_charges
+is_hidden: false
+unrelated_dimensions_handling: empty

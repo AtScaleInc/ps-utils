@@ -1,0 +1,18 @@
+unique_name: dim_supplier
+object_type: dataset
+label: dim_supplier
+connection_id: my_connection
+table: dim_supplier
+columns:
+  -     name: supplier_id
+        data_type: bigint
+  -     name: supplier_category
+        data_type: string
+  -     name: supplier_name
+        data_type: string
+  -     name: supplier_site
+        data_type: string
+  -     name: purchase_order_id
+        data_type: bigint
+  -     name: po_number
+        data_type: string

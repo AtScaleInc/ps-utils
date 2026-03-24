@@ -1,0 +1,22 @@
+unique_name: dim_creative
+object_type: dataset
+label: dim_creative
+connection_id: my_connection
+table: dim_creative
+columns:
+  -     name: creative_id
+        data_type: bigint
+  -     name: creative_name
+        data_type: string
+  -     name: creative_type
+        data_type: string
+  -     name: creative_format
+        data_type: string
+  -     name: ad_format
+        data_type: string
+  -     name: ad_size
+        data_type: string
+  -     name: attribution_model
+        data_type: string
+  -     name: attribution_window
+        data_type: string

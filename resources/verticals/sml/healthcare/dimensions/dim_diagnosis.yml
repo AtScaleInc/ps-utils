@@ -1,0 +1,93 @@
+unique_name: Dim Diagnosis
+object_type: dimension
+label: Dim Diagnosis
+type: standard
+level_attributes:
+  -     unique_name: la_icd_chapter
+        label: Icd Chapter
+        dataset: dim_diagnosis
+        name_column: icd_chapter
+        key_columns:
+          - icd_chapter
+  -     unique_name: la_icd_block
+        label: Icd Block
+        dataset: dim_diagnosis
+        name_column: icd_block
+        key_columns:
+          - icd_block
+  -     unique_name: la_icd_category
+        label: Icd Category
+        dataset: dim_diagnosis
+        name_column: icd_category
+        key_columns:
+          - icd_category
+  -     unique_name: la_icd10_code
+        label: Icd10 Code
+        dataset: dim_diagnosis
+        name_column: icd10_code
+        key_columns:
+          - icd10_code
+  -     unique_name: la_drg_type
+        label: Drg Type
+        dataset: dim_diagnosis
+        name_column: drg_type
+        key_columns:
+          - drg_type
+  -     unique_name: la_drg_code
+        label: Drg Code
+        dataset: dim_diagnosis
+        name_column: drg_code
+        key_columns:
+          - drg_code
+  -     unique_name: la_icd9_code
+        label: Icd9 Code
+        dataset: dim_diagnosis
+        name_column: icd9_code
+        key_columns:
+          - icd9_code
+  -     unique_name: la_diagnosis_code
+        label: Diagnosis Code
+        dataset: dim_diagnosis
+        name_column: diagnosis_code
+        key_columns:
+          - diagnosis_code
+  -     unique_name: la_ms_drg
+        label: Ms Drg
+        dataset: dim_diagnosis
+        name_column: ms_drg
+        key_columns:
+          - ms_drg
+  -     unique_name: la_apr_drg
+        label: Apr Drg
+        dataset: dim_diagnosis
+        name_column: apr_drg
+        key_columns:
+          - apr_drg
+  -     unique_name: la_mdc_code
+        label: Mdc Code
+        dataset: dim_diagnosis
+        name_column: mdc_code
+        key_columns:
+          - mdc_code
+  -     unique_name: la_diagnosis_id
+        label: diagnosis_id
+        dataset: dim_diagnosis
+        name_column: diagnosis_id
+        key_columns:
+          - diagnosis_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: ICD Diagnosis Hierarchy
+        label: ICD Diagnosis Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_icd_chapter
+          -         unique_name: la_icd_block
+          -         unique_name: la_icd_category
+          -         unique_name: la_icd10_code
+  -     unique_name: DRG Hierarchy
+        label: DRG Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_drg_type
+          -         unique_name: la_drg_code

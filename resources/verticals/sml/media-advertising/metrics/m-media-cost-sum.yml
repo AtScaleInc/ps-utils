@@ -1,0 +1,8 @@
+unique_name: m_media_cost_sum
+object_type: metric
+label: media_cost
+calculation_method: sum
+dataset: media_ad_performance_fact
+column: media_cost
+is_hidden: false
+unrelated_dimensions_handling: empty

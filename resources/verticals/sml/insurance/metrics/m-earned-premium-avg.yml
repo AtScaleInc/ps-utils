@@ -1,0 +1,8 @@
+unique_name: m_earned_premium_avg
+object_type: metric
+label: earned_premium
+calculation_method: average
+dataset: insurance_policy_fact
+column: earned_premium
+is_hidden: false
+unrelated_dimensions_handling: empty

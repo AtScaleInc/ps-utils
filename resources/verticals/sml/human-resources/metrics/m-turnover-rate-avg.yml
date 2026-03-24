@@ -1,0 +1,8 @@
+unique_name: m_turnover_rate_avg
+object_type: metric
+label: turnover_rate
+calculation_method: average
+dataset: hr_workforce_fact
+column: turnover_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

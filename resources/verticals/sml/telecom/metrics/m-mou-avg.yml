@@ -1,0 +1,8 @@
+unique_name: m_mou_avg
+object_type: metric
+label: mou
+calculation_method: average
+dataset: telecom_cdr_fact
+column: mou
+is_hidden: false
+unrelated_dimensions_handling: empty

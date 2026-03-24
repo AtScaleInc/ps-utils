@@ -1,0 +1,8 @@
+unique_name: m_grade_point_average_avg
+object_type: metric
+label: grade_point_average
+calculation_method: average
+dataset: education_enrollment_fact
+column: grade_point_average
+is_hidden: false
+unrelated_dimensions_handling: empty

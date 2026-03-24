@@ -1,0 +1,8 @@
+unique_name: m_hcc_score_min
+object_type: metric
+label: hcc_score
+calculation_method: minimum
+dataset: healthcare_encounter_fact
+column: hcc_score
+is_hidden: false
+unrelated_dimensions_handling: empty

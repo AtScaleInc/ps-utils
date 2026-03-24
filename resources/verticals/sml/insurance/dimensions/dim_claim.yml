@@ -1,0 +1,68 @@
+unique_name: Dim Claim
+object_type: dimension
+label: Dim Claim
+type: standard
+level_attributes:
+  -     unique_name: la_claim_type
+        label: Claim Type
+        dataset: dim_claim
+        name_column: claim_type
+        key_columns:
+          - claim_type
+  -     unique_name: la_peril_code
+        label: Peril Code
+        dataset: dim_claim
+        name_column: peril_code
+        key_columns:
+          - peril_code
+  -     unique_name: la_claim_status
+        label: Claim Status
+        dataset: dim_claim
+        name_column: claim_status
+        key_columns:
+          - claim_status
+  -     unique_name: la_claim_number
+        label: Claim Number
+        dataset: dim_claim
+        name_column: claim_number
+        key_columns:
+          - claim_number
+  -     unique_name: la_cause_of_loss
+        label: Cause Of Loss
+        dataset: dim_claim
+        name_column: cause_of_loss
+        key_columns:
+          - cause_of_loss
+  -     unique_name: la_adjuster_id
+        label: Adjuster Id
+        dataset: dim_claim
+        name_column: adjuster_id
+        key_columns:
+          - adjuster_id
+  -     unique_name: la_examiner_id
+        label: Examiner Id
+        dataset: dim_claim
+        name_column: examiner_id
+        key_columns:
+          - examiner_id
+  -     unique_name: la_claimant_id
+        label: Claimant Id
+        dataset: dim_claim
+        name_column: claimant_id
+        key_columns:
+          - claimant_id
+  -     unique_name: la_claim_dim_id
+        label: claim_dim_id
+        dataset: dim_claim
+        name_column: claim_dim_id
+        key_columns:
+          - claim_dim_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Claim Type Hierarchy
+        label: Claim Type Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_claim_type
+          -         unique_name: la_peril_code
+          -         unique_name: la_claim_status

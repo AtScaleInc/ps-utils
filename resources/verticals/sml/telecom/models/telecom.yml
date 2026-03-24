@@ -1,0 +1,97 @@
+unique_name: telecom
+object_type: model
+label: telecom
+relationships:
+  -     unique_name: telecom_cdr_fact_dim-network_network_id
+        from:
+          dataset: telecom_cdr_fact
+          join_columns:
+            - network_id
+        to:
+          dimension: Dim Network
+          level: la_network_id
+  -     unique_name: telecom_cdr_fact_dim-subscriber_subscriber_id
+        from:
+          dataset: telecom_cdr_fact
+          join_columns:
+            - subscriber_id
+        to:
+          dimension: Dim Subscriber
+          level: la_subscriber_id
+  -     unique_name: telecom_cdr_fact_dim-product-plan_plan_id
+        from:
+          dataset: telecom_cdr_fact
+          join_columns:
+            - plan_id
+        to:
+          dimension: Dim Product Plan
+          level: la_plan_id
+  -     unique_name: telecom_cdr_fact_dim-coverage-geography_geography_id
+        from:
+          dataset: telecom_cdr_fact
+          join_columns:
+            - geography_id
+        to:
+          dimension: Dim Coverage Geography
+          level: la_geography_id
+  -     unique_name: telecom_cdr_fact_dim-event-time_event_time_id
+        from:
+          dataset: telecom_cdr_fact
+          join_columns:
+            - event_time_id
+        to:
+          dimension: Dim Event Time
+          level: la_event_time_id
+metrics:
+  -     unique_name: m_call_duration_avg
+  -     unique_name: m_call_duration_min
+  -     unique_name: m_call_duration_max
+  -     unique_name: m_duration_seconds_avg
+  -     unique_name: m_duration_seconds_min
+  -     unique_name: m_duration_seconds_max
+  -     unique_name: m_data_usage_mb_sum
+  -     unique_name: m_data_usage_mb_avg
+  -     unique_name: m_data_usage_mb_min
+  -     unique_name: m_data_usage_mb_max
+  -     unique_name: m_data_usage_gb_sum
+  -     unique_name: m_data_usage_gb_avg
+  -     unique_name: m_data_usage_gb_min
+  -     unique_name: m_data_usage_gb_max
+  -     unique_name: m_arpu_avg
+  -     unique_name: m_arpu_min
+  -     unique_name: m_arpu_max
+  -     unique_name: m_mou_avg
+  -     unique_name: m_mou_min
+  -     unique_name: m_mou_max
+  -     unique_name: m_voice_revenue_sum
+  -     unique_name: m_voice_revenue_avg
+  -     unique_name: m_voice_revenue_min
+  -     unique_name: m_voice_revenue_max
+  -     unique_name: m_data_revenue_sum
+  -     unique_name: m_data_revenue_avg
+  -     unique_name: m_data_revenue_min
+  -     unique_name: m_data_revenue_max
+  -     unique_name: m_sms_revenue_sum
+  -     unique_name: m_sms_revenue_avg
+  -     unique_name: m_sms_revenue_min
+  -     unique_name: m_sms_revenue_max
+  -     unique_name: m_total_revenue_sum
+  -     unique_name: m_total_revenue_avg
+  -     unique_name: m_total_revenue_min
+  -     unique_name: m_total_revenue_max
+  -     unique_name: m_sms_count_sum
+  -     unique_name: m_sms_count_avg
+  -     unique_name: m_sms_count_min
+  -     unique_name: m_sms_count_max
+  -     unique_name: m_voice_calls_count_sum
+  -     unique_name: m_voice_calls_count_avg
+  -     unique_name: m_voice_calls_count_min
+  -     unique_name: m_voice_calls_count_max
+  -     unique_name: m_dropped_calls_sum
+  -     unique_name: m_dropped_calls_avg
+  -     unique_name: m_dropped_calls_min
+  -     unique_name: m_dropped_calls_max
+  -     unique_name: m_failed_calls_sum
+  -     unique_name: m_failed_calls_avg
+  -     unique_name: m_failed_calls_min
+  -     unique_name: m_failed_calls_max

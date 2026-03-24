@@ -1,0 +1,8 @@
+unique_name: m_voice_revenue_min
+object_type: metric
+label: voice_revenue
+calculation_method: minimum
+dataset: telecom_cdr_fact
+column: voice_revenue
+is_hidden: false
+unrelated_dimensions_handling: empty

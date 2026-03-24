@@ -1,0 +1,20 @@
+unique_name: dim_rate
+object_type: dataset
+label: dim_rate
+connection_id: my_connection
+table: dim_rate
+columns:
+  -     name: rate_id
+        data_type: bigint
+  -     name: rate_class
+        data_type: string
+  -     name: rate_schedule
+        data_type: string
+  -     name: tariff_code
+        data_type: string
+  -     name: service_type
+        data_type: string
+  -     name: customer_class
+        data_type: string
+  -     name: customer_segment
+        data_type: string

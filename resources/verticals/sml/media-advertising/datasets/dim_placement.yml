@@ -1,0 +1,28 @@
+unique_name: dim_placement
+object_type: dataset
+label: dim_placement
+connection_id: my_connection
+table: dim_placement
+columns:
+  -     name: placement_id
+        data_type: bigint
+  -     name: placement_name
+        data_type: string
+  -     name: placement_type
+        data_type: string
+  -     name: site_id
+        data_type: bigint
+  -     name: publisher_name
+        data_type: string
+  -     name: section_name
+        data_type: string
+  -     name: page_name
+        data_type: string
+  -     name: ad_slot
+        data_type: string
+  -     name: media_type
+        data_type: string
+  -     name: platform_name
+        data_type: string
+  -     name: channel_name
+        data_type: string

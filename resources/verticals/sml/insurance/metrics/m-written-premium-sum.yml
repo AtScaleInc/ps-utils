@@ -1,0 +1,8 @@
+unique_name: m_written_premium_sum
+object_type: metric
+label: written_premium
+calculation_method: sum
+dataset: insurance_policy_fact
+column: written_premium
+is_hidden: false
+unrelated_dimensions_handling: empty

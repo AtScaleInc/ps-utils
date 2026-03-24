@@ -1,0 +1,8 @@
+unique_name: m_dom_sum
+object_type: metric
+label: dom
+calculation_method: sum
+dataset: real_estate_transaction_fact
+column: dom
+is_hidden: false
+unrelated_dimensions_handling: empty

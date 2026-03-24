@@ -1,0 +1,8 @@
+unique_name: m_cost_per_kwh_max
+object_type: metric
+label: cost_per_kwh
+calculation_method: maximum
+dataset: energy_interval_fact
+column: cost_per_kwh
+is_hidden: false
+unrelated_dimensions_handling: empty

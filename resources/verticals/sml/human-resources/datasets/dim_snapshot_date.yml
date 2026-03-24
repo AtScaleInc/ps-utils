@@ -1,0 +1,16 @@
+unique_name: dim_snapshot_date
+object_type: dataset
+label: dim_snapshot_date
+connection_id: my_connection
+table: dim_snapshot_date
+columns:
+  -     name: snapshot_date_id
+        data_type: bigint
+  -     name: snapshot_date
+        data_type: date
+  -     name: snapshot_year
+        data_type: int
+  -     name: snapshot_month
+        data_type: int
+  -     name: snapshot_quarter
+        data_type: string

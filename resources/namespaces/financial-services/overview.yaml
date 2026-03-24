@@ -1,0 +1,555 @@
+version: 1
+title: financial-services Analysis
+description: Auto-generated analysis namespace for the financial-services model
+worksheets:
+  price_close:
+    title: price_close
+    model: financial-services
+    graphType: text
+    measures:
+      - m_price_close_sum
+    description: "Summary statistic: price_close"
+    format: decimal:2
+  price_close_2:
+    title: price_close
+    model: financial-services
+    graphType: text
+    measures:
+      - m_price_close_avg
+    description: "Summary statistic: price_close"
+    format: decimal:2
+  price_close_3:
+    title: price_close
+    model: financial-services
+    graphType: text
+    measures:
+      - m_price_close_min
+    description: "Summary statistic: price_close"
+    format: decimal:2
+  price_close_4:
+    title: price_close
+    model: financial-services
+    graphType: text
+    measures:
+      - m_price_close_max
+    description: "Summary statistic: price_close"
+    format: decimal:2
+  price_open:
+    title: price_open
+    model: financial-services
+    graphType: text
+    measures:
+      - m_price_open_sum
+    description: "Summary statistic: price_open"
+    format: decimal:2
+  price_open_2:
+    title: price_open
+    model: financial-services
+    graphType: text
+    measures:
+      - m_price_open_avg
+    description: "Summary statistic: price_open"
+    format: decimal:2
+  price_close_by_week:
+    title: price_close by Week
+    model: financial-services
+    graphType: line
+    xAxis: price_year
+    xAxisGranularity: week
+    yAxis: m_price_close_sum
+    description: >-
+      Track how price_close changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  price_close_by_asset_class_hierarchy_by_week:
+    title: price_close by Asset Class Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_price_close_sum
+    description: >-
+      Cross-analyse price_close by **Asset Class Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_close_by_geography_hierarchy_by_week:
+    title: price_close by Geography Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: listing_country
+    xAxisGranularity: week
+    yAxis: m_price_close_sum
+    description: >-
+      Cross-analyse price_close by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_close_by_account_hierarchy_by_week:
+    title: price_close by Account Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: market_segment
+    xAxisGranularity: week
+    yAxis: m_price_close_sum
+    description: >-
+      Cross-analyse price_close by **Account Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_close_by_gics_industry_hierarchy_by_week:
+    title: price_close by GICS Industry Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: gics_sector
+    xAxisGranularity: week
+    yAxis: m_price_close_sum
+    description: >-
+      Cross-analyse price_close by **GICS Industry Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_close_by_credit_rating_hierarchy_by_week:
+    title: price_close by Credit Rating Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: rating_agency
+    xAxisGranularity: week
+    yAxis: m_price_close_sum
+    description: >-
+      Cross-analyse price_close by **Credit Rating Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_open_by_week:
+    title: price_open by Week
+    model: financial-services
+    graphType: line
+    xAxis: price_year
+    xAxisGranularity: week
+    yAxis: m_price_open_sum
+    description: >-
+      Track how price_open changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  price_open_by_asset_class_hierarchy_by_week:
+    title: price_open by Asset Class Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_price_open_sum
+    description: >-
+      Cross-analyse price_open by **Asset Class Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_open_by_geography_hierarchy_by_week:
+    title: price_open by Geography Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: listing_country
+    xAxisGranularity: week
+    yAxis: m_price_open_sum
+    description: >-
+      Cross-analyse price_open by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_open_by_account_hierarchy_by_week:
+    title: price_open by Account Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: market_segment
+    xAxisGranularity: week
+    yAxis: m_price_open_sum
+    description: >-
+      Cross-analyse price_open by **Account Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_open_by_gics_industry_hierarchy_by_week:
+    title: price_open by GICS Industry Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: gics_sector
+    xAxisGranularity: week
+    yAxis: m_price_open_sum
+    description: >-
+      Cross-analyse price_open by **GICS Industry Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_open_by_credit_rating_hierarchy_by_week:
+    title: price_open by Credit Rating Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: rating_agency
+    xAxisGranularity: week
+    yAxis: m_price_open_sum
+    description: >-
+      Cross-analyse price_open by **Credit Rating Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_high_by_week:
+    title: price_high by Week
+    model: financial-services
+    graphType: line
+    xAxis: price_year
+    xAxisGranularity: week
+    yAxis: m_price_high_sum
+    description: >-
+      Track how price_high changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  price_high_by_asset_class_hierarchy_by_week:
+    title: price_high by Asset Class Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_price_high_sum
+    description: >-
+      Cross-analyse price_high by **Asset Class Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_high_by_geography_hierarchy_by_week:
+    title: price_high by Geography Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: listing_country
+    xAxisGranularity: week
+    yAxis: m_price_high_sum
+    description: >-
+      Cross-analyse price_high by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_high_by_account_hierarchy_by_week:
+    title: price_high by Account Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: market_segment
+    xAxisGranularity: week
+    yAxis: m_price_high_sum
+    description: >-
+      Cross-analyse price_high by **Account Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_high_by_gics_industry_hierarchy_by_week:
+    title: price_high by GICS Industry Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: gics_sector
+    xAxisGranularity: week
+    yAxis: m_price_high_sum
+    description: >-
+      Cross-analyse price_high by **GICS Industry Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_high_by_credit_rating_hierarchy_by_week:
+    title: price_high by Credit Rating Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: rating_agency
+    xAxisGranularity: week
+    yAxis: m_price_high_sum
+    description: >-
+      Cross-analyse price_high by **Credit Rating Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_low_by_week:
+    title: price_low by Week
+    model: financial-services
+    graphType: line
+    xAxis: price_year
+    xAxisGranularity: week
+    yAxis: m_price_low_sum
+    description: >-
+      Track how price_low changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  price_low_by_asset_class_hierarchy_by_week:
+    title: price_low by Asset Class Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_price_low_sum
+    description: >-
+      Cross-analyse price_low by **Asset Class Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_low_by_geography_hierarchy_by_week:
+    title: price_low by Geography Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: listing_country
+    xAxisGranularity: week
+    yAxis: m_price_low_sum
+    description: >-
+      Cross-analyse price_low by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_low_by_account_hierarchy_by_week:
+    title: price_low by Account Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: market_segment
+    xAxisGranularity: week
+    yAxis: m_price_low_sum
+    description: >-
+      Cross-analyse price_low by **Account Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+  price_low_by_gics_industry_hierarchy_by_week:
+    title: price_low by GICS Industry Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: gics_sector
+    xAxisGranularity: week
+    yAxis: m_price_low_sum
+    description: >-
+      Cross-analyse price_low by **GICS Industry Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  price_low_by_credit_rating_hierarchy_by_week:
+    title: price_low by Credit Rating Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: rating_agency
+    xAxisGranularity: week
+    yAxis: m_price_low_sum
+    description: >-
+      Cross-analyse price_low by **Credit Rating Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: price_year
+  volume_by_geography_hierarchy_by_week:
+    title: volume by Geography Hierarchy by Week
+    model: financial-services
+    graphType: line
+    xAxis: listing_country
+    xAxisGranularity: week
+    yAxis: m_volume_sum
+    description: >-
+      Cross-analyse volume by **Geography Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: price_year
+dashboards:
+  financialservices_dashboard:
+    title: financial-services Analysis Dashboard
+    description: Auto-generated dashboard for financial-services
+    size:
+      width: 1800
+      height: 13100
+      hSegments: 3
+      vSegments: 131
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: price_close
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: price_close_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: price_close_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: price_close_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: price_open
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: price_open_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: price_close_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_close_by_asset_class_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_close_by_geography_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_close_by_account_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_close_by_gics_industry_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_close_by_credit_rating_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_open_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_open_by_asset_class_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_open_by_geography_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_open_by_account_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_open_by_gics_industry_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_open_by_credit_rating_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_high_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_high_by_asset_class_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_high_by_geography_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_high_by_account_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_high_by_gics_industry_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_high_by_credit_rating_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_low_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_low_by_asset_class_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_low_by_geography_hierarchy_by_week
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_low_by_account_hierarchy_by_week
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_low_by_gics_industry_hierarchy_by_week
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_low_by_credit_rating_hierarchy_by_week
+        x: 0
+        "y": 121
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: volume_by_geography_hierarchy_by_week
+        x: 0
+        "y": 126
+        colSpan: 3
+        rowSpan: 5
+        category: Trends

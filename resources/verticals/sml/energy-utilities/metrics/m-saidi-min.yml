@@ -1,0 +1,8 @@
+unique_name: m_saidi_min
+object_type: metric
+label: saidi
+calculation_method: minimum
+dataset: energy_interval_fact
+column: saidi
+is_hidden: false
+unrelated_dimensions_handling: empty

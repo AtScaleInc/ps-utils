@@ -1,0 +1,48 @@
+unique_name: insurance_policy_fact
+object_type: dataset
+label: insurance_policy_fact
+connection_id: my_connection
+table: insurance_policy_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: policy_dim_id
+        data_type: bigint
+  -     name: risk_id
+        data_type: bigint
+  -     name: claim_dim_id
+        data_type: bigint
+  -     name: distribution_id
+        data_type: bigint
+  -     name: policy_date_id
+        data_type: bigint
+  -     name: insured_id
+        data_type: bigint
+  -     name: premium_amount
+        data_type: decimal
+  -     name: written_premium
+        data_type: decimal
+  -     name: earned_premium
+        data_type: decimal
+  -     name: deductible_amount
+        data_type: decimal
+  -     name: loss_ratio
+        data_type: decimal
+  -     name: combined_ratio
+        data_type: decimal
+  -     name: expense_ratio
+        data_type: decimal
+  -     name: incurred_loss
+        data_type: decimal
+  -     name: paid_loss
+        data_type: decimal
+  -     name: case_reserve
+        data_type: decimal
+  -     name: ibnr_reserve
+        data_type: decimal
+  -     name: claim_count
+        data_type: int
+  -     name: open_claims_count
+        data_type: int
+  -     name: reinsurance_ceded
+        data_type: decimal

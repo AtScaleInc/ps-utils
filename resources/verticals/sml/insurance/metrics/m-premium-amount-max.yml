@@ -1,0 +1,8 @@
+unique_name: m_premium_amount_max
+object_type: metric
+label: premium_amount
+calculation_method: maximum
+dataset: insurance_policy_fact
+column: premium_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

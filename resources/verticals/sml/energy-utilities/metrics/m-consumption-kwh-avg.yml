@@ -1,0 +1,8 @@
+unique_name: m_consumption_kwh_avg
+object_type: metric
+label: consumption_kwh
+calculation_method: average
+dataset: energy_interval_fact
+column: consumption_kwh
+is_hidden: false
+unrelated_dimensions_handling: empty

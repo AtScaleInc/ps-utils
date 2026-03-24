@@ -1,0 +1,8 @@
+unique_name: m_loss_ratio_min
+object_type: metric
+label: loss_ratio
+calculation_method: minimum
+dataset: insurance_policy_fact
+column: loss_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

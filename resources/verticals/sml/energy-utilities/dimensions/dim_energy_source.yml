@@ -1,0 +1,76 @@
+unique_name: Dim Energy Source
+object_type: dimension
+label: Dim Energy Source
+type: standard
+level_attributes:
+  -     unique_name: la_fuel_category
+        label: Fuel Category
+        dataset: dim_energy_source
+        name_column: fuel_category
+        key_columns:
+          - fuel_category
+  -     unique_name: la_fuel_type
+        label: Fuel Type
+        dataset: dim_energy_source
+        name_column: fuel_type
+        key_columns:
+          - fuel_type
+  -     unique_name: la_technology_type
+        label: Technology Type
+        dataset: dim_energy_source
+        name_column: technology_type
+        key_columns:
+          - technology_type
+  -     unique_name: la_plant_name
+        label: Plant Name
+        dataset: dim_energy_source
+        name_column: plant_name
+        key_columns:
+          - plant_name
+  -     unique_name: la_unit_id
+        label: Unit Id
+        dataset: dim_energy_source
+        name_column: unit_id
+        key_columns:
+          - unit_id
+  -     unique_name: la_fuel_code
+        label: Fuel Code
+        dataset: dim_energy_source
+        name_column: fuel_code
+        key_columns:
+          - fuel_code
+  -     unique_name: la_energy_source
+        label: Energy Source
+        dataset: dim_energy_source
+        name_column: energy_source
+        key_columns:
+          - energy_source
+  -     unique_name: la_capacity_mw
+        label: Capacity Mw
+        dataset: dim_energy_source
+        name_column: capacity_mw
+        key_columns:
+          - capacity_mw
+  -     unique_name: la_capacity_kva
+        label: Capacity Kva
+        dataset: dim_energy_source
+        name_column: capacity_kva
+        key_columns:
+          - capacity_kva
+  -     unique_name: la_energy_source_id
+        label: energy_source_id
+        dataset: dim_energy_source
+        name_column: energy_source_id
+        key_columns:
+          - energy_source_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Energy Source Hierarchy
+        label: Energy Source Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_fuel_category
+          -         unique_name: la_fuel_type
+          -         unique_name: la_technology_type
+          -         unique_name: la_plant_name
+          -         unique_name: la_unit_id

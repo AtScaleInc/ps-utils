@@ -1,0 +1,18 @@
+unique_name: dim_ship_date
+object_type: dataset
+label: dim_ship_date
+connection_id: my_connection
+table: dim_ship_date
+columns:
+  -     name: ship_date_id
+        data_type: bigint
+  -     name: ship_date
+        data_type: date
+  -     name: delivery_date
+        data_type: date
+  -     name: ship_year
+        data_type: int
+  -     name: ship_month
+        data_type: int
+  -     name: ship_quarter
+        data_type: string

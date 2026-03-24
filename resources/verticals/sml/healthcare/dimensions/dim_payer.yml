@@ -1,0 +1,33 @@
+unique_name: Dim Payer
+object_type: dimension
+label: Dim Payer
+type: standard
+level_attributes:
+  -     unique_name: la_payer_type
+        label: Payer Type
+        dataset: dim_payer
+        name_column: payer_type
+        key_columns:
+          - payer_type
+  -     unique_name: la_payer_name
+        label: Payer Name
+        dataset: dim_payer
+        name_column: payer_name
+        key_columns:
+          - payer_name
+        sort_column: payer_id
+  -     unique_name: la_plan_name
+        label: Plan Name
+        dataset: dim_payer
+        name_column: plan_name
+        key_columns:
+          - plan_name
+  -     unique_name: la_payer_id
+        label: payer_id
+        dataset: dim_payer
+        name_column: payer_name
+        key_columns:
+          - payer_id
+        is_unique_key: true
+        sort_column: payer_id
+hierarchies: []

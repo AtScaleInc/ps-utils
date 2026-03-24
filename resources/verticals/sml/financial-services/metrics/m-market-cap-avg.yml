@@ -1,0 +1,8 @@
+unique_name: m_market_cap_avg
+object_type: metric
+label: market_cap
+calculation_method: average
+dataset: financial_securities_fact
+column: market_cap
+is_hidden: false
+unrelated_dimensions_handling: empty

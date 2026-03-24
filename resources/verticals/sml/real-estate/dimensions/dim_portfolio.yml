@@ -1,0 +1,63 @@
+unique_name: Dim Portfolio
+object_type: dimension
+label: Dim Portfolio
+type: standard
+level_attributes:
+  -     unique_name: la_fund_name
+        label: Fund Name
+        dataset: dim_portfolio
+        name_column: fund_name
+        key_columns:
+          - fund_name
+  -     unique_name: la_portfolio_name
+        label: Portfolio Name
+        dataset: dim_portfolio
+        name_column: portfolio_name
+        key_columns:
+          - portfolio_name
+        sort_column: portfolio_id
+  -     unique_name: la_floor_number
+        label: Floor Number
+        dataset: dim_portfolio
+        name_column: floor_number
+        key_columns:
+          - floor_number
+  -     unique_name: la_unit_id
+        label: Unit Id
+        dataset: dim_portfolio
+        name_column: unit_id
+        key_columns:
+          - unit_id
+  -     unique_name: la_tenant_id
+        label: Tenant Id
+        dataset: dim_portfolio
+        name_column: tenant_id
+        key_columns:
+          - tenant_id
+  -     unique_name: la_lease_id
+        label: Lease Id
+        dataset: dim_portfolio
+        name_column: lease_id
+        key_columns:
+          - lease_id
+  -     unique_name: la_brokerage_name
+        label: Brokerage Name
+        dataset: dim_portfolio
+        name_column: brokerage_name
+        key_columns:
+          - brokerage_name
+  -     unique_name: la_listing_agent_id
+        label: Listing Agent Id
+        dataset: dim_portfolio
+        name_column: listing_agent_id
+        key_columns:
+          - listing_agent_id
+  -     unique_name: la_portfolio_id
+        label: portfolio_id
+        dataset: dim_portfolio
+        name_column: portfolio_name
+        key_columns:
+          - portfolio_id
+        is_unique_key: true
+        sort_column: portfolio_id
+hierarchies: []

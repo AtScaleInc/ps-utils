@@ -1,0 +1,98 @@
+unique_name: logistics
+object_type: model
+label: logistics
+relationships:
+  -     unique_name: logistics_shipment_fact_dim-origin_origin_id
+        from:
+          dataset: logistics_shipment_fact
+          join_columns:
+            - origin_id
+        to:
+          dimension: Dim Origin
+          level: la_origin_id
+  -     unique_name: logistics_shipment_fact_dim-destination_destination_id
+        from:
+          dataset: logistics_shipment_fact
+          join_columns:
+            - destination_id
+        to:
+          dimension: Dim Destination
+          level: la_destination_id
+  -     unique_name: logistics_shipment_fact_dim-carrier_carrier_id
+        from:
+          dataset: logistics_shipment_fact
+          join_columns:
+            - carrier_id
+        to:
+          dimension: Dim Carrier
+          level: la_carrier_id
+  -     unique_name: logistics_shipment_fact_dim-warehouse_warehouse_id
+        from:
+          dataset: logistics_shipment_fact
+          join_columns:
+            - warehouse_id
+        to:
+          dimension: Dim Warehouse
+          level: la_warehouse_id
+  -     unique_name: logistics_shipment_fact_dim-ship-date_ship_date_id
+        from:
+          dataset: logistics_shipment_fact
+          join_columns:
+            - ship_date_id
+        to:
+          dimension: Dim Ship Date
+          level: la_ship_date_id
+metrics:
+  -     unique_name: m_load_id_sum
+  -     unique_name: m_load_id_avg
+  -     unique_name: m_load_id_min
+  -     unique_name: m_load_id_max
+  -     unique_name: m_transit_days_sum
+  -     unique_name: m_transit_days_avg
+  -     unique_name: m_transit_days_min
+  -     unique_name: m_transit_days_max
+  -     unique_name: m_transit_time_avg
+  -     unique_name: m_transit_time_min
+  -     unique_name: m_transit_time_max
+  -     unique_name: m_freight_cost_sum
+  -     unique_name: m_freight_cost_avg
+  -     unique_name: m_freight_cost_min
+  -     unique_name: m_freight_cost_max
+  -     unique_name: m_fuel_surcharge_sum
+  -     unique_name: m_fuel_surcharge_avg
+  -     unique_name: m_fuel_surcharge_min
+  -     unique_name: m_fuel_surcharge_max
+  -     unique_name: m_accessorial_charges_sum
+  -     unique_name: m_accessorial_charges_avg
+  -     unique_name: m_accessorial_charges_min
+  -     unique_name: m_accessorial_charges_max
+  -     unique_name: m_total_charges_sum
+  -     unique_name: m_total_charges_avg
+  -     unique_name: m_total_charges_min
+  -     unique_name: m_total_charges_max
+  -     unique_name: m_weight_lbs_sum
+  -     unique_name: m_weight_lbs_avg
+  -     unique_name: m_weight_lbs_min
+  -     unique_name: m_weight_lbs_max
+  -     unique_name: m_volume_cuft_sum
+  -     unique_name: m_volume_cuft_avg
+  -     unique_name: m_volume_cuft_min
+  -     unique_name: m_volume_cuft_max
+  -     unique_name: m_pieces_count_sum
+  -     unique_name: m_pieces_count_avg
+  -     unique_name: m_pieces_count_min
+  -     unique_name: m_pieces_count_max
+  -     unique_name: m_units_shipped_sum
+  -     unique_name: m_units_shipped_avg
+  -     unique_name: m_units_shipped_min
+  -     unique_name: m_units_shipped_max
+  -     unique_name: m_on_time_delivery_rate_avg
+  -     unique_name: m_on_time_delivery_rate_min
+  -     unique_name: m_on_time_delivery_rate_max
+  -     unique_name: m_fill_rate_avg
+  -     unique_name: m_fill_rate_min
+  -     unique_name: m_fill_rate_max
+  -     unique_name: m_damage_claims_count_sum
+  -     unique_name: m_damage_claims_count_avg
+  -     unique_name: m_damage_claims_count_min
+  -     unique_name: m_damage_claims_count_max

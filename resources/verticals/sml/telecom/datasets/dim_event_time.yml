@@ -1,0 +1,16 @@
+unique_name: dim_event_time
+object_type: dataset
+label: dim_event_time
+connection_id: my_connection
+table: dim_event_time
+columns:
+  -     name: event_time_id
+        data_type: bigint
+  -     name: event_year
+        data_type: int
+  -     name: event_month
+        data_type: int
+  -     name: event_date
+        data_type: date
+  -     name: event_hour
+        data_type: int

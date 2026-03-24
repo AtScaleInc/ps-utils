@@ -1,0 +1,26 @@
+unique_name: Dim Agency
+object_type: dimension
+label: Dim Agency
+type: standard
+level_attributes:
+  -     unique_name: la_agency_code
+        label: Agency Code
+        dataset: dim_agency
+        name_column: agency_code
+        key_columns:
+          - agency_code
+  -     unique_name: la_bureau_code
+        label: Bureau Code
+        dataset: dim_agency
+        name_column: bureau_code
+        key_columns:
+          - bureau_code
+  -     unique_name: la_agency_id
+        label: agency_id
+        dataset: dim_agency
+        name_column: agency_name
+        key_columns:
+          - agency_id
+        is_unique_key: true
+        sort_column: agency_id
+hierarchies: []

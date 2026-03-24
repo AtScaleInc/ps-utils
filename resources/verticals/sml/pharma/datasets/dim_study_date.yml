@@ -1,0 +1,18 @@
+unique_name: dim_study_date
+object_type: dataset
+label: dim_study_date
+connection_id: my_connection
+table: dim_study_date
+columns:
+  -     name: study_date_id
+        data_type: bigint
+  -     name: study_start_date
+        data_type: date
+  -     name: data_cutoff_date
+        data_type: date
+  -     name: study_year
+        data_type: int
+  -     name: study_month
+        data_type: int
+  -     name: study_quarter
+        data_type: string

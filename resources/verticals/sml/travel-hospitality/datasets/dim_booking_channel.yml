@@ -1,0 +1,24 @@
+unique_name: dim_booking_channel
+object_type: dataset
+label: dim_booking_channel
+connection_id: my_connection
+table: dim_booking_channel
+columns:
+  -     name: channel_id
+        data_type: bigint
+  -     name: booking_window
+        data_type: string
+  -     name: alliance_name
+        data_type: string
+  -     name: carrier_code
+        data_type: string
+  -     name: hub_code
+        data_type: string
+  -     name: route_code
+        data_type: string
+  -     name: cabin_class
+        data_type: string
+  -     name: fare_class
+        data_type: string
+  -     name: booking_class
+        data_type: string

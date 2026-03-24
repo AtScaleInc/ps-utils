@@ -1,0 +1,8 @@
+unique_name: m_heat_rate_avg
+object_type: metric
+label: heat_rate
+calculation_method: average
+dataset: energy_interval_fact
+column: heat_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_room_nights_max
+object_type: metric
+label: room_nights
+calculation_method: maximum
+dataset: travel_reservation_fact
+column: room_nights
+is_hidden: false
+unrelated_dimensions_handling: empty

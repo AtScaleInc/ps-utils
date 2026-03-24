@@ -1,0 +1,101 @@
+unique_name: energy-utilities
+object_type: model
+label: energy-utilities
+relationships:
+  -     unique_name: energy_interval_fact_dim-meter_meter_id
+        from:
+          dataset: energy_interval_fact
+          join_columns:
+            - meter_id
+        to:
+          dimension: Dim Meter
+          level: la_meter_id
+  -     unique_name: energy_interval_fact_dim-rate_rate_id
+        from:
+          dataset: energy_interval_fact
+          join_columns:
+            - rate_id
+        to:
+          dimension: Dim Rate
+          level: la_rate_id
+  -     unique_name: energy_interval_fact_dim-grid_grid_id
+        from:
+          dataset: energy_interval_fact
+          join_columns:
+            - grid_id
+        to:
+          dimension: Dim Grid
+          level: la_grid_id
+  -     unique_name: energy_interval_fact_dim-energy-source_energy_source_id
+        from:
+          dataset: energy_interval_fact
+          join_columns:
+            - energy_source_id
+        to:
+          dimension: Dim Energy Source
+          level: la_energy_source_id
+  -     unique_name: energy_interval_fact_dim-interval-time_interval_time_id
+        from:
+          dataset: energy_interval_fact
+          join_columns:
+            - interval_time_id
+        to:
+          dimension: Dim Interval Time
+          level: la_interval_time_id
+metrics:
+  -     unique_name: m_consumption_kwh_avg
+  -     unique_name: m_consumption_kwh_min
+  -     unique_name: m_consumption_kwh_max
+  -     unique_name: m_consumption_mwh_avg
+  -     unique_name: m_consumption_mwh_min
+  -     unique_name: m_consumption_mwh_max
+  -     unique_name: m_demand_kw_avg
+  -     unique_name: m_demand_kw_min
+  -     unique_name: m_demand_kw_max
+  -     unique_name: m_peak_demand_kw_avg
+  -     unique_name: m_peak_demand_kw_min
+  -     unique_name: m_peak_demand_kw_max
+  -     unique_name: m_interval_kwh_avg
+  -     unique_name: m_interval_kwh_min
+  -     unique_name: m_interval_kwh_max
+  -     unique_name: m_saidi_avg
+  -     unique_name: m_saidi_min
+  -     unique_name: m_saidi_max
+  -     unique_name: m_saifi_avg
+  -     unique_name: m_saifi_min
+  -     unique_name: m_saifi_max
+  -     unique_name: m_caidi_avg
+  -     unique_name: m_caidi_min
+  -     unique_name: m_caidi_max
+  -     unique_name: m_outage_count_sum
+  -     unique_name: m_outage_count_avg
+  -     unique_name: m_outage_count_min
+  -     unique_name: m_outage_count_max
+  -     unique_name: m_lmp_avg
+  -     unique_name: m_lmp_min
+  -     unique_name: m_lmp_max
+  -     unique_name: m_net_generation_mwh_sum
+  -     unique_name: m_net_generation_mwh_avg
+  -     unique_name: m_net_generation_mwh_min
+  -     unique_name: m_net_generation_mwh_max
+  -     unique_name: m_fuel_consumed_mmbtu_avg
+  -     unique_name: m_fuel_consumed_mmbtu_min
+  -     unique_name: m_fuel_consumed_mmbtu_max
+  -     unique_name: m_heat_rate_avg
+  -     unique_name: m_heat_rate_min
+  -     unique_name: m_heat_rate_max
+  -     unique_name: m_revenue_amount_sum
+  -     unique_name: m_revenue_amount_avg
+  -     unique_name: m_revenue_amount_min
+  -     unique_name: m_revenue_amount_max
+  -     unique_name: m_cost_per_kwh_sum
+  -     unique_name: m_cost_per_kwh_avg
+  -     unique_name: m_cost_per_kwh_min
+  -     unique_name: m_cost_per_kwh_max
+  -     unique_name: m_restoration_time_min_avg
+  -     unique_name: m_restoration_time_min_min
+  -     unique_name: m_restoration_time_min_max
+  -     unique_name: m_customers_affected_sum
+  -     unique_name: m_customers_affected_avg
+  -     unique_name: m_customers_affected_min
+  -     unique_name: m_customers_affected_max

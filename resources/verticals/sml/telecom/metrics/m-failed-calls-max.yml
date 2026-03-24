@@ -1,0 +1,8 @@
+unique_name: m_failed_calls_max
+object_type: metric
+label: failed_calls
+calculation_method: maximum
+dataset: telecom_cdr_fact
+column: failed_calls
+is_hidden: false
+unrelated_dimensions_handling: empty

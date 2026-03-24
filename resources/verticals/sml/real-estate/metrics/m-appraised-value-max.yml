@@ -1,0 +1,8 @@
+unique_name: m_appraised_value_max
+object_type: metric
+label: appraised_value
+calculation_method: maximum
+dataset: real_estate_transaction_fact
+column: appraised_value
+is_hidden: false
+unrelated_dimensions_handling: empty

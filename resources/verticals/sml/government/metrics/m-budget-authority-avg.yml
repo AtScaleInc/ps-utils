@@ -1,0 +1,8 @@
+unique_name: m_budget_authority_avg
+object_type: metric
+label: budget_authority
+calculation_method: average
+dataset: government_budget_fact
+column: budget_authority
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,100 @@
+unique_name: insurance
+object_type: model
+label: insurance
+relationships:
+  -     unique_name: insurance_policy_fact_dim-policy_policy_dim_id
+        from:
+          dataset: insurance_policy_fact
+          join_columns:
+            - policy_dim_id
+        to:
+          dimension: Dim Policy
+          level: la_policy_dim_id
+  -     unique_name: insurance_policy_fact_dim-risk_risk_id
+        from:
+          dataset: insurance_policy_fact
+          join_columns:
+            - risk_id
+        to:
+          dimension: Dim Risk
+          level: la_risk_id
+  -     unique_name: insurance_policy_fact_dim-claim_claim_dim_id
+        from:
+          dataset: insurance_policy_fact
+          join_columns:
+            - claim_dim_id
+        to:
+          dimension: Dim Claim
+          level: la_claim_dim_id
+  -     unique_name: insurance_policy_fact_dim-distribution_distribution_id
+        from:
+          dataset: insurance_policy_fact
+          join_columns:
+            - distribution_id
+        to:
+          dimension: Dim Distribution
+          level: la_distribution_id
+  -     unique_name: insurance_policy_fact_dim-policy-date_policy_date_id
+        from:
+          dataset: insurance_policy_fact
+          join_columns:
+            - policy_date_id
+        to:
+          dimension: Dim Policy Date
+          level: la_policy_date_id
+metrics:
+  -     unique_name: m_insured_id_sum
+  -     unique_name: m_insured_id_avg
+  -     unique_name: m_insured_id_min
+  -     unique_name: m_insured_id_max
+  -     unique_name: m_premium_amount_sum
+  -     unique_name: m_premium_amount_avg
+  -     unique_name: m_premium_amount_min
+  -     unique_name: m_premium_amount_max
+  -     unique_name: m_written_premium_avg
+  -     unique_name: m_written_premium_min
+  -     unique_name: m_written_premium_max
+  -     unique_name: m_earned_premium_avg
+  -     unique_name: m_earned_premium_min
+  -     unique_name: m_earned_premium_max
+  -     unique_name: m_deductible_amount_sum
+  -     unique_name: m_deductible_amount_avg
+  -     unique_name: m_deductible_amount_min
+  -     unique_name: m_deductible_amount_max
+  -     unique_name: m_loss_ratio_avg
+  -     unique_name: m_loss_ratio_min
+  -     unique_name: m_loss_ratio_max
+  -     unique_name: m_combined_ratio_avg
+  -     unique_name: m_combined_ratio_min
+  -     unique_name: m_combined_ratio_max
+  -     unique_name: m_expense_ratio_sum
+  -     unique_name: m_expense_ratio_avg
+  -     unique_name: m_expense_ratio_min
+  -     unique_name: m_expense_ratio_max
+  -     unique_name: m_incurred_loss_avg
+  -     unique_name: m_incurred_loss_min
+  -     unique_name: m_incurred_loss_max
+  -     unique_name: m_paid_loss_avg
+  -     unique_name: m_paid_loss_min
+  -     unique_name: m_paid_loss_max
+  -     unique_name: m_case_reserve_avg
+  -     unique_name: m_case_reserve_min
+  -     unique_name: m_case_reserve_max
+  -     unique_name: m_ibnr_reserve_avg
+  -     unique_name: m_ibnr_reserve_min
+  -     unique_name: m_ibnr_reserve_max
+  -     unique_name: m_claim_count_sum
+  -     unique_name: m_claim_count_avg
+  -     unique_name: m_claim_count_min
+  -     unique_name: m_claim_count_max
+  -     unique_name: m_open_claims_count_sum
+  -     unique_name: m_open_claims_count_avg
+  -     unique_name: m_open_claims_count_min
+  -     unique_name: m_open_claims_count_max
+  -     unique_name: m_reinsurance_ceded_avg
+  -     unique_name: m_reinsurance_ceded_min
+  -     unique_name: m_reinsurance_ceded_max
+  -     unique_name: m_written_premium_sum
+  -     unique_name: m_earned_premium_sum
+  -     unique_name: m_incurred_loss_sum
+  -     unique_name: m_paid_loss_sum

@@ -1,0 +1,81 @@
+unique_name: Dim Risk
+object_type: dimension
+label: Dim Risk
+type: standard
+level_attributes:
+  -     unique_name: la_state_code
+        label: State Code
+        dataset: dim_risk
+        name_column: state_code
+        key_columns:
+          - state_code
+  -     unique_name: la_county_name
+        label: County Name
+        dataset: dim_risk
+        name_column: county_name
+        key_columns:
+          - county_name
+  -     unique_name: la_zip_code
+        label: Zip Code
+        dataset: dim_risk
+        name_column: zip_code
+        key_columns:
+          - zip_code
+  -     unique_name: la_risk_class
+        label: Risk Class
+        dataset: dim_risk
+        name_column: risk_class
+        key_columns:
+          - risk_class
+  -     unique_name: la_risk_tier
+        label: Risk Tier
+        dataset: dim_risk
+        name_column: risk_tier
+        key_columns:
+          - risk_tier
+  -     unique_name: la_risk_score
+        label: Risk Score
+        dataset: dim_risk
+        name_column: risk_score
+        key_columns:
+          - risk_score
+  -     unique_name: la_underwriter_id
+        label: Underwriter Id
+        dataset: dim_risk
+        name_column: underwriter_id
+        key_columns:
+          - underwriter_id
+  -     unique_name: la_underwriter_code
+        label: Underwriter Code
+        dataset: dim_risk
+        name_column: underwriter_code
+        key_columns:
+          - underwriter_code
+  -     unique_name: la_territory_code
+        label: Territory Code
+        dataset: dim_risk
+        name_column: territory_code
+        key_columns:
+          - territory_code
+  -     unique_name: la_risk_id
+        label: risk_id
+        dataset: dim_risk
+        name_column: risk_id
+        key_columns:
+          - risk_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_state_code
+          -         unique_name: la_county_name
+          -         unique_name: la_zip_code
+  -     unique_name: Risk Classification Hierarchy
+        label: Risk Classification Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_risk_class
+          -         unique_name: la_risk_tier
+          -         unique_name: la_risk_score

@@ -1,0 +1,8 @@
+unique_name: m_pe_ratio_max
+object_type: metric
+label: pe_ratio
+calculation_method: maximum
+dataset: financial_securities_fact
+column: pe_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

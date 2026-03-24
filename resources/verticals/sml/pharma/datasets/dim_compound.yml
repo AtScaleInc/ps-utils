@@ -1,0 +1,38 @@
+unique_name: dim_compound
+object_type: dataset
+label: dim_compound
+connection_id: my_connection
+table: dim_compound
+columns:
+  -     name: compound_id
+        data_type: bigint
+  -     name: compound_code
+        data_type: string
+  -     name: compound_name
+        data_type: string
+  -     name: molecule_id
+        data_type: bigint
+  -     name: molecule_code
+        data_type: string
+  -     name: ndc_code
+        data_type: string
+  -     name: therapeutic_area
+        data_type: string
+  -     name: ta_code
+        data_type: string
+  -     name: mechanism_of_action
+        data_type: string
+  -     name: moa
+        data_type: string
+  -     name: moa_code
+        data_type: string
+  -     name: drug_class
+        data_type: string
+  -     name: atc_code
+        data_type: string
+  -     name: formulation_code
+        data_type: string
+  -     name: dosage_form
+        data_type: string
+  -     name: formulation_name
+        data_type: string

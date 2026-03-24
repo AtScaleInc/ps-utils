@@ -1,0 +1,8 @@
+unique_name: m_freight_cost_min
+object_type: metric
+label: freight_cost
+calculation_method: minimum
+dataset: logistics_shipment_fact
+column: freight_cost
+is_hidden: false
+unrelated_dimensions_handling: empty

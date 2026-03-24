@@ -1,0 +1,18 @@
+unique_name: dim_transaction_date
+object_type: dataset
+label: dim_transaction_date
+connection_id: my_connection
+table: dim_transaction_date
+columns:
+  -     name: transaction_date_id
+        data_type: bigint
+  -     name: close_date
+        data_type: date
+  -     name: list_date
+        data_type: date
+  -     name: close_year
+        data_type: int
+  -     name: close_month
+        data_type: int
+  -     name: close_quarter
+        data_type: string

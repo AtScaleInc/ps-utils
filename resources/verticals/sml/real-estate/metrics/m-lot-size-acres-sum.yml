@@ -1,0 +1,8 @@
+unique_name: m_lot_size_acres_sum
+object_type: metric
+label: lot_size_acres
+calculation_method: sum
+dataset: real_estate_transaction_fact
+column: lot_size_acres
+is_hidden: false
+unrelated_dimensions_handling: empty

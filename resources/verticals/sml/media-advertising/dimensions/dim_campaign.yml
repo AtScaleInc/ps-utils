@@ -1,0 +1,96 @@
+unique_name: Dim Campaign
+object_type: dimension
+label: Dim Campaign
+type: standard
+level_attributes:
+  -     unique_name: la_advertiser_name
+        label: Advertiser Name
+        dataset: dim_campaign
+        name_column: advertiser_name
+        key_columns:
+          - advertiser_name
+  -     unique_name: la_brand_name
+        label: Brand Name
+        dataset: dim_campaign
+        name_column: brand_name
+        key_columns:
+          - brand_name
+  -     unique_name: la_campaign_name
+        label: Campaign Name
+        dataset: dim_campaign
+        name_column: campaign_name
+        key_columns:
+          - campaign_name
+        sort_column: campaign_id
+  -     unique_name: la_ad_group_id
+        label: Ad Group Id
+        dataset: dim_campaign
+        name_column: ad_group_id
+        key_columns:
+          - ad_group_id
+  -     unique_name: la_agency_name
+        label: Agency Name
+        dataset: dim_campaign
+        name_column: agency_name
+        key_columns:
+          - agency_name
+  -     unique_name: la_insertion_order_id
+        label: Insertion Order Id
+        dataset: dim_campaign
+        name_column: insertion_order_id
+        key_columns:
+          - insertion_order_id
+  -     unique_name: la_line_item_id
+        label: Line Item Id
+        dataset: dim_campaign
+        name_column: line_item_id
+        key_columns:
+          - line_item_id
+  -     unique_name: la_campaign_type
+        label: Campaign Type
+        dataset: dim_campaign
+        name_column: campaign_type
+        key_columns:
+          - campaign_type
+  -     unique_name: la_io_number
+        label: Io Number
+        dataset: dim_campaign
+        name_column: io_number
+        key_columns:
+          - io_number
+  -     unique_name: la_adset_id
+        label: Adset Id
+        dataset: dim_campaign
+        name_column: adset_id
+        key_columns:
+          - adset_id
+  -     unique_name: la_deal_id
+        label: Deal Id
+        dataset: dim_campaign
+        name_column: deal_id
+        key_columns:
+          - deal_id
+  -     unique_name: la_campaign_id
+        label: campaign_id
+        dataset: dim_campaign
+        name_column: campaign_name
+        key_columns:
+          - campaign_id
+        is_unique_key: true
+        sort_column: campaign_id
+hierarchies:
+  -     unique_name: Campaign Hierarchy
+        label: Campaign Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_advertiser_name
+          -         unique_name: la_brand_name
+          -         unique_name: la_campaign_name
+          -         unique_name: la_ad_group_id
+  -     unique_name: Media Buy Hierarchy
+        label: Media Buy Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_agency_name
+          -         unique_name: la_insertion_order_id
+          -         unique_name: la_line_item_id

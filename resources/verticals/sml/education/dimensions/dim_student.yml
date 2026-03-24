@@ -1,0 +1,37 @@
+unique_name: Dim Student
+object_type: dimension
+label: Dim Student
+type: standard
+level_attributes:
+  -     unique_name: la_graduation_year
+        label: Graduation Year
+        dataset: dim_student
+        name_column: graduation_year
+        key_columns:
+          - graduation_year
+  -     unique_name: la_cohort_year
+        label: Cohort Year
+        dataset: dim_student
+        name_column: cohort_year
+        key_columns:
+          - cohort_year
+  -     unique_name: la_degree_type
+        label: Degree Type
+        dataset: dim_student
+        name_column: degree_type
+        key_columns:
+          - degree_type
+  -     unique_name: la_credential_type
+        label: Credential Type
+        dataset: dim_student
+        name_column: credential_type
+        key_columns:
+          - credential_type
+  -     unique_name: la_student_id
+        label: student_id
+        dataset: dim_student
+        name_column: student_id
+        key_columns:
+          - student_id
+        is_unique_key: true
+hierarchies: []

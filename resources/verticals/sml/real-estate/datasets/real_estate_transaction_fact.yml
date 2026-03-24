@@ -1,0 +1,66 @@
+unique_name: real_estate_transaction_fact
+object_type: dataset
+label: real_estate_transaction_fact
+connection_id: my_connection
+table: real_estate_transaction_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: property_id
+        data_type: bigint
+  -     name: location_id
+        data_type: bigint
+  -     name: portfolio_id
+        data_type: bigint
+  -     name: transaction_date_id
+        data_type: bigint
+  -     name: listing_status
+        data_type: string
+  -     name: mls_status
+        data_type: string
+  -     name: sale_price
+        data_type: decimal
+  -     name: list_price
+        data_type: decimal
+  -     name: original_list_price
+        data_type: decimal
+  -     name: price_per_sqft
+        data_type: decimal
+  -     name: sale_price_per_sqft
+        data_type: decimal
+  -     name: lot_size_sqft
+        data_type: decimal
+  -     name: lot_size_acres
+        data_type: decimal
+  -     name: building_sqft
+        data_type: decimal
+  -     name: gross_sqft
+        data_type: decimal
+  -     name: cap_rate
+        data_type: decimal
+  -     name: noi
+        data_type: decimal
+  -     name: net_operating_income
+        data_type: decimal
+  -     name: assessed_value
+        data_type: decimal
+  -     name: appraised_value
+        data_type: decimal
+  -     name: market_value
+        data_type: decimal
+  -     name: days_on_market
+        data_type: int
+  -     name: dom
+        data_type: int
+  -     name: gross_rent
+        data_type: decimal
+  -     name: operating_expenses
+        data_type: decimal
+  -     name: vacancy_rate
+        data_type: decimal
+  -     name: occupancy_rate
+        data_type: decimal
+  -     name: transactions_count
+        data_type: int
+  -     name: price_reduction_amount
+        data_type: decimal

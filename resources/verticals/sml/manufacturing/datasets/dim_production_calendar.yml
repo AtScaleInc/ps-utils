@@ -1,0 +1,24 @@
+unique_name: dim_production_calendar
+object_type: dataset
+label: dim_production_calendar
+connection_id: my_connection
+table: dim_production_calendar
+columns:
+  -     name: production_calendar_id
+        data_type: bigint
+  -     name: production_year
+        data_type: int
+  -     name: production_quarter
+        data_type: string
+  -     name: production_month
+        data_type: int
+  -     name: production_week
+        data_type: int
+  -     name: production_date
+        data_type: date
+  -     name: shift_id
+        data_type: string
+  -     name: shift_code
+        data_type: string
+  -     name: shift_name
+        data_type: string

@@ -1,0 +1,58 @@
+unique_name: healthcare_encounter_fact
+object_type: dataset
+label: healthcare_encounter_fact
+connection_id: my_connection
+table: healthcare_encounter_fact
+columns:
+  -     name: encounter_id
+        data_type: bigint
+  -     name: facility_id
+        data_type: bigint
+  -     name: diagnosis_id
+        data_type: bigint
+  -     name: procedure_id
+        data_type: bigint
+  -     name: provider_id
+        data_type: bigint
+  -     name: payer_id
+        data_type: bigint
+  -     name: service_date_id
+        data_type: bigint
+  -     name: mrn
+        data_type: string
+  -     name: visit_id
+        data_type: bigint
+  -     name: claim_id
+        data_type: bigint
+  -     name: admission_type
+        data_type: string
+  -     name: admit_source
+        data_type: string
+  -     name: discharge_disposition
+        data_type: string
+  -     name: length_of_stay
+        data_type: int
+  -     name: los
+        data_type: int
+  -     name: total_charges
+        data_type: decimal
+  -     name: total_payments
+        data_type: decimal
+  -     name: allowed_amount
+        data_type: decimal
+  -     name: paid_amount
+        data_type: decimal
+  -     name: denial_amount
+        data_type: decimal
+  -     name: pmpm
+        data_type: decimal
+  -     name: hcc_score
+        data_type: decimal
+  -     name: risk_score
+        data_type: decimal
+  -     name: readmission_flag
+        data_type: boolean
+  -     name: er_visits_count
+        data_type: int
+  -     name: procedure_count
+        data_type: int

@@ -1,0 +1,18 @@
+unique_name: dim_fiscal_calendar
+object_type: dataset
+label: dim_fiscal_calendar
+connection_id: my_connection
+table: dim_fiscal_calendar
+columns:
+  -     name: fiscal_calendar_id
+        data_type: bigint
+  -     name: fiscal_week
+        data_type: int
+  -     name: fiscal_month
+        data_type: int
+  -     name: fiscal_quarter
+        data_type: string
+  -     name: fiscal_year
+        data_type: int
+  -     name: transaction_date
+        data_type: date

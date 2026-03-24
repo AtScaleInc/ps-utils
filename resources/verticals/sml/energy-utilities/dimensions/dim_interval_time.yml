@@ -1,0 +1,68 @@
+unique_name: Dim Interval Time
+object_type: dimension
+label: Dim Interval Time
+type: time
+level_attributes:
+  -     unique_name: la_interval_year
+        label: Interval Year
+        dataset: dim_interval_time
+        name_column: interval_year
+        key_columns:
+          - interval_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_interval_month
+        label: Interval Month
+        dataset: dim_interval_time
+        name_column: interval_month
+        key_columns:
+          - interval_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_interval_day
+        label: Interval Day
+        dataset: dim_interval_time
+        name_column: interval_day
+        key_columns:
+          - interval_day
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_interval_hour
+        label: Interval Hour
+        dataset: dim_interval_time
+        name_column: interval_hour
+        key_columns:
+          - interval_hour
+        folder: Date Attributes
+        time_unit: hour
+  -     unique_name: la_interval_start
+        label: Interval Start
+        dataset: dim_interval_time
+        name_column: interval_start
+        key_columns:
+          - interval_start
+        folder: Date Attributes
+  -     unique_name: la_interval_end
+        label: Interval End
+        dataset: dim_interval_time
+        name_column: interval_end
+        key_columns:
+          - interval_end
+        folder: Date Attributes
+  -     unique_name: la_interval_time_id
+        label: interval_time_id
+        dataset: dim_interval_time
+        name_column: interval_time_id
+        key_columns:
+          - interval_time_id
+        is_unique_key: true
+        folder: Date Attributes
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_interval_year
+          -         unique_name: la_interval_month
+          -         unique_name: la_interval_day

@@ -1,0 +1,16 @@
+unique_name: dim_student
+object_type: dataset
+label: dim_student
+connection_id: my_connection
+table: dim_student
+columns:
+  -     name: student_id
+        data_type: bigint
+  -     name: graduation_year
+        data_type: int
+  -     name: cohort_year
+        data_type: int
+  -     name: degree_type
+        data_type: string
+  -     name: credential_type
+        data_type: string

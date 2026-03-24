@@ -1,0 +1,8 @@
+unique_name: m_saifi_min
+object_type: metric
+label: saifi
+calculation_method: minimum
+dataset: energy_interval_fact
+column: saifi
+is_hidden: false
+unrelated_dimensions_handling: empty

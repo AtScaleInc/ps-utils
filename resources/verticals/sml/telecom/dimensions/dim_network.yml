@@ -1,0 +1,155 @@
+unique_name: Dim Network
+object_type: dimension
+label: Dim Network
+type: standard
+level_attributes:
+  -     unique_name: la_network_region
+        label: Network Region
+        dataset: dim_network
+        name_column: network_region
+        key_columns:
+          - network_region
+  -     unique_name: la_cluster_name
+        label: Cluster Name
+        dataset: dim_network
+        name_column: cluster_name
+        key_columns:
+          - cluster_name
+  -     unique_name: la_site_id
+        label: Site Id
+        dataset: dim_network
+        name_column: site_id
+        key_columns:
+          - site_id
+  -     unique_name: la_sector_id
+        label: Sector Id
+        dataset: dim_network
+        name_column: sector_id
+        key_columns:
+          - sector_id
+  -     unique_name: la_cell_id
+        label: Cell Id
+        dataset: dim_network
+        name_column: cell_id
+        key_columns:
+          - cell_id
+  -     unique_name: la_technology_gen
+        label: Technology Gen
+        dataset: dim_network
+        name_column: technology_gen
+        key_columns:
+          - technology_gen
+  -     unique_name: la_access_type
+        label: Access Type
+        dataset: dim_network
+        name_column: access_type
+        key_columns:
+          - access_type
+  -     unique_name: la_radio_technology
+        label: Radio Technology
+        dataset: dim_network
+        name_column: radio_technology
+        key_columns:
+          - radio_technology
+  -     unique_name: la_network_area
+        label: Network Area
+        dataset: dim_network
+        name_column: network_area
+        key_columns:
+          - network_area
+  -     unique_name: la_site_name
+        label: Site Name
+        dataset: dim_network
+        name_column: site_name
+        key_columns:
+          - site_name
+  -     unique_name: la_cell_name
+        label: Cell Name
+        dataset: dim_network
+        name_column: cell_name
+        key_columns:
+          - cell_name
+  -     unique_name: la_bts_id
+        label: Bts Id
+        dataset: dim_network
+        name_column: bts_id
+        key_columns:
+          - bts_id
+  -     unique_name: la_enb_id
+        label: Enb Id
+        dataset: dim_network
+        name_column: enb_id
+        key_columns:
+          - enb_id
+  -     unique_name: la_rnc_id
+        label: Rnc Id
+        dataset: dim_network
+        name_column: rnc_id
+        key_columns:
+          - rnc_id
+  -     unique_name: la_bsc_id
+        label: Bsc Id
+        dataset: dim_network
+        name_column: bsc_id
+        key_columns:
+          - bsc_id
+  -     unique_name: la_lac
+        label: Lac
+        dataset: dim_network
+        name_column: lac
+        key_columns:
+          - lac
+  -     unique_name: la_tac
+        label: Tac
+        dataset: dim_network
+        name_column: tac
+        key_columns:
+          - tac
+  -     unique_name: la_mcc
+        label: Mcc
+        dataset: dim_network
+        name_column: mcc
+        key_columns:
+          - mcc
+  -     unique_name: la_mnc
+        label: Mnc
+        dataset: dim_network
+        name_column: mnc
+        key_columns:
+          - mnc
+  -     unique_name: la_mcc_mnc
+        label: Mcc Mnc
+        dataset: dim_network
+        name_column: mcc_mnc
+        key_columns:
+          - mcc_mnc
+  -     unique_name: la_plmn
+        label: Plmn
+        dataset: dim_network
+        name_column: plmn
+        key_columns:
+          - plmn
+  -     unique_name: la_network_id
+        label: network_id
+        dataset: dim_network
+        name_column: network_id
+        key_columns:
+          - network_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Network Topology Hierarchy
+        label: Network Topology Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_network_region
+          -         unique_name: la_cluster_name
+          -         unique_name: la_site_id
+          -         unique_name: la_sector_id
+          -         unique_name: la_cell_id
+  -     unique_name: Technology Generation Hierarchy
+        label: Technology Generation Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_technology_gen
+          -         unique_name: la_access_type
+          -         unique_name: la_radio_technology

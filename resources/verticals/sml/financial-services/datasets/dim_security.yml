@@ -1,0 +1,36 @@
+unique_name: dim_security
+object_type: dataset
+label: dim_security
+connection_id: my_connection
+table: dim_security
+columns:
+  -     name: security_id
+        data_type: bigint
+  -     name: ticker_symbol
+        data_type: string
+  -     name: ticker_code
+        data_type: string
+  -     name: cusip
+        data_type: string
+  -     name: isin
+        data_type: string
+  -     name: sedol
+        data_type: string
+  -     name: figi
+        data_type: string
+  -     name: bloomberg_id
+        data_type: string
+  -     name: lei_code
+        data_type: string
+  -     name: ric_code
+        data_type: string
+  -     name: asset_class
+        data_type: string
+  -     name: asset_sub_class
+        data_type: string
+  -     name: instrument_type
+        data_type: string
+  -     name: security_type
+        data_type: string
+  -     name: bond_type
+        data_type: string

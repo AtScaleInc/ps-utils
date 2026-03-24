@@ -1,0 +1,76 @@
+unique_name: Dim Fund
+object_type: dimension
+label: Dim Fund
+type: standard
+level_attributes:
+  -     unique_name: la_fund_code
+        label: Fund Code
+        dataset: dim_fund
+        name_column: fund_code
+        key_columns:
+          - fund_code
+  -     unique_name: la_subfund_code
+        label: Subfund Code
+        dataset: dim_fund
+        name_column: subfund_code
+        key_columns:
+          - subfund_code
+  -     unique_name: la_fund_group
+        label: Fund Group
+        dataset: dim_fund
+        name_column: fund_group
+        key_columns:
+          - fund_group
+  -     unique_name: la_fund_type
+        label: Fund Type
+        dataset: dim_fund
+        name_column: fund_type
+        key_columns:
+          - fund_type
+  -     unique_name: la_fund_name
+        label: Fund Name
+        dataset: dim_fund
+        name_column: fund_name
+        key_columns:
+          - fund_name
+        sort_column: fund_id
+  -     unique_name: la_subfund_id
+        label: Subfund Id
+        dataset: dim_fund
+        name_column: subfund_id
+        key_columns:
+          - subfund_id
+  -     unique_name: la_tas_code
+        label: Tas Code
+        dataset: dim_fund
+        name_column: tas_code
+        key_columns:
+          - tas_code
+  -     unique_name: la_appropriation_code
+        label: Appropriation Code
+        dataset: dim_fund
+        name_column: appropriation_code
+        key_columns:
+          - appropriation_code
+  -     unique_name: la_fund_id
+        label: fund_id
+        dataset: dim_fund
+        name_column: fund_name
+        key_columns:
+          - fund_id
+        is_unique_key: true
+        sort_column: fund_id
+hierarchies:
+  -     unique_name: Fund Code Hierarchy
+        label: Fund Code Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_fund_code
+          -         unique_name: la_subfund_code
+  -     unique_name: Fund Type Hierarchy
+        label: Fund Type Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_fund_group
+          -         unique_name: la_fund_type
+          -         unique_name: la_fund_name

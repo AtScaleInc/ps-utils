@@ -1,0 +1,51 @@
+unique_name: Dim Geography
+object_type: dimension
+label: Dim Geography
+type: standard
+level_attributes:
+  -     unique_name: la_state_code
+        label: State Code
+        dataset: dim_geography
+        name_column: state_code
+        key_columns:
+          - state_code
+  -     unique_name: la_congressional_district
+        label: Congressional District
+        dataset: dim_geography
+        name_column: congressional_district
+        key_columns:
+          - congressional_district
+  -     unique_name: la_county_name
+        label: County Name
+        dataset: dim_geography
+        name_column: county_name
+        key_columns:
+          - county_name
+  -     unique_name: la_zip_code
+        label: Zip Code
+        dataset: dim_geography
+        name_column: zip_code
+        key_columns:
+          - zip_code
+  -     unique_name: la_state_name
+        label: State Name
+        dataset: dim_geography
+        name_column: state_name
+        key_columns:
+          - state_name
+  -     unique_name: la_geography_id
+        label: geography_id
+        dataset: dim_geography
+        name_column: geography_id
+        key_columns:
+          - geography_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_state_code
+          -         unique_name: la_congressional_district
+          -         unique_name: la_county_name
+          -         unique_name: la_zip_code

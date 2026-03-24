@@ -1,0 +1,8 @@
+unique_name: m_total_target_comp_avg
+object_type: metric
+label: total_target_comp
+calculation_method: average
+dataset: hr_workforce_fact
+column: total_target_comp
+is_hidden: false
+unrelated_dimensions_handling: empty

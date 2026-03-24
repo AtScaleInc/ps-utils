@@ -1,0 +1,74 @@
+unique_name: Dim Subscriber
+object_type: dimension
+label: Dim Subscriber
+type: standard
+level_attributes:
+  -     unique_name: la_enterprise_account
+        label: Enterprise Account
+        dataset: dim_subscriber
+        name_column: enterprise_account
+        key_columns:
+          - enterprise_account
+  -     unique_name: la_billing_account
+        label: Billing Account
+        dataset: dim_subscriber
+        name_column: billing_account
+        key_columns:
+          - billing_account
+  -     unique_name: la_msisdn
+        label: Msisdn
+        dataset: dim_subscriber
+        name_column: msisdn
+        key_columns:
+          - msisdn
+  -     unique_name: la_imsi
+        label: Imsi
+        dataset: dim_subscriber
+        name_column: imsi
+        key_columns:
+          - imsi
+  -     unique_name: la_iccid
+        label: Iccid
+        dataset: dim_subscriber
+        name_column: iccid
+        key_columns:
+          - iccid
+  -     unique_name: la_sim_id
+        label: Sim Id
+        dataset: dim_subscriber
+        name_column: sim_id
+        key_columns:
+          - sim_id
+  -     unique_name: la_rate_plan_code
+        label: Rate Plan Code
+        dataset: dim_subscriber
+        name_column: rate_plan_code
+        key_columns:
+          - rate_plan_code
+  -     unique_name: la_roaming_flag
+        label: Roaming Flag
+        dataset: dim_subscriber
+        name_column: roaming_flag
+        key_columns:
+          - roaming_flag
+  -     unique_name: la_is_roaming
+        label: Is Roaming
+        dataset: dim_subscriber
+        name_column: is_roaming
+        key_columns:
+          - is_roaming
+  -     unique_name: la_subscriber_id
+        label: subscriber_id
+        dataset: dim_subscriber
+        name_column: subscriber_id
+        key_columns:
+          - subscriber_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Subscriber Account Hierarchy
+        label: Subscriber Account Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_enterprise_account
+          -         unique_name: la_billing_account
+          -         unique_name: la_msisdn

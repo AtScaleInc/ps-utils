@@ -1,0 +1,8 @@
+unique_name: m_terminations_count_avg
+object_type: metric
+label: terminations_count
+calculation_method: average
+dataset: hr_workforce_fact
+column: terminations_count
+is_hidden: false
+unrelated_dimensions_handling: empty

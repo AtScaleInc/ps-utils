@@ -1,0 +1,108 @@
+unique_name: Dim Compound
+object_type: dimension
+label: Dim Compound
+type: standard
+level_attributes:
+  -     unique_name: la_therapeutic_area
+        label: Therapeutic Area
+        dataset: dim_compound
+        name_column: therapeutic_area
+        key_columns:
+          - therapeutic_area
+  -     unique_name: la_drug_class
+        label: Drug Class
+        dataset: dim_compound
+        name_column: drug_class
+        key_columns:
+          - drug_class
+  -     unique_name: la_mechanism_of_action
+        label: Mechanism Of Action
+        dataset: dim_compound
+        name_column: mechanism_of_action
+        key_columns:
+          - mechanism_of_action
+  -     unique_name: la_compound_name
+        label: Compound Name
+        dataset: dim_compound
+        name_column: compound_name
+        key_columns:
+          - compound_name
+        sort_column: compound_id
+  -     unique_name: la_dosage_form
+        label: Dosage Form
+        dataset: dim_compound
+        name_column: dosage_form
+        key_columns:
+          - dosage_form
+  -     unique_name: la_compound_code
+        label: Compound Code
+        dataset: dim_compound
+        name_column: compound_code
+        key_columns:
+          - compound_code
+  -     unique_name: la_molecule_id
+        label: Molecule Id
+        dataset: dim_compound
+        name_column: molecule_id
+        key_columns:
+          - molecule_id
+  -     unique_name: la_molecule_code
+        label: Molecule Code
+        dataset: dim_compound
+        name_column: molecule_code
+        key_columns:
+          - molecule_code
+  -     unique_name: la_ndc_code
+        label: Ndc Code
+        dataset: dim_compound
+        name_column: ndc_code
+        key_columns:
+          - ndc_code
+  -     unique_name: la_ta_code
+        label: Ta Code
+        dataset: dim_compound
+        name_column: ta_code
+        key_columns:
+          - ta_code
+  -     unique_name: la_moa
+        label: Moa
+        dataset: dim_compound
+        name_column: moa
+        key_columns:
+          - moa
+  -     unique_name: la_moa_code
+        label: Moa Code
+        dataset: dim_compound
+        name_column: moa_code
+        key_columns:
+          - moa_code
+  -     unique_name: la_atc_code
+        label: Atc Code
+        dataset: dim_compound
+        name_column: atc_code
+        key_columns:
+          - atc_code
+  -     unique_name: la_formulation_code
+        label: Formulation Code
+        dataset: dim_compound
+        name_column: formulation_code
+        key_columns:
+          - formulation_code
+  -     unique_name: la_compound_id
+        label: compound_id
+        dataset: dim_compound
+        name_column: compound_name
+        key_columns:
+          - compound_id
+        is_unique_key: true
+        sort_column: compound_id
+hierarchies:
+  -     unique_name: Compound Taxonomy Hierarchy
+        label: Compound Taxonomy Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_therapeutic_area
+          -         unique_name: la_drug_class
+          -         unique_name: la_mechanism_of_action
+          -         unique_name: la_compound_name
+          -         unique_name: la_dosage_form

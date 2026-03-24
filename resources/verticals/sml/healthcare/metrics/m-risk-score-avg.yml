@@ -1,0 +1,8 @@
+unique_name: m_risk_score_avg
+object_type: metric
+label: risk_score
+calculation_method: average
+dataset: healthcare_encounter_fact
+column: risk_score
+is_hidden: false
+unrelated_dimensions_handling: empty

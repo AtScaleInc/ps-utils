@@ -1,0 +1,8 @@
+unique_name: m_room_rate_min
+object_type: metric
+label: room_rate
+calculation_method: minimum
+dataset: travel_reservation_fact
+column: room_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

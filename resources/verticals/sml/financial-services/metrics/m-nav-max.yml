@@ -1,0 +1,8 @@
+unique_name: m_nav_max
+object_type: metric
+label: nav
+calculation_method: maximum
+dataset: financial_securities_fact
+column: nav
+is_hidden: false
+unrelated_dimensions_handling: empty

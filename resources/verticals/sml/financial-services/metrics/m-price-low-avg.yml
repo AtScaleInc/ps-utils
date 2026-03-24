@@ -1,0 +1,8 @@
+unique_name: m_price_low_avg
+object_type: metric
+label: price_low
+calculation_method: average
+dataset: financial_securities_fact
+column: price_low
+is_hidden: false
+unrelated_dimensions_handling: empty

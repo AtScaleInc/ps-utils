@@ -1,0 +1,8 @@
+unique_name: m_points_earned_max
+object_type: metric
+label: points_earned
+calculation_method: maximum
+dataset: travel_reservation_fact
+column: points_earned
+is_hidden: false
+unrelated_dimensions_handling: empty

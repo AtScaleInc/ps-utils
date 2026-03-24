@@ -1,0 +1,43 @@
+unique_name: Dim Product Plan
+object_type: dimension
+label: Dim Product Plan
+type: standard
+level_attributes:
+  -     unique_name: la_product_line
+        label: Product Line
+        dataset: dim_product_plan
+        name_column: product_line
+        key_columns:
+          - product_line
+  -     unique_name: la_bundle_name
+        label: Bundle Name
+        dataset: dim_product_plan
+        name_column: bundle_name
+        key_columns:
+          - bundle_name
+  -     unique_name: la_plan_code
+        label: Plan Code
+        dataset: dim_product_plan
+        name_column: plan_code
+        key_columns:
+          - plan_code
+  -     unique_name: la_add_on_code
+        label: Add On Code
+        dataset: dim_product_plan
+        name_column: add_on_code
+        key_columns:
+          - add_on_code
+  -     unique_name: la_plan_id
+        label: plan_id
+        dataset: dim_product_plan
+        name_column: plan_id
+        key_columns:
+          - plan_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Product Hierarchy
+        label: Product Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_product_line
+          -         unique_name: la_product_line

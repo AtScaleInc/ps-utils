@@ -1,0 +1,39 @@
+unique_name: Dim Provider
+object_type: dimension
+label: Dim Provider
+type: standard
+level_attributes:
+  -     unique_name: la_provider_name
+        label: Provider Name
+        dataset: dim_provider
+        name_column: provider_name
+        key_columns:
+          - provider_name
+        sort_column: provider_id
+  -     unique_name: la_specialty_name
+        label: Specialty Name
+        dataset: dim_provider
+        name_column: specialty_name
+        key_columns:
+          - specialty_name
+  -     unique_name: la_medical_group_name
+        label: Medical Group Name
+        dataset: dim_provider
+        name_column: medical_group_name
+        key_columns:
+          - medical_group_name
+  -     unique_name: la_health_system_name
+        label: Health System Name
+        dataset: dim_provider
+        name_column: health_system_name
+        key_columns:
+          - health_system_name
+  -     unique_name: la_provider_id
+        label: provider_id
+        dataset: dim_provider
+        name_column: provider_name
+        key_columns:
+          - provider_id
+        is_unique_key: true
+        sort_column: provider_id
+hierarchies: []

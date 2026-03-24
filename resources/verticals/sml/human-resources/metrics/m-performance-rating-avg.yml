@@ -1,0 +1,8 @@
+unique_name: m_performance_rating_avg
+object_type: metric
+label: performance_rating
+calculation_method: average
+dataset: hr_workforce_fact
+column: performance_rating
+is_hidden: false
+unrelated_dimensions_handling: empty

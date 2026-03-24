@@ -1,0 +1,102 @@
+unique_name: retail-ecommerce
+object_type: model
+label: retail-ecommerce
+relationships:
+  -     unique_name: retail_sales_fact_dim-product_product_id
+        from:
+          dataset: retail_sales_fact
+          join_columns:
+            - product_id
+        to:
+          dimension: Dim Product
+          level: la_product_id
+  -     unique_name: retail_sales_fact_dim-store_store_id
+        from:
+          dataset: retail_sales_fact
+          join_columns:
+            - store_id
+        to:
+          dimension: Dim Store
+          level: la_store_id
+  -     unique_name: retail_sales_fact_dim-promotion_promotion_id
+        from:
+          dataset: retail_sales_fact
+          join_columns:
+            - promotion_id
+        to:
+          dimension: Dim Promotion
+          level: la_promotion_id
+  -     unique_name: retail_sales_fact_dim-customer_customer_id
+        from:
+          dataset: retail_sales_fact
+          join_columns:
+            - customer_id
+        to:
+          dimension: Dim Customer
+          level: la_customer_id
+  -     unique_name: retail_sales_fact_dim-fiscal-calendar_fiscal_calendar_id
+        from:
+          dataset: retail_sales_fact
+          join_columns:
+            - fiscal_calendar_id
+        to:
+          dimension: Dim Fiscal Calendar
+          level: la_fiscal_calendar_id
+metrics:
+  -     unique_name: m_net_sales_sum
+  -     unique_name: m_net_sales_avg
+  -     unique_name: m_net_sales_min
+  -     unique_name: m_net_sales_max
+  -     unique_name: m_gross_sales_sum
+  -     unique_name: m_gross_sales_avg
+  -     unique_name: m_gross_sales_min
+  -     unique_name: m_gross_sales_max
+  -     unique_name: m_cost_of_goods_sum
+  -     unique_name: m_cost_of_goods_avg
+  -     unique_name: m_cost_of_goods_min
+  -     unique_name: m_cost_of_goods_max
+  -     unique_name: m_gross_margin_sum
+  -     unique_name: m_gross_margin_avg
+  -     unique_name: m_gross_margin_min
+  -     unique_name: m_gross_margin_max
+  -     unique_name: m_units_sold_sum
+  -     unique_name: m_units_sold_avg
+  -     unique_name: m_units_sold_min
+  -     unique_name: m_units_sold_max
+  -     unique_name: m_units_returned_sum
+  -     unique_name: m_units_returned_avg
+  -     unique_name: m_units_returned_min
+  -     unique_name: m_units_returned_max
+  -     unique_name: m_discount_amount_sum
+  -     unique_name: m_discount_amount_avg
+  -     unique_name: m_discount_amount_min
+  -     unique_name: m_discount_amount_max
+  -     unique_name: m_freight_amount_sum
+  -     unique_name: m_freight_amount_avg
+  -     unique_name: m_freight_amount_min
+  -     unique_name: m_freight_amount_max
+  -     unique_name: m_basket_size_sum
+  -     unique_name: m_basket_size_avg
+  -     unique_name: m_basket_size_min
+  -     unique_name: m_basket_size_max
+  -     unique_name: m_basket_value_avg
+  -     unique_name: m_basket_value_min
+  -     unique_name: m_basket_value_max
+  -     unique_name: m_markdown_pct_avg
+  -     unique_name: m_markdown_pct_min
+  -     unique_name: m_markdown_pct_max
+  -     unique_name: m_markdown_amount_sum
+  -     unique_name: m_markdown_amount_avg
+  -     unique_name: m_markdown_amount_min
+  -     unique_name: m_markdown_amount_max
+  -     unique_name: m_sell_through_rate_avg
+  -     unique_name: m_sell_through_rate_min
+  -     unique_name: m_sell_through_rate_max
+  -     unique_name: m_inventory_turnover_sum
+  -     unique_name: m_inventory_turnover_avg
+  -     unique_name: m_inventory_turnover_min
+  -     unique_name: m_inventory_turnover_max
+  -     unique_name: m_on_hand_units_sum
+  -     unique_name: m_on_hand_units_avg
+  -     unique_name: m_on_hand_units_min
+  -     unique_name: m_on_hand_units_max

@@ -1,0 +1,8 @@
+unique_name: m_cpc_avg
+object_type: metric
+label: cpc
+calculation_method: average
+dataset: media_ad_performance_fact
+column: cpc
+is_hidden: false
+unrelated_dimensions_handling: empty

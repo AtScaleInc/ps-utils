@@ -1,0 +1,63 @@
+unique_name: Dim Program
+object_type: dimension
+label: Dim Program
+type: standard
+level_attributes:
+  -     unique_name: la_program_name
+        label: Program Name
+        dataset: dim_program
+        name_column: program_name
+        key_columns:
+          - program_name
+        sort_column: program_id
+  -     unique_name: la_activity_code
+        label: Activity Code
+        dataset: dim_program
+        name_column: activity_code
+        key_columns:
+          - activity_code
+  -     unique_name: la_program_code
+        label: Program Code
+        dataset: dim_program
+        name_column: program_code
+        key_columns:
+          - program_code
+  -     unique_name: la_activity_name
+        label: Activity Name
+        dataset: dim_program
+        name_column: activity_name
+        key_columns:
+          - activity_name
+  -     unique_name: la_project_code
+        label: Project Code
+        dataset: dim_program
+        name_column: project_code
+        key_columns:
+          - project_code
+  -     unique_name: la_cfda_number
+        label: Cfda Number
+        dataset: dim_program
+        name_column: cfda_number
+        key_columns:
+          - cfda_number
+  -     unique_name: la_budget_function
+        label: Budget Function
+        dataset: dim_program
+        name_column: budget_function
+        key_columns:
+          - budget_function
+  -     unique_name: la_program_id
+        label: program_id
+        dataset: dim_program
+        name_column: program_name
+        key_columns:
+          - program_id
+        is_unique_key: true
+        sort_column: program_id
+hierarchies:
+  -     unique_name: Budget Structure Hierarchy
+        label: Budget Structure Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_program_name
+          -         unique_name: la_activity_code

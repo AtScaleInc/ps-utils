@@ -1,0 +1,8 @@
+unique_name: m_coupon_rate_max
+object_type: metric
+label: coupon_rate
+calculation_method: maximum
+dataset: financial_securities_fact
+column: coupon_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

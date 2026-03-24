@@ -1,0 +1,8 @@
+unique_name: m_net_operating_income_sum
+object_type: metric
+label: net_operating_income
+calculation_method: sum
+dataset: real_estate_transaction_fact
+column: net_operating_income
+is_hidden: false
+unrelated_dimensions_handling: empty

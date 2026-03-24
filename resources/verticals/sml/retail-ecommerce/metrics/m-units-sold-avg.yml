@@ -1,0 +1,8 @@
+unique_name: m_units_sold_avg
+object_type: metric
+label: units_sold
+calculation_method: average
+dataset: retail_sales_fact
+column: units_sold
+is_hidden: false
+unrelated_dimensions_handling: empty

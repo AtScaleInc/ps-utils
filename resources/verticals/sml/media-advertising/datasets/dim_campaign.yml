@@ -1,0 +1,30 @@
+unique_name: dim_campaign
+object_type: dataset
+label: dim_campaign
+connection_id: my_connection
+table: dim_campaign
+columns:
+  -     name: campaign_id
+        data_type: bigint
+  -     name: campaign_name
+        data_type: string
+  -     name: campaign_type
+        data_type: string
+  -     name: advertiser_name
+        data_type: string
+  -     name: brand_name
+        data_type: string
+  -     name: agency_name
+        data_type: string
+  -     name: insertion_order_id
+        data_type: bigint
+  -     name: io_number
+        data_type: string
+  -     name: ad_group_id
+        data_type: bigint
+  -     name: adset_id
+        data_type: bigint
+  -     name: line_item_id
+        data_type: bigint
+  -     name: deal_id
+        data_type: string

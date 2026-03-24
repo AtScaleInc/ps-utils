@@ -1,0 +1,8 @@
+unique_name: m_on_time_delivery_rate_min
+object_type: metric
+label: on_time_delivery_rate
+calculation_method: minimum
+dataset: logistics_shipment_fact
+column: on_time_delivery_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

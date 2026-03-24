@@ -1,0 +1,8 @@
+unique_name: m_inventory_turnover_sum
+object_type: metric
+label: inventory_turnover
+calculation_method: sum
+dataset: retail_sales_fact
+column: inventory_turnover
+is_hidden: false
+unrelated_dimensions_handling: empty

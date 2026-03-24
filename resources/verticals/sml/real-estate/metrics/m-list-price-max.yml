@@ -1,0 +1,8 @@
+unique_name: m_list_price_max
+object_type: metric
+label: list_price
+calculation_method: maximum
+dataset: real_estate_transaction_fact
+column: list_price
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_tracking_error_max
+object_type: metric
+label: tracking_error
+calculation_method: maximum
+dataset: financial_securities_fact
+column: tracking_error
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,49 @@
+unique_name: Dim Customer
+object_type: dimension
+label: Dim Customer
+type: standard
+level_attributes:
+  -     unique_name: la_loyalty_id
+        label: Loyalty Id
+        dataset: dim_customer
+        name_column: loyalty_id
+        key_columns:
+          - loyalty_id
+  -     unique_name: la_loyalty_number
+        label: Loyalty Number
+        dataset: dim_customer
+        name_column: loyalty_number
+        key_columns:
+          - loyalty_number
+  -     unique_name: la_membership_id
+        label: Membership Id
+        dataset: dim_customer
+        name_column: membership_id
+        key_columns:
+          - membership_id
+  -     unique_name: la_customer_segment
+        label: Customer Segment
+        dataset: dim_customer
+        name_column: customer_segment
+        key_columns:
+          - customer_segment
+  -     unique_name: la_customer_tier
+        label: Customer Tier
+        dataset: dim_customer
+        name_column: customer_tier
+        key_columns:
+          - customer_tier
+  -     unique_name: la_lifecycle_stage
+        label: Lifecycle Stage
+        dataset: dim_customer
+        name_column: lifecycle_stage
+        key_columns:
+          - lifecycle_stage
+  -     unique_name: la_customer_id
+        label: customer_id
+        dataset: dim_customer
+        name_column: customer_id
+        key_columns:
+          - customer_id
+        is_unique_key: true
+hierarchies: []

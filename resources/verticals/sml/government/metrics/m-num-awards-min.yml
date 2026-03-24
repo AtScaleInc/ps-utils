@@ -1,0 +1,8 @@
+unique_name: m_num_awards_min
+object_type: metric
+label: num_awards
+calculation_method: minimum
+dataset: government_budget_fact
+column: num_awards
+is_hidden: false
+unrelated_dimensions_handling: empty

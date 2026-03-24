@@ -1,0 +1,8 @@
+unique_name: m_customers_affected_avg
+object_type: metric
+label: customers_affected
+calculation_method: average
+dataset: energy_interval_fact
+column: customers_affected
+is_hidden: false
+unrelated_dimensions_handling: empty

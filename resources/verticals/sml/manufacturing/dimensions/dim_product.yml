@@ -1,0 +1,74 @@
+unique_name: Dim Product
+object_type: dimension
+label: Dim Product
+type: standard
+level_attributes:
+  -     unique_name: la_product_line
+        label: Product Line
+        dataset: dim_product
+        name_column: product_line
+        key_columns:
+          - product_line
+  -     unique_name: la_product_family
+        label: Product Family
+        dataset: dim_product
+        name_column: product_family
+        key_columns:
+          - product_family
+  -     unique_name: la_model_name
+        label: Model Name
+        dataset: dim_product
+        name_column: model_name
+        key_columns:
+          - model_name
+  -     unique_name: la_part_number
+        label: Part Number
+        dataset: dim_product
+        name_column: part_number
+        key_columns:
+          - part_number
+  -     unique_name: la_part_id
+        label: Part Id
+        dataset: dim_product
+        name_column: part_id
+        key_columns:
+          - part_id
+  -     unique_name: la_item_number
+        label: Item Number
+        dataset: dim_product
+        name_column: item_number
+        key_columns:
+          - item_number
+  -     unique_name: la_bom_id
+        label: Bom Id
+        dataset: dim_product
+        name_column: bom_id
+        key_columns:
+          - bom_id
+  -     unique_name: la_component_name
+        label: Component Name
+        dataset: dim_product
+        name_column: component_name
+        key_columns:
+          - component_name
+  -     unique_name: la_product_id
+        label: product_id
+        dataset: dim_product
+        name_column: product_id
+        key_columns:
+          - product_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Product Hierarchy
+        label: Product Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_product_line
+          -         unique_name: la_product_family
+          -         unique_name: la_product_line
+  -     unique_name: Product BOM Hierarchy
+        label: Product BOM Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_model_name
+          -         unique_name: la_part_number

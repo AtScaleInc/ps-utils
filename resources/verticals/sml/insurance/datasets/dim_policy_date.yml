@@ -1,0 +1,20 @@
+unique_name: dim_policy_date
+object_type: dataset
+label: dim_policy_date
+connection_id: my_connection
+table: dim_policy_date
+columns:
+  -     name: policy_date_id
+        data_type: bigint
+  -     name: effective_date
+        data_type: date
+  -     name: expiration_date
+        data_type: date
+  -     name: loss_date
+        data_type: date
+  -     name: policy_year
+        data_type: int
+  -     name: policy_month
+        data_type: int
+  -     name: policy_quarter
+        data_type: string

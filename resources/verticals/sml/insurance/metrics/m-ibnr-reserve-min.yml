@@ -1,0 +1,8 @@
+unique_name: m_ibnr_reserve_min
+object_type: metric
+label: ibnr_reserve
+calculation_method: minimum
+dataset: insurance_policy_fact
+column: ibnr_reserve
+is_hidden: false
+unrelated_dimensions_handling: empty

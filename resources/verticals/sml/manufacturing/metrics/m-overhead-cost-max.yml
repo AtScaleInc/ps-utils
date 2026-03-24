@@ -1,0 +1,8 @@
+unique_name: m_overhead_cost_max
+object_type: metric
+label: overhead_cost
+calculation_method: maximum
+dataset: manufacturing_production_fact
+column: overhead_cost
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_lot_size_sqft_max
+object_type: metric
+label: lot_size_sqft
+calculation_method: maximum
+dataset: real_estate_transaction_fact
+column: lot_size_sqft
+is_hidden: false
+unrelated_dimensions_handling: empty

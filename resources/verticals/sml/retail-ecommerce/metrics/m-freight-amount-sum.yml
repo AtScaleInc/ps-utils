@@ -1,0 +1,8 @@
+unique_name: m_freight_amount_sum
+object_type: metric
+label: freight_amount
+calculation_method: sum
+dataset: retail_sales_fact
+column: freight_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

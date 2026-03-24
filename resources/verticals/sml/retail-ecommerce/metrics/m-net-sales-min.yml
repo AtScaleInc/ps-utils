@@ -1,0 +1,8 @@
+unique_name: m_net_sales_min
+object_type: metric
+label: net_sales
+calculation_method: minimum
+dataset: retail_sales_fact
+column: net_sales
+is_hidden: false
+unrelated_dimensions_handling: empty

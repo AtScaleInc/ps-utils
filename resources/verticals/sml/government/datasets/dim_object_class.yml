@@ -1,0 +1,16 @@
+unique_name: dim_object_class
+object_type: dataset
+label: dim_object_class
+connection_id: my_connection
+table: dim_object_class
+columns:
+  -     name: object_class_id
+        data_type: bigint
+  -     name: object_class_code
+        data_type: string
+  -     name: object_class_name
+        data_type: string
+  -     name: major_object_class
+        data_type: string
+  -     name: minor_object_class
+        data_type: string

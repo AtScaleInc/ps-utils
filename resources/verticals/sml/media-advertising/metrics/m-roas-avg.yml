@@ -1,0 +1,8 @@
+unique_name: m_roas_avg
+object_type: metric
+label: roas
+calculation_method: average
+dataset: media_ad_performance_fact
+column: roas
+is_hidden: false
+unrelated_dimensions_handling: empty

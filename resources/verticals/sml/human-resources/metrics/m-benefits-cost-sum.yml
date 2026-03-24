@@ -1,0 +1,8 @@
+unique_name: m_benefits_cost_sum
+object_type: metric
+label: benefits_cost
+calculation_method: sum
+dataset: hr_workforce_fact
+column: benefits_cost
+is_hidden: false
+unrelated_dimensions_handling: empty

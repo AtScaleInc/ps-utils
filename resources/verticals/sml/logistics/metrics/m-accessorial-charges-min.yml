@@ -1,0 +1,8 @@
+unique_name: m_accessorial_charges_min
+object_type: metric
+label: accessorial_charges
+calculation_method: minimum
+dataset: logistics_shipment_fact
+column: accessorial_charges
+is_hidden: false
+unrelated_dimensions_handling: empty

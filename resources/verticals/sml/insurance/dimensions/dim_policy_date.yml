@@ -1,0 +1,71 @@
+unique_name: Dim Policy Date
+object_type: dimension
+label: Dim Policy Date
+type: time
+level_attributes:
+  -     unique_name: la_policy_year
+        label: Policy Year
+        dataset: dim_policy_date
+        name_column: policy_year
+        key_columns:
+          - policy_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_policy_quarter
+        label: Policy Quarter
+        dataset: dim_policy_date
+        name_column: policy_quarter
+        key_columns:
+          - policy_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_policy_month
+        label: Policy Month
+        dataset: dim_policy_date
+        name_column: policy_month
+        key_columns:
+          - policy_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_effective_date
+        label: Effective Date
+        dataset: dim_policy_date
+        name_column: effective_date
+        key_columns:
+          - effective_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_expiration_date
+        label: Expiration Date
+        dataset: dim_policy_date
+        name_column: expiration_date
+        key_columns:
+          - expiration_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_loss_date
+        label: Loss Date
+        dataset: dim_policy_date
+        name_column: loss_date
+        key_columns:
+          - loss_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_policy_date_id
+        label: policy_date_id
+        dataset: dim_policy_date
+        name_column: policy_date_id
+        key_columns:
+          - policy_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_policy_year
+          -         unique_name: la_policy_quarter
+          -         unique_name: la_policy_month

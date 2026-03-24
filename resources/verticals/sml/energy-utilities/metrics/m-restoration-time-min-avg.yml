@@ -1,0 +1,8 @@
+unique_name: m_restoration_time_min_avg
+object_type: metric
+label: restoration_time_min
+calculation_method: average
+dataset: energy_interval_fact
+column: restoration_time_min
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_conversion_value_avg
+object_type: metric
+label: conversion_value
+calculation_method: average
+dataset: media_ad_performance_fact
+column: conversion_value
+is_hidden: false
+unrelated_dimensions_handling: empty
