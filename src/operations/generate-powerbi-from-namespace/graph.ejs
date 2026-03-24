@@ -14,7 +14,7 @@
     let level;
     let dimension;
     let hierarchy;
-    if (worksheet.graphType == 'bar') { 
+    if (visualType == 'columnChart') { 
       measure = worksheet.xAxis;
       level = worksheet.yAxis;
     }
@@ -138,6 +138,28 @@
           }
         },
         "type": "Categorical"
+      }
+    ]
+  },
+  "visualContainerObjects": {
+    "title": [
+      {
+        "properties": {
+          "show": {
+            "expr": {
+              "Literal": {
+                "Value": "true"
+              }
+            }
+          },
+          "text": {
+            "expr": {
+              "Literal": {
+                "Value": "'<%= worksheet.title %>'"
+              }
+            }
+          }
+        }
       }
     ]
   }
