@@ -17,11 +17,14 @@ This document describes how to run every CLI operation as a GitHub Actions workf
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
   - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
+  - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
   - [Database → Tableau](#database--tableau)
   - [AtScale → Tableau](#atscale--tableau)
+  - [AtScale → Excel](#atscale--excel)
+  - [AtScale → Power BI](#atscale--power-bi)
   - [DDL → SML → AtScale → Tableau](#ddl--sml--atscale--tableau)
   - [SQL migration on every push](#sql-migration-on-every-push)
 
@@ -35,7 +38,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection` | Full contents of your `connections.yaml` file |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection` | Full contents of your `connections.yaml` file |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -107,7 +110,7 @@ Reads a local SML directory and outputs a `model.yaml` in the same format as `ex
 
 ### `generate-namespace-from-model`
 
-Reads a `model.yaml` file and auto-generates a namespace YAML using the analysis-suggestions engine. Each suggestion becomes a worksheet (`line`, `bar`, or `text`). The output is ready to pass directly to `generate-tableau-from-namespace`.
+Reads a `model.yaml` file and auto-generates a namespace YAML using the analysis-suggestions engine. Each suggestion becomes a worksheet (`line`, `bar`, or `text`). Time-based line charts include an `xAxisGranularity` field and the granularity is embedded in the worksheet title (e.g. "Sum Queries by Week"). The output is ready to pass directly to any BI generator.
 
 **Requires:** No secrets — only a `model.yaml` file produced by a prior step or committed to the repo.
 
@@ -266,21 +269,33 @@ Generates a Tableau `.twb` workbook from a namespace YAML and a model YAML.
     connection-name: ats_connection
     namespace-file: namespace.yaml
     model-file: model.yaml
+    aliases-file: aliases.yaml    # optional
     tableau-version: "2025"       # optional, default 2025
     target-file: tableau.twb
 ```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | No | `default` | Connection name in the file |
+| `namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
+| `model-file` | No | `model.yaml` | Path to the model YAML |
+| `aliases-file` | No | | Path to an optional column aliases YAML |
+| `tableau-version` | No | `2025` | Target Tableau version: `2025` or `2024` |
+| `target-file` | No | `tableau.twb` | Output path for the workbook |
 
 ---
 
 ### `generate-excel-from-namespace`
 
-Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Each dashboard in the namespace becomes a sheet containing:
+Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Each dashboard in the namespace becomes a visible sheet containing:
 
-- An OLAP pivot table whose data source is the AtScale XMLA/MDX endpoint — refresh in Excel to populate live data
-- One chart per dashboard tile, styled according to the worksheet `graphType` (`bar`, `line`, `pie`, `area`)
-- A hidden `_Connections` sheet with the full MDX connection string for manual reference
+- One chart per tile styled according to `graphType` (`bar`, `line`, `pie`, `area`)
+- CUBE formula data sections in far-right columns — Excel evaluates these against AtScale via MDX/XMLA
+- An OLAP pivot table on the hidden `_Connections` sheet — click **Data → Refresh All** to load live data
+- Number formatting from the worksheet `format` field (`integer`, `decimal:N`, `percent:N`, `currency:N`)
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection. Python 3 must be available in the runner; `openpyxl` is installed automatically if not already present.
+**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
 
 #### Using the composite action
 
@@ -294,6 +309,7 @@ Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Ea
     connection-name: ats_connection
     namespace-file: analysis/namespace.yaml
     model-file: model.yaml
+    aliases-file: aliases.yaml    # optional
     target-file: analysis/workbook.xlsx
 ```
 
@@ -303,7 +319,43 @@ Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Ea
 | `connection-name` | No | `default` | Connection name in the file |
 | `namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
 | `model-file` | No | `model.yaml` | Path to the model YAML |
+| `aliases-file` | No | | Path to an optional column aliases YAML |
 | `target-file` | No | `analysis/workbook.xlsx` | Output path for the Excel workbook |
+
+---
+
+### `generate-powerbi-from-namespace`
+
+Generates a Power BI project folder (`.pbip`) from a namespace YAML and a model YAML. One page is created per worksheet. The `graphType` maps to Power BI visual types: `bar` → `columnChart` or `barChart` (based on whether `xAxis` is a measure), `line` → `lineChart`, `text` → `cardVisual`.
+
+The output is written to `output/<target-folder>/` and can be opened directly in Power BI Desktop.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block, and the referenced user must have a `token` field (Power BI uses token-based MDX auth, not password).
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-powerbi-from-namespace
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    namespace-file: analysis/namespace.yaml
+    model-file: model.yaml
+    aliases-file: aliases.yaml    # optional
+    target-folder: powerbi
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | No | `default` | Connection name in the file |
+| `namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
+| `model-file` | No | `model.yaml` | Path to the model YAML |
+| `aliases-file` | No | | Path to an optional column aliases YAML |
+| `target-folder` | No | `powerbi` | Report folder name (written under `output/`) |
 
 ---
 
@@ -571,6 +623,137 @@ jobs:
             model.yaml
             namespace.yaml
             tableau.twb
+```
+
+---
+
+### AtScale → Excel
+
+Extracts the model from a live AtScale instance and generates an Excel workbook with OLAP pivot tables and charts.
+
+```
+AtScale Instance
+  → extract-model-from-atscale      → model.yaml
+  → generate-namespace-from-model   → namespace.yaml
+  → generate-excel-from-namespace   → workbook.xlsx
+```
+
+```yaml
+# .github/workflows/atscale-to-excel.yml
+name: AtScale to Excel
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: AtScale model/cube name
+        required: true
+        type: string
+      connection-name:
+        description: Connection name within CONNECTIONS_FILE
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: AtScaleInc/ps-template@main
+        with:
+          operation: extract-model-from-atscale
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          connection-name: ${{ inputs.connection-name }}
+          model: ${{ inputs.model }}
+          output-model-file: model.yaml
+
+      - uses: AtScaleInc/ps-template@main
+        with:
+          operation: generate-namespace-from-model
+          model-file: model.yaml
+          title: "${{ inputs.model }} Analysis"
+          output-file: namespace.yaml
+
+      - uses: AtScaleInc/ps-template@main
+        with:
+          operation: generate-excel-from-namespace
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          connection-name: ${{ inputs.connection-name }}
+          namespace-file: namespace.yaml
+          model-file: model.yaml
+          target-file: workbook.xlsx
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: excel-package
+          path: |
+            model.yaml
+            namespace.yaml
+            workbook.xlsx
+```
+
+---
+
+### AtScale → Power BI
+
+Extracts the model from a live AtScale instance and generates a Power BI project folder. The connection must include a user `token` for MDX auth.
+
+```
+AtScale Instance
+  → extract-model-from-atscale        → model.yaml
+  → generate-namespace-from-model     → namespace.yaml
+  → generate-powerbi-from-namespace   → output/powerbi/
+```
+
+```yaml
+# .github/workflows/atscale-to-powerbi.yml
+name: AtScale to Power BI
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: AtScale model/cube name
+        required: true
+        type: string
+      connection-name:
+        description: Connection name within CONNECTIONS_FILE
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: AtScaleInc/ps-template@main
+        with:
+          operation: extract-model-from-atscale
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          connection-name: ${{ inputs.connection-name }}
+          model: ${{ inputs.model }}
+          output-model-file: model.yaml
+
+      - uses: AtScaleInc/ps-template@main
+        with:
+          operation: generate-namespace-from-model
+          model-file: model.yaml
+          title: "${{ inputs.model }} Analysis"
+          output-file: namespace.yaml
+
+      - uses: AtScaleInc/ps-template@main
+        with:
+          operation: generate-powerbi-from-namespace
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          connection-name: ${{ inputs.connection-name }}
+          namespace-file: namespace.yaml
+          model-file: model.yaml
+          target-folder: powerbi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: powerbi-package
+          path: output/powerbi/
 ```
 
 ---

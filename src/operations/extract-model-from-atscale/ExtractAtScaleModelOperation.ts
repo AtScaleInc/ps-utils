@@ -335,7 +335,7 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     models[_params.model] = {};
     models[_params.model]["data_source"] = _params["connection-name"];
     models[_params.model]["mdx"] = output;
-    models[_params.model]["sql"] = this.convertToSQL(connection.sql.schema, output);
+    models[_params.model]["sql"] = this.convertToSQL(_params.model, output);
 
     // console.log(yaml.dump(models, { noRefs: true, quotingType: '"' }));
 

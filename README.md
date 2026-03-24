@@ -1,18 +1,17 @@
 # AtScale PS Template CLI
 
-CLI tool for extracting AtScale models, generating SML semantic models, and generating BI workbooks (Tableau, Excel).
+CLI tool for extracting AtScale models, generating SML semantic models, and generating BI workbooks (Tableau, Excel, Power BI).
 
 Upcoming features:
-1. PBI
-2. Google Sheets
-3. Query Testing; python (match Gatling)
-4. Extract Queries
-5. Stat Analysis
-6. Rudy's aggregate util
-7. Complete GitActions
-8. Incorporate atscale-cli for deploy
-9. Investigate sml/converters
-10. SSO
+1. Google Sheets
+2. Query Testing; python (match Gatling)
+3. Extract Queries
+4. Stat Analysis
+5. Rudy's aggregate util
+6. Complete GitActions
+7. Incorporate atscale-cli for deploy
+8. Investigate sml/converters
+9. SSO
 
 
 
@@ -50,8 +49,13 @@ flowchart TD
     CONN  --> XLSX
     ALIASES -.->|optional| TWB
     ALIASES -.->|optional| XLSX
+    ALIASES -.->|optional| PBI
+    MODEL --> PBI
+    NS    --> PBI
+    CONN  --> PBI
     TWB["generate-tableau-from-namespace\n→ tableau.twb"]
     XLSX["generate-excel-from-namespace\n→ workbook.xlsx"]
+    PBI["generate-powerbi-from-namespace\n→ output/powerbi/"]
 ```
 
 ## Table of Contents
@@ -68,6 +72,7 @@ flowchart TD
   - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
   - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
+  - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
@@ -354,7 +359,7 @@ Extract only specific tables or wildcard patterns:
 
 ### BI Tool Feature Comparison
 
-| Feature | Tableau Desktop | PowerBI Desktop | Excel | Jupyter | Sheets |
+| Feature | Tableau Desktop | Power BI Desktop | Excel | Jupyter | Sheets |
 |---|---|---|---|---|---|
 | Text Output | Yes | Yes | Yes | — | — |
 | Bar Chart | Yes | Yes | — | — | — |
@@ -368,6 +373,7 @@ Extract only specific tables or wildcard patterns:
 | &nbsp;&nbsp; Number Format | — | — | Yes | — | — |
 | OLAP Pivot Table | — | — | Yes | — | — |
 | xAxisGranularity | — | — | Yes | — | — |
+| Column Chart | — | Yes | — | — | — |
 
 ---
 
@@ -453,6 +459,77 @@ With an aliases file:
 | `--target-file` | No | `analysis/workbook.xlsx` | Output path for the Excel workbook |
 
 The MDX connection uses `Provider=MSOLAP.8` pointed at the AtScale XMLA endpoint (`<mdx.url>/xmla/<organization_id>`). Open the workbook in Excel and click **Data → Refresh All** to load live data.
+
+---
+
+### `generate-powerbi-from-namespace`
+
+Generates a Power BI project folder (`.pbip`) from a namespace YAML and a model YAML. The output can be opened directly in Power BI Desktop.
+
+One page is created per worksheet in the namespace. The `graphType` controls the visual type on each page:
+
+| `graphType` | Visual | Notes |
+|---|---|---|
+| `bar` | `columnChart` | When `xAxis` is a measure column |
+| `bar` | `barChart` | When `xAxis` is a dimension column |
+| `line` | `lineChart` | |
+| `text` | `cardVisual` | |
+
+**Connection requirement:** The named connection must have an `mdx:` block, and the referenced user must have a `token` field (not `password`) — Power BI connects via the AtScale MDX URL with token authentication.
+
+**Output layout:**
+
+```
+output/<target-folder>/
+  <target-folder>.pbip
+  <target-folder>.SemanticModel/
+    definition.pbism
+    modelReference.json
+  <target-folder>.Report/
+    definition.pbir
+    definition/
+      report.json
+      version.json
+      pages/
+        <uuid>/
+          page.json
+          visuals/<uuid>/visual.json
+```
+
+```bash
+./atscale-utils generate-powerbi-from-namespace \
+  --namespace-file "analysis/namespace.yaml" \
+  --model-file     "model.yaml" \
+  --connection-file "connections.yaml" \
+  --connection-name "ats_connection" \
+  --target-folder  "powerbi"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--namespace-file` | No | `analysis/namespace.yaml` | Path to the namespace YAML |
+| `--model-file` | No | `model.yaml` | Path to the model YAML |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--connection-name` | No | `default` | Connection name in the file |
+| `--aliases-file` | No | | Path to an optional aliases YAML (see [Aliases YAML](#aliases-yaml-aliasesyaml)) |
+| `--target-folder` | No | `powerbi` | Folder name for the report (written under `output/`) |
+
+The `connections.yaml` user entry for Power BI must include a `token` field:
+
+```yaml
+users:
+  admin:
+    username: admin
+    token: "<AtScale API token>"
+
+connections:
+  ats_connection:
+    mdx:
+      url: http://template.atscale-se-demo.com
+      user: admin
+      organization_id: default
+      catalog_name: Telemetry
+```
 
 ---
 
