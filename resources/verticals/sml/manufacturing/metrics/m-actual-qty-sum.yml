@@ -1,0 +1,8 @@
+unique_name: m_actual_qty_sum
+object_type: metric
+label: actual_qty
+calculation_method: sum
+dataset: manufacturing_production_fact
+column: actual_qty
+is_hidden: false
+unrelated_dimensions_handling: empty

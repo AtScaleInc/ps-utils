@@ -1,0 +1,8 @@
+unique_name: m_data_usage_mb_avg
+object_type: metric
+label: data_usage_mb
+calculation_method: average
+dataset: telecom_cdr_fact
+column: data_usage_mb
+is_hidden: false
+unrelated_dimensions_handling: empty

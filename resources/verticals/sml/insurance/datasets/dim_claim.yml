@@ -1,0 +1,24 @@
+unique_name: dim_claim
+object_type: dataset
+label: dim_claim
+connection_id: my_connection
+table: dim_claim
+columns:
+  -     name: claim_dim_id
+        data_type: bigint
+  -     name: claim_number
+        data_type: string
+  -     name: claim_type
+        data_type: string
+  -     name: claim_status
+        data_type: string
+  -     name: peril_code
+        data_type: string
+  -     name: cause_of_loss
+        data_type: string
+  -     name: adjuster_id
+        data_type: bigint
+  -     name: examiner_id
+        data_type: bigint
+  -     name: claimant_id
+        data_type: bigint

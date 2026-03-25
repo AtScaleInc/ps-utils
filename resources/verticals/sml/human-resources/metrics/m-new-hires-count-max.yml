@@ -1,0 +1,8 @@
+unique_name: m_new_hires_count_max
+object_type: metric
+label: new_hires_count
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: new_hires_count
+is_hidden: false
+unrelated_dimensions_handling: empty

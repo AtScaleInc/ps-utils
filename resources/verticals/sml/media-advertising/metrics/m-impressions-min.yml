@@ -1,0 +1,8 @@
+unique_name: m_impressions_min
+object_type: metric
+label: impressions
+calculation_method: minimum
+dataset: media_ad_performance_fact
+column: impressions
+is_hidden: false
+unrelated_dimensions_handling: empty

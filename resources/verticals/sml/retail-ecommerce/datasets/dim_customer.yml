@@ -1,0 +1,20 @@
+unique_name: dim_customer
+object_type: dataset
+label: dim_customer
+connection_id: my_connection
+table: dim_customer
+columns:
+  -     name: customer_id
+        data_type: bigint
+  -     name: loyalty_id
+        data_type: bigint
+  -     name: loyalty_number
+        data_type: string
+  -     name: membership_id
+        data_type: string
+  -     name: customer_segment
+        data_type: string
+  -     name: customer_tier
+        data_type: string
+  -     name: lifecycle_stage
+        data_type: string

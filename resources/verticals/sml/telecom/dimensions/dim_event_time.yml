@@ -1,0 +1,53 @@
+unique_name: Dim Event Time
+object_type: dimension
+label: Dim Event Time
+type: time
+level_attributes:
+  -     unique_name: la_event_year
+        label: Event Year
+        dataset: dim_event_time
+        name_column: event_year
+        key_columns:
+          - event_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_event_month
+        label: Event Month
+        dataset: dim_event_time
+        name_column: event_month
+        key_columns:
+          - event_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_event_date
+        label: Event Date
+        dataset: dim_event_time
+        name_column: event_date
+        key_columns:
+          - event_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_event_hour
+        label: Event Hour
+        dataset: dim_event_time
+        name_column: event_hour
+        key_columns:
+          - event_hour
+        folder: Date Attributes
+        time_unit: hour
+  -     unique_name: la_event_time_id
+        label: event_time_id
+        dataset: dim_event_time
+        name_column: event_time_id
+        key_columns:
+          - event_time_id
+        is_unique_key: true
+        folder: Date Attributes
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_event_year
+          -         unique_name: la_event_month

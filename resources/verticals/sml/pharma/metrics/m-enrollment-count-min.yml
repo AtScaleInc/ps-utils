@@ -1,0 +1,8 @@
+unique_name: m_enrollment_count_min
+object_type: metric
+label: enrollment_count
+calculation_method: minimum
+dataset: pharma_clinical_fact
+column: enrollment_count
+is_hidden: false
+unrelated_dimensions_handling: empty

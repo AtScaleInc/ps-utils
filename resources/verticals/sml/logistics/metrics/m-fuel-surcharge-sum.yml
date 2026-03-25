@@ -1,0 +1,8 @@
+unique_name: m_fuel_surcharge_sum
+object_type: metric
+label: fuel_surcharge
+calculation_method: sum
+dataset: logistics_shipment_fact
+column: fuel_surcharge
+is_hidden: false
+unrelated_dimensions_handling: empty

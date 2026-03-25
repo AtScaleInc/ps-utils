@@ -1,0 +1,18 @@
+unique_name: dim_location
+object_type: dataset
+label: dim_location
+connection_id: my_connection
+table: dim_location
+columns:
+  -     name: location_id
+        data_type: bigint
+  -     name: work_region
+        data_type: string
+  -     name: work_country
+        data_type: string
+  -     name: work_state
+        data_type: string
+  -     name: work_city
+        data_type: string
+  -     name: location_name
+        data_type: string

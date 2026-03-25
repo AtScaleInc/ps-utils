@@ -1,0 +1,20 @@
+unique_name: dim_stay_date
+object_type: dataset
+label: dim_stay_date
+connection_id: my_connection
+table: dim_stay_date
+columns:
+  -     name: stay_date_id
+        data_type: bigint
+  -     name: arrival_date
+        data_type: date
+  -     name: departure_date
+        data_type: date
+  -     name: booking_date
+        data_type: date
+  -     name: stay_year
+        data_type: int
+  -     name: stay_month
+        data_type: int
+  -     name: stay_quarter
+        data_type: string

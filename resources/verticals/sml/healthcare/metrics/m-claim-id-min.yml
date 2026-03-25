@@ -1,0 +1,8 @@
+unique_name: m_claim_id_min
+object_type: metric
+label: claim_id
+calculation_method: minimum
+dataset: healthcare_encounter_fact
+column: claim_id
+is_hidden: false
+unrelated_dimensions_handling: empty

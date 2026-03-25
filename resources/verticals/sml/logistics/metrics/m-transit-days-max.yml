@@ -1,0 +1,8 @@
+unique_name: m_transit_days_max
+object_type: metric
+label: transit_days
+calculation_method: maximum
+dataset: logistics_shipment_fact
+column: transit_days
+is_hidden: false
+unrelated_dimensions_handling: empty

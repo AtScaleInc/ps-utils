@@ -1,0 +1,16 @@
+unique_name: dim_investigator
+object_type: dataset
+label: dim_investigator
+connection_id: my_connection
+table: dim_investigator
+columns:
+  -     name: investigator_id
+        data_type: bigint
+  -     name: pi_id
+        data_type: bigint
+  -     name: principal_investigator
+        data_type: string
+  -     name: manufacturing_site
+        data_type: string
+  -     name: manufacturing_line
+        data_type: string

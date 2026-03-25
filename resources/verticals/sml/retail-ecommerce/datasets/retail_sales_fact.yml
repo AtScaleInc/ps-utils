@@ -1,0 +1,48 @@
+unique_name: retail_sales_fact
+object_type: dataset
+label: retail_sales_fact
+connection_id: my_connection
+table: retail_sales_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: product_id
+        data_type: bigint
+  -     name: store_id
+        data_type: bigint
+  -     name: promotion_id
+        data_type: bigint
+  -     name: customer_id
+        data_type: bigint
+  -     name: fiscal_calendar_id
+        data_type: bigint
+  -     name: net_sales
+        data_type: decimal
+  -     name: gross_sales
+        data_type: decimal
+  -     name: cost_of_goods
+        data_type: decimal
+  -     name: gross_margin
+        data_type: decimal
+  -     name: units_sold
+        data_type: int
+  -     name: units_returned
+        data_type: int
+  -     name: discount_amount
+        data_type: decimal
+  -     name: freight_amount
+        data_type: decimal
+  -     name: basket_size
+        data_type: int
+  -     name: basket_value
+        data_type: decimal
+  -     name: markdown_pct
+        data_type: decimal
+  -     name: markdown_amount
+        data_type: decimal
+  -     name: sell_through_rate
+        data_type: decimal
+  -     name: inventory_turnover
+        data_type: decimal
+  -     name: on_hand_units
+        data_type: int

@@ -1,0 +1,8 @@
+unique_name: m_pmpm_max
+object_type: metric
+label: pmpm
+calculation_method: maximum
+dataset: healthcare_encounter_fact
+column: pmpm
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_peak_demand_kw_min
+object_type: metric
+label: peak_demand_kw
+calculation_method: minimum
+dataset: energy_interval_fact
+column: peak_demand_kw
+is_hidden: false
+unrelated_dimensions_handling: empty

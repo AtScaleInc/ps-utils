@@ -1,0 +1,24 @@
+unique_name: dim_portfolio
+object_type: dataset
+label: dim_portfolio
+connection_id: my_connection
+table: dim_portfolio
+columns:
+  -     name: portfolio_id
+        data_type: bigint
+  -     name: fund_name
+        data_type: string
+  -     name: portfolio_name
+        data_type: string
+  -     name: floor_number
+        data_type: string
+  -     name: unit_id
+        data_type: string
+  -     name: tenant_id
+        data_type: bigint
+  -     name: lease_id
+        data_type: bigint
+  -     name: brokerage_name
+        data_type: string
+  -     name: listing_agent_id
+        data_type: bigint

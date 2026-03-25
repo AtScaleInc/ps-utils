@@ -1,0 +1,8 @@
+unique_name: m_hcc_score_avg
+object_type: metric
+label: hcc_score
+calculation_method: average
+dataset: healthcare_encounter_fact
+column: hcc_score
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_on_hand_units_max
+object_type: metric
+label: on_hand_units
+calculation_method: maximum
+dataset: retail_sales_fact
+column: on_hand_units
+is_hidden: false
+unrelated_dimensions_handling: empty

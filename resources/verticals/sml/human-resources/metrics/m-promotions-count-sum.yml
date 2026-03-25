@@ -1,0 +1,8 @@
+unique_name: m_promotions_count_sum
+object_type: metric
+label: promotions_count
+calculation_method: sum
+dataset: hr_workforce_fact
+column: promotions_count
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_beta_max
+object_type: metric
+label: beta
+calculation_method: maximum
+dataset: financial_securities_fact
+column: beta
+is_hidden: false
+unrelated_dimensions_handling: empty

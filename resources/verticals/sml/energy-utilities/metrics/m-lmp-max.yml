@@ -1,0 +1,8 @@
+unique_name: m_lmp_max
+object_type: metric
+label: lmp
+calculation_method: maximum
+dataset: energy_interval_fact
+column: lmp
+is_hidden: false
+unrelated_dimensions_handling: empty

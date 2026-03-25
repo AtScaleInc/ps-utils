@@ -1,0 +1,8 @@
+unique_name: m_open_claims_count_avg
+object_type: metric
+label: open_claims_count
+calculation_method: average
+dataset: insurance_policy_fact
+column: open_claims_count
+is_hidden: false
+unrelated_dimensions_handling: empty

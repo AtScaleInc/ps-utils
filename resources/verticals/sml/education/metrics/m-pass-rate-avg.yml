@@ -1,0 +1,8 @@
+unique_name: m_pass_rate_avg
+object_type: metric
+label: pass_rate
+calculation_method: average
+dataset: education_enrollment_fact
+column: pass_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

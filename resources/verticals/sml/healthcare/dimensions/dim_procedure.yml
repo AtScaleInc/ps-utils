@@ -1,0 +1,49 @@
+unique_name: Dim Procedure
+object_type: dimension
+label: Dim Procedure
+type: standard
+level_attributes:
+  -     unique_name: la_cpt_category
+        label: Cpt Category
+        dataset: dim_procedure
+        name_column: cpt_category
+        key_columns:
+          - cpt_category
+  -     unique_name: la_cpt_section
+        label: Cpt Section
+        dataset: dim_procedure
+        name_column: cpt_section
+        key_columns:
+          - cpt_section
+  -     unique_name: la_cpt_code
+        label: Cpt Code
+        dataset: dim_procedure
+        name_column: cpt_code
+        key_columns:
+          - cpt_code
+  -     unique_name: la_hcpcs_code
+        label: Hcpcs Code
+        dataset: dim_procedure
+        name_column: hcpcs_code
+        key_columns:
+          - hcpcs_code
+  -     unique_name: la_procedure_code
+        label: Procedure Code
+        dataset: dim_procedure
+        name_column: procedure_code
+        key_columns:
+          - procedure_code
+  -     unique_name: la_procedure_id
+        label: procedure_id
+        dataset: dim_procedure
+        name_column: procedure_id
+        key_columns:
+          - procedure_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Cpt Hierarchy
+        label: Cpt Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_cpt_category
+          -         unique_name: la_cpt_section

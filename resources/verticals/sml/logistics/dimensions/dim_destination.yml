@@ -1,0 +1,57 @@
+unique_name: Dim Destination
+object_type: dimension
+label: Dim Destination
+type: standard
+level_attributes:
+  -     unique_name: la_dest_country
+        label: Dest Country
+        dataset: dim_destination
+        name_column: dest_country
+        key_columns:
+          - dest_country
+  -     unique_name: la_dest_state
+        label: Dest State
+        dataset: dim_destination
+        name_column: dest_state
+        key_columns:
+          - dest_state
+  -     unique_name: la_dest_city
+        label: Dest City
+        dataset: dim_destination
+        name_column: dest_city
+        key_columns:
+          - dest_city
+  -     unique_name: la_dest_zip
+        label: Dest Zip
+        dataset: dim_destination
+        name_column: dest_zip
+        key_columns:
+          - dest_zip
+  -     unique_name: la_destination_port
+        label: Destination Port
+        dataset: dim_destination
+        name_column: destination_port
+        key_columns:
+          - destination_port
+  -     unique_name: la_destination_location
+        label: Destination Location
+        dataset: dim_destination
+        name_column: destination_location
+        key_columns:
+          - destination_location
+  -     unique_name: la_destination_id
+        label: destination_id
+        dataset: dim_destination
+        name_column: destination_id
+        key_columns:
+          - destination_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_dest_country
+          -         unique_name: la_dest_state
+          -         unique_name: la_dest_city
+          -         unique_name: la_dest_zip

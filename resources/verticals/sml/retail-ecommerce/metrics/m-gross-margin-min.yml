@@ -1,0 +1,8 @@
+unique_name: m_gross_margin_min
+object_type: metric
+label: gross_margin
+calculation_method: minimum
+dataset: retail_sales_fact
+column: gross_margin
+is_hidden: false
+unrelated_dimensions_handling: empty

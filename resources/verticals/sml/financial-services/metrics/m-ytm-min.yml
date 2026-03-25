@@ -1,0 +1,8 @@
+unique_name: m_ytm_min
+object_type: metric
+label: ytm
+calculation_method: minimum
+dataset: financial_securities_fact
+column: ytm
+is_hidden: false
+unrelated_dimensions_handling: empty

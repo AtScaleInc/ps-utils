@@ -1,0 +1,8 @@
+unique_name: m_insured_id_sum
+object_type: metric
+label: insured_id
+calculation_method: sum
+dataset: insurance_policy_fact
+column: insured_id
+is_hidden: false
+unrelated_dimensions_handling: empty

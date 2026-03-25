@@ -1,0 +1,8 @@
+unique_name: m_premium_amount_avg
+object_type: metric
+label: premium_amount
+calculation_method: average
+dataset: insurance_policy_fact
+column: premium_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

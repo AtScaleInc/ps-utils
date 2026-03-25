@@ -1,0 +1,8 @@
+unique_name: m_attrition_rate_max
+object_type: metric
+label: attrition_rate
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: attrition_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

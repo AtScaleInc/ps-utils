@@ -1,0 +1,8 @@
+unique_name: m_operating_expenses_min
+object_type: metric
+label: operating_expenses
+calculation_method: minimum
+dataset: real_estate_transaction_fact
+column: operating_expenses
+is_hidden: false
+unrelated_dimensions_handling: empty

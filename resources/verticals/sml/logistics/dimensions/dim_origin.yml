@@ -1,0 +1,57 @@
+unique_name: Dim Origin
+object_type: dimension
+label: Dim Origin
+type: standard
+level_attributes:
+  -     unique_name: la_origin_country
+        label: Origin Country
+        dataset: dim_origin
+        name_column: origin_country
+        key_columns:
+          - origin_country
+  -     unique_name: la_origin_state
+        label: Origin State
+        dataset: dim_origin
+        name_column: origin_state
+        key_columns:
+          - origin_state
+  -     unique_name: la_origin_city
+        label: Origin City
+        dataset: dim_origin
+        name_column: origin_city
+        key_columns:
+          - origin_city
+  -     unique_name: la_origin_zip
+        label: Origin Zip
+        dataset: dim_origin
+        name_column: origin_zip
+        key_columns:
+          - origin_zip
+  -     unique_name: la_origin_port
+        label: Origin Port
+        dataset: dim_origin
+        name_column: origin_port
+        key_columns:
+          - origin_port
+  -     unique_name: la_origin_location
+        label: Origin Location
+        dataset: dim_origin
+        name_column: origin_location
+        key_columns:
+          - origin_location
+  -     unique_name: la_origin_id
+        label: origin_id
+        dataset: dim_origin
+        name_column: origin_id
+        key_columns:
+          - origin_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_origin_country
+          -         unique_name: la_origin_state
+          -         unique_name: la_origin_city
+          -         unique_name: la_origin_zip

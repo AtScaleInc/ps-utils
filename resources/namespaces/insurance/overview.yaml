@@ -1,0 +1,547 @@
+version: 1
+title: insurance Analysis
+description: Auto-generated analysis namespace for the insurance model
+worksheets:
+  insured_id:
+    title: insured_id
+    model: insurance
+    graphType: text
+    measures:
+      - m_insured_id_sum
+    description: "Summary statistic: insured_id"
+    format: integer
+  insured_id_2:
+    title: insured_id
+    model: insurance
+    graphType: text
+    measures:
+      - m_insured_id_avg
+    description: "Summary statistic: insured_id"
+    format: integer
+  insured_id_3:
+    title: insured_id
+    model: insurance
+    graphType: text
+    measures:
+      - m_insured_id_min
+    description: "Summary statistic: insured_id"
+    format: integer
+  insured_id_4:
+    title: insured_id
+    model: insurance
+    graphType: text
+    measures:
+      - m_insured_id_max
+    description: "Summary statistic: insured_id"
+    format: integer
+  premium_amount:
+    title: premium_amount
+    model: insurance
+    graphType: text
+    measures:
+      - m_premium_amount_sum
+    description: "Summary statistic: premium_amount"
+    format: decimal:2
+  premium_amount_2:
+    title: premium_amount
+    model: insurance
+    graphType: text
+    measures:
+      - m_premium_amount_avg
+    description: "Summary statistic: premium_amount"
+    format: decimal:2
+  premium_amount_by_week:
+    title: premium_amount by Week
+    model: insurance
+    graphType: line
+    xAxis: policy_year
+    xAxisGranularity: week
+    yAxis: m_premium_amount_sum
+    description: >-
+      Track how premium_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  premium_amount_by_geography_hierarchy_by_week:
+    title: premium_amount by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_premium_amount_sum
+    description: >-
+      Cross-analyse premium_amount by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  premium_amount_by_risk_classification_hierarchy_by_week:
+    title: premium_amount by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_premium_amount_sum
+    description: >-
+      Cross-analyse premium_amount by **Risk Classification Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: policy_year
+  deductible_amount_by_week:
+    title: deductible_amount by Week
+    model: insurance
+    graphType: line
+    xAxis: policy_year
+    xAxisGranularity: week
+    yAxis: m_deductible_amount_sum
+    description: >-
+      Track how deductible_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  deductible_amount_by_geography_hierarchy_by_week:
+    title: deductible_amount by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_deductible_amount_sum
+    description: >-
+      Cross-analyse deductible_amount by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  deductible_amount_by_risk_classification_hierarchy_by_week:
+    title: deductible_amount by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_deductible_amount_sum
+    description: >-
+      Cross-analyse deductible_amount by **Risk Classification Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: policy_year
+  expense_ratio_by_week:
+    title: expense_ratio by Week
+    model: insurance
+    graphType: line
+    xAxis: policy_year
+    xAxisGranularity: week
+    yAxis: m_expense_ratio_sum
+    description: >-
+      Track how expense_ratio changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  expense_ratio_by_geography_hierarchy_by_week:
+    title: expense_ratio by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_expense_ratio_sum
+    description: >-
+      Cross-analyse expense_ratio by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  expense_ratio_by_risk_classification_hierarchy_by_week:
+    title: expense_ratio by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_expense_ratio_sum
+    description: >-
+      Cross-analyse expense_ratio by **Risk Classification Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: policy_year
+  claim_count_by_geography_hierarchy_by_week:
+    title: claim_count by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_claim_count_sum
+    description: >-
+      Cross-analyse claim_count by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  open_claims_count_by_geography_hierarchy_by_week:
+    title: open_claims_count by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_open_claims_count_sum
+    description: >-
+      Cross-analyse open_claims_count by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  claim_count_by_risk_classification_hierarchy_by_week:
+    title: claim_count by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_claim_count_sum
+    description: >-
+      Cross-analyse claim_count by **Risk Classification Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  open_claims_count_by_risk_classification_hierarchy_by_week:
+    title: open_claims_count by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_open_claims_count_sum
+    description: >-
+      Cross-analyse open_claims_count by **Risk Classification Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: policy_year
+  claim_count_by_week:
+    title: claim_count by Week
+    model: insurance
+    graphType: line
+    xAxis: policy_year
+    xAxisGranularity: week
+    yAxis: m_claim_count_sum
+    description: >-
+      Track how claim_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  open_claims_count_by_week:
+    title: open_claims_count by Week
+    model: insurance
+    graphType: line
+    xAxis: policy_year
+    xAxisGranularity: week
+    yAxis: m_open_claims_count_sum
+    description: >-
+      Track how open_claims_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  loss_ratio_by_risk_classification_hierarchy_by_week:
+    title: loss_ratio by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_loss_ratio_avg
+    description: >-
+      Cross-analyse loss_ratio by **Risk Classification Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  combined_ratio_by_risk_classification_hierarchy_by_week:
+    title: combined_ratio by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_combined_ratio_avg
+    description: >-
+      Cross-analyse combined_ratio by **Risk Classification Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: policy_year
+  expense_ratio_by_risk_classification_hierarchy_by_week_2:
+    title: expense_ratio by Risk Classification Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: risk_class
+    xAxisGranularity: week
+    yAxis: m_expense_ratio_avg
+    description: >-
+      Cross-analyse expense_ratio by **Risk Classification Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: policy_year
+  loss_ratio_by_geography_hierarchy_by_week:
+    title: loss_ratio by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_loss_ratio_avg
+    description: >-
+      Cross-analyse loss_ratio by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: policy_year
+  combined_ratio_by_geography_hierarchy_by_week:
+    title: combined_ratio by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_combined_ratio_avg
+    description: >-
+      Cross-analyse combined_ratio by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  expense_ratio_by_geography_hierarchy_by_week_2:
+    title: expense_ratio by Geography Hierarchy by Week
+    model: insurance
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_expense_ratio_avg
+    description: >-
+      Cross-analyse expense_ratio by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: policy_year
+  premium_amount_by_geography_hierarchy:
+    title: premium_amount by Geography Hierarchy
+    model: insurance
+    graphType: bar
+    xAxis: m_premium_amount_sum
+    yAxis: state_code
+    description: >-
+      Decompose premium_amount across **Geography Hierarchy** to identify top
+      and bottom contributors and reveal performance disparities.
+  deductible_amount_by_geography_hierarchy:
+    title: deductible_amount by Geography Hierarchy
+    model: insurance
+    graphType: bar
+    xAxis: m_deductible_amount_sum
+    yAxis: state_code
+    description: >-
+      Decompose deductible_amount across **Geography Hierarchy** to identify top
+      and bottom contributors and reveal performance disparities.
+  expense_ratio_by_geography_hierarchy:
+    title: expense_ratio by Geography Hierarchy
+    model: insurance
+    graphType: bar
+    xAxis: m_expense_ratio_sum
+    yAxis: state_code
+    description: >-
+      Decompose expense_ratio across **Geography Hierarchy** to identify top and
+      bottom contributors and reveal performance disparities.
+  premium_amount_by_risk_classification_hierarchy:
+    title: premium_amount by Risk Classification Hierarchy
+    model: insurance
+    graphType: bar
+    xAxis: m_premium_amount_sum
+    yAxis: risk_class
+    description: >-
+      Decompose premium_amount across **Risk Classification Hierarchy** to
+      identify top and bottom contributors and reveal performance disparities.
+dashboards:
+  insurance_dashboard:
+    title: insurance Analysis Dashboard
+    description: Auto-generated dashboard for insurance
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: insured_id
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: insured_id_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: insured_id_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: insured_id_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: premium_amount
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: premium_amount_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: premium_amount_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: premium_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: premium_amount_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: deductible_amount_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: deductible_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: deductible_amount_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: expense_ratio_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: expense_ratio_by_geography_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: expense_ratio_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: claim_count_by_geography_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: open_claims_count_by_geography_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: claim_count_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: open_claims_count_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: claim_count_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: open_claims_count_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: loss_ratio_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: combined_ratio_by_risk_classification_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: expense_ratio_by_risk_classification_hierarchy_by_week_2
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: loss_ratio_by_geography_hierarchy_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: combined_ratio_by_geography_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: expense_ratio_by_geography_hierarchy_by_week_2
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: premium_amount_by_geography_hierarchy
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: deductible_amount_by_geography_hierarchy
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: expense_ratio_by_geography_hierarchy
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: premium_amount_by_risk_classification_hierarchy
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

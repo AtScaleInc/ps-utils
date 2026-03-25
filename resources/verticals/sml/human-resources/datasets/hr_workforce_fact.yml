@@ -1,0 +1,62 @@
+unique_name: hr_workforce_fact
+object_type: dataset
+label: hr_workforce_fact
+connection_id: my_connection
+table: hr_workforce_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: employee_id
+        data_type: bigint
+  -     name: organization_id
+        data_type: bigint
+  -     name: job_id
+        data_type: bigint
+  -     name: location_id
+        data_type: bigint
+  -     name: snapshot_date_id
+        data_type: bigint
+  -     name: requisition_id
+        data_type: bigint
+  -     name: base_salary
+        data_type: decimal
+  -     name: bonus_amount
+        data_type: decimal
+  -     name: equity_value
+        data_type: decimal
+  -     name: benefits_cost
+        data_type: decimal
+  -     name: total_compensation
+        data_type: decimal
+  -     name: total_cash
+        data_type: decimal
+  -     name: total_target_comp
+        data_type: decimal
+  -     name: compa_ratio
+        data_type: decimal
+  -     name: pay_equity_ratio
+        data_type: decimal
+  -     name: headcount
+        data_type: int
+  -     name: turnover_rate
+        data_type: decimal
+  -     name: attrition_rate
+        data_type: decimal
+  -     name: performance_rating
+        data_type: decimal
+  -     name: engagement_score
+        data_type: decimal
+  -     name: overtime_hours
+        data_type: decimal
+  -     name: training_hours
+        data_type: decimal
+  -     name: time_to_fill
+        data_type: int
+  -     name: time_to_hire
+        data_type: int
+  -     name: new_hires_count
+        data_type: int
+  -     name: terminations_count
+        data_type: int
+  -     name: promotions_count
+        data_type: int

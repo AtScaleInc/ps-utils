@@ -1,0 +1,8 @@
+unique_name: m_revenue_amount_avg
+object_type: metric
+label: revenue_amount
+calculation_method: average
+dataset: energy_interval_fact
+column: revenue_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

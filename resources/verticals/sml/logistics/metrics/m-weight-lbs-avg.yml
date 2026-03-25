@@ -1,0 +1,8 @@
+unique_name: m_weight_lbs_avg
+object_type: metric
+label: weight_lbs
+calculation_method: average
+dataset: logistics_shipment_fact
+column: weight_lbs
+is_hidden: false
+unrelated_dimensions_handling: empty

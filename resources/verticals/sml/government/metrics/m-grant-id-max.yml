@@ -1,0 +1,8 @@
+unique_name: m_grant_id_max
+object_type: metric
+label: grant_id
+calculation_method: maximum
+dataset: government_budget_fact
+column: grant_id
+is_hidden: false
+unrelated_dimensions_handling: empty

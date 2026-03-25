@@ -1,0 +1,121 @@
+unique_name: real-estate
+object_type: model
+label: real-estate
+relationships:
+  -     unique_name: real_estate_transaction_fact_dim-property_property_id
+        from:
+          dataset: real_estate_transaction_fact
+          join_columns:
+            - property_id
+        to:
+          dimension: Dim Property
+          level: la_property_id
+  -     unique_name: real_estate_transaction_fact_dim-location_location_id
+        from:
+          dataset: real_estate_transaction_fact
+          join_columns:
+            - location_id
+        to:
+          dimension: Dim Location
+          level: la_location_id
+  -     unique_name: real_estate_transaction_fact_dim-portfolio_portfolio_id
+        from:
+          dataset: real_estate_transaction_fact
+          join_columns:
+            - portfolio_id
+        to:
+          dimension: Dim Portfolio
+          level: la_portfolio_id
+  -     unique_name: real_estate_transaction_fact_dim-transaction-date_transaction_date_id
+        from:
+          dataset: real_estate_transaction_fact
+          join_columns:
+            - transaction_date_id
+        to:
+          dimension: Dim Transaction Date
+          level: la_transaction_date_id
+metrics:
+  -     unique_name: m_sale_price_sum
+  -     unique_name: m_sale_price_avg
+  -     unique_name: m_sale_price_min
+  -     unique_name: m_sale_price_max
+  -     unique_name: m_list_price_sum
+  -     unique_name: m_list_price_avg
+  -     unique_name: m_list_price_min
+  -     unique_name: m_list_price_max
+  -     unique_name: m_original_list_price_sum
+  -     unique_name: m_original_list_price_avg
+  -     unique_name: m_original_list_price_min
+  -     unique_name: m_original_list_price_max
+  -     unique_name: m_price_per_sqft_sum
+  -     unique_name: m_price_per_sqft_avg
+  -     unique_name: m_price_per_sqft_min
+  -     unique_name: m_price_per_sqft_max
+  -     unique_name: m_sale_price_per_sqft_sum
+  -     unique_name: m_sale_price_per_sqft_avg
+  -     unique_name: m_sale_price_per_sqft_min
+  -     unique_name: m_sale_price_per_sqft_max
+  -     unique_name: m_lot_size_sqft_sum
+  -     unique_name: m_lot_size_sqft_avg
+  -     unique_name: m_lot_size_sqft_min
+  -     unique_name: m_lot_size_sqft_max
+  -     unique_name: m_lot_size_acres_sum
+  -     unique_name: m_lot_size_acres_avg
+  -     unique_name: m_lot_size_acres_min
+  -     unique_name: m_lot_size_acres_max
+  -     unique_name: m_building_sqft_avg
+  -     unique_name: m_building_sqft_min
+  -     unique_name: m_building_sqft_max
+  -     unique_name: m_gross_sqft_sum
+  -     unique_name: m_gross_sqft_avg
+  -     unique_name: m_gross_sqft_min
+  -     unique_name: m_gross_sqft_max
+  -     unique_name: m_cap_rate_avg
+  -     unique_name: m_cap_rate_min
+  -     unique_name: m_cap_rate_max
+  -     unique_name: m_noi_avg
+  -     unique_name: m_noi_min
+  -     unique_name: m_noi_max
+  -     unique_name: m_net_operating_income_sum
+  -     unique_name: m_net_operating_income_avg
+  -     unique_name: m_net_operating_income_min
+  -     unique_name: m_net_operating_income_max
+  -     unique_name: m_assessed_value_avg
+  -     unique_name: m_assessed_value_min
+  -     unique_name: m_assessed_value_max
+  -     unique_name: m_appraised_value_avg
+  -     unique_name: m_appraised_value_min
+  -     unique_name: m_appraised_value_max
+  -     unique_name: m_market_value_avg
+  -     unique_name: m_market_value_min
+  -     unique_name: m_market_value_max
+  -     unique_name: m_days_on_market_sum
+  -     unique_name: m_days_on_market_avg
+  -     unique_name: m_days_on_market_min
+  -     unique_name: m_days_on_market_max
+  -     unique_name: m_dom_sum
+  -     unique_name: m_dom_avg
+  -     unique_name: m_dom_min
+  -     unique_name: m_dom_max
+  -     unique_name: m_gross_rent_sum
+  -     unique_name: m_gross_rent_avg
+  -     unique_name: m_gross_rent_min
+  -     unique_name: m_gross_rent_max
+  -     unique_name: m_operating_expenses_sum
+  -     unique_name: m_operating_expenses_avg
+  -     unique_name: m_operating_expenses_min
+  -     unique_name: m_operating_expenses_max
+  -     unique_name: m_vacancy_rate_avg
+  -     unique_name: m_vacancy_rate_min
+  -     unique_name: m_vacancy_rate_max
+  -     unique_name: m_occupancy_rate_avg
+  -     unique_name: m_occupancy_rate_min
+  -     unique_name: m_occupancy_rate_max
+  -     unique_name: m_transactions_count_sum
+  -     unique_name: m_transactions_count_avg
+  -     unique_name: m_transactions_count_min
+  -     unique_name: m_transactions_count_max
+  -     unique_name: m_price_reduction_amount_sum
+  -     unique_name: m_price_reduction_amount_avg
+  -     unique_name: m_price_reduction_amount_min
+  -     unique_name: m_price_reduction_amount_max

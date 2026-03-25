@@ -1,0 +1,8 @@
+unique_name: m_scrap_qty_avg
+object_type: metric
+label: scrap_qty
+calculation_method: average
+dataset: manufacturing_production_fact
+column: scrap_qty
+is_hidden: false
+unrelated_dimensions_handling: empty

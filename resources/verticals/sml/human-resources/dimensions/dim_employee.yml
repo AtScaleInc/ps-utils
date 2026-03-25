@@ -1,0 +1,74 @@
+unique_name: Dim Employee
+object_type: dimension
+label: Dim Employee
+type: standard
+level_attributes:
+  -     unique_name: la_hire_date
+        label: Hire Date
+        dataset: dim_employee
+        name_column: hire_date
+        key_columns:
+          - hire_date
+  -     unique_name: la_termination_date
+        label: Termination Date
+        dataset: dim_employee
+        name_column: termination_date
+        key_columns:
+          - termination_date
+  -     unique_name: la_last_day_worked
+        label: Last Day Worked
+        dataset: dim_employee
+        name_column: last_day_worked
+        key_columns:
+          - last_day_worked
+  -     unique_name: la_emp_id
+        label: Emp Id
+        dataset: dim_employee
+        name_column: emp_id
+        key_columns:
+          - emp_id
+  -     unique_name: la_badge_number
+        label: Badge Number
+        dataset: dim_employee
+        name_column: badge_number
+        key_columns:
+          - badge_number
+  -     unique_name: la_flsa_status
+        label: Flsa Status
+        dataset: dim_employee
+        name_column: flsa_status
+        key_columns:
+          - flsa_status
+  -     unique_name: la_union_code
+        label: Union Code
+        dataset: dim_employee
+        name_column: union_code
+        key_columns:
+          - union_code
+  -     unique_name: la_fte
+        label: Fte
+        dataset: dim_employee
+        name_column: fte
+        key_columns:
+          - fte
+  -     unique_name: la_fte_value
+        label: Fte Value
+        dataset: dim_employee
+        name_column: fte_value
+        key_columns:
+          - fte_value
+  -     unique_name: la_employee_id
+        label: employee_id
+        dataset: dim_employee
+        name_column: employee_id
+        key_columns:
+          - employee_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_hire_date
+          -         unique_name: la_termination_date
+          -         unique_name: la_last_day_worked

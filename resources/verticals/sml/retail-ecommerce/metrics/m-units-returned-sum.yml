@@ -1,0 +1,8 @@
+unique_name: m_units_returned_sum
+object_type: metric
+label: units_returned
+calculation_method: sum
+dataset: retail_sales_fact
+column: units_returned
+is_hidden: false
+unrelated_dimensions_handling: empty

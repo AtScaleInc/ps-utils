@@ -1,0 +1,8 @@
+unique_name: m_cycle_time_seconds_max
+object_type: metric
+label: cycle_time_seconds
+calculation_method: maximum
+dataset: manufacturing_production_fact
+column: cycle_time_seconds
+is_hidden: false
+unrelated_dimensions_handling: empty

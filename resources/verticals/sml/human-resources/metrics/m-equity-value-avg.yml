@@ -1,0 +1,8 @@
+unique_name: m_equity_value_avg
+object_type: metric
+label: equity_value
+calculation_method: average
+dataset: hr_workforce_fact
+column: equity_value
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,68 @@
+unique_name: Dim Organization
+object_type: dimension
+label: Dim Organization
+type: standard
+level_attributes:
+  -     unique_name: la_division_name
+        label: Division Name
+        dataset: dim_organization
+        name_column: division_name
+        key_columns:
+          - division_name
+  -     unique_name: la_department_name
+        label: Department Name
+        dataset: dim_organization
+        name_column: department_name
+        key_columns:
+          - department_name
+  -     unique_name: la_company_name
+        label: Company Name
+        dataset: dim_organization
+        name_column: company_name
+        key_columns:
+          - company_name
+  -     unique_name: la_cost_center
+        label: Cost Center
+        dataset: dim_organization
+        name_column: cost_center
+        key_columns:
+          - cost_center
+  -     unique_name: la_team_name
+        label: Team Name
+        dataset: dim_organization
+        name_column: team_name
+        key_columns:
+          - team_name
+  -     unique_name: la_business_unit
+        label: Business Unit
+        dataset: dim_organization
+        name_column: business_unit
+        key_columns:
+          - business_unit
+  -     unique_name: la_cost_center_code
+        label: Cost Center Code
+        dataset: dim_organization
+        name_column: cost_center_code
+        key_columns:
+          - cost_center_code
+  -     unique_name: la_organization_id
+        label: organization_id
+        dataset: dim_organization
+        name_column: organization_id
+        key_columns:
+          - organization_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Product Hierarchy
+        label: Product Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_division_name
+          -         unique_name: la_department_name
+  -     unique_name: Employee Organization Hierarchy
+        label: Employee Organization Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_company_name
+          -         unique_name: la_cost_center
+          -         unique_name: la_team_name

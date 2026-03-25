@@ -1,0 +1,49 @@
+unique_name: Dim Facility
+object_type: dimension
+label: Dim Facility
+type: standard
+level_attributes:
+  -     unique_name: la_health_system_name
+        label: Health System Name
+        dataset: dim_facility
+        name_column: health_system_name
+        key_columns:
+          - health_system_name
+  -     unique_name: la_hospital_name
+        label: Hospital Name
+        dataset: dim_facility
+        name_column: hospital_name
+        key_columns:
+          - hospital_name
+  -     unique_name: la_department_name
+        label: Department Name
+        dataset: dim_facility
+        name_column: department_name
+        key_columns:
+          - department_name
+  -     unique_name: la_unit_name
+        label: Unit Name
+        dataset: dim_facility
+        name_column: unit_name
+        key_columns:
+          - unit_name
+  -     unique_name: la_room_number
+        label: Room Number
+        dataset: dim_facility
+        name_column: room_number
+        key_columns:
+          - room_number
+  -     unique_name: la_bed_id
+        label: Bed Id
+        dataset: dim_facility
+        name_column: bed_id
+        key_columns:
+          - bed_id
+  -     unique_name: la_facility_id
+        label: facility_id
+        dataset: dim_facility
+        name_column: facility_id
+        key_columns:
+          - facility_id
+        is_unique_key: true
+hierarchies: []

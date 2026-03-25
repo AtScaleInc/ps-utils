@@ -1,0 +1,116 @@
+unique_name: Dim Grid
+object_type: dimension
+label: Dim Grid
+type: standard
+level_attributes:
+  -     unique_name: la_balancing_authority
+        label: Balancing Authority
+        dataset: dim_grid
+        name_column: balancing_authority
+        key_columns:
+          - balancing_authority
+  -     unique_name: la_transmission_zone
+        label: Transmission Zone
+        dataset: dim_grid
+        name_column: transmission_zone
+        key_columns:
+          - transmission_zone
+  -     unique_name: la_substation_id
+        label: Substation Id
+        dataset: dim_grid
+        name_column: substation_id
+        key_columns:
+          - substation_id
+  -     unique_name: la_feeder_id
+        label: Feeder Id
+        dataset: dim_grid
+        name_column: feeder_id
+        key_columns:
+          - feeder_id
+  -     unique_name: la_transformer_id
+        label: Transformer Id
+        dataset: dim_grid
+        name_column: transformer_id
+        key_columns:
+          - transformer_id
+  -     unique_name: la_service_territory
+        label: Service Territory
+        dataset: dim_grid
+        name_column: service_territory
+        key_columns:
+          - service_territory
+  -     unique_name: la_division_name
+        label: Division Name
+        dataset: dim_grid
+        name_column: division_name
+        key_columns:
+          - division_name
+  -     unique_name: la_district_name
+        label: District Name
+        dataset: dim_grid
+        name_column: district_name
+        key_columns:
+          - district_name
+  -     unique_name: la_circuit_id
+        label: Circuit Id
+        dataset: dim_grid
+        name_column: circuit_id
+        key_columns:
+          - circuit_id
+  -     unique_name: la_iso_id
+        label: Iso Id
+        dataset: dim_grid
+        name_column: iso_id
+        key_columns:
+          - iso_id
+  -     unique_name: la_pricing_zone
+        label: Pricing Zone
+        dataset: dim_grid
+        name_column: pricing_zone
+        key_columns:
+          - pricing_zone
+  -     unique_name: la_load_zone
+        label: Load Zone
+        dataset: dim_grid
+        name_column: load_zone
+        key_columns:
+          - load_zone
+  -     unique_name: la_lmp_node_id
+        label: Lmp Node Id
+        dataset: dim_grid
+        name_column: lmp_node_id
+        key_columns:
+          - lmp_node_id
+  -     unique_name: la_grid_id
+        label: grid_id
+        dataset: dim_grid
+        name_column: grid_id
+        key_columns:
+          - grid_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Grid Topology Hierarchy
+        label: Grid Topology Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_balancing_authority
+          -         unique_name: la_transmission_zone
+          -         unique_name: la_substation_id
+          -         unique_name: la_feeder_id
+          -         unique_name: la_transformer_id
+  -     unique_name: Service Territory Hierarchy
+        label: Service Territory Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_service_territory
+          -         unique_name: la_division_name
+          -         unique_name: la_district_name
+          -         unique_name: la_circuit_id
+  -     unique_name: ISO Market Hierarchy
+        label: ISO Market Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_iso_id
+          -         unique_name: la_pricing_zone
+          -         unique_name: la_load_zone
+          -         unique_name: la_lmp_node_id

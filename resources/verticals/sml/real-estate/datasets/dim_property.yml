@@ -1,0 +1,42 @@
+unique_name: dim_property
+object_type: dataset
+label: dim_property
+connection_id: my_connection
+table: dim_property
+columns:
+  -     name: property_id
+        data_type: bigint
+  -     name: parcel_id
+        data_type: string
+  -     name: apn
+        data_type: string
+  -     name: assessor_parcel_number
+        data_type: string
+  -     name: mls_number
+        data_type: string
+  -     name: mls_id
+        data_type: bigint
+  -     name: folio_number
+        data_type: string
+  -     name: property_type
+        data_type: string
+  -     name: asset_class
+        data_type: string
+  -     name: property_subtype
+        data_type: string
+  -     name: use_type
+        data_type: string
+  -     name: zoning_code
+        data_type: string
+  -     name: land_use_code
+        data_type: string
+  -     name: bedroom
+        data_type: int
+  -     name: bathroom
+        data_type: int
+  -     name: half_bath
+        data_type: int
+  -     name: num_units
+        data_type: int
+  -     name: total_rooms
+        data_type: int

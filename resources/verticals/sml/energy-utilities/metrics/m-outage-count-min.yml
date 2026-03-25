@@ -1,0 +1,8 @@
+unique_name: m_outage_count_min
+object_type: metric
+label: outage_count
+calculation_method: minimum
+dataset: energy_interval_fact
+column: outage_count
+is_hidden: false
+unrelated_dimensions_handling: empty

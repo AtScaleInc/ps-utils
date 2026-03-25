@@ -1,0 +1,8 @@
+unique_name: m_interval_kwh_max
+object_type: metric
+label: interval_kwh
+calculation_method: maximum
+dataset: energy_interval_fact
+column: interval_kwh
+is_hidden: false
+unrelated_dimensions_handling: empty

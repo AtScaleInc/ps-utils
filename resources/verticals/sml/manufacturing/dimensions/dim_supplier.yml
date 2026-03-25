@@ -1,0 +1,45 @@
+unique_name: Dim Supplier
+object_type: dimension
+label: Dim Supplier
+type: standard
+level_attributes:
+  -     unique_name: la_supplier_category
+        label: Supplier Category
+        dataset: dim_supplier
+        name_column: supplier_category
+        key_columns:
+          - supplier_category
+  -     unique_name: la_supplier_name
+        label: Supplier Name
+        dataset: dim_supplier
+        name_column: supplier_name
+        key_columns:
+          - supplier_name
+        sort_column: supplier_id
+  -     unique_name: la_supplier_site
+        label: Supplier Site
+        dataset: dim_supplier
+        name_column: supplier_site
+        key_columns:
+          - supplier_site
+  -     unique_name: la_purchase_order_id
+        label: Purchase Order Id
+        dataset: dim_supplier
+        name_column: purchase_order_id
+        key_columns:
+          - purchase_order_id
+  -     unique_name: la_po_number
+        label: Po Number
+        dataset: dim_supplier
+        name_column: po_number
+        key_columns:
+          - po_number
+  -     unique_name: la_supplier_id
+        label: supplier_id
+        dataset: dim_supplier
+        name_column: supplier_name
+        key_columns:
+          - supplier_id
+        is_unique_key: true
+        sort_column: supplier_id
+hierarchies: []

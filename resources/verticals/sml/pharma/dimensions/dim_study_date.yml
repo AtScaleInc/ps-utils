@@ -1,0 +1,63 @@
+unique_name: Dim Study Date
+object_type: dimension
+label: Dim Study Date
+type: time
+level_attributes:
+  -     unique_name: la_study_year
+        label: Study Year
+        dataset: dim_study_date
+        name_column: study_year
+        key_columns:
+          - study_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_study_quarter
+        label: Study Quarter
+        dataset: dim_study_date
+        name_column: study_quarter
+        key_columns:
+          - study_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_study_month
+        label: Study Month
+        dataset: dim_study_date
+        name_column: study_month
+        key_columns:
+          - study_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_study_start_date
+        label: Study Start Date
+        dataset: dim_study_date
+        name_column: study_start_date
+        key_columns:
+          - study_start_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_data_cutoff_date
+        label: Data Cutoff Date
+        dataset: dim_study_date
+        name_column: data_cutoff_date
+        key_columns:
+          - data_cutoff_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_study_date_id
+        label: study_date_id
+        dataset: dim_study_date
+        name_column: study_date_id
+        key_columns:
+          - study_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_study_year
+          -         unique_name: la_study_quarter
+          -         unique_name: la_study_month

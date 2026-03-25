@@ -1,0 +1,90 @@
+unique_name: Dim Institution
+object_type: dimension
+label: Dim Institution
+type: standard
+level_attributes:
+  -     unique_name: la_state_code
+        label: State Code
+        dataset: dim_institution
+        name_column: state_code
+        key_columns:
+          - state_code
+  -     unique_name: la_city_name
+        label: City Name
+        dataset: dim_institution
+        name_column: city_name
+        key_columns:
+          - city_name
+  -     unique_name: la_district_id
+        label: District Id
+        dataset: dim_institution
+        name_column: district_name
+        key_columns:
+          - district_id
+        sort_column: district_id
+  -     unique_name: la_county_name
+        label: County Name
+        dataset: dim_institution
+        name_column: county_name
+        key_columns:
+          - county_name
+  -     unique_name: la_district_name
+        label: District Name
+        dataset: dim_institution
+        name_column: district_name
+        key_columns:
+          - district_name
+        sort_column: district_id
+  -     unique_name: la_grade_level
+        label: Grade Level
+        dataset: dim_institution
+        name_column: grade_level
+        key_columns:
+          - grade_level
+  -     unique_name: la_district_code
+        label: District Code
+        dataset: dim_institution
+        name_column: district_code
+        key_columns:
+          - district_code
+  -     unique_name: la_campus_id
+        label: Campus Id
+        dataset: dim_institution
+        name_column: campus_name
+        key_columns:
+          - campus_id
+        sort_column: campus_id
+  -     unique_name: la_school_id
+        label: School Id
+        dataset: dim_institution
+        name_column: school_id
+        key_columns:
+          - school_id
+  -     unique_name: la_grade_band
+        label: Grade Band
+        dataset: dim_institution
+        name_column: grade_band
+        key_columns:
+          - grade_band
+  -     unique_name: la_institution_id
+        label: institution_id
+        dataset: dim_institution
+        name_column: institution_id
+        key_columns:
+          - institution_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_state_code
+          -         unique_name: la_city_name
+          -         unique_name: la_district_id
+          -         unique_name: la_county_name
+  -     unique_name: District Hierarchy
+        label: District Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_district_name
+          -         unique_name: la_grade_level

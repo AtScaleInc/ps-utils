@@ -1,0 +1,55 @@
+unique_name: Dim Price Date
+object_type: dimension
+label: Dim Price Date
+type: time
+level_attributes:
+  -     unique_name: la_price_year
+        label: Price Year
+        dataset: dim_price_date
+        name_column: price_year
+        key_columns:
+          - price_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_price_quarter
+        label: Price Quarter
+        dataset: dim_price_date
+        name_column: price_quarter
+        key_columns:
+          - price_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_price_month
+        label: Price Month
+        dataset: dim_price_date
+        name_column: price_month
+        key_columns:
+          - price_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_price_date
+        label: Price Date
+        dataset: dim_price_date
+        name_column: price_date
+        key_columns:
+          - price_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_price_date_id
+        label: price_date_id
+        dataset: dim_price_date
+        name_column: price_date_id
+        key_columns:
+          - price_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_price_year
+          -         unique_name: la_price_quarter
+          -         unique_name: la_price_month

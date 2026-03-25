@@ -1,0 +1,8 @@
+unique_name: m_markdown_amount_min
+object_type: metric
+label: markdown_amount
+calculation_method: minimum
+dataset: retail_sales_fact
+column: markdown_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

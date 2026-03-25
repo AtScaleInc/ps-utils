@@ -1,0 +1,50 @@
+unique_name: pharma_clinical_fact
+object_type: dataset
+label: pharma_clinical_fact
+connection_id: my_connection
+table: pharma_clinical_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: compound_id
+        data_type: bigint
+  -     name: trial_id
+        data_type: bigint
+  -     name: investigator_id
+        data_type: bigint
+  -     name: regulatory_id
+        data_type: bigint
+  -     name: study_date_id
+        data_type: bigint
+  -     name: adverse_event_id
+        data_type: bigint
+  -     name: ae_code
+        data_type: string
+  -     name: lot_number
+        data_type: string
+  -     name: batch_number_pharma
+        data_type: string
+  -     name: dosage
+        data_type: decimal
+  -     name: dose_amount
+        data_type: decimal
+  -     name: dose_mg
+        data_type: decimal
+  -     name: enrollment_count
+        data_type: int
+  -     name: subject_count
+        data_type: int
+  -     name: patient_count
+        data_type: int
+  -     name: adverse_event_rate
+        data_type: decimal
+  -     name: completion_rate
+        data_type: decimal
+  -     name: response_rate
+        data_type: decimal
+  -     name: drop_out_count
+        data_type: int
+  -     name: serious_ae_count
+        data_type: int
+  -     name: protocol_deviation_count
+        data_type: int

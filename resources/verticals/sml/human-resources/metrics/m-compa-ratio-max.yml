@@ -1,0 +1,8 @@
+unique_name: m_compa_ratio_max
+object_type: metric
+label: compa_ratio
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: compa_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

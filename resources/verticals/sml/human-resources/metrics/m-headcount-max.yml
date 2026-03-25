@@ -1,0 +1,8 @@
+unique_name: m_headcount_max
+object_type: metric
+label: headcount
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: headcount
+is_hidden: false
+unrelated_dimensions_handling: empty

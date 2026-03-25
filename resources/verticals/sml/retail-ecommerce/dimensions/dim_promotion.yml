@@ -1,0 +1,38 @@
+unique_name: Dim Promotion
+object_type: dimension
+label: Dim Promotion
+type: standard
+level_attributes:
+  -     unique_name: la_promo_code
+        label: Promo Code
+        dataset: dim_promotion
+        name_column: promo_code
+        key_columns:
+          - promo_code
+  -     unique_name: la_promotion_code
+        label: Promotion Code
+        dataset: dim_promotion
+        name_column: promotion_code
+        key_columns:
+          - promotion_code
+  -     unique_name: la_offer_code
+        label: Offer Code
+        dataset: dim_promotion
+        name_column: offer_code
+        key_columns:
+          - offer_code
+  -     unique_name: la_campaign_name
+        label: Campaign Name
+        dataset: dim_promotion
+        name_column: campaign_name
+        key_columns:
+          - campaign_name
+  -     unique_name: la_promotion_id
+        label: promotion_id
+        dataset: dim_promotion
+        name_column: promotion_name
+        key_columns:
+          - promotion_id
+        is_unique_key: true
+        sort_column: promotion_id
+hierarchies: []

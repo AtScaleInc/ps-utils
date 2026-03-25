@@ -1,0 +1,8 @@
+unique_name: m_equity_value_min
+object_type: metric
+label: equity_value
+calculation_method: minimum
+dataset: hr_workforce_fact
+column: equity_value
+is_hidden: false
+unrelated_dimensions_handling: empty

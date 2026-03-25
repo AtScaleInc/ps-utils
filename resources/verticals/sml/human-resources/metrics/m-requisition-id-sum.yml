@@ -1,0 +1,8 @@
+unique_name: m_requisition_id_sum
+object_type: metric
+label: requisition_id
+calculation_method: sum
+dataset: hr_workforce_fact
+column: requisition_id
+is_hidden: false
+unrelated_dimensions_handling: empty

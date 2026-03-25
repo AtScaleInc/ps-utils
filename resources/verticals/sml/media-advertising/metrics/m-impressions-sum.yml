@@ -1,0 +1,8 @@
+unique_name: m_impressions_sum
+object_type: metric
+label: impressions
+calculation_method: sum
+dataset: media_ad_performance_fact
+column: impressions
+is_hidden: false
+unrelated_dimensions_handling: empty

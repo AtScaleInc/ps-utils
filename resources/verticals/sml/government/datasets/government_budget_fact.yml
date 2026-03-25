@@ -1,0 +1,42 @@
+unique_name: government_budget_fact
+object_type: dataset
+label: government_budget_fact
+connection_id: my_connection
+table: government_budget_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: agency_id
+        data_type: bigint
+  -     name: program_id
+        data_type: bigint
+  -     name: fund_id
+        data_type: bigint
+  -     name: object_class_id
+        data_type: bigint
+  -     name: geography_id
+        data_type: bigint
+  -     name: fiscal_calendar_id
+        data_type: bigint
+  -     name: grant_id
+        data_type: bigint
+  -     name: budget_authority
+        data_type: decimal
+  -     name: obligation_amount
+        data_type: decimal
+  -     name: outlay_amount
+        data_type: decimal
+  -     name: enacted_amount
+        data_type: decimal
+  -     name: apportioned_amount
+        data_type: decimal
+  -     name: allotted_amount
+        data_type: decimal
+  -     name: expenditure_amount
+        data_type: decimal
+  -     name: unobligated_balance
+        data_type: decimal
+  -     name: num_awards
+        data_type: int
+  -     name: num_transactions
+        data_type: int

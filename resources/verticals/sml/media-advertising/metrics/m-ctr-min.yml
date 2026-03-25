@@ -1,0 +1,8 @@
+unique_name: m_ctr_min
+object_type: metric
+label: ctr
+calculation_method: minimum
+dataset: media_ad_performance_fact
+column: ctr
+is_hidden: false
+unrelated_dimensions_handling: empty

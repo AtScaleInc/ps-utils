@@ -1,0 +1,77 @@
+unique_name: Dim Production Calendar
+object_type: dimension
+label: Dim Production Calendar
+type: time
+level_attributes:
+  -     unique_name: la_production_year
+        label: Production Year
+        dataset: dim_production_calendar
+        name_column: production_year
+        key_columns:
+          - production_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_production_quarter
+        label: Production Quarter
+        dataset: dim_production_calendar
+        name_column: production_quarter
+        key_columns:
+          - production_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_production_month
+        label: Production Month
+        dataset: dim_production_calendar
+        name_column: production_month
+        key_columns:
+          - production_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_production_week
+        label: Production Week
+        dataset: dim_production_calendar
+        name_column: production_week
+        key_columns:
+          - production_week
+        folder: Date Attributes
+        time_unit: week
+  -     unique_name: la_production_date
+        label: Production Date
+        dataset: dim_production_calendar
+        name_column: production_date
+        key_columns:
+          - production_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_shift_id
+        label: Shift Id
+        dataset: dim_production_calendar
+        name_column: shift_id
+        key_columns:
+          - shift_id
+        folder: Date Attributes
+  -     unique_name: la_shift_code
+        label: Shift Code
+        dataset: dim_production_calendar
+        name_column: shift_code
+        key_columns:
+          - shift_code
+        folder: Date Attributes
+  -     unique_name: la_production_calendar_id
+        label: production_calendar_id
+        dataset: dim_production_calendar
+        name_column: production_calendar_id
+        key_columns:
+          - production_calendar_id
+        is_unique_key: true
+        folder: Date Attributes
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_production_year
+          -         unique_name: la_production_quarter
+          -         unique_name: la_production_month
+          -         unique_name: la_production_week

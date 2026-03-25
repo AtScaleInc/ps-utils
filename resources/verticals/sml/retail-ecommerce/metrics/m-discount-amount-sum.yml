@@ -1,0 +1,8 @@
+unique_name: m_discount_amount_sum
+object_type: metric
+label: discount_amount
+calculation_method: sum
+dataset: retail_sales_fact
+column: discount_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

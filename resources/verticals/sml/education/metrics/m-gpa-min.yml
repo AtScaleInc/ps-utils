@@ -1,0 +1,8 @@
+unique_name: m_gpa_min
+object_type: metric
+label: gpa
+calculation_method: minimum
+dataset: education_enrollment_fact
+column: gpa
+is_hidden: false
+unrelated_dimensions_handling: empty

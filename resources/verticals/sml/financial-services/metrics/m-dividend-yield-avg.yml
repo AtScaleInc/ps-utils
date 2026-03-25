@@ -1,0 +1,8 @@
+unique_name: m_dividend_yield_avg
+object_type: metric
+label: dividend_yield
+calculation_method: average
+dataset: financial_securities_fact
+column: dividend_yield
+is_hidden: false
+unrelated_dimensions_handling: empty

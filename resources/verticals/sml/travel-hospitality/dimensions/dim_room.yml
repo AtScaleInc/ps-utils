@@ -1,0 +1,85 @@
+unique_name: Dim Room
+object_type: dimension
+label: Dim Room
+type: standard
+level_attributes:
+  -     unique_name: la_property_id
+        label: Property Id
+        dataset: dim_room
+        name_column: property_id
+        key_columns:
+          - property_id
+  -     unique_name: la_room_type_code
+        label: Room Type Code
+        dataset: dim_room
+        name_column: room_type_code
+        key_columns:
+          - room_type_code
+  -     unique_name: la_room_number
+        label: Room Number
+        dataset: dim_room
+        name_column: room_number
+        key_columns:
+          - room_number
+  -     unique_name: la_room_category
+        label: Room Category
+        dataset: dim_room
+        name_column: room_category
+        key_columns:
+          - room_category
+  -     unique_name: la_rate_plan_code
+        label: Rate Plan Code
+        dataset: dim_room
+        name_column: rate_plan_code
+        key_columns:
+          - rate_plan_code
+  -     unique_name: la_rate_code
+        label: Rate Code
+        dataset: dim_room
+        name_column: rate_code
+        key_columns:
+          - rate_code
+  -     unique_name: la_room_type_name
+        label: Room Type Name
+        dataset: dim_room
+        name_column: room_type_name
+        key_columns:
+          - room_type_name
+  -     unique_name: la_room_class
+        label: Room Class
+        dataset: dim_room
+        name_column: room_class
+        key_columns:
+          - room_class
+  -     unique_name: la_room_id
+        label: room_id
+        dataset: dim_room
+        name_column: room_id
+        key_columns:
+          - room_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Hotel Portfolio Hierarchy
+        label: Hotel Portfolio Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_property_id
+          -         unique_name: la_room_type_code
+          -         unique_name: la_room_number
+  -     unique_name: Revenue Management Hierarchy
+        label: Revenue Management Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_room_category
+          -         unique_name: la_rate_plan_code
+          -         unique_name: la_rate_code
+relationships:
+  -     unique_name: dim_room_dim_property_property_id
+        from:
+          dataset: dim_room
+          join_columns:
+            - property_id
+        to:
+          dimension: dim-property
+          level: la_property_id
+        type: snowflake

@@ -1,0 +1,8 @@
+unique_name: m_sms_count_min
+object_type: metric
+label: sms_count
+calculation_method: minimum
+dataset: telecom_cdr_fact
+column: sms_count
+is_hidden: false
+unrelated_dimensions_handling: empty

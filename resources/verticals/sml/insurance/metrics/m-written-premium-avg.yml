@@ -1,0 +1,8 @@
+unique_name: m_written_premium_avg
+object_type: metric
+label: written_premium
+calculation_method: average
+dataset: insurance_policy_fact
+column: written_premium
+is_hidden: false
+unrelated_dimensions_handling: empty

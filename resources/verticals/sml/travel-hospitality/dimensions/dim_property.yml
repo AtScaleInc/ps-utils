@@ -1,0 +1,76 @@
+unique_name: Dim Property
+object_type: dimension
+label: Dim Property
+type: standard
+level_attributes:
+  -     unique_name: la_geo_country
+        label: Geo Country
+        dataset: dim_property
+        name_column: geo_country
+        key_columns:
+          - geo_country
+  -     unique_name: la_geo_region
+        label: Geo Region
+        dataset: dim_property
+        name_column: geo_region
+        key_columns:
+          - geo_region
+  -     unique_name: la_geo_state
+        label: Geo State
+        dataset: dim_property
+        name_column: geo_state
+        key_columns:
+          - geo_state
+  -     unique_name: la_brand_family
+        label: Brand Family
+        dataset: dim_property
+        name_column: brand_family
+        key_columns:
+          - brand_family
+  -     unique_name: la_chain_name
+        label: Chain Name
+        dataset: dim_property
+        name_column: chain_name
+        key_columns:
+          - chain_name
+  -     unique_name: la_brand_name
+        label: Brand Name
+        dataset: dim_property
+        name_column: brand_name
+        key_columns:
+          - brand_name
+  -     unique_name: la_property_name
+        label: Property Name
+        dataset: dim_property
+        name_column: property_name
+        key_columns:
+          - property_name
+        sort_column: property_id
+  -     unique_name: la_market_name
+        label: Market Name
+        dataset: dim_property
+        name_column: market_name
+        key_columns:
+          - market_name
+  -     unique_name: la_sub_market
+        label: Sub Market
+        dataset: dim_property
+        name_column: sub_market
+        key_columns:
+          - sub_market
+  -     unique_name: la_property_id
+        label: property_id
+        dataset: dim_property
+        name_column: property_name
+        key_columns:
+          - property_id
+        is_unique_key: true
+        sort_column: property_id
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_geo_country
+          -         unique_name: la_geo_region
+          -         unique_name: la_geo_state

@@ -1,0 +1,8 @@
+unique_name: m_response_rate_min
+object_type: metric
+label: response_rate
+calculation_method: minimum
+dataset: pharma_clinical_fact
+column: response_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

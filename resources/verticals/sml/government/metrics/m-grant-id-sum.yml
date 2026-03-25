@@ -1,0 +1,8 @@
+unique_name: m_grant_id_sum
+object_type: metric
+label: grant_id
+calculation_method: sum
+dataset: government_budget_fact
+column: grant_id
+is_hidden: false
+unrelated_dimensions_handling: empty

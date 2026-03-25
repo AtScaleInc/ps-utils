@@ -1,0 +1,57 @@
+unique_name: Dim Creative
+object_type: dimension
+label: Dim Creative
+type: standard
+level_attributes:
+  -     unique_name: la_creative_name
+        label: Creative Name
+        dataset: dim_creative
+        name_column: creative_name
+        key_columns:
+          - creative_name
+        sort_column: creative_id
+  -     unique_name: la_creative_type
+        label: Creative Type
+        dataset: dim_creative
+        name_column: creative_type
+        key_columns:
+          - creative_type
+  -     unique_name: la_creative_format
+        label: Creative Format
+        dataset: dim_creative
+        name_column: creative_format
+        key_columns:
+          - creative_format
+  -     unique_name: la_ad_format
+        label: Ad Format
+        dataset: dim_creative
+        name_column: ad_format
+        key_columns:
+          - ad_format
+  -     unique_name: la_ad_size
+        label: Ad Size
+        dataset: dim_creative
+        name_column: ad_size
+        key_columns:
+          - ad_size
+  -     unique_name: la_attribution_model
+        label: Attribution Model
+        dataset: dim_creative
+        name_column: attribution_model
+        key_columns:
+          - attribution_model
+  -     unique_name: la_attribution_window
+        label: Attribution Window
+        dataset: dim_creative
+        name_column: attribution_window
+        key_columns:
+          - attribution_window
+  -     unique_name: la_creative_id
+        label: creative_id
+        dataset: dim_creative
+        name_column: creative_name
+        key_columns:
+          - creative_id
+        is_unique_key: true
+        sort_column: creative_id
+hierarchies: []

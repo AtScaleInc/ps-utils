@@ -1,0 +1,8 @@
+unique_name: m_on_time_delivery_max
+object_type: metric
+label: on_time_delivery
+calculation_method: maximum
+dataset: manufacturing_production_fact
+column: on_time_delivery
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_occ_pct_avg
+object_type: metric
+label: occ_pct
+calculation_method: average
+dataset: travel_reservation_fact
+column: occ_pct
+is_hidden: false
+unrelated_dimensions_handling: empty

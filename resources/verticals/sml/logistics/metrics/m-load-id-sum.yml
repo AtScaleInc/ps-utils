@@ -1,0 +1,8 @@
+unique_name: m_load_id_sum
+object_type: metric
+label: load_id
+calculation_method: sum
+dataset: logistics_shipment_fact
+column: load_id
+is_hidden: false
+unrelated_dimensions_handling: empty

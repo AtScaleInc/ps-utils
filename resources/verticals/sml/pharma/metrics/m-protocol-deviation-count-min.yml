@@ -1,0 +1,8 @@
+unique_name: m_protocol_deviation_count_min
+object_type: metric
+label: protocol_deviation_count
+calculation_method: minimum
+dataset: pharma_clinical_fact
+column: protocol_deviation_count
+is_hidden: false
+unrelated_dimensions_handling: empty

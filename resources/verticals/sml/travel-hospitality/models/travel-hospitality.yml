@@ -1,0 +1,107 @@
+unique_name: travel-hospitality
+object_type: model
+label: travel-hospitality
+relationships:
+  -     unique_name: travel_reservation_fact_dim-property_property_id
+        from:
+          dataset: travel_reservation_fact
+          join_columns:
+            - property_id
+        to:
+          dimension: Dim Property
+          level: la_property_id
+  -     unique_name: travel_reservation_fact_dim-room_room_id
+        from:
+          dataset: travel_reservation_fact
+          join_columns:
+            - room_id
+        to:
+          dimension: Dim Room
+          level: la_room_id
+  -     unique_name: travel_reservation_fact_dim-guest_guest_id
+        from:
+          dataset: travel_reservation_fact
+          join_columns:
+            - guest_id
+        to:
+          dimension: Dim Guest
+          level: la_guest_id
+  -     unique_name: travel_reservation_fact_dim-booking-channel_channel_id
+        from:
+          dataset: travel_reservation_fact
+          join_columns:
+            - channel_id
+        to:
+          dimension: Dim Booking Channel
+          level: la_channel_id
+  -     unique_name: travel_reservation_fact_dim-stay-date_stay_date_id
+        from:
+          dataset: travel_reservation_fact
+          join_columns:
+            - stay_date_id
+        to:
+          dimension: Dim Stay Date
+          level: la_stay_date_id
+metrics:
+  -     unique_name: m_daily_rate_avg
+  -     unique_name: m_daily_rate_min
+  -     unique_name: m_daily_rate_max
+  -     unique_name: m_room_rate_avg
+  -     unique_name: m_room_rate_min
+  -     unique_name: m_room_rate_max
+  -     unique_name: m_adr_avg
+  -     unique_name: m_adr_min
+  -     unique_name: m_adr_max
+  -     unique_name: m_average_daily_rate_avg
+  -     unique_name: m_average_daily_rate_min
+  -     unique_name: m_average_daily_rate_max
+  -     unique_name: m_revpar_avg
+  -     unique_name: m_revpar_min
+  -     unique_name: m_revpar_max
+  -     unique_name: m_occupancy_rate_avg
+  -     unique_name: m_occupancy_rate_min
+  -     unique_name: m_occupancy_rate_max
+  -     unique_name: m_occ_pct_avg
+  -     unique_name: m_occ_pct_min
+  -     unique_name: m_occ_pct_max
+  -     unique_name: m_length_of_stay_sum
+  -     unique_name: m_length_of_stay_avg
+  -     unique_name: m_length_of_stay_min
+  -     unique_name: m_length_of_stay_max
+  -     unique_name: m_num_nights_sum
+  -     unique_name: m_num_nights_avg
+  -     unique_name: m_num_nights_min
+  -     unique_name: m_num_nights_max
+  -     unique_name: m_room_nights_sum
+  -     unique_name: m_room_nights_avg
+  -     unique_name: m_room_nights_min
+  -     unique_name: m_room_nights_max
+  -     unique_name: m_load_factor_avg
+  -     unique_name: m_load_factor_min
+  -     unique_name: m_load_factor_max
+  -     unique_name: m_no_show_rate_avg
+  -     unique_name: m_no_show_rate_min
+  -     unique_name: m_no_show_rate_max
+  -     unique_name: m_cancellation_rate_avg
+  -     unique_name: m_cancellation_rate_min
+  -     unique_name: m_cancellation_rate_max
+  -     unique_name: m_room_revenue_sum
+  -     unique_name: m_room_revenue_avg
+  -     unique_name: m_room_revenue_min
+  -     unique_name: m_room_revenue_max
+  -     unique_name: m_food_beverage_revenue_sum
+  -     unique_name: m_food_beverage_revenue_avg
+  -     unique_name: m_food_beverage_revenue_min
+  -     unique_name: m_food_beverage_revenue_max
+  -     unique_name: m_total_revenue_sum
+  -     unique_name: m_total_revenue_avg
+  -     unique_name: m_total_revenue_min
+  -     unique_name: m_total_revenue_max
+  -     unique_name: m_num_guests_sum
+  -     unique_name: m_num_guests_avg
+  -     unique_name: m_num_guests_min
+  -     unique_name: m_num_guests_max
+  -     unique_name: m_points_earned_sum
+  -     unique_name: m_points_earned_avg
+  -     unique_name: m_points_earned_min
+  -     unique_name: m_points_earned_max

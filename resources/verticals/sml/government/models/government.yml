@@ -1,0 +1,96 @@
+unique_name: government
+object_type: model
+label: government
+relationships:
+  -     unique_name: government_budget_fact_dim-agency_agency_id
+        from:
+          dataset: government_budget_fact
+          join_columns:
+            - agency_id
+        to:
+          dimension: Dim Agency
+          level: la_agency_id
+  -     unique_name: government_budget_fact_dim-program_program_id
+        from:
+          dataset: government_budget_fact
+          join_columns:
+            - program_id
+        to:
+          dimension: Dim Program
+          level: la_program_id
+  -     unique_name: government_budget_fact_dim-fund_fund_id
+        from:
+          dataset: government_budget_fact
+          join_columns:
+            - fund_id
+        to:
+          dimension: Dim Fund
+          level: la_fund_id
+  -     unique_name: government_budget_fact_dim-object-class_object_class_id
+        from:
+          dataset: government_budget_fact
+          join_columns:
+            - object_class_id
+        to:
+          dimension: Dim Object Class
+          level: la_object_class_id
+  -     unique_name: government_budget_fact_dim-geography_geography_id
+        from:
+          dataset: government_budget_fact
+          join_columns:
+            - geography_id
+        to:
+          dimension: Dim Geography
+          level: la_geography_id
+  -     unique_name: government_budget_fact_dim-fiscal-calendar_fiscal_calendar_id
+        from:
+          dataset: government_budget_fact
+          join_columns:
+            - fiscal_calendar_id
+        to:
+          dimension: Dim Fiscal Calendar
+          level: la_fiscal_calendar_id
+metrics:
+  -     unique_name: m_grant_id_sum
+  -     unique_name: m_grant_id_avg
+  -     unique_name: m_grant_id_min
+  -     unique_name: m_grant_id_max
+  -     unique_name: m_budget_authority_sum
+  -     unique_name: m_budget_authority_avg
+  -     unique_name: m_budget_authority_min
+  -     unique_name: m_budget_authority_max
+  -     unique_name: m_obligation_amount_sum
+  -     unique_name: m_obligation_amount_avg
+  -     unique_name: m_obligation_amount_min
+  -     unique_name: m_obligation_amount_max
+  -     unique_name: m_outlay_amount_sum
+  -     unique_name: m_outlay_amount_avg
+  -     unique_name: m_outlay_amount_min
+  -     unique_name: m_outlay_amount_max
+  -     unique_name: m_enacted_amount_sum
+  -     unique_name: m_enacted_amount_avg
+  -     unique_name: m_enacted_amount_min
+  -     unique_name: m_enacted_amount_max
+  -     unique_name: m_apportioned_amount_sum
+  -     unique_name: m_apportioned_amount_avg
+  -     unique_name: m_apportioned_amount_min
+  -     unique_name: m_apportioned_amount_max
+  -     unique_name: m_allotted_amount_sum
+  -     unique_name: m_allotted_amount_avg
+  -     unique_name: m_allotted_amount_min
+  -     unique_name: m_allotted_amount_max
+  -     unique_name: m_expenditure_amount_sum
+  -     unique_name: m_expenditure_amount_avg
+  -     unique_name: m_expenditure_amount_min
+  -     unique_name: m_expenditure_amount_max
+  -     unique_name: m_unobligated_balance_avg
+  -     unique_name: m_unobligated_balance_min
+  -     unique_name: m_unobligated_balance_max
+  -     unique_name: m_num_awards_sum
+  -     unique_name: m_num_awards_avg
+  -     unique_name: m_num_awards_min
+  -     unique_name: m_num_awards_max
+  -     unique_name: m_num_transactions_sum
+  -     unique_name: m_num_transactions_avg
+  -     unique_name: m_num_transactions_min
+  -     unique_name: m_num_transactions_max

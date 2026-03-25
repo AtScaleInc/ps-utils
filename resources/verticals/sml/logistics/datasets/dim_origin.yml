@@ -1,0 +1,20 @@
+unique_name: dim_origin
+object_type: dataset
+label: dim_origin
+connection_id: my_connection
+table: dim_origin
+columns:
+  -     name: origin_id
+        data_type: bigint
+  -     name: origin_country
+        data_type: string
+  -     name: origin_state
+        data_type: string
+  -     name: origin_city
+        data_type: string
+  -     name: origin_zip
+        data_type: string
+  -     name: origin_port
+        data_type: string
+  -     name: origin_location
+        data_type: string

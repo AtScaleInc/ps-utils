@@ -1,0 +1,30 @@
+unique_name: dim_subscriber
+object_type: dataset
+label: dim_subscriber
+connection_id: my_connection
+table: dim_subscriber
+columns:
+  -     name: subscriber_id
+        data_type: bigint
+  -     name: msisdn
+        data_type: string
+  -     name: imsi
+        data_type: string
+  -     name: imei
+        data_type: string
+  -     name: iccid
+        data_type: string
+  -     name: sim_id
+        data_type: string
+  -     name: enterprise_account
+        data_type: string
+  -     name: billing_account
+        data_type: string
+  -     name: device_id
+        data_type: string
+  -     name: rate_plan_code
+        data_type: string
+  -     name: roaming_flag
+        data_type: boolean
+  -     name: is_roaming
+        data_type: boolean

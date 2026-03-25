@@ -1,0 +1,8 @@
+unique_name: m_price_per_sqft_avg
+object_type: metric
+label: price_per_sqft
+calculation_method: average
+dataset: real_estate_transaction_fact
+column: price_per_sqft
+is_hidden: false
+unrelated_dimensions_handling: empty

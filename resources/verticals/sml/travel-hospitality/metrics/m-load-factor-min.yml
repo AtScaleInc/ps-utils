@@ -1,0 +1,8 @@
+unique_name: m_load_factor_min
+object_type: metric
+label: load_factor
+calculation_method: minimum
+dataset: travel_reservation_fact
+column: load_factor
+is_hidden: false
+unrelated_dimensions_handling: empty

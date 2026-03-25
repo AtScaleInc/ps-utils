@@ -1,0 +1,8 @@
+unique_name: m_days_on_market_min
+object_type: metric
+label: days_on_market
+calculation_method: minimum
+dataset: real_estate_transaction_fact
+column: days_on_market
+is_hidden: false
+unrelated_dimensions_handling: empty

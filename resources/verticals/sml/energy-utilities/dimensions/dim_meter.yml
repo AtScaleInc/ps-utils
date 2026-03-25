@@ -1,0 +1,67 @@
+unique_name: Dim Meter
+object_type: dimension
+label: Dim Meter
+type: standard
+level_attributes:
+  -     unique_name: la_service_point_id
+        label: Service Point Id
+        dataset: dim_meter
+        name_column: service_point_id
+        key_columns:
+          - service_point_id
+  -     unique_name: la_meter_number
+        label: Meter Number
+        dataset: dim_meter
+        name_column: meter_number
+        key_columns:
+          - meter_number
+  -     unique_name: la_smart_meter_id
+        label: Smart Meter Id
+        dataset: dim_meter
+        name_column: smart_meter_id
+        key_columns:
+          - smart_meter_id
+  -     unique_name: la_meter_serial_number
+        label: Meter Serial Number
+        dataset: dim_meter
+        name_column: meter_serial_number
+        key_columns:
+          - meter_serial_number
+  -     unique_name: la_premise_id
+        label: Premise Id
+        dataset: dim_meter
+        name_column: premise_id
+        key_columns:
+          - premise_id
+  -     unique_name: la_utility_account
+        label: Utility Account
+        dataset: dim_meter
+        name_column: utility_account
+        key_columns:
+          - utility_account
+  -     unique_name: la_read_type
+        label: Read Type
+        dataset: dim_meter
+        name_column: read_type
+        key_columns:
+          - read_type
+  -     unique_name: la_estimated_flag
+        label: Estimated Flag
+        dataset: dim_meter
+        name_column: estimated_flag
+        key_columns:
+          - estimated_flag
+  -     unique_name: la_meter_id
+        label: meter_id
+        dataset: dim_meter
+        name_column: meter_id
+        key_columns:
+          - meter_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Grid Topology Hierarchy
+        label: Grid Topology Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_service_point_id
+          -         unique_name: la_meter_number

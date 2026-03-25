@@ -1,0 +1,8 @@
+unique_name: m_paid_loss_sum
+object_type: metric
+label: paid_loss
+calculation_method: sum
+dataset: insurance_policy_fact
+column: paid_loss
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,16 @@
+unique_name: dim_price_date
+object_type: dataset
+label: dim_price_date
+connection_id: my_connection
+table: dim_price_date
+columns:
+  -     name: price_date_id
+        data_type: bigint
+  -     name: price_date
+        data_type: date
+  -     name: price_year
+        data_type: int
+  -     name: price_month
+        data_type: int
+  -     name: price_quarter
+        data_type: string

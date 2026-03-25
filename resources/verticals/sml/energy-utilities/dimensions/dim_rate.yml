@@ -1,0 +1,49 @@
+unique_name: Dim Rate
+object_type: dimension
+label: Dim Rate
+type: standard
+level_attributes:
+  -     unique_name: la_rate_class
+        label: Rate Class
+        dataset: dim_rate
+        name_column: rate_class
+        key_columns:
+          - rate_class
+  -     unique_name: la_rate_schedule
+        label: Rate Schedule
+        dataset: dim_rate
+        name_column: rate_schedule
+        key_columns:
+          - rate_schedule
+  -     unique_name: la_tariff_code
+        label: Tariff Code
+        dataset: dim_rate
+        name_column: tariff_code
+        key_columns:
+          - tariff_code
+  -     unique_name: la_service_type
+        label: Service Type
+        dataset: dim_rate
+        name_column: service_type
+        key_columns:
+          - service_type
+  -     unique_name: la_customer_class
+        label: Customer Class
+        dataset: dim_rate
+        name_column: customer_class
+        key_columns:
+          - customer_class
+  -     unique_name: la_customer_segment
+        label: Customer Segment
+        dataset: dim_rate
+        name_column: customer_segment
+        key_columns:
+          - customer_segment
+  -     unique_name: la_rate_id
+        label: rate_id
+        dataset: dim_rate
+        name_column: rate_id
+        key_columns:
+          - rate_id
+        is_unique_key: true
+hierarchies: []

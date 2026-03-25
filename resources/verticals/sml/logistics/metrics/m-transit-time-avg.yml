@@ -1,0 +1,8 @@
+unique_name: m_transit_time_avg
+object_type: metric
+label: transit_time
+calculation_method: average
+dataset: logistics_shipment_fact
+column: transit_time
+is_hidden: false
+unrelated_dimensions_handling: empty

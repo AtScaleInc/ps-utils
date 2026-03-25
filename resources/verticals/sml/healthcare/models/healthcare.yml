@@ -1,0 +1,106 @@
+unique_name: healthcare
+object_type: model
+label: healthcare
+relationships:
+  -     unique_name: healthcare_encounter_fact_dim-facility_facility_id
+        from:
+          dataset: healthcare_encounter_fact
+          join_columns:
+            - facility_id
+        to:
+          dimension: Dim Facility
+          level: la_facility_id
+  -     unique_name: healthcare_encounter_fact_dim-diagnosis_diagnosis_id
+        from:
+          dataset: healthcare_encounter_fact
+          join_columns:
+            - diagnosis_id
+        to:
+          dimension: Dim Diagnosis
+          level: la_diagnosis_id
+  -     unique_name: healthcare_encounter_fact_dim-procedure_procedure_id
+        from:
+          dataset: healthcare_encounter_fact
+          join_columns:
+            - procedure_id
+        to:
+          dimension: Dim Procedure
+          level: la_procedure_id
+  -     unique_name: healthcare_encounter_fact_dim-provider_provider_id
+        from:
+          dataset: healthcare_encounter_fact
+          join_columns:
+            - provider_id
+        to:
+          dimension: Dim Provider
+          level: la_provider_id
+  -     unique_name: healthcare_encounter_fact_dim-payer_payer_id
+        from:
+          dataset: healthcare_encounter_fact
+          join_columns:
+            - payer_id
+        to:
+          dimension: Dim Payer
+          level: la_payer_id
+  -     unique_name: healthcare_encounter_fact_dim-service-date_service_date_id
+        from:
+          dataset: healthcare_encounter_fact
+          join_columns:
+            - service_date_id
+        to:
+          dimension: Dim Service Date
+          level: la_service_date_id
+metrics:
+  -     unique_name: m_visit_id_sum
+  -     unique_name: m_visit_id_avg
+  -     unique_name: m_visit_id_min
+  -     unique_name: m_visit_id_max
+  -     unique_name: m_claim_id_sum
+  -     unique_name: m_claim_id_avg
+  -     unique_name: m_claim_id_min
+  -     unique_name: m_claim_id_max
+  -     unique_name: m_length_of_stay_sum
+  -     unique_name: m_length_of_stay_avg
+  -     unique_name: m_length_of_stay_min
+  -     unique_name: m_length_of_stay_max
+  -     unique_name: m_los_sum
+  -     unique_name: m_los_avg
+  -     unique_name: m_los_min
+  -     unique_name: m_los_max
+  -     unique_name: m_total_charges_sum
+  -     unique_name: m_total_charges_avg
+  -     unique_name: m_total_charges_min
+  -     unique_name: m_total_charges_max
+  -     unique_name: m_total_payments_sum
+  -     unique_name: m_total_payments_avg
+  -     unique_name: m_total_payments_min
+  -     unique_name: m_total_payments_max
+  -     unique_name: m_allowed_amount_sum
+  -     unique_name: m_allowed_amount_avg
+  -     unique_name: m_allowed_amount_min
+  -     unique_name: m_allowed_amount_max
+  -     unique_name: m_paid_amount_sum
+  -     unique_name: m_paid_amount_avg
+  -     unique_name: m_paid_amount_min
+  -     unique_name: m_paid_amount_max
+  -     unique_name: m_denial_amount_sum
+  -     unique_name: m_denial_amount_avg
+  -     unique_name: m_denial_amount_min
+  -     unique_name: m_denial_amount_max
+  -     unique_name: m_pmpm_avg
+  -     unique_name: m_pmpm_min
+  -     unique_name: m_pmpm_max
+  -     unique_name: m_hcc_score_avg
+  -     unique_name: m_hcc_score_min
+  -     unique_name: m_hcc_score_max
+  -     unique_name: m_risk_score_avg
+  -     unique_name: m_risk_score_min
+  -     unique_name: m_risk_score_max
+  -     unique_name: m_er_visits_count_sum
+  -     unique_name: m_er_visits_count_avg
+  -     unique_name: m_er_visits_count_min
+  -     unique_name: m_er_visits_count_max
+  -     unique_name: m_procedure_count_sum
+  -     unique_name: m_procedure_count_avg
+  -     unique_name: m_procedure_count_min
+  -     unique_name: m_procedure_count_max

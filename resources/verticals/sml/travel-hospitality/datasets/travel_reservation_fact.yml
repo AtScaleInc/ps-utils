@@ -1,0 +1,58 @@
+unique_name: travel_reservation_fact
+object_type: dataset
+label: travel_reservation_fact
+connection_id: my_connection
+table: travel_reservation_fact
+columns:
+  -     name: reservation_id
+        data_type: bigint
+  -     name: property_id
+        data_type: bigint
+  -     name: room_id
+        data_type: bigint
+  -     name: guest_id
+        data_type: bigint
+  -     name: channel_id
+        data_type: bigint
+  -     name: stay_date_id
+        data_type: bigint
+  -     name: confirmation_number
+        data_type: string
+  -     name: pnr
+        data_type: string
+  -     name: daily_rate
+        data_type: decimal
+  -     name: room_rate
+        data_type: decimal
+  -     name: adr
+        data_type: decimal
+  -     name: average_daily_rate
+        data_type: decimal
+  -     name: revpar
+        data_type: decimal
+  -     name: occupancy_rate
+        data_type: decimal
+  -     name: occ_pct
+        data_type: decimal
+  -     name: length_of_stay
+        data_type: int
+  -     name: num_nights
+        data_type: int
+  -     name: room_nights
+        data_type: int
+  -     name: load_factor
+        data_type: decimal
+  -     name: no_show_rate
+        data_type: decimal
+  -     name: cancellation_rate
+        data_type: decimal
+  -     name: room_revenue
+        data_type: decimal
+  -     name: food_beverage_revenue
+        data_type: decimal
+  -     name: total_revenue
+        data_type: decimal
+  -     name: num_guests
+        data_type: int
+  -     name: points_earned
+        data_type: int

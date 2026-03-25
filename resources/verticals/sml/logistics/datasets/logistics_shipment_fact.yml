@@ -1,0 +1,58 @@
+unique_name: logistics_shipment_fact
+object_type: dataset
+label: logistics_shipment_fact
+connection_id: my_connection
+table: logistics_shipment_fact
+columns:
+  -     name: shipment_id
+        data_type: bigint
+  -     name: origin_id
+        data_type: bigint
+  -     name: destination_id
+        data_type: bigint
+  -     name: carrier_id
+        data_type: bigint
+  -     name: warehouse_id
+        data_type: bigint
+  -     name: ship_date_id
+        data_type: bigint
+  -     name: tracking_number
+        data_type: string
+  -     name: bol_number
+        data_type: string
+  -     name: container_id
+        data_type: string
+  -     name: container_number
+        data_type: string
+  -     name: freight_class
+        data_type: string
+  -     name: nmfc_code
+        data_type: string
+  -     name: load_id
+        data_type: bigint
+  -     name: transit_days
+        data_type: decimal
+  -     name: transit_time
+        data_type: decimal
+  -     name: freight_cost
+        data_type: decimal
+  -     name: fuel_surcharge
+        data_type: decimal
+  -     name: accessorial_charges
+        data_type: decimal
+  -     name: total_charges
+        data_type: decimal
+  -     name: weight_lbs
+        data_type: decimal
+  -     name: volume_cuft
+        data_type: decimal
+  -     name: pieces_count
+        data_type: int
+  -     name: units_shipped
+        data_type: int
+  -     name: on_time_delivery_rate
+        data_type: decimal
+  -     name: fill_rate
+        data_type: decimal
+  -     name: damage_claims_count
+        data_type: int

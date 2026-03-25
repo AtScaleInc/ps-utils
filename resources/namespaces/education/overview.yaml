@@ -1,0 +1,561 @@
+version: 1
+title: education Analysis
+description: Auto-generated analysis namespace for the education model
+worksheets:
+  gpa:
+    title: gpa
+    model: education
+    graphType: text
+    measures:
+      - m_gpa_avg
+    description: "Summary statistic: gpa"
+    format: decimal:2
+  gpa_2:
+    title: gpa
+    model: education
+    graphType: text
+    measures:
+      - m_gpa_min
+    description: "Summary statistic: gpa"
+    format: decimal:2
+  gpa_3:
+    title: gpa
+    model: education
+    graphType: text
+    measures:
+      - m_gpa_max
+    description: "Summary statistic: gpa"
+    format: decimal:2
+  grade_point_average:
+    title: grade_point_average
+    model: education
+    graphType: text
+    measures:
+      - m_grade_point_average_sum
+    description: "Summary statistic: grade_point_average"
+    format: decimal:2
+  grade_point_average_2:
+    title: grade_point_average
+    model: education
+    graphType: text
+    measures:
+      - m_grade_point_average_avg
+    description: "Summary statistic: grade_point_average"
+    format: decimal:2
+  grade_point_average_3:
+    title: grade_point_average
+    model: education
+    graphType: text
+    measures:
+      - m_grade_point_average_min
+    description: "Summary statistic: grade_point_average"
+    format: decimal:2
+  enrollment_count_by_geography_hierarchy_by_week:
+    title: enrollment_count by Geography Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Academic Calendar Hierarchy** and
+      **Geography Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: state_code
+  enrollment_count_by_district_hierarchy_by_week:
+    title: enrollment_count by District Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Academic Calendar Hierarchy** and
+      **District Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: district_name
+  enrollment_count_by_course_taxonomy_hierarchy_by_week:
+    title: enrollment_count by Course Taxonomy Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: subject_area
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Course Taxonomy Hierarchy** and
+      **Academic Calendar Hierarchy** to see how performance differs across
+      segments at each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  enrollment_count_by_course_taxonomy_hierarchy_by_day:
+    title: enrollment_count by Course Taxonomy Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Course Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: subject_area
+  enrollment_count_by_geography_hierarchy_by_week_2:
+    title: enrollment_count by Geography Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Geography Hierarchy** and **Academic
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  enrollment_count_by_geography_hierarchy_by_day:
+    title: enrollment_count by Geography Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: state_code
+  enrollment_count_by_district_hierarchy_by_week_2:
+    title: enrollment_count by District Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: district_name
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **District Hierarchy** and **Academic
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  enrollment_count_by_district_hierarchy_by_day:
+    title: enrollment_count by District Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **District Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: district_name
+  headcount_by_geography_hierarchy_by_week:
+    title: headcount by Geography Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **Academic Calendar Hierarchy** and **Geography
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: state_code
+  headcount_by_district_hierarchy_by_week:
+    title: headcount by District Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **Academic Calendar Hierarchy** and **District
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: district_name
+  headcount_by_course_taxonomy_hierarchy_by_week:
+    title: headcount by Course Taxonomy Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: subject_area
+    xAxisGranularity: week
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **Course Taxonomy Hierarchy** and **Academic
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  headcount_by_course_taxonomy_hierarchy_by_day:
+    title: headcount by Course Taxonomy Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **Course Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: subject_area
+  headcount_by_geography_hierarchy_by_week_2:
+    title: headcount by Geography Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **Geography Hierarchy** and **Academic Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: academic_year
+  headcount_by_geography_hierarchy_by_day:
+    title: headcount by Geography Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: state_code
+  headcount_by_district_hierarchy_by_week_2:
+    title: headcount by District Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: district_name
+    xAxisGranularity: week
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **District Hierarchy** and **Academic Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: academic_year
+  headcount_by_district_hierarchy_by_day:
+    title: headcount by District Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_headcount_sum
+    description: >-
+      Cross-analyse headcount by **District Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: district_name
+  absences_count_by_geography_hierarchy_by_week:
+    title: absences_count by Geography Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **Academic Calendar Hierarchy** and
+      **Geography Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: state_code
+  absences_count_by_district_hierarchy_by_week:
+    title: absences_count by District Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **Academic Calendar Hierarchy** and
+      **District Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: district_name
+  absences_count_by_course_taxonomy_hierarchy_by_week:
+    title: absences_count by Course Taxonomy Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: subject_area
+    xAxisGranularity: week
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **Course Taxonomy Hierarchy** and
+      **Academic Calendar Hierarchy** to see how performance differs across
+      segments at each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  absences_count_by_course_taxonomy_hierarchy_by_day:
+    title: absences_count by Course Taxonomy Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **Course Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: subject_area
+  absences_count_by_geography_hierarchy_by_week_2:
+    title: absences_count by Geography Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: state_code
+    xAxisGranularity: week
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **Geography Hierarchy** and **Academic
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  absences_count_by_geography_hierarchy_by_day:
+    title: absences_count by Geography Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: state_code
+  absences_count_by_district_hierarchy_by_week_2:
+    title: absences_count by District Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: district_name
+    xAxisGranularity: week
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **District Hierarchy** and **Academic
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+  absences_count_by_district_hierarchy_by_day:
+    title: absences_count by District Hierarchy by Day
+    model: education
+    graphType: line
+    xAxis: calendar_date
+    xAxisGranularity: day
+    yAxis: m_absences_count_sum
+    description: >-
+      Cross-analyse absences_count by **District Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: district_name
+  enrollment_count_by_academic_calendar_hierarchy_and_academic:
+    title: >-
+      enrollment_count by Academic Calendar Hierarchy and Academic Calendar
+      Hierarchy by Week
+    model: education
+    graphType: line
+    xAxis: course_code
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Academic Calendar Hierarchy** and
+      **Academic Calendar Hierarchy** to see how performance differs across
+      segments at each point in time — supports period-over-period comparisons.
+    colorField: academic_year
+dashboards:
+  education_dashboard:
+    title: education Analysis Dashboard
+    description: Auto-generated dashboard for education
+    size:
+      width: 1800
+      height: 13100
+      hSegments: 3
+      vSegments: 131
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: gpa
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: gpa_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: gpa_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: grade_point_average
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: grade_point_average_2
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: grade_point_average_3
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: enrollment_count_by_geography_hierarchy_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_district_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_course_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_course_taxonomy_hierarchy_by_day
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_geography_hierarchy_by_week_2
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_geography_hierarchy_by_day
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_district_hierarchy_by_week_2
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_district_hierarchy_by_day
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_district_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_course_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_course_taxonomy_hierarchy_by_day
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_geography_hierarchy_by_week_2
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_geography_hierarchy_by_day
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_district_hierarchy_by_week_2
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: headcount_by_district_hierarchy_by_day
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_geography_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_district_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_course_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_course_taxonomy_hierarchy_by_day
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_geography_hierarchy_by_week_2
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_geography_hierarchy_by_day
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_district_hierarchy_by_week_2
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: absences_count_by_district_hierarchy_by_day
+        x: 0
+        "y": 121
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_academic_calendar_hierarchy_and_academic
+        x: 0
+        "y": 126
+        colSpan: 3
+        rowSpan: 5
+        category: Trends

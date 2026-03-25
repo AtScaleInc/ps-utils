@@ -1,0 +1,8 @@
+unique_name: m_market_value_avg
+object_type: metric
+label: market_value
+calculation_method: average
+dataset: real_estate_transaction_fact
+column: market_value
+is_hidden: false
+unrelated_dimensions_handling: empty

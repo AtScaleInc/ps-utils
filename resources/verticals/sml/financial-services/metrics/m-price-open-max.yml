@@ -1,0 +1,8 @@
+unique_name: m_price_open_max
+object_type: metric
+label: price_open
+calculation_method: maximum
+dataset: financial_securities_fact
+column: price_open
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_duration_seconds_max
+object_type: metric
+label: duration_seconds
+calculation_method: maximum
+dataset: telecom_cdr_fact
+column: duration_seconds
+is_hidden: false
+unrelated_dimensions_handling: empty

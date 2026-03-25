@@ -1,0 +1,89 @@
+unique_name: Dim Job
+object_type: dimension
+label: Dim Job
+type: standard
+level_attributes:
+  -     unique_name: la_job_family_group
+        label: Job Family Group
+        dataset: dim_job
+        name_column: job_family_group
+        key_columns:
+          - job_family_group
+  -     unique_name: la_job_family
+        label: Job Family
+        dataset: dim_job
+        name_column: job_family
+        key_columns:
+          - job_family
+  -     unique_name: la_job_function
+        label: Job Function
+        dataset: dim_job
+        name_column: job_function
+        key_columns:
+          - job_function
+  -     unique_name: la_job_level
+        label: Job Level
+        dataset: dim_job
+        name_column: job_level
+        key_columns:
+          - job_level
+  -     unique_name: la_pay_grade
+        label: Pay Grade
+        dataset: dim_job
+        name_column: pay_grade
+        key_columns:
+          - pay_grade
+  -     unique_name: la_band_group
+        label: Band Group
+        dataset: dim_job
+        name_column: band_group
+        key_columns:
+          - band_group
+  -     unique_name: la_salary_band
+        label: Salary Band
+        dataset: dim_job
+        name_column: salary_band
+        key_columns:
+          - salary_band
+  -     unique_name: la_job_code
+        label: Job Code
+        dataset: dim_job
+        name_column: job_code
+        key_columns:
+          - job_code
+  -     unique_name: la_band_name
+        label: Band Name
+        dataset: dim_job
+        name_column: band_name
+        key_columns:
+          - band_name
+  -     unique_name: la_band_step
+        label: Band Step
+        dataset: dim_job
+        name_column: band_step
+        key_columns:
+          - band_step
+  -     unique_name: la_job_id
+        label: job_id
+        dataset: dim_job
+        name_column: job_title
+        key_columns:
+          - job_id
+        is_unique_key: true
+        sort_column: job_id
+hierarchies:
+  -     unique_name: Job Classification Hierarchy
+        label: Job Classification Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_job_family_group
+          -         unique_name: la_job_family
+          -         unique_name: la_job_function
+          -         unique_name: la_job_level
+          -         unique_name: la_pay_grade
+  -     unique_name: Compensation Band Hierarchy
+        label: Compensation Band Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_band_group
+          -         unique_name: la_salary_band

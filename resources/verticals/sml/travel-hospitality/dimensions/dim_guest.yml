@@ -1,0 +1,43 @@
+unique_name: Dim Guest
+object_type: dimension
+label: Dim Guest
+type: standard
+level_attributes:
+  -     unique_name: la_loyalty_id
+        label: Loyalty Id
+        dataset: dim_guest
+        name_column: loyalty_id
+        key_columns:
+          - loyalty_id
+  -     unique_name: la_loyalty_number
+        label: Loyalty Number
+        dataset: dim_guest
+        name_column: loyalty_number
+        key_columns:
+          - loyalty_number
+  -     unique_name: la_loyalty_tier
+        label: Loyalty Tier
+        dataset: dim_guest
+        name_column: loyalty_tier
+        key_columns:
+          - loyalty_tier
+  -     unique_name: la_loyalty_status
+        label: Loyalty Status
+        dataset: dim_guest
+        name_column: loyalty_status
+        key_columns:
+          - loyalty_status
+  -     unique_name: la_loyalty_program
+        label: Loyalty Program
+        dataset: dim_guest
+        name_column: loyalty_program
+        key_columns:
+          - loyalty_program
+  -     unique_name: la_guest_id
+        label: guest_id
+        dataset: dim_guest
+        name_column: guest_id
+        key_columns:
+          - guest_id
+        is_unique_key: true
+hierarchies: []

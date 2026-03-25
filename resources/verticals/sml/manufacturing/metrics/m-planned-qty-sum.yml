@@ -1,0 +1,8 @@
+unique_name: m_planned_qty_sum
+object_type: metric
+label: planned_qty
+calculation_method: sum
+dataset: manufacturing_production_fact
+column: planned_qty
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_ps_ratio_max
+object_type: metric
+label: ps_ratio
+calculation_method: maximum
+dataset: financial_securities_fact
+column: ps_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

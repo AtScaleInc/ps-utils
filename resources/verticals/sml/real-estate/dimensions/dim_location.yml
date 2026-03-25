@@ -1,0 +1,89 @@
+unique_name: Dim Location
+object_type: dimension
+label: Dim Location
+type: standard
+level_attributes:
+  -     unique_name: la_mls_region
+        label: Mls Region
+        dataset: dim_location
+        name_column: mls_region
+        key_columns:
+          - mls_region
+  -     unique_name: la_state_name
+        label: State Name
+        dataset: dim_location
+        name_column: state_name
+        key_columns:
+          - state_name
+  -     unique_name: la_city_name
+        label: City Name
+        dataset: dim_location
+        name_column: city_name
+        key_columns:
+          - city_name
+  -     unique_name: la_county_name
+        label: County Name
+        dataset: dim_location
+        name_column: county_name
+        key_columns:
+          - county_name
+  -     unique_name: la_zip_code
+        label: Zip Code
+        dataset: dim_location
+        name_column: zip_code
+        key_columns:
+          - zip_code
+  -     unique_name: la_street_name
+        label: Street Name
+        dataset: dim_location
+        name_column: street_name
+        key_columns:
+          - street_name
+  -     unique_name: la_neighborhood_name
+        label: Neighborhood Name
+        dataset: dim_location
+        name_column: neighborhood_name
+        key_columns:
+          - neighborhood_name
+  -     unique_name: la_subdivision_name
+        label: Subdivision Name
+        dataset: dim_location
+        name_column: subdivision_name
+        key_columns:
+          - subdivision_name
+  -     unique_name: la_mls_area
+        label: Mls Area
+        dataset: dim_location
+        name_column: mls_area
+        key_columns:
+          - mls_area
+  -     unique_name: la_market_name
+        label: Market Name
+        dataset: dim_location
+        name_column: market_name
+        key_columns:
+          - market_name
+  -     unique_name: la_sub_market
+        label: Sub Market
+        dataset: dim_location
+        name_column: sub_market
+        key_columns:
+          - sub_market
+  -     unique_name: la_location_id
+        label: location_id
+        dataset: dim_location
+        name_column: location_id
+        key_columns:
+          - location_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_mls_region
+          -         unique_name: la_state_name
+          -         unique_name: la_city_name
+          -         unique_name: la_county_name
+          -         unique_name: la_zip_code
+          -         unique_name: la_street_name

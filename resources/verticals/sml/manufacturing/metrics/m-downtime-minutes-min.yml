@@ -1,0 +1,8 @@
+unique_name: m_downtime_minutes_min
+object_type: metric
+label: downtime_minutes
+calculation_method: minimum
+dataset: manufacturing_production_fact
+column: downtime_minutes
+is_hidden: false
+unrelated_dimensions_handling: empty

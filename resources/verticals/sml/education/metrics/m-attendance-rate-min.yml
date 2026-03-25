@@ -1,0 +1,8 @@
+unique_name: m_attendance_rate_min
+object_type: metric
+label: attendance_rate
+calculation_method: minimum
+dataset: education_enrollment_fact
+column: attendance_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

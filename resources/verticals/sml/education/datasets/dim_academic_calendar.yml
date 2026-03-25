@@ -1,0 +1,22 @@
+unique_name: dim_academic_calendar
+object_type: dataset
+label: dim_academic_calendar
+connection_id: my_connection
+table: dim_academic_calendar
+columns:
+  -     name: academic_calendar_id
+        data_type: bigint
+  -     name: academic_year
+        data_type: string
+  -     name: school_year
+        data_type: string
+  -     name: semester_name
+        data_type: string
+  -     name: term_name
+        data_type: string
+  -     name: week_number
+        data_type: int
+  -     name: calendar_date
+        data_type: date
+  -     name: enrollment_date
+        data_type: date

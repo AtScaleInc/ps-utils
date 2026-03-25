@@ -1,0 +1,8 @@
+unique_name: m_saidi_max
+object_type: metric
+label: saidi
+calculation_method: maximum
+dataset: energy_interval_fact
+column: saidi
+is_hidden: false
+unrelated_dimensions_handling: empty

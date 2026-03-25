@@ -1,0 +1,16 @@
+unique_name: dim_agency
+object_type: dataset
+label: dim_agency
+connection_id: my_connection
+table: dim_agency
+columns:
+  -     name: agency_id
+        data_type: bigint
+  -     name: agency_code
+        data_type: string
+  -     name: agency_name
+        data_type: string
+  -     name: bureau_code
+        data_type: string
+  -     name: bureau_name
+        data_type: string

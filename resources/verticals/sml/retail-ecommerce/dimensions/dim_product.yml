@@ -1,0 +1,99 @@
+unique_name: Dim Product
+object_type: dimension
+label: Dim Product
+type: standard
+level_attributes:
+  -     unique_name: la_department_name
+        label: Department Name
+        dataset: dim_product
+        name_column: department_name
+        key_columns:
+          - department_name
+  -     unique_name: la_sub_category_name
+        label: Sub Category Name
+        dataset: dim_product
+        name_column: sub_category_name
+        key_columns:
+          - sub_category_name
+  -     unique_name: la_product_line
+        label: Product Line
+        dataset: dim_product
+        name_column: product_line
+        key_columns:
+          - product_line
+  -     unique_name: la_category_name
+        label: Category Name
+        dataset: dim_product
+        name_column: category_name
+        key_columns:
+          - category_name
+  -     unique_name: la_sku
+        label: Sku
+        dataset: dim_product
+        name_column: sku
+        key_columns:
+          - sku
+  -     unique_name: la_sku_code
+        label: Sku Code
+        dataset: dim_product
+        name_column: sku_code
+        key_columns:
+          - sku_code
+  -     unique_name: la_upc_code
+        label: Upc Code
+        dataset: dim_product
+        name_column: upc_code
+        key_columns:
+          - upc_code
+  -     unique_name: la_ean_code
+        label: Ean Code
+        dataset: dim_product
+        name_column: ean_code
+        key_columns:
+          - ean_code
+  -     unique_name: la_style_code
+        label: Style Code
+        dataset: dim_product
+        name_column: style_code
+        key_columns:
+          - style_code
+  -     unique_name: la_item_number
+        label: Item Number
+        dataset: dim_product
+        name_column: item_number
+        key_columns:
+          - item_number
+  -     unique_name: la_vendor_name
+        label: Vendor Name
+        dataset: dim_product
+        name_column: vendor_name
+        key_columns:
+          - vendor_name
+  -     unique_name: la_brand_name
+        label: Brand Name
+        dataset: dim_product
+        name_column: brand_name
+        key_columns:
+          - brand_name
+  -     unique_name: la_product_id
+        label: product_id
+        dataset: dim_product
+        name_column: product_id
+        key_columns:
+          - product_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Product Hierarchy
+        label: Product Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_department_name
+          -         unique_name: la_sub_category_name
+          -         unique_name: la_product_line
+          -         unique_name: la_product_line
+  -     unique_name: Product Taxonomy Hierarchy
+        label: Product Taxonomy Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_category_name
+          -         unique_name: la_sku

@@ -1,0 +1,74 @@
+unique_name: Dim Policy
+object_type: dimension
+label: Dim Policy
+type: standard
+level_attributes:
+  -     unique_name: la_coverage_type
+        label: Coverage Type
+        dataset: dim_policy
+        name_column: coverage_type
+        key_columns:
+          - coverage_type
+  -     unique_name: la_policy_status
+        label: Policy Status
+        dataset: dim_policy
+        name_column: policy_status
+        key_columns:
+          - policy_status
+  -     unique_name: la_policy_term
+        label: Policy Term
+        dataset: dim_policy
+        name_column: policy_term
+        key_columns:
+          - policy_term
+  -     unique_name: la_policy_number
+        label: Policy Number
+        dataset: dim_policy
+        name_column: policy_number
+        key_columns:
+          - policy_number
+  -     unique_name: la_coverage_code
+        label: Coverage Code
+        dataset: dim_policy
+        name_column: coverage_code
+        key_columns:
+          - coverage_code
+  -     unique_name: la_policy_duration
+        label: Policy Duration
+        dataset: dim_policy
+        name_column: policy_duration
+        key_columns:
+          - policy_duration
+  -     unique_name: la_naic_code
+        label: Naic Code
+        dataset: dim_policy
+        name_column: naic_code
+        key_columns:
+          - naic_code
+  -     unique_name: la_carrier_code
+        label: Carrier Code
+        dataset: dim_policy
+        name_column: carrier_code
+        key_columns:
+          - carrier_code
+  -     unique_name: la_carrier_id
+        label: Carrier Id
+        dataset: dim_policy
+        name_column: carrier_id
+        key_columns:
+          - carrier_id
+  -     unique_name: la_policy_dim_id
+        label: policy_dim_id
+        dataset: dim_policy
+        name_column: policy_dim_id
+        key_columns:
+          - policy_dim_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Policy Lifecycle Hierarchy
+        label: Policy Lifecycle Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_coverage_type
+          -         unique_name: la_policy_status
+          -         unique_name: la_policy_term

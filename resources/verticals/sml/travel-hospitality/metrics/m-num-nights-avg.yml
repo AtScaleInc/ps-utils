@@ -1,0 +1,8 @@
+unique_name: m_num_nights_avg
+object_type: metric
+label: num_nights
+calculation_method: average
+dataset: travel_reservation_fact
+column: num_nights
+is_hidden: false
+unrelated_dimensions_handling: empty

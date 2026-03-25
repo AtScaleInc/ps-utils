@@ -1,0 +1,20 @@
+unique_name: dim_payer
+object_type: dataset
+label: dim_payer
+connection_id: my_connection
+table: dim_payer
+columns:
+  -     name: payer_id
+        data_type: bigint
+  -     name: payer_type
+        data_type: string
+  -     name: payer_name
+        data_type: string
+  -     name: plan_name
+        data_type: string
+  -     name: member_id
+        data_type: bigint
+  -     name: beneficiary_id
+        data_type: bigint
+  -     name: subscriber_id
+        data_type: bigint

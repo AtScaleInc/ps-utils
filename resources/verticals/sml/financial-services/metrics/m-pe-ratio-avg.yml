@@ -1,0 +1,8 @@
+unique_name: m_pe_ratio_avg
+object_type: metric
+label: pe_ratio
+calculation_method: average
+dataset: financial_securities_fact
+column: pe_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

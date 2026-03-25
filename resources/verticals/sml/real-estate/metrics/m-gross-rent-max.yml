@@ -1,0 +1,8 @@
+unique_name: m_gross_rent_max
+object_type: metric
+label: gross_rent
+calculation_method: maximum
+dataset: real_estate_transaction_fact
+column: gross_rent
+is_hidden: false
+unrelated_dimensions_handling: empty

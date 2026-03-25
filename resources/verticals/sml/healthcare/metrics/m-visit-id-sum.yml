@@ -1,0 +1,8 @@
+unique_name: m_visit_id_sum
+object_type: metric
+label: visit_id
+calculation_method: sum
+dataset: healthcare_encounter_fact
+column: visit_id
+is_hidden: false
+unrelated_dimensions_handling: empty

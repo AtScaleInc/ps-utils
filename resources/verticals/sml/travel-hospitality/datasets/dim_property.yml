@@ -1,0 +1,26 @@
+unique_name: dim_property
+object_type: dataset
+label: dim_property
+connection_id: my_connection
+table: dim_property
+columns:
+  -     name: property_id
+        data_type: bigint
+  -     name: brand_family
+        data_type: string
+  -     name: chain_name
+        data_type: string
+  -     name: brand_name
+        data_type: string
+  -     name: property_name
+        data_type: string
+  -     name: geo_region
+        data_type: string
+  -     name: geo_country
+        data_type: string
+  -     name: geo_state
+        data_type: string
+  -     name: market_name
+        data_type: string
+  -     name: sub_market
+        data_type: string

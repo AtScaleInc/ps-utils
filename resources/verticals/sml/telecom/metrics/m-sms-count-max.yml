@@ -1,0 +1,8 @@
+unique_name: m_sms_count_max
+object_type: metric
+label: sms_count
+calculation_method: maximum
+dataset: telecom_cdr_fact
+column: sms_count
+is_hidden: false
+unrelated_dimensions_handling: empty

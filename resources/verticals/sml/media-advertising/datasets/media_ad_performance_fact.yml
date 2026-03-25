@@ -1,0 +1,56 @@
+unique_name: media_ad_performance_fact
+object_type: dataset
+label: media_ad_performance_fact
+connection_id: my_connection
+table: media_ad_performance_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: campaign_id
+        data_type: bigint
+  -     name: creative_id
+        data_type: bigint
+  -     name: placement_id
+        data_type: bigint
+  -     name: audience_id
+        data_type: bigint
+  -     name: report_date_id
+        data_type: bigint
+  -     name: impressions
+        data_type: bigint
+  -     name: clicks
+        data_type: bigint
+  -     name: ctr
+        data_type: decimal
+  -     name: cpm
+        data_type: decimal
+  -     name: cpc
+        data_type: decimal
+  -     name: cpa
+        data_type: decimal
+  -     name: roas
+        data_type: decimal
+  -     name: spend
+        data_type: decimal
+  -     name: media_cost
+        data_type: decimal
+  -     name: data_cost
+        data_type: decimal
+  -     name: revenue
+        data_type: decimal
+  -     name: conversions_count
+        data_type: int
+  -     name: conversion_value
+        data_type: decimal
+  -     name: video_views
+        data_type: bigint
+  -     name: video_completions
+        data_type: bigint
+  -     name: video_25_pct
+        data_type: bigint
+  -     name: reach
+        data_type: bigint
+  -     name: frequency
+        data_type: decimal
+  -     name: engagement_count
+        data_type: bigint

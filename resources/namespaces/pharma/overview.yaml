@@ -1,0 +1,554 @@
+version: 1
+title: pharma Analysis
+description: Auto-generated analysis namespace for the pharma model
+worksheets:
+  adverse_event_id:
+    title: adverse_event_id
+    model: pharma
+    graphType: text
+    measures:
+      - m_adverse_event_id_sum
+    description: "Summary statistic: adverse_event_id"
+    format: integer
+  adverse_event_id_2:
+    title: adverse_event_id
+    model: pharma
+    graphType: text
+    measures:
+      - m_adverse_event_id_avg
+    description: "Summary statistic: adverse_event_id"
+    format: integer
+  adverse_event_id_3:
+    title: adverse_event_id
+    model: pharma
+    graphType: text
+    measures:
+      - m_adverse_event_id_min
+    description: "Summary statistic: adverse_event_id"
+    format: integer
+  adverse_event_id_4:
+    title: adverse_event_id
+    model: pharma
+    graphType: text
+    measures:
+      - m_adverse_event_id_max
+    description: "Summary statistic: adverse_event_id"
+    format: integer
+  dosage:
+    title: dosage
+    model: pharma
+    graphType: text
+    measures:
+      - m_dosage_sum
+    description: "Summary statistic: dosage"
+    format: decimal:2
+  dosage_2:
+    title: dosage
+    model: pharma
+    graphType: text
+    measures:
+      - m_dosage_avg
+    description: "Summary statistic: dosage"
+    format: decimal:2
+  dose_amount_by_week:
+    title: dose_amount by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_dose_amount_sum
+    description: >-
+      Track how dose_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  dose_amount_by_compound_taxonomy_hierarchy_by_week:
+    title: dose_amount by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_dose_amount_sum
+    description: >-
+      Cross-analyse dose_amount by **Compound Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  enrollment_count_by_compound_taxonomy_hierarchy_by_week:
+    title: enrollment_count by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Compound Taxonomy Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: study_year
+  subject_count_by_compound_taxonomy_hierarchy_by_week:
+    title: subject_count by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_subject_count_sum
+    description: >-
+      Cross-analyse subject_count by **Compound Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  patient_count_by_compound_taxonomy_hierarchy_by_week:
+    title: patient_count by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_patient_count_sum
+    description: >-
+      Cross-analyse patient_count by **Compound Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  drop_out_count_by_compound_taxonomy_hierarchy_by_week:
+    title: drop_out_count by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_drop_out_count_sum
+    description: >-
+      Cross-analyse drop_out_count by **Compound Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  serious_ae_count_by_compound_taxonomy_hierarchy_by_week:
+    title: serious_ae_count by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_serious_ae_count_sum
+    description: >-
+      Cross-analyse serious_ae_count by **Compound Taxonomy Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: study_year
+  protocol_deviation_count_by_compound_taxonomy_hierarchy_by_w:
+    title: protocol_deviation_count by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_protocol_deviation_count_sum
+    description: >-
+      Cross-analyse protocol_deviation_count by **Compound Taxonomy Hierarchy**
+      and **Date Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: study_year
+  dose_amount_by_clinical_phase_hierarchy_by_week:
+    title: dose_amount by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_dose_amount_sum
+    description: >-
+      Cross-analyse dose_amount by **Clinical Phase Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  enrollment_count_by_clinical_phase_hierarchy_by_week:
+    title: enrollment_count by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Cross-analyse enrollment_count by **Clinical Phase Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  subject_count_by_clinical_phase_hierarchy_by_week:
+    title: subject_count by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_subject_count_sum
+    description: >-
+      Cross-analyse subject_count by **Clinical Phase Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  patient_count_by_clinical_phase_hierarchy_by_week:
+    title: patient_count by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_patient_count_sum
+    description: >-
+      Cross-analyse patient_count by **Clinical Phase Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  drop_out_count_by_clinical_phase_hierarchy_by_week:
+    title: drop_out_count by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_drop_out_count_sum
+    description: >-
+      Cross-analyse drop_out_count by **Clinical Phase Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  serious_ae_count_by_clinical_phase_hierarchy_by_week:
+    title: serious_ae_count by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_serious_ae_count_sum
+    description: >-
+      Cross-analyse serious_ae_count by **Clinical Phase Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  protocol_deviation_count_by_clinical_phase_hierarchy_by_week:
+    title: protocol_deviation_count by Clinical Phase Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: study_type
+    xAxisGranularity: week
+    yAxis: m_protocol_deviation_count_sum
+    description: >-
+      Cross-analyse protocol_deviation_count by **Clinical Phase Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: study_year
+  adverse_event_rate_by_compound_taxonomy_hierarchy_by_week:
+    title: adverse_event_rate by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_adverse_event_rate_avg
+    description: >-
+      Cross-analyse adverse_event_rate by **Compound Taxonomy Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: study_year
+  completion_rate_by_compound_taxonomy_hierarchy_by_week:
+    title: completion_rate by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_completion_rate_avg
+    description: >-
+      Cross-analyse completion_rate by **Compound Taxonomy Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: study_year
+  response_rate_by_compound_taxonomy_hierarchy_by_week:
+    title: response_rate by Compound Taxonomy Hierarchy by Week
+    model: pharma
+    graphType: line
+    xAxis: therapeutic_area
+    xAxisGranularity: week
+    yAxis: m_response_rate_avg
+    description: >-
+      Cross-analyse response_rate by **Compound Taxonomy Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: study_year
+  enrollment_count_by_week:
+    title: enrollment_count by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_enrollment_count_sum
+    description: >-
+      Track how enrollment_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  subject_count_by_week:
+    title: subject_count by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_subject_count_sum
+    description: >-
+      Track how subject_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  patient_count_by_week:
+    title: patient_count by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_patient_count_sum
+    description: >-
+      Track how patient_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  drop_out_count_by_week:
+    title: drop_out_count by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_drop_out_count_sum
+    description: >-
+      Track how drop_out_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  serious_ae_count_by_week:
+    title: serious_ae_count by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_serious_ae_count_sum
+    description: >-
+      Track how serious_ae_count changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  protocol_deviation_count_by_week:
+    title: protocol_deviation_count by Week
+    model: pharma
+    graphType: line
+    xAxis: study_year
+    xAxisGranularity: week
+    yAxis: m_protocol_deviation_count_sum
+    description: >-
+      Track how protocol_deviation_count changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  dose_amount_by_compound_taxonomy_hierarchy:
+    title: dose_amount by Compound Taxonomy Hierarchy
+    model: pharma
+    graphType: bar
+    xAxis: m_dose_amount_sum
+    yAxis: therapeutic_area
+    description: >-
+      Decompose dose_amount across **Compound Taxonomy Hierarchy** to identify
+      top and bottom contributors and reveal performance disparities.
+dashboards:
+  pharma_dashboard:
+    title: pharma Analysis Dashboard
+    description: Auto-generated dashboard for pharma
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 126
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: adverse_event_id
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: adverse_event_id_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: adverse_event_id_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: adverse_event_id_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: dosage
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: dosage_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: dose_amount_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: dose_amount_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: subject_count_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: patient_count_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: drop_out_count_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: serious_ae_count_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: protocol_deviation_count_by_compound_taxonomy_hierarchy_by_w
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: dose_amount_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: subject_count_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: patient_count_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: drop_out_count_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: serious_ae_count_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: protocol_deviation_count_by_clinical_phase_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: adverse_event_rate_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: completion_rate_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: response_rate_by_compound_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: enrollment_count_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: subject_count_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: patient_count_by_week
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: drop_out_count_by_week
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: serious_ae_count_by_week
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: protocol_deviation_count_by_week
+        x: 0
+        "y": 121
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: dose_amount_by_compound_taxonomy_hierarchy
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

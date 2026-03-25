@@ -1,0 +1,8 @@
+unique_name: m_volume_cuft_avg
+object_type: metric
+label: volume_cuft
+calculation_method: average
+dataset: logistics_shipment_fact
+column: volume_cuft
+is_hidden: false
+unrelated_dimensions_handling: empty

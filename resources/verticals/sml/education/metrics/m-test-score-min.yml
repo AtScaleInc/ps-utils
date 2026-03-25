@@ -1,0 +1,8 @@
+unique_name: m_test_score_min
+object_type: metric
+label: test_score
+calculation_method: minimum
+dataset: education_enrollment_fact
+column: test_score
+is_hidden: false
+unrelated_dimensions_handling: empty

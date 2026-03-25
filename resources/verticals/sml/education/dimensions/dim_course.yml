@@ -1,0 +1,96 @@
+unique_name: Dim Course
+object_type: dimension
+label: Dim Course
+type: standard
+level_attributes:
+  -     unique_name: la_course_code
+        label: Course Code
+        dataset: dim_course
+        name_column: course_code
+        key_columns:
+          - course_code
+  -     unique_name: la_section_id
+        label: Section Id
+        dataset: dim_course
+        name_column: section_name
+        key_columns:
+          - section_id
+        sort_column: section_id
+  -     unique_name: la_subject_area
+        label: Subject Area
+        dataset: dim_course
+        name_column: subject_area
+        key_columns:
+          - subject_area
+  -     unique_name: la_course_name
+        label: Course Name
+        dataset: dim_course
+        name_column: course_name
+        key_columns:
+          - course_name
+        sort_column: course_id
+  -     unique_name: la_class_id
+        label: Class Id
+        dataset: dim_course
+        name_column: class_id
+        key_columns:
+          - class_id
+  -     unique_name: la_credit_hours
+        label: Credit Hours
+        dataset: dim_course
+        name_column: credit_hours
+        key_columns:
+          - credit_hours
+  -     unique_name: la_section_name
+        label: Section Name
+        dataset: dim_course
+        name_column: section_name
+        key_columns:
+          - section_name
+        sort_column: section_id
+  -     unique_name: la_department_name
+        label: Department Name
+        dataset: dim_course
+        name_column: department_name
+        key_columns:
+          - department_name
+  -     unique_name: la_instructor_id
+        label: Instructor Id
+        dataset: dim_course
+        name_column: instructor_id
+        key_columns:
+          - instructor_id
+  -     unique_name: la_teacher_id
+        label: Teacher Id
+        dataset: dim_course
+        name_column: teacher_id
+        key_columns:
+          - teacher_id
+  -     unique_name: la_faculty_id
+        label: Faculty Id
+        dataset: dim_course
+        name_column: faculty_id
+        key_columns:
+          - faculty_id
+  -     unique_name: la_course_id
+        label: course_id
+        dataset: dim_course
+        name_column: course_name
+        key_columns:
+          - course_id
+        is_unique_key: true
+        sort_column: course_id
+hierarchies:
+  -     unique_name: Academic Calendar Hierarchy
+        label: Academic Calendar Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_course_code
+          -         unique_name: la_section_id
+  -     unique_name: Course Taxonomy Hierarchy
+        label: Course Taxonomy Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_subject_area
+          -         unique_name: la_course_name
+          -         unique_name: la_class_id

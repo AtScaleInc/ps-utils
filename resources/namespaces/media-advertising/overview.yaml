@@ -1,0 +1,567 @@
+version: 1
+title: media-advertising Analysis
+description: Auto-generated analysis namespace for the media-advertising model
+worksheets:
+  impressions:
+    title: impressions
+    model: media-advertising
+    graphType: text
+    measures:
+      - m_impressions_sum
+    description: "Summary statistic: impressions"
+    format: integer
+  impressions_2:
+    title: impressions
+    model: media-advertising
+    graphType: text
+    measures:
+      - m_impressions_avg
+    description: "Summary statistic: impressions"
+    format: integer
+  impressions_3:
+    title: impressions
+    model: media-advertising
+    graphType: text
+    measures:
+      - m_impressions_min
+    description: "Summary statistic: impressions"
+    format: integer
+  impressions_4:
+    title: impressions
+    model: media-advertising
+    graphType: text
+    measures:
+      - m_impressions_max
+    description: "Summary statistic: impressions"
+    format: integer
+  clicks:
+    title: clicks
+    model: media-advertising
+    graphType: text
+    measures:
+      - m_clicks_sum
+    description: "Summary statistic: clicks"
+    format: integer
+  clicks_2:
+    title: clicks
+    model: media-advertising
+    graphType: text
+    measures:
+      - m_clicks_avg
+    description: "Summary statistic: clicks"
+    format: integer
+  spend_by_week:
+    title: spend by Week
+    model: media-advertising
+    graphType: line
+    xAxis: report_year
+    xAxisGranularity: week
+    yAxis: m_spend_sum
+    description: >-
+      Track how spend changes over time using the **Date Hierarchy** hierarchy.
+      Useful for identifying seasonality, growth trends, and forecasting.
+  spend_by_campaign_hierarchy_by_week:
+    title: spend by Campaign Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: advertiser_name
+    xAxisGranularity: week
+    yAxis: m_spend_sum
+    description: >-
+      Cross-analyse spend by **Campaign Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  spend_by_media_buy_hierarchy_by_week:
+    title: spend by Media Buy Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: agency_name
+    xAxisGranularity: week
+    yAxis: m_spend_sum
+    description: >-
+      Cross-analyse spend by **Media Buy Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  spend_by_geography_hierarchy_by_week:
+    title: spend by Geography Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: country_name
+    xAxisGranularity: week
+    yAxis: m_spend_sum
+    description: >-
+      Cross-analyse spend by **Geography Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  media_cost_by_week:
+    title: media_cost by Week
+    model: media-advertising
+    graphType: line
+    xAxis: report_year
+    xAxisGranularity: week
+    yAxis: m_media_cost_sum
+    description: >-
+      Track how media_cost changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  media_cost_by_campaign_hierarchy_by_week:
+    title: media_cost by Campaign Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: advertiser_name
+    xAxisGranularity: week
+    yAxis: m_media_cost_sum
+    description: >-
+      Cross-analyse media_cost by **Campaign Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  media_cost_by_media_buy_hierarchy_by_week:
+    title: media_cost by Media Buy Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: agency_name
+    xAxisGranularity: week
+    yAxis: m_media_cost_sum
+    description: >-
+      Cross-analyse media_cost by **Media Buy Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  media_cost_by_geography_hierarchy_by_week:
+    title: media_cost by Geography Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: country_name
+    xAxisGranularity: week
+    yAxis: m_media_cost_sum
+    description: >-
+      Cross-analyse media_cost by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  data_cost_by_week:
+    title: data_cost by Week
+    model: media-advertising
+    graphType: line
+    xAxis: report_year
+    xAxisGranularity: week
+    yAxis: m_data_cost_sum
+    description: >-
+      Track how data_cost changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  data_cost_by_campaign_hierarchy_by_week:
+    title: data_cost by Campaign Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: advertiser_name
+    xAxisGranularity: week
+    yAxis: m_data_cost_sum
+    description: >-
+      Cross-analyse data_cost by **Campaign Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  data_cost_by_media_buy_hierarchy_by_week:
+    title: data_cost by Media Buy Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: agency_name
+    xAxisGranularity: week
+    yAxis: m_data_cost_sum
+    description: >-
+      Cross-analyse data_cost by **Media Buy Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  data_cost_by_geography_hierarchy_by_week:
+    title: data_cost by Geography Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: country_name
+    xAxisGranularity: week
+    yAxis: m_data_cost_sum
+    description: >-
+      Cross-analyse data_cost by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  revenue_by_week:
+    title: revenue by Week
+    model: media-advertising
+    graphType: line
+    xAxis: report_year
+    xAxisGranularity: week
+    yAxis: m_revenue_sum
+    description: >-
+      Track how revenue changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  revenue_by_campaign_hierarchy_by_week:
+    title: revenue by Campaign Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: advertiser_name
+    xAxisGranularity: week
+    yAxis: m_revenue_sum
+    description: >-
+      Cross-analyse revenue by **Campaign Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  revenue_by_media_buy_hierarchy_by_week:
+    title: revenue by Media Buy Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: agency_name
+    xAxisGranularity: week
+    yAxis: m_revenue_sum
+    description: >-
+      Cross-analyse revenue by **Media Buy Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  revenue_by_geography_hierarchy_by_week:
+    title: revenue by Geography Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: country_name
+    xAxisGranularity: week
+    yAxis: m_revenue_sum
+    description: >-
+      Cross-analyse revenue by **Geography Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: report_year
+  conversions_count_by_campaign_hierarchy_by_week:
+    title: conversions_count by Campaign Hierarchy by Week
+    model: media-advertising
+    graphType: line
+    xAxis: advertiser_name
+    xAxisGranularity: week
+    yAxis: m_conversions_count_sum
+    description: >-
+      Cross-analyse conversions_count by **Campaign Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: report_year
+  spend_by_campaign_hierarchy_and_geography_hierarchy:
+    title: spend by Campaign Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_spend_sum
+    yAxis: advertiser_name
+    description: >-
+      Rank members of **Campaign Hierarchy** and **Geography Hierarchy** by
+      their spend to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  spend_by_media_buy_hierarchy_and_geography_hierarchy:
+    title: spend by Media Buy Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_spend_sum
+    yAxis: agency_name
+    description: >-
+      Rank members of **Media Buy Hierarchy** and **Geography Hierarchy** by
+      their spend to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  media_cost_by_campaign_hierarchy_and_geography_hierarchy:
+    title: media_cost by Campaign Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_media_cost_sum
+    yAxis: advertiser_name
+    description: >-
+      Rank members of **Campaign Hierarchy** and **Geography Hierarchy** by
+      their media_cost to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  media_cost_by_media_buy_hierarchy_and_geography_hierarchy:
+    title: media_cost by Media Buy Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_media_cost_sum
+    yAxis: agency_name
+    description: >-
+      Rank members of **Media Buy Hierarchy** and **Geography Hierarchy** by
+      their media_cost to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  data_cost_by_campaign_hierarchy_and_geography_hierarchy:
+    title: data_cost by Campaign Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_data_cost_sum
+    yAxis: advertiser_name
+    description: >-
+      Rank members of **Campaign Hierarchy** and **Geography Hierarchy** by
+      their data_cost to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  data_cost_by_media_buy_hierarchy_and_geography_hierarchy:
+    title: data_cost by Media Buy Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_data_cost_sum
+    yAxis: agency_name
+    description: >-
+      Rank members of **Media Buy Hierarchy** and **Geography Hierarchy** by
+      their data_cost to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  revenue_by_campaign_hierarchy_and_geography_hierarchy:
+    title: revenue by Campaign Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_revenue_sum
+    yAxis: advertiser_name
+    description: >-
+      Rank members of **Campaign Hierarchy** and **Geography Hierarchy** by
+      their revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+  revenue_by_media_buy_hierarchy_and_geography_hierarchy:
+    title: revenue by Media Buy Hierarchy and Geography Hierarchy
+    model: media-advertising
+    graphType: bar
+    xAxis: m_revenue_sum
+    yAxis: agency_name
+    description: >-
+      Rank members of **Media Buy Hierarchy** and **Geography Hierarchy** by
+      their revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_name
+dashboards:
+  mediaadvertising_dashboard:
+    title: media-advertising Analysis Dashboard
+    description: Auto-generated dashboard for media-advertising
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: impressions
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: impressions_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: impressions_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: impressions_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: clicks
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: clicks_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: spend_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: spend_by_campaign_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: spend_by_media_buy_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: spend_by_geography_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: media_cost_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: media_cost_by_campaign_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: media_cost_by_media_buy_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: media_cost_by_geography_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_cost_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_cost_by_campaign_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_cost_by_media_buy_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_cost_by_geography_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_by_campaign_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_by_media_buy_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_by_geography_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: conversions_count_by_campaign_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: spend_by_campaign_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 92
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: spend_by_media_buy_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 97
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: media_cost_by_campaign_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 102
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: media_cost_by_media_buy_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 107
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_cost_by_campaign_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_cost_by_media_buy_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: revenue_by_campaign_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: revenue_by_media_buy_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

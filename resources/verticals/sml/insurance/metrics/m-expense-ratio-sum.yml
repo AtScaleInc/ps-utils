@@ -1,0 +1,8 @@
+unique_name: m_expense_ratio_sum
+object_type: metric
+label: expense_ratio
+calculation_method: sum
+dataset: insurance_policy_fact
+column: expense_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty
