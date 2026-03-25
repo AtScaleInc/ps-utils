@@ -1,8 +1,7 @@
 ---
 version: 1
-title: Telemetry Dashboard (Tableau Template)
-description: Template for building a Tableau dashboard mirroring the app's KPIs and
-  visualizations.
+title: Retail Dashboard
+description: Template for building a retail dashboard with KPIs and visualizations.
 
 # -- Project Specific
 # connections.yaml
@@ -81,27 +80,25 @@ worksheets:
 
 dashboards:
   # ============================================================================
-  # COMPREHENSIVE TELEMETRY DASHBOARD
+  # COMPREHENSIVE RETAIL DASHBOARD
   # Layout: Section headers (1 row each) followed by worksheet tiles
   #
-  # Grid: 3 columns x 49 rows (100px per segment)
+  # Grid: 2 columns x 18 rows (100px per segment)
   # Sections:
   #   y=0       → "Summary Statistics" header
-  #   y=1–4     → Summary Statistics tiles (2 rows × 3 cols)
-  #   y=5       → "KPI Visuals" header
-  #   y=6–20    → KPI line charts (3 charts × 5 rows each)
-  #   y=21      → "Additional Information" header
-  #   y=22–48   → Top-10 bar charts (5 charts × 5 rows each, last 7 rows)
+  #   y=1–2     → Summary Statistics tiles (1 rows × 2 cols)
+  #   y=3       → "KPI Visuals" header
+  #   y=4–18    → KPI charts (3 charts × 5 rows each)
   # ============================================================================
-  Telemetry_comprehensive:
-    title: Telemetry Dashboard
-    description: Comprehensive view of Telemetry metrics organized by Summary Statistics, KPIs, and Additional Information
+  Retail_comprehensive:
+    title: Retail Dashboard
+    description: Comprehensive view of Retail metrics organized by Summary Statistics and KPIs
 
     size:
-      width: 1800
-      height: 4900
-      hSegments: 3
-      vSegments: 49
+      width: 1500
+      height: 3600
+      hSegments: 2
+      vSegments: 18
 
     # ------------------------------------------
     # CATEGORY SECTION HEADERS
@@ -112,12 +109,12 @@ dashboards:
       - label: "Summary Statistics"
         x: 0
         y: 0
-        colSpan: 3
+        colSpan: 2
         rowSpan: 1
       - label: "KPI Visuals"
         x: 0
-        y: 5
-        colSpan: 3
+        y: 3
+        colSpan: 2
         rowSpan: 1
 
     tiles:
@@ -144,19 +141,19 @@ dashboards:
       # ------------------------------------------
       - worksheet: kpi_total_orders_per_year
         x: 0
-        y: 6
-        colSpan: 3
+        y: 4
+        colSpan: 2
         rowSpan: 5
         category: KPI Visuals
       - worksheet: kpi_total_sales_per_country
         x: 0
-        y: 11
-        colSpan: 3
+        y: 9
+        colSpan: 2
         rowSpan: 5
         category: KPI Visuals
       - worksheet: kpi_total_sales_per_country2
         x: 0
-        y: 11
-        colSpan: 3
+        y: 14
+        colSpan: 2
         rowSpan: 5
         category: KPI Visuals

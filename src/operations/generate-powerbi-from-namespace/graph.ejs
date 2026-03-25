@@ -1,12 +1,18 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.5.0/schema.json",
   "name": "<%= visualName %>",
+  <%
+    const segmentWidth = dashboard.size.width / dashboard.size.hSegments;
+    const segmentHeight = dashboard.size.height / dashboard.size.vSegments;
+    const colSpan = tile.colSpan || 1;
+    const rowSpan = tile.rowSpan || 1;
+  %>
   "position": {
-    "x": 10,
-    "y": 0,
+    "x": <%= tile.x * segmentWidth %>,
+    "y": <%= tile.y * segmentHeight %>,
     "z": 0,
-    "height": 280,
-    "width": 280,
+    "height": <%= colSpan * segmentHeight %>,
+    "width": <%= rowSpan * segmentWidth %>,
     "tabOrder": 0
   },
   <%
@@ -35,6 +41,10 @@
         };
       });
     });
+    let sortDefinition = 'Descending'
+    if (worksheet.sortDefinition === 'asc') {
+      sortDefinition = 'Ascending'
+    };
   %>
   "visual": {
     "visualType": "<%= visualType %>",
@@ -96,11 +106,33 @@
                 "Property": "<%= measure %>"
               }
             },
-            "direction": "Descending"
+            "direction": "<%= sortDefinition %>"
           }
         ],
         "isDefaultSort": true
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'<%= worksheet.title %>'"
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "drillFilterOtherVisuals": true
   },
@@ -138,28 +170,6 @@
           }
         },
         "type": "Categorical"
-      }
-    ]
-  },
-  "visualContainerObjects": {
-    "title": [
-      {
-        "properties": {
-          "show": {
-            "expr": {
-              "Literal": {
-                "Value": "true"
-              }
-            }
-          },
-          "text": {
-            "expr": {
-              "Literal": {
-                "Value": "'<%= worksheet.title %>'"
-              }
-            }
-          }
-        }
       }
     ]
   }

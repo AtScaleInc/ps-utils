@@ -93,8 +93,8 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
       output = ejs.render(template, {
       });
       fs.writeFileSync(`${outDir}/${folderName}.SemanticModel/definition.pbism`, output, "utf8");
-
-      const connectionString = connection.mdx.url.replace(/\/$/, "") + '/' + connectionData.users[connection.mdx.user].token;
+  
+      const connectionString = connection.mdx.url.replace(/\/$/, "") + '/engine/xmla/' + connectionData.users[connection.mdx.user].token
       template = fs.readFileSync(`${__dirname}/modelReference.ejs`, "utf8");
       output = ejs.render(template, {
         model, connection, connectionString
@@ -118,45 +118,62 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
       fs.writeFileSync(`${outDir}/${folderName}.Report/definition/version.json`, output, "utf8");
 
       let pageNames = [] as any[];
-      Object.entries<any>(namespace.worksheets).forEach(([worksheetName, worksheet]) => {
-        this.logger.verbose("Generating visuals for worksheet: " + worksheetName);
+      Object.entries<any>(namespace.dashboards).forEach(([dashboardName, dashboard]) => {
+        this.logger.verbose("Generating visuals for dashboard: " + dashboardName);
         let pageName = crypto.randomUUID();
         pageNames.push(pageName);
         fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}`, { recursive: true });
         template = fs.readFileSync(`${__dirname}/page.ejs`, "utf8");
         output = ejs.render(template, {
           pageName,
-          worksheet
+          dashboard
         });
         fs.writeFileSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/page.json`, output, "utf8");
-
-        let visualName = crypto.randomUUID();
-        let visualType;
-        fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}`, { recursive: true });
-        if (worksheet.graphType == 'bar') {
-          if (model.mdx.metrics.map((metric: any) => metric.query_name).includes(worksheet.xAxis)) {
-            visualType = 'columnChart';
+        Object.entries<any>(dashboard.tiles).forEach(([tileName, tile]) => {
+          let worksheet = namespace.worksheets[tile.worksheet]
+          let visualName = crypto.randomUUID();
+          let visualType;
+          fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}`, { recursive: true });
+          if (worksheet.graphType == 'bar') {
+            if (model.mdx.metrics.map((metric: any) => metric.query_name).includes(worksheet.xAxis)) {
+              visualType = 'columnChart'
+            }
+            else {
+              visualType = 'barChart'
+            }
+            template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
+          }
+          else if (worksheet.graphType == 'line') {
+            visualType = 'lineChart'
+            template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
           }
           else {
-            visualType = 'barChart';
+            visualType = 'cardVisual'
+            template = fs.readFileSync(`${__dirname}/card.ejs`, "utf8");
           }
-          template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
-        }
-        else if (worksheet.graphType == 'line') {
-          visualType = 'lineChart';
-          template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
-        }
-        else {
-          visualType = 'cardVisual';
-          template = fs.readFileSync(`${__dirname}/card.ejs`, "utf8");
-        }
-        output = ejs.render(template, {
-          visualName,
-          visualType,
-          model,
-          worksheet
+          output = ejs.render(template, {
+            visualName,
+            visualType,
+            model,
+            dashboard,
+            worksheet,
+            tile
+          });
+          fs.writeFileSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}/visual.json`, output, "utf8");
         });
-        fs.writeFileSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}/visual.json`, output, "utf8");
+        Object.entries<any>(dashboard.categoryHeaders).forEach(([categoryHeaderName, categoryHeader]) => {
+          let visualName = crypto.randomUUID();
+          let visualType = 'textbox'
+          fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}`, { recursive: true });
+          let template = fs.readFileSync(`${__dirname}/textbox.ejs`, "utf8");
+          output = ejs.render(template, {
+            visualName,
+            visualType,
+            dashboard,
+            categoryHeader,
+          });
+          fs.writeFileSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}/visual.json`, output, "utf8");
+        });
       });
 
       template = fs.readFileSync(`${__dirname}/pages.ejs`, "utf8");
