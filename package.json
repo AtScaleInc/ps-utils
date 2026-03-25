@@ -6,6 +6,13 @@
   "bin": {
     "operation-cli": "dist/cli.js"
   },
+  "overrides": {
+  "jdbc": {
+    "java": {
+      "nan": "^2.22.0"
+    }
+  }
+},
   "files": [
     "dist",
     "action.yml"
