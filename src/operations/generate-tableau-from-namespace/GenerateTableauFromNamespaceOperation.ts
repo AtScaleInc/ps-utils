@@ -81,9 +81,13 @@ export class GenerateTableauFromNamespaceOperation extends TemplateOperation<Gen
 
     this.logger.verbose(`Reading connection file: ${connectionFile}`);
     const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile) as any;
-    var connection = connectionData.connections[params["connection-name"]] as any;
+    var connection = connectionData.connections?.[params["connection-name"]] as any;
     if (!connection) {
       this.logger.error(`Connection ${params["connection-name"]} not found in ${connectionFile}`);
+      return;
+    }
+    if (!connection.sql) {
+      this.logger.error(`Connection '${params["connection-name"]}' is missing a 'sql:' block in ${connectionFile}`);
       return;
     }
     /*

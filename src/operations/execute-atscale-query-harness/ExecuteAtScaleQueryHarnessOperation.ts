@@ -46,6 +46,7 @@ interface ResultRecord {
   error: string;
   timestamp: number;
   inboundTextAsHash: string;
+  inboundText: string;
 }
 
 /** Minimal representation of one Gatling injection step from a task file. */
@@ -212,20 +213,24 @@ function csvField(value: string | number | null | undefined): string {
 
 /** Convert an array of ResultRecords to a CSV string. */
 function toCsv(records: ResultRecord[], redact: boolean): string {
-  const header = [
+  const baseColumns = [
     "run_id", "task_name", "model", "query_name", "atscale_query_id",
     "protocol", "status", "duration_ms", "row_count", "error",
     "timestamp", "inbound_text_hash",
-  ].join(",");
+  ];
+  const header = redact
+    ? baseColumns.join(",")
+    : [...baseColumns, "inbound_text"].join(",");
 
-  const rows = records.map((r) =>
-    [
+  const rows = records.map((r) => {
+    const base = [
       r.runId, r.taskName, r.model, r.queryName,
       r.atscaleQueryId, r.protocol, r.status,
       r.durationMs, r.rowCount, r.error, r.timestamp,
-      redact ? r.inboundTextAsHash : "",
-    ].map(csvField).join(","),
-  );
+      r.inboundTextAsHash,
+    ];
+    return (redact ? base : [...base, r.inboundText]).map(csvField).join(",");
+  });
 
   return [header, ...rows].join("\n") + "\n";
 }
@@ -455,6 +460,12 @@ function sqlConfigFromProperties(
   if (!url) {
     throw new Error(`systems.properties is missing atscale.${model}.jdbc.url`);
   }
+  if (!username) {
+    throw new Error(`systems.properties is missing atscale.${model}.jdbc.username`);
+  }
+  if (!password) {
+    throw new Error(`systems.properties is missing atscale.${model}.jdbc.password`);
+  }
 
   const { server, port, database, schema } = parseJdbcPostgresUrl(url);
   const connName = `_${model}_sql`;
@@ -643,6 +654,7 @@ async function runQueriesOnce(
         error: r.error,
         timestamp: Date.now(),
         inboundTextAsHash: q.inboundTextAsHash,
+        inboundText: q.inboundText,
       };
       results.push(record);
       logger.log(
@@ -695,6 +707,7 @@ async function runQueriesForDuration(
         error: r.error,
         timestamp: Date.now(),
         inboundTextAsHash: q.inboundTextAsHash,
+        inboundText: q.inboundText,
       };
       results.push(record);
       logger.log(

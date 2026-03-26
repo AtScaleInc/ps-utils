@@ -44,7 +44,7 @@ export class SqlService extends ServiceProvider {
     connectionUser?: string,
   ): Promise<SqlConnection> {
     const { connection, users } = this.resolveConnectionEntry(config, connectionName);
-    const sql = connection.sql ?? connection.jdbc ?? connection;
+    const sql = connection.sql ?? connection;
     const dialect: string = sql.dialect ?? "postgres";
 
     if (dialect === "postgres" || dialect === "redshift") {

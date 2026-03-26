@@ -211,20 +211,6 @@ runs:
   steps:
 
     # ── Setup (CLI operations only — not needed for deploy-atscale-microk8s) ──
-    - name: Set up Java
-      if: inputs.operation != 'deploy-atscale-microk8s'
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: '18'
-
-    - name: Set JVM library path
-      if: inputs.operation != 'deploy-atscale-microk8s'
-      run: |
-        echo "LIBRARY_PATH=$JAVA_HOME/lib/server:$LIBRARY_PATH" >> $GITHUB_ENV
-        echo "LD_LIBRARY_PATH=$JAVA_HOME/lib/server:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-      shell: bash
-
     - uses: actions/setup-node@v4
       if: inputs.operation != 'deploy-atscale-microk8s'
       with:
@@ -233,10 +219,7 @@ runs:
 
     - name: Install dependencies
       if: inputs.operation != 'deploy-atscale-microk8s'
-      run: |
-        export LIBRARY_PATH="$JAVA_HOME/lib/server:$LIBRARY_PATH"
-        export LD_LIBRARY_PATH="$JAVA_HOME/lib/server:$LD_LIBRARY_PATH"
-        npm install
+      run: npm install
       shell: bash
       working-directory: ${{ github.action_path }}
 

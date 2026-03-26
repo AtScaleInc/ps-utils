@@ -307,8 +307,18 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     this.logger.info("Authenticating against connection named " + _params["connection-name"]);
     this.logger.verbose("Connection detail: " + JSON.stringify(connectionFile.connections[_params["connection-name"]]));
 
-    const connection = connectionFile.connections[_params["connection-name"]];
-    const user = connectionFile.users[connection.mdx.user] || {};
+    const connection = connectionFile.connections?.[_params["connection-name"]];
+    if (!connection) {
+      throw new Error(
+        `Connection '${_params["connection-name"]}' not found in ${_params["connection-file"]}`,
+      );
+    }
+    if (!connection.mdx) {
+      throw new Error(
+        `Connection '${_params["connection-name"]}' is missing an 'mdx:' block in ${_params["connection-file"]}`,
+      );
+    }
+    const user = (connectionFile.users ?? {})[connection.mdx.user] ?? {};
     this.logger.verbose("User detail: " + user.username);
     const token = await this.getToken(connection.installer,
       connection.mdx.url,

@@ -62,9 +62,13 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
 
     this.logger.verbose(`Reading connection file: ${connectionFile}`);
     const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile) as any;
-    let connection = connectionData.connections[params["connection-name"]] as any;
+    let connection = connectionData.connections?.[params["connection-name"]] as any;
     if (!connection) {
       this.logger.error(`Connection ${params["connection-name"]} not found in ${connectionFile}`);
+      return;
+    }
+    if (!connection.mdx) {
+      this.logger.error(`Connection '${params["connection-name"]}' is missing an 'mdx:' block in ${connectionFile}`);
       return;
     }
 
@@ -74,7 +78,12 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
     try {
       const models = modelData as Record<string, any>;
       const namespace = this.sanitizeNamespace(overviewData as Record<string, any>, models);
-      const model = models[Object.values(namespace.worksheets as Record<string, any>)[0].model];
+      const worksheetValues = Object.values(namespace.worksheets as Record<string, any>);
+      if (worksheetValues.length === 0) {
+        this.logger.error("No worksheets found in namespace — cannot generate Power BI report.");
+        return;
+      }
+      const model = models[worksheetValues[0].model];
 
       this.logger.verbose("Generating folders");
       fs.mkdirSync(outDir, { recursive: true });
@@ -94,7 +103,11 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
       });
       fs.writeFileSync(`${outDir}/${folderName}.SemanticModel/definition.pbism`, output, "utf8");
   
-      const connectionString = connection.mdx.url.replace(/\/$/, "") + '/engine/xmla/' + connectionData.users[connection.mdx.user].token
+      const mdxUser = (connectionData.users ?? {})[connection.mdx.user];
+      if (!mdxUser) {
+        throw new Error(`User '${connection.mdx.user}' not found in ${connectionFile}`);
+      }
+      const connectionString = connection.mdx.url.replace(/\/$/, "") + '/engine/xmla/' + mdxUser.token
       template = fs.readFileSync(`${__dirname}/modelReference.ejs`, "utf8");
       output = ejs.render(template, {
         model, connection, connectionString
@@ -129,8 +142,12 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
           dashboard
         });
         fs.writeFileSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/page.json`, output, "utf8");
-        Object.entries<any>(dashboard.tiles).forEach(([tileName, tile]) => {
-          let worksheet = namespace.worksheets[tile.worksheet]
+        Object.entries<any>(dashboard.tiles ?? {}).forEach(([tileName, tile]) => {
+          const worksheet = namespace.worksheets[tile.worksheet];
+          if (!worksheet) {
+            this.logger.verbose(`Skipping tile '${tileName}': worksheet '${tile.worksheet}' not found.`);
+            return;
+          }
           let visualName = crypto.randomUUID();
           let visualType;
           fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}`, { recursive: true });
@@ -161,7 +178,7 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
           });
           fs.writeFileSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}/visual.json`, output, "utf8");
         });
-        Object.entries<any>(dashboard.categoryHeaders).forEach(([categoryHeaderName, categoryHeader]) => {
+        Object.entries<any>(dashboard.categoryHeaders ?? {}).forEach(([categoryHeaderName, categoryHeader]) => {
           let visualName = crypto.randomUUID();
           let visualType = 'textbox'
           fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}`, { recursive: true });
