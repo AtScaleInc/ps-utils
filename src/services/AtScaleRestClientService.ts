@@ -160,7 +160,7 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
     const response = await axios.post<{ accessToken: string }>(
       url,
       {},
-      { ...agentConfig, headers: { Authorization: this.apiToken }, validateStatus: () => true },
+      { ...agentConfig, headers: { Authorization: `Bearer ${this.apiToken}` }, validateStatus: () => true },
     );
     this.logger?.verbose(`[REST:Auth] ← ${response.status}`);
     if (response.status < 200 || response.status >= 300) {
