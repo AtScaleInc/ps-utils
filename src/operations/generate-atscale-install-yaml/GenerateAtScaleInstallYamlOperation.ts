@@ -70,6 +70,15 @@ class GenerateAtScaleInstallYamlParameterSet extends ParameterSet {
       defaultValue = false;
       isFlag = true;
     })(),
+    new (class extends BooleanParameter {
+      name = "minimal";
+      description =
+        "Emit additional Helm values that reduce the hardware footprint: " +
+        "disables telemetry, removes the Redis replica, and shrinks default PVC sizes.";
+      required = false;
+      defaultValue = false;
+      isFlag = true;
+    })(),
   ];
 }
 
@@ -80,6 +89,7 @@ type Params = {
   "license-key"?: string;
   "output-file": string;
   "enable-mcp": boolean;
+  "minimal": boolean;
 };
 
 // ── DER / ASN.1 helpers ────────────────────────────────────────────────────────
@@ -213,7 +223,8 @@ export class GenerateAtScaleInstallYamlOperation extends Operation<Params> {
     const template = fs.readFileSync(templatePath, "utf8");
     const licenseKey = params["license-key"] ?? "";
     const enableMcp = params["enable-mcp"];
-    const output = ejs.render(template, { hostname, tlsCrt, tlsKey, licenseKey, enableMcp });
+    const minimal = params["minimal"];
+    const output = ejs.render(template, { hostname, tlsCrt, tlsKey, licenseKey, enableMcp, minimal });
 
     // ── Write output ──────────────────────────────────────────────────────
     const outputPath = path.resolve(params["output-file"]);

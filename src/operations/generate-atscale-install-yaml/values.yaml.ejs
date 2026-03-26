@@ -17,3 +17,29 @@ atscale-entitlement:
 <% } %>
 atscale-mcp:
   enabled: <%= enableMcp %>
+<% if (minimal) { %>
+# Minimal footprint — disables telemetry, removes the Redis replica, reduces PVC sizes.
+# Verified against AtScale Helm chart 2026.1.0.
+global:
+  atscale:
+    telemetry:
+      enabled: false
+      persistence:
+        size: 10Gi
+
+redis:
+  replica:
+    replicaCount: 0
+  master:
+    persistence:
+      size: 8Gi
+
+db:
+  persistence:
+    size: 20Gi
+
+keycloak:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+<% } %>

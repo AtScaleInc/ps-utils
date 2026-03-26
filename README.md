@@ -775,6 +775,7 @@ The `tlsCrt` and `tlsKey` fields in the output are base64-encoded PEM strings â€
 | `--cert-file` | No | | Path to an existing PEM certificate file |
 | `--key-file` | No | | Path to an existing PEM private key file (required when `--cert-file` is set) |
 | `--enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart (`atscale-mcp.enabled`). Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
+| `--minimal` | No | `false` | Append values that reduce hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes (`db` 20 Gi, Redis master 8 Gi, telemetry 10 Gi). Verified against chart 2026.1.0. |
 | `--output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **Output:** A `values.yaml` ready to pass to `helm install atscale ... --values values.yaml`.

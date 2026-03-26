@@ -122,8 +122,10 @@ inputs:
     default: "0.5"
   output-file:
     description: >
-      Output file path. For generate-namespace-from-model: namespace YAML output (omit to print to stdout).
+      Output file path.
+      For generate-namespace-from-model: namespace YAML output (omit to print to stdout).
       For extract-ddl-from-connection: DDL output (omit to print to stdout).
+      For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
     required: false
 
   # ── generate-tableau-from-namespace ──────────────────────────────────────
@@ -192,16 +194,18 @@ inputs:
       Store as a secret and pass via secrets.ATSCALE_LICENSE_KEY.
       Used by: generate-atscale-install-yaml.
     required: false
-  install-output-file:
-    description: >
-      Output path for the generated values.yaml (default: values.yaml).
-      Used by: generate-atscale-install-yaml.
-    required: false
-    default: values.yaml
   enable-mcp:
     description: >
       Enable the AtScale MCP server sub-chart (atscale-mcp.enabled).
       Accepts true/false, yes/no, 1/0, on/off. Defaults to false.
+      Used by: generate-atscale-install-yaml.
+    required: false
+    default: "false"
+  minimal:
+    description: >
+      Emit additional Helm values that reduce the hardware footprint:
+      disables telemetry, removes the Redis replica, and shrinks default PVC sizes.
+      Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.
       Used by: generate-atscale-install-yaml.
     required: false
     default: "false"
@@ -406,13 +410,14 @@ runs:
       if: inputs.operation == 'generate-atscale-install-yaml'
       run: |
         ARGS=(
-          --hostname     "${{ inputs.install-hostname }}"
-          --output-file  "${{ inputs.install-output-file }}"
+          --hostname "${{ inputs.install-hostname }}"
         )
         [[ -n "${{ inputs.tls-cert-file }}" ]] && ARGS+=(--cert-file   "${{ inputs.tls-cert-file }}")
         [[ -n "${{ inputs.tls-key-file }}"  ]] && ARGS+=(--key-file    "${{ inputs.tls-key-file }}")
         [[ -n "${{ inputs.license-key }}"   ]] && ARGS+=(--license-key "${{ inputs.license-key }}")
+        [[ -n "${{ inputs.output-file }}"   ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         ARGS+=(--enable-mcp "${{ inputs.enable-mcp }}")
+        [[ "${{ inputs.minimal }}" == "true" ]] && ARGS+=(--minimal)
         node "${{ github.action_path }}/dist/cli.js" generate-atscale-install-yaml "${ARGS[@]}"
       shell: bash
 
