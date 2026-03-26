@@ -8,10 +8,10 @@ import type { AnalysisSuggestion } from "./analysis-suggestions.js";
 export type { AnalysisSuggestion };
 
 // ----------------------------------------------------------
-// JDBC-style metadata interfaces
+// Database schema metadata interfaces
 // ----------------------------------------------------------
 
-export interface JdbcColumnMeta {
+export interface ColumnMeta {
   tableName: string;
   columnName: string;
   dataType: string;        // e.g. "VARCHAR", "INTEGER", "DECIMAL", "DATE"
@@ -19,11 +19,11 @@ export interface JdbcColumnMeta {
   nullable: boolean;
   isPrimaryKey: boolean;
   ordinalPosition: number;
-  /** Optional column remark / comment from JDBC getColumns() REMARKS field. */
+  /** Optional column remark / comment (maps to INFORMATION_SCHEMA REMARKS). */
   remarks?: string;
 }
 
-export interface JdbcForeignKeyMeta {
+export interface ForeignKeyMeta {
   fkTableName: string;
   fkColumnName: string;
   pkTableName: string;
@@ -32,7 +32,7 @@ export interface JdbcForeignKeyMeta {
   constraintName: string;
 }
 
-export interface JdbcIndexMeta {
+export interface IndexMeta {
   tableName: string;
   indexName: string;
   columnName: string;
@@ -41,25 +41,25 @@ export interface JdbcIndexMeta {
   indexType: "CLUSTERED" | "HASHED" | "OTHER";
 }
 
-export interface JdbcViewMeta {
+export interface ViewMeta {
   viewName: string;
   definition: string;
-  columns: JdbcColumnMeta[];
+  columns: ColumnMeta[];
 }
 
-export interface JdbcTableMeta {
+export interface TableMeta {
   tableName: string;
   tableType: "TABLE" | "VIEW" | "SYSTEM TABLE";
   remarks?: string;
 }
 
 /** Mirror of java.sql.DatabaseMetaData — implemented by the caller. */
-export interface JdbcDatabaseMetaData {
-  getTables(schemaPattern?: string): Promise<JdbcTableMeta[]>;
-  getColumns(tableName: string): Promise<JdbcColumnMeta[]>;
-  getForeignKeys(tableName: string): Promise<JdbcForeignKeyMeta[]>;
-  getIndexInfo(tableName: string): Promise<JdbcIndexMeta[]>;
-  getViews(schemaPattern?: string): Promise<JdbcViewMeta[]>;
+export interface DatabaseMetaData {
+  getTables(schemaPattern?: string): Promise<TableMeta[]>;
+  getColumns(tableName: string): Promise<ColumnMeta[]>;
+  getForeignKeys(tableName: string): Promise<ForeignKeyMeta[]>;
+  getIndexInfo(tableName: string): Promise<IndexMeta[]>;
+  getViews(schemaPattern?: string): Promise<ViewMeta[]>;
   /**
    * Optional: return up to `limit` sample rows from the table.
    * Used by the inference engine to detect column patterns and refine type inference.
@@ -97,7 +97,7 @@ export interface SemanticAttribute {
   nullable: boolean;
   /** Companion columns that provide a human-readable label for this attribute. */
   labels?: SemanticLabel[];
-  /** Non-empty REMARKS from JDBC getColumns(), emitted as SML description. */
+  /** Non-empty column remarks, emitted as SML description. */
   description?: string;
   /** UI folder for grouping this attribute in BI tools (e.g. "Date Attributes"). */
   folder?: string;
@@ -125,7 +125,7 @@ export interface SemanticDimension {
   primaryKey: string;
   attributes: SemanticAttribute[];
   hierarchies: SemanticHierarchy[];
-  /** Non-empty table REMARKS from JDBC getTables(), emitted as SML description. */
+  /** Non-empty table remarks, emitted as SML description. */
   description?: string;
   /**
    * FK columns on this dimension table that point to other dimension tables.

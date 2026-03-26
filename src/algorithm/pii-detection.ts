@@ -20,7 +20,7 @@
 //   a human-readable reason, and a severity level.
 // ============================================================
 
-import { JdbcColumnMeta } from "./types.js";
+import { ColumnMeta } from "./types.js";
 
 // ----------------------------------------------------------
 // Rule types
@@ -326,7 +326,7 @@ const ALL_RULES: PiiRule[] = [...PII_RULES, ...HIPAA_RULES];
  */
 export function detectPiiColumns(
   tableName: string,
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
 ): PiiColumnFlag[] {
   const flags: PiiColumnFlag[] = [];
 
@@ -359,7 +359,7 @@ export function detectPiiColumns(
  */
 export function getPiiExclusionSet(
   tableName: string,
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
   minSeverity: PiiSeverity = "MEDIUM",
 ): Set<string> {
   const severityRank: Record<PiiSeverity, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };

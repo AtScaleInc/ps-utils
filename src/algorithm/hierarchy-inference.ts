@@ -12,7 +12,7 @@
 //      share a prefix and the suffixes appear in a known sequence
 // ============================================================
 
-import { JdbcColumnMeta, JdbcIndexMeta, SemanticHierarchy, DATE_TYPES, NUMERIC_TYPES, toTitleCase } from "./types.js";
+import { ColumnMeta, IndexMeta, SemanticHierarchy, DATE_TYPES, NUMERIC_TYPES, toTitleCase } from "./types.js";
 
 // ----------------------------------------------------------
 // Known ordered level sequences for common domain hierarchies
@@ -81,10 +81,10 @@ const KNOWN_HIERARCHY_SEQUENCES: Array<{ name: string; levels: string[] }> = [
 // ----------------------------------------------------------
 
 function inferFromIndexes(
-  columns: JdbcColumnMeta[],
-  indexes: JdbcIndexMeta[],
+  columns: ColumnMeta[],
+  indexes: IndexMeta[],
 ): { hierarchies: SemanticHierarchy[]; usedColumns: Set<string> } {
-  const byIndex = new Map<string, JdbcIndexMeta[]>();
+  const byIndex = new Map<string, IndexMeta[]>();
   for (const idx of indexes) {
     const existing = byIndex.get(idx.indexName) ?? [];
     existing.push(idx);
@@ -130,7 +130,7 @@ function matchesSegment(columnName: string, keyword: string): boolean {
  * A sequence contributes a hierarchy only when ≥2 of its levels are present.
  */
 function inferFromKnownSequences(
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
   alreadyUsed: Set<string>,
 ): { hierarchies: SemanticHierarchy[]; usedColumns: Set<string> } {
   const hierarchies: SemanticHierarchy[] = [];
@@ -140,7 +140,7 @@ function inferFromKnownSequences(
     // Walk the sequence in broadest-to-granular order, finding the first
     // available column that matches each level keyword.  A column is only
     // used once across all sequences (enforced by usedColumns + alreadyUsed).
-    const matchedColumns: JdbcColumnMeta[] = [];
+    const matchedColumns: ColumnMeta[] = [];
 
     for (const level of seq.levels) {
       const col = columns.find(
@@ -172,7 +172,7 @@ function inferFromKnownSequences(
  * whose name is the remainder (e.g. subcategory → category).
  */
 function inferFromSubPrefix(
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
   alreadyUsed: Set<string>,
 ): { hierarchies: SemanticHierarchy[]; usedColumns: Set<string> } {
   const colByLower = new Map(columns.map((c) => [c.columnName.toLowerCase(), c]));
@@ -219,11 +219,11 @@ function inferFromSubPrefix(
  * with levels ordered by the known "Product" sequence.
  */
 function inferFromSharedPrefix(
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
   alreadyUsed: Set<string>,
 ): { hierarchies: SemanticHierarchy[]; usedColumns: Set<string> } {
   // Build prefix → columns map (only for multi-part names)
-  const prefixGroups = new Map<string, Array<{ col: JdbcColumnMeta; suffix: string }>>();
+  const prefixGroups = new Map<string, Array<{ col: ColumnMeta; suffix: string }>>();
 
   for (const col of columns) {
     if (alreadyUsed.has(col.columnName.toLowerCase())) continue;
@@ -276,7 +276,7 @@ function inferFromSharedPrefix(
 // ----------------------------------------------------------
 
 function inferDateFallback(
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
   alreadyUsed: Set<string>,
 ): { hierarchies: SemanticHierarchy[]; warnings: string[] } {
   // Pattern matches column names that suggest a date component
@@ -342,8 +342,8 @@ function inferDateFallback(
  * Callers should surface the warnings in the SemanticModel.warnings array.
  */
 export function inferHierarchies(
-  columns: JdbcColumnMeta[],
-  indexes: JdbcIndexMeta[],
+  columns: ColumnMeta[],
+  indexes: IndexMeta[],
 ): { hierarchies: SemanticHierarchy[]; warnings: string[] } {
   const hierarchies: SemanticHierarchy[] = [];
   const inferenceWarnings: string[] = [];

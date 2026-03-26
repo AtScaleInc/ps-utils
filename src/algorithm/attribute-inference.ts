@@ -14,7 +14,7 @@
 // ============================================================
 
 import {
-  JdbcColumnMeta,
+  ColumnMeta,
   SemanticAttribute,
   SemanticLabel,
   toSemanticType,
@@ -56,7 +56,7 @@ const KEY_SUFFIXES = ["_id", "_key", "_code", "_num", "_number"];
  * return the lowercased base key that should own it (e.g. "category",
  * "category_id", "category_key", …), trying each key suffix in turn.
  */
-function resolveParentKey(base: string, colByLower: Map<string, JdbcColumnMeta>): string | null {
+function resolveParentKey(base: string, colByLower: Map<string, ColumnMeta>): string | null {
   if (colByLower.has(base)) return base;
   for (const ks of KEY_SUFFIXES) {
     if (colByLower.has(base + ks)) return base + ks;
@@ -73,7 +73,7 @@ function resolveParentKey(base: string, colByLower: Map<string, JdbcColumnMeta>)
  * @param excluded  Column names already excluded (FK columns, PK, etc.)
  */
 export function groupSecondaryAttributes(
-  columns: JdbcColumnMeta[],
+  columns: ColumnMeta[],
   excluded: Set<string>,
 ): { attributes: SemanticAttribute[]; consumed: Set<string> } {
   const colByLower = new Map(

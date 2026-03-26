@@ -1,8 +1,8 @@
 // ============================================================
-// JDBC Metadata → Semantic Model Proposer
+// Schema Metadata → Semantic Model Proposer
 // ============================================================
-// Reads database metadata via a JDBC-style interface and
-// proposes a dimensional semantic model (facts, dimensions,
+// Reads database schema metadata via the DatabaseMetaData interface
+// and proposes a dimensional semantic model (facts, dimensions,
 // measures, hierarchies, relationships).
 //
 // Inference logic lives in dedicated modules:
@@ -13,9 +13,9 @@
 // ============================================================
 
 import {
-  JdbcDatabaseMetaData,
-  JdbcTableMeta,
-  JdbcColumnMeta,
+  DatabaseMetaData,
+  TableMeta,
+  ColumnMeta,
   SemanticModel,
   SemanticDimension,
   SemanticFact,
@@ -63,15 +63,15 @@ export * from "./types.js";
 // ----------------------------------------------------------
 
 interface RawMetadata {
-  tables: JdbcTableMeta[];
-  columnsByTable: Map<string, JdbcColumnMeta[]>;
-  foreignKeysByTable: Map<string, import("./types").JdbcForeignKeyMeta[]>;
-  indexesByTable: Map<string, import("./types").JdbcIndexMeta[]>;
-  views: import("./types").JdbcViewMeta[];
+  tables: TableMeta[];
+  columnsByTable: Map<string, ColumnMeta[]>;
+  foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>;
+  indexesByTable: Map<string, import("./types").IndexMeta[]>;
+  views: import("./types").ViewMeta[];
 }
 
 async function readMetadata(
-  db: JdbcDatabaseMetaData,
+  db: DatabaseMetaData,
   schemaPattern?: string,
 ): Promise<RawMetadata> {
   const tables = (await db.getTables(schemaPattern)).filter(
@@ -79,9 +79,9 @@ async function readMetadata(
   );
   const views = await db.getViews(schemaPattern);
 
-  const columnsByTable = new Map<string, JdbcColumnMeta[]>();
-  const foreignKeysByTable = new Map<string, import("./types").JdbcForeignKeyMeta[]>();
-  const indexesByTable = new Map<string, import("./types").JdbcIndexMeta[]>();
+  const columnsByTable = new Map<string, ColumnMeta[]>();
+  const foreignKeysByTable = new Map<string, import("./types").ForeignKeyMeta[]>();
+  const indexesByTable = new Map<string, import("./types").IndexMeta[]>();
 
   await Promise.all(
     tables.map(async (t) => {
@@ -104,9 +104,9 @@ async function readMetadata(
 // ----------------------------------------------------------
 
 function classifyTables(
-  tables: JdbcTableMeta[],
-  columnsByTable: Map<string, JdbcColumnMeta[]>,
-  foreignKeysByTable: Map<string, import("./types").JdbcForeignKeyMeta[]>,
+  tables: TableMeta[],
+  columnsByTable: Map<string, ColumnMeta[]>,
+  foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>,
 ): { factTables: Set<string>; dimensionTables: Set<string> } {
   // FACT: table name ends with "fact" (word boundary), OR has FKs to ≥2 distinct
   // tables AND at least one numeric non-FK column.
@@ -213,7 +213,7 @@ export interface ProposeOptions {
  */
 function buildPiiExclusionSet(
   tableName: string,
-  cols: JdbcColumnMeta[],
+  cols: ColumnMeta[],
   severity: import("./pii-detection").PiiSeverity | false,
   tableProfiles: Map<string, import("./column-profiler").ColumnProfile> | undefined,
   flagAccumulator: PiiColumnFlag[],
@@ -235,7 +235,7 @@ function buildPiiExclusionSet(
 }
 
 export async function proposeSemanticModel(
-  db: JdbcDatabaseMetaData,
+  db: DatabaseMetaData,
   modelName = "ProposedModel",
   options: ProposeOptions | string = {},  // string kept for backward compat
 ): Promise<SemanticModel> {
@@ -725,7 +725,7 @@ export async function proposeSemanticModel(
       ...smlOpts,
       columnsByTable:
         smlOpts.columnsByTable ??
-        (rawMetadata.columnsByTable as Map<string, import("./types").JdbcColumnMeta[]>),
+        (rawMetadata.columnsByTable as Map<string, import("./types").ColumnMeta[]>),
     };
     model.sml = serializeToSml(model, smlOptsWithCols);
   }
@@ -845,7 +845,7 @@ export function printSemanticModel(model: SemanticModel): void {
 // 5. Usage
 // ----------------------------------------------------------
 //
-// Implement JdbcDatabaseMetaData for your driver, then call:
+// Implement DatabaseMetaData for your driver, then call:
 //
 //   import { proposeSemanticModel, printSemanticModel } from "./jdbc-semantic-model.js";
 //

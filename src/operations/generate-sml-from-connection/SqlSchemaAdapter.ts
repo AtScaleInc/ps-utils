@@ -1,23 +1,22 @@
 /**
- * Adapts SqlService + SqlConnection to the JdbcDatabaseMetaData interface
+ * Adapts SqlService + SqlConnection to the DatabaseMetaData interface
  * expected by proposeSemanticModel().
  *
- * Row-mapping note: node-jdbc returns JDBC ResultSet column names as-is from
- * the Java driver.  Snowflake and Postgres both use UPPERCASE column names
- * for JDBC metadata calls, so we read properties with uppercase keys and fall
- * back to lowercase for safety.
+ * Row-mapping note: SqlService returns INFORMATION_SCHEMA result rows with
+ * UPPERCASE column aliases (TABLE_NAME, COLUMN_NAME, etc.).  We read
+ * properties with uppercase keys and fall back to lowercase for safety.
  */
 import type { SqlService, SqlConnection } from "../../services/SqlService.js";
 import type {
-  JdbcDatabaseMetaData,
-  JdbcTableMeta,
-  JdbcColumnMeta,
-  JdbcForeignKeyMeta,
-  JdbcIndexMeta,
-  JdbcViewMeta,
+  DatabaseMetaData,
+  TableMeta,
+  ColumnMeta,
+  ForeignKeyMeta,
+  IndexMeta,
+  ViewMeta,
 } from "../../algorithm/types.js";
 
-/** Read a property that may be uppercase or lowercase in the raw JDBC row. */
+/** Read a property that may be uppercase or lowercase in the result row. */
 function prop(row: Record<string, unknown>, upper: string): unknown {
   return row[upper] ?? row[upper.toLowerCase()];
 }
@@ -32,7 +31,7 @@ function num(row: Record<string, unknown>, upper: string, fallback = 0): number 
   return v !== null && v !== undefined ? Number(v) : fallback;
 }
 
-export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
+export class SqlSchemaAdapter implements DatabaseMetaData {
   constructor(
     private readonly sql: SqlService,
     private readonly conn: SqlConnection,
@@ -43,7 +42,7 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   // Tables
   // ----------------------------------------------------------
 
-  async getTables(schemaPattern?: string): Promise<JdbcTableMeta[]> {
+  async getTables(schemaPattern?: string): Promise<TableMeta[]> {
     const schema = schemaPattern ?? this.schema;
     const rows = await this.sql.getTables(this.conn, schema, "%", ["TABLE"]);
     return rows.map((r) => ({
@@ -57,9 +56,8 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   // Columns
   // ----------------------------------------------------------
 
-  async getColumns(tableName: string): Promise<JdbcColumnMeta[]> {
-    // Sequential awaits: JDBC connections do not support concurrent operations
-    // on the same connection — running these in parallel would deadlock.
+  async getColumns(tableName: string): Promise<ColumnMeta[]> {
+    // Sequential awaits: run these one at a time to avoid connection contention.
     const colRows = await this.sql.getColumns(this.conn, this.schema, tableName);
     const pkSet   = await this.fetchPrimaryKeys(tableName);
 
@@ -67,10 +65,10 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
       .map((r) => ({
         tableName:       str(r, "TABLE_NAME", tableName),
         columnName:      str(r, "COLUMN_NAME"),
-        // JDBC returns TYPE_NAME for the SQL type name (e.g. "VARCHAR", "INTEGER")
+        // TYPE_NAME contains the SQL type name (e.g. "VARCHAR", "INTEGER")
         dataType:        str(r, "TYPE_NAME", "VARCHAR"),
         columnSize:      num(r, "COLUMN_SIZE"),
-        // JDBC NULLABLE: 0 = columnNoNulls, 1 = columnNullable, 2 = columnNullableUnknown
+        // NULLABLE: 0 = columnNoNulls, 1 = columnNullable, 2 = columnNullableUnknown
         nullable:        num(r, "NULLABLE", 1) !== 0,
         isPrimaryKey:    pkSet.has(str(r, "COLUMN_NAME").toUpperCase()),
         ordinalPosition: num(r, "ORDINAL_POSITION", 1),
@@ -79,8 +77,7 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   }
 
   private async fetchPrimaryKeys(tableName: string): Promise<Set<string>> {
-    // Query INFORMATION_SCHEMA instead of relying on JDBC getPrimaryKeys()
-    // because SqlService does not expose that metadata method.
+    // Query INFORMATION_SCHEMA for primary keys.
     try {
       const rows = await this.sql.query(
         this.conn,
@@ -105,7 +102,7 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   // Foreign keys
   // ----------------------------------------------------------
 
-  async getForeignKeys(tableName: string): Promise<JdbcForeignKeyMeta[]> {
+  async getForeignKeys(tableName: string): Promise<ForeignKeyMeta[]> {
     const rows = await this.sql.getForeignKeys(this.conn, this.schema, tableName);
     return rows.map((r) => ({
       fkTableName:    str(r, "FKTABLE_NAME", tableName),
@@ -121,9 +118,9 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   // Index info
   // ----------------------------------------------------------
 
-  async getIndexInfo(_tableName: string): Promise<JdbcIndexMeta[]> {
-    // Snowflake does not expose index metadata via JDBC; Postgres does but
-    // the operational risk of a missing index isn't worth a separate call.
+  async getIndexInfo(_tableName: string): Promise<IndexMeta[]> {
+    // Index metadata is not queried — hierarchy inference falls back gracefully
+    // to name-based strategies.
     // Hierarchy inference falls back gracefully to name-based strategies.
     return [];
   }
@@ -132,7 +129,7 @@ export class SqlJdbcAdapter implements JdbcDatabaseMetaData {
   // Views
   // ----------------------------------------------------------
 
-  async getViews(schemaPattern?: string): Promise<JdbcViewMeta[]> {
+  async getViews(schemaPattern?: string): Promise<ViewMeta[]> {
     const schema = schemaPattern ?? this.schema;
     const rows = await this.sql.getViews(this.conn, schema);
     return rows.map((r) => ({

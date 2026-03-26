@@ -8,7 +8,7 @@
 //   budget_authority, obligation, outlay.
 // ============================================================
 
-import { JdbcColumnMeta, SemanticMeasure } from "../../types.js";
+import { ColumnMeta, SemanticMeasure } from "../../types.js";
 import { AbstractVerticalPlugin, HierarchySequence } from "../base-plugin.js";
 
 export class GovernmentPlugin extends AbstractVerticalPlugin {
@@ -75,7 +75,7 @@ export class GovernmentPlugin extends AbstractVerticalPlugin {
 
   // Government plugin uses default measure inference for budget_authority,
   // obligation, outlay, and grant_amount columns.
-  override inferMeasures(_columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  override inferMeasures(_columns: ColumnMeta[]): SemanticMeasure[] {
     return [];
   }
 }

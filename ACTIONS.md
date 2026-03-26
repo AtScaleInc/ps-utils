@@ -2,6 +2,63 @@
 
 This document describes how to run every CLI operation as a GitHub Actions workflow via the **composite action** (`action.yml`) bundled in this repository.
 
+```mermaid
+flowchart TD
+    DDL["DDL File<br/>(.sql)"]
+    DB[("Database<br/>(Postgres / Snowflake)")]
+    ATS["AtScale<br/>Instance"]
+    ATSDB[("AtScale<br/>Postgres Backend")]
+    NS["Namespace YAML<br/>(namespace.yaml)"]
+    CONN["Connections YAML<br/>(connections.yaml)"]
+
+    DDL -->|generate-sml-from-ddl| SML
+    DB -->|generate-sml-from-connection| SML
+    DB -->|extract-ddl-from-connection| DDL2["DDL File<br/>(extracted)"]
+
+    subgraph SML["SML Output"]
+        direction TB
+        catalog["catalog.yml"]
+        datasets["datasets/"]
+        dims["dimensions/"]
+        metrics["metrics/"]
+        models["models/"]
+    end
+
+    SML -->|deploy to| ATS
+    ATS -->|extract-model-from-atscale| MODEL["model.yaml"]
+    SML -->|extract-model-from-sml| MODEL
+
+    MODEL -->|generate-namespace-from-model| NS
+    MODEL --> TWB
+    MODEL --> XLSX
+    NS --> TWB
+    NS --> XLSX
+    CONN --> TWB
+    CONN --> XLSX
+    MODEL --> PBI
+    NS --> PBI
+    CONN --> PBI
+    TWB["generate-tableau-from-namespace<br/>→ tableau.twb"]
+    XLSX["generate-excel-from-namespace<br/>→ workbook.xlsx"]
+    PBI["generate-powerbi-from-namespace<br/>→ output/powerbi/"]
+
+    DB -->|execute-sql-on-connection| SQLOUT["SQL Results"]
+    ATSDB -->|extract-queries-from-atscale| QJSON["Query JSON<br/>(queries/*.json)"]
+    QJSON -->|execute-atscale-query-harness| RCSV["Results CSV<br/>(run_results/*.csv)"]
+    ATS -->|execute-atscale-query-harness| RCSV
+    ATS -->|extract-query-stats-from-atscale| STATSCSV["Stats CSV<br/>(occurrences.csv)"]
+
+    click MODEL href "#extract-model-from-atscale" "extract-model-from-atscale"
+    click DDL2 href "#extract-ddl-from-connection" "extract-ddl-from-connection"
+    click SQLOUT href "#execute-sql-on-connection" "execute-sql-on-connection"
+    click TWB href "#generate-tableau-from-namespace" "generate-tableau-from-namespace"
+    click XLSX href "#generate-excel-from-namespace" "generate-excel-from-namespace"
+    click PBI href "#generate-powerbi-from-namespace" "generate-powerbi-from-namespace"
+    click QJSON href "#extract-queries-from-atscale" "extract-queries-from-atscale"
+    click RCSV href "#execute-atscale-query-harness" "execute-atscale-query-harness"
+    click STATSCSV href "#extract-query-stats-from-atscale" "extract-query-stats-from-atscale"
+```
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -18,6 +75,10 @@ This document describes how to run every CLI operation as a GitHub Actions workf
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
   - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
   - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+  - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
+  - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
+  - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+  - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
@@ -38,7 +99,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection` | Full contents of your `connections.yaml` file |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -167,7 +228,7 @@ Reads a SQL file, splits it into individual statements (handling string literals
 
 ### `extract-ddl-from-connection`
 
-Connects to a live database, reads JDBC metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file. Use `--tables` to limit extraction to specific tables or wildcard patterns.
+Connects to a live database, reads schema metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file. Use `--tables` to limit extraction to specific tables or wildcard patterns.
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
@@ -356,6 +417,177 @@ The output is written to `output/<target-folder>/` and can be opened directly in
 | `model-file` | No | `model.yaml` | Path to the model YAML |
 | `aliases-file` | No | | Path to an optional column aliases YAML |
 | `target-folder` | No | `powerbi` | Report folder name (written under `output/`) |
+
+---
+
+### `extract-query-stats-from-atscale`
+
+Paginates through the AtScale query history REST API for a given time window and writes a CSV occurrence matrix showing how many user queries involved each (dimension attribute × measure) pair. Mirrors the analysis in `query_histogram_updated.ipynb`.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-query-stats-from-atscale
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    model: MyModel
+    output-dir: query-stats
+    window-days: "30"         # optional — look-back window (default 30)
+    monthly: "true"           # optional — also write month-by-month CSV
+    monthly-year: "2025"      # optional — year for monthly breakdown
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | Yes | | Connection name in the file |
+| `model` | Yes | | AtScale model (cube) name to analyse |
+| `output-dir` | No | `.` | Directory to write the output CSV files |
+| `window-days` | No | `30` | Days to look back when no explicit date range is given |
+| `start-date` | No | | Explicit window start (ISO-8601, e.g. `2025-01-01T00:00:00Z`). Overrides `window-days`. |
+| `end-date` | No | now | Explicit window end (ISO-8601). Only used when `start-date` is set. |
+| `monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv` |
+| `monthly-year` | No | current year | Calendar year for the monthly breakdown |
+| `limit` | No | `100` | Page size for the query history API |
+| `num-queries` | No | `10` | Max sample query IDs retained per (attribute, measure) pair |
+
+**Outputs:**
+- `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
+- `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts for all 12 months of `monthly-year` (only when `monthly: "true"`)
+
+---
+
+### `extract-queries-from-atscale`
+
+Connects to the AtScale internal Postgres backend and extracts deduplicated query history for one or more models. Outputs one JSON file per (model, protocol) pair for use with `execute-atscale-query-harness`. Accepts both `connections.yaml` and Gatling `systems.properties`.
+
+**Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file (with a `sql:` block pointing at the AtScale Postgres backend) or a Gatling `systems.properties` file.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-queries-from-atscale
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_postgres
+    models: "SalesModel,InventoryModel"
+    days: "60"                  # optional, default 60
+    protocol: all               # optional — sql, xmla, or all
+    min-executions: "2"         # optional — exclude queries seen < N times
+    output-dir: queries         # optional, default queries
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of `connections.yaml` or a Gatling `systems.properties` (pass via secret) |
+| `connection-name` | No | `default` | Connection name within `connections.yaml` (ignored for `.properties` files) |
+| `models` | No* | | Comma-separated model/cube names. Required for YAML mode; overrides `atscale.models` for `.properties` mode |
+| `days` | No | `60` | Look-back window in days |
+| `output-dir` | No | `queries` | Directory to write output JSON files |
+| `protocol` | No | `all` | Protocol to extract: `sql`, `xmla`, or `all` |
+| `min-executions` | No | `1` | Exclude queries seen fewer than N times |
+| `db-schema` | No | `engine` | Postgres schema prefix (e.g. `engine` or `atscale.engine`) |
+
+\* Required when using a `connections.yaml` file.
+
+**Outputs:** JSON files in `output-dir`, one per (model, protocol) pair — `{model}_sql_queries.json`, `{model}_sql_installer_queries.json`, `{model}_xmla_queries.json`.
+
+---
+
+### `execute-atscale-query-harness`
+
+Replays extracted queries against a live AtScale instance, measuring response time and row count for each. Supports SQL and XMLA/MDX protocols, concurrent workers, throttling, and timed-duration run modes. Accepts query input as a JSON file (from `extract-queries-from-atscale`), a Gatling ingest CSV, or a Gatling executor task YAML/JSON.
+
+**Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file or a Gatling `systems.properties` file.
+
+#### Using the composite action
+
+```yaml
+# Direct mode — replay a query JSON file
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: execute-atscale-query-harness
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    query-file: queries/SalesModel_xmla_queries.json
+    protocol: xmla
+    concurrent-users: "5"
+    output-dir: run_results
+```
+
+```yaml
+# Task-file mode — run all Gatling executor tasks
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: execute-atscale-query-harness
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: SalesModel
+    task-file: executor_tasks/tasks.yaml
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of `connections.yaml` or a Gatling `systems.properties` (pass via secret) |
+| `connection-name` | Yes | | Connection name (YAML mode) or model name (`.properties` mode) |
+| `query-file` | No | | JSON file from `extract-queries-from-atscale` |
+| `ingest-file` | No | | Gatling ingest CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`) |
+| `task-file` | No | | Gatling executor task YAML or JSON |
+| `protocol` | No | `xmla` | Query protocol: `xmla` or `sql` (ignored in task-file mode) |
+| `concurrent-users` | No | `1` | Number of parallel workers (ignored in task-file mode) |
+| `throttle-ms` | No | `5` | Minimum ms between dispatches per worker |
+| `run-id` | No | | Label embedded in every output row (auto-generated if omitted) |
+| `output-dir` | No | `run_results` | Directory to write the output CSV |
+| `redact` | No | `false` | When `"true"`, omits inbound query text from log output |
+| `duration-minutes` | No | `0` | Run for this many minutes cycling the query list (0 = one pass) |
+
+**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `inbound_text_hash`
+
+---
+
+### `generate-atscale-install-yaml`
+
+Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS certificate is supplied, a self-signed RSA-2048 / SHA-256 certificate is generated automatically for the provided hostname (valid 365 days). The `tlsCrt` and `tlsKey` fields are base64-encoded PEM strings as required by the AtScale Helm chart.
+
+**Requires:** No secrets — all inputs are plain parameters.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-atscale-install-yaml
+    install-hostname: ${{ inputs.hostname }}
+    install-output-file: values.yaml   # optional, default values.yaml
+```
+
+```yaml
+# With an existing certificate stored as secrets
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-atscale-install-yaml
+    install-hostname: ${{ inputs.hostname }}
+    tls-cert-file: tls.crt
+    tls-key-file:  tls.key
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `install-hostname` | Yes | | FQDN or IP for the AtScale ingress domain and certificate CN/SAN |
+| `tls-cert-file` | No | | Path to an existing PEM certificate file |
+| `tls-key-file` | No | | Path to an existing PEM private key file (required when `tls-cert-file` is set) |
+| `install-output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
+
+**What it does:**
+1. If `tls-cert-file` is omitted, generates a self-signed certificate for `install-hostname` using Node's built-in `crypto` module (no external dependencies)
+2. Base64-encodes the PEM cert and key (double-encodes as required by the Helm chart)
+3. Renders `values.yaml` with `ingressDomain`, `tlsCrt`, and `tlsKey` filled in
 
 ---
 

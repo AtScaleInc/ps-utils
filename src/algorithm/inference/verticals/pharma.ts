@@ -6,7 +6,7 @@
 //   ind_number, cohort_id, molecule_id, therapeutic_area, moa, dosage.
 // ============================================================
 
-import { JdbcColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
+import { ColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
 import { AbstractVerticalPlugin, HierarchySequence } from "../base-plugin.js";
 
 export class PharmaPlugin extends AbstractVerticalPlugin {
@@ -72,7 +72,7 @@ export class PharmaPlugin extends AbstractVerticalPlugin {
 
   // Dosage/rate columns: AVG/MIN/MAX only (summing doses or rates is meaningless).
   // Count columns: SUM/AVG/MIN/MAX.
-  override inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  override inferMeasures(columns: ColumnMeta[]): SemanticMeasure[] {
     const measures: SemanticMeasure[] = [];
 
     const avgOnlyPatterns =

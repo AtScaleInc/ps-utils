@@ -1,7 +1,7 @@
 // ============================================================
 // Column Profiler
 //
-// Samples actual row data (via JdbcDatabaseMetaData.sampleRows)
+// Samples actual row data (via DatabaseMetaData.sampleRows)
 // and produces per-column profiles that the inference engine uses
 // to override schema-declared types, suppress identifier columns
 // from measures, and add pattern-based PII signals.
@@ -12,7 +12,7 @@
 //   phone > json > decimal > integer > none
 // ============================================================
 
-import { JdbcColumnMeta, JdbcDatabaseMetaData, SemanticDataType } from "./types.js";
+import { ColumnMeta, DatabaseMetaData, SemanticDataType } from "./types.js";
 
 // ----------------------------------------------------------
 // Public types
@@ -268,8 +268,8 @@ export function profileColumn(
  * @param sampleSize     Maximum rows to sample per table (default 250).
  */
 export async function profileTables(
-  db: JdbcDatabaseMetaData,
-  columnsByTable: Map<string, JdbcColumnMeta[]>,
+  db: DatabaseMetaData,
+  columnsByTable: Map<string, ColumnMeta[]>,
   sampleSize = 250,
 ): Promise<ProfileMap> {
   const profileMap: ProfileMap = new Map();
@@ -304,13 +304,13 @@ export async function profileTables(
 }
 
 /**
- * Apply column profile overrides to a list of JdbcColumnMeta.
+ * Apply column profile overrides to a list of ColumnMeta.
  * Returns a new array where data types have been refined based on profiled patterns.
  */
 export function applyProfileTypeOverrides(
-  cols: JdbcColumnMeta[],
+  cols: ColumnMeta[],
   tableProfiles: Map<string, ColumnProfile> | undefined,
-): JdbcColumnMeta[] {
+): ColumnMeta[] {
   if (!tableProfiles) return cols;
 
   return cols.map((col) => {

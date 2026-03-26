@@ -6,7 +6,7 @@
 //   academic_year, district_id, campus_id, grade_level.
 // ============================================================
 
-import { JdbcColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
+import { ColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
 import { AbstractVerticalPlugin, HierarchySequence } from "../base-plugin.js";
 
 export class EducationPlugin extends AbstractVerticalPlugin {
@@ -73,7 +73,7 @@ export class EducationPlugin extends AbstractVerticalPlugin {
 
   // Rate/score columns: AVG/MIN/MAX only (summing is meaningless).
   // Count/hours columns: SUM/AVG/MIN/MAX.
-  override inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  override inferMeasures(columns: ColumnMeta[]): SemanticMeasure[] {
     const measures: SemanticMeasure[] = [];
 
     const ratePatterns =

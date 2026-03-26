@@ -1,7 +1,7 @@
 /**
  * ExtractDDLFromConnection
  *
- * Connects to a live database, reads JDBC metadata for each table in the
+ * Connects to a live database, reads schema metadata for each table in the
  * target schema, and writes the equivalent CREATE TABLE DDL to a file (or
  * stdout).
  *

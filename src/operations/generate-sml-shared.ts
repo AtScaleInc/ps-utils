@@ -10,7 +10,7 @@
 import fs from "fs";
 import path from "path";
 import type { Logger } from "../logging.js";
-import type { JdbcDatabaseMetaData } from "../algorithm/types.js";
+import type { DatabaseMetaData } from "../algorithm/types.js";
 import type { ProposeOptions } from "../algorithm/jdbc-semantic-model.js";
 import { proposeSemanticModel } from "../algorithm/jdbc-semantic-model.js";
 import { createDefaultEngine } from "../algorithm/inference/index.js";
@@ -63,7 +63,7 @@ export type InferenceOptions = Omit<ProposeOptions, "inferenceEngine" | "suggest
  * @param tag  Short identifier used in log prefixes, e.g. "GenerateSMLFromDDL".
  */
 export async function runInferenceAndWrite(
-  db: JdbcDatabaseMetaData,
+  db: DatabaseMetaData,
   modelName: string,
   options: InferenceOptions,
   outputDir: string,

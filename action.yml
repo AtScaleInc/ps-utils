@@ -18,6 +18,7 @@ inputs:
         generate-excel-from-namespace
         execute-sql-on-connection
         extract-ddl-from-connection
+        generate-atscale-install-yaml
         deploy-atscale-microk8s
     required: true
 
@@ -167,6 +168,30 @@ inputs:
       Omit to extract all tables in the schema.
     required: false
 
+  # ── generate-atscale-install-yaml ────────────────────────────────────────
+  install-hostname:
+    description: >
+      Fully-qualified domain name (or IP) for the AtScale ingress and TLS certificate.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  tls-cert-file:
+    description: >
+      Path to an existing PEM certificate file. When omitted a self-signed
+      certificate is generated automatically.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  tls-key-file:
+    description: >
+      Path to an existing PEM private key file. Required when tls-cert-file is set.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  install-output-file:
+    description: >
+      Output path for the generated values.yaml (default: values.yaml).
+      Used by: generate-atscale-install-yaml.
+    required: false
+    default: values.yaml
+
   # ── deploy-atscale-microk8s ───────────────────────────────────────────────
   microk8s-hostname:
     description: IP address or hostname of the MicroK8s server.
@@ -221,7 +246,7 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
 
-    # ── Write connection file (operations that need JDBC credentials) ────────
+    # ── Write connection file (operations that need credentials) ────────
     - name: Write connection file
       if: >-
         inputs.connection-file != '' &&
@@ -377,6 +402,19 @@ runs:
         [[ -n "${{ inputs.tables }}" ]]      && ARGS+=(--tables      "${{ inputs.tables }}")
         [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-atscale-install-yaml ────────────────────────────────────────
+    - name: Generate AtScale install values.yaml
+      if: inputs.operation == 'generate-atscale-install-yaml'
+      run: |
+        ARGS=(
+          --hostname     "${{ inputs.install-hostname }}"
+          --output-file  "${{ inputs.install-output-file }}"
+        )
+        [[ -n "${{ inputs.tls-cert-file }}" ]] && ARGS+=(--cert-file "${{ inputs.tls-cert-file }}")
+        [[ -n "${{ inputs.tls-key-file }}"  ]] && ARGS+=(--key-file  "${{ inputs.tls-key-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-atscale-install-yaml "${ARGS[@]}"
       shell: bash
 
     # ── deploy-atscale-microk8s ───────────────────────────────────────────────

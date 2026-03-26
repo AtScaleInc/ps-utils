@@ -6,7 +6,7 @@
 //   bol_number, container_id, freight_class, route_id, warehouse_id.
 // ============================================================
 
-import { JdbcColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
+import { ColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
 import { AbstractVerticalPlugin, HierarchySequence } from "../base-plugin.js";
 
 export class LogisticsPlugin extends AbstractVerticalPlugin {
@@ -75,7 +75,7 @@ export class LogisticsPlugin extends AbstractVerticalPlugin {
   // Transit days: AVG/MIN/MAX only (summing transit days is meaningless).
   // Rate columns: AVG/MIN/MAX only.
   // Freight cost / weight / unit count columns: SUM/AVG/MIN/MAX.
-  override inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  override inferMeasures(columns: ColumnMeta[]): SemanticMeasure[] {
     const measures: SemanticMeasure[] = [];
 
     const avgOnlyPatterns =

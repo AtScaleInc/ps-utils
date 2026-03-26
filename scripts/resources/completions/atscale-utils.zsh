@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace
+    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml
     ;;
   args)
     case "$words[2]" in
@@ -51,6 +51,18 @@ case $state in
     ;;
   generate-excel-from-namespace)
     _values 'params' --logfile --output --verbose --namespace-file --model-file --connection-file --aliases-file --connection-name --target-file
+    ;;
+  extract-query-stats-from-atscale)
+    _values 'params' --logfile --output --verbose --connection-file --connection-name --model --output-dir --window-days --start-date --end-date --monthly --monthly-year --limit --num-queries
+    ;;
+  extract-queries-from-atscale)
+    _values 'params' --logfile --output --verbose --connection-file --connection-name --models --days --output-dir --protocol --min-executions --db-schema
+    ;;
+  execute-atscale-query-harness)
+    _values 'params' --logfile --output --verbose --connection-file --connection-name --query-file --ingest-file --task-file --protocol --concurrent-users --throttle-ms --run-id --output-dir --redact --duration-minutes
+    ;;
+  generate-atscale-install-yaml)
+    _values 'params' --logfile --output --verbose --hostname --cert-file --key-file --output-file
     ;;
     *)
       _values 'params' --logfile --output --verbose

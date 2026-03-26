@@ -2,7 +2,7 @@
 // DDL Reader
 //
 // Parses SQL DDL text (CREATE TABLE / CREATE VIEW statements)
-// and produces a JdbcDatabaseMetaData implementation that can
+// and produces a DatabaseMetaData implementation that can
 // be passed directly to proposeSemanticModel().
 //
 // Supported DDL constructs:
@@ -23,12 +23,12 @@
 // ============================================================
 
 import {
-  JdbcDatabaseMetaData,
-  JdbcTableMeta,
-  JdbcColumnMeta,
-  JdbcForeignKeyMeta,
-  JdbcIndexMeta,
-  JdbcViewMeta,
+  DatabaseMetaData,
+  TableMeta,
+  ColumnMeta,
+  ForeignKeyMeta,
+  IndexMeta,
+  ViewMeta,
 } from "./types.js";
 
 // ----------------------------------------------------------
@@ -542,11 +542,11 @@ function splitStatements(ddl: string): string[] {
 }
 
 // ----------------------------------------------------------
-// DdlDatabaseMetaData — implements JdbcDatabaseMetaData
+// DdlDatabaseMetaData — implements DatabaseMetaData
 // ----------------------------------------------------------
 
 /**
- * A JdbcDatabaseMetaData implementation backed by parsed DDL.
+ * A DatabaseMetaData implementation backed by parsed DDL.
  *
  * Construct it from a DDL string via `DdlDatabaseMetaData.fromDdl(ddlText)`,
  * or use the static `fromFile(path)` helper to read from disk.
@@ -555,7 +555,7 @@ function splitStatements(ddl: string): string[] {
  * const meta = DdlDatabaseMetaData.fromDdl(ddlText);
  * const model = await proposeSemanticModel(meta, "SalesModel");
  */
-export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
+export class DdlDatabaseMetaData implements DatabaseMetaData {
   private readonly tables = new Map<string, ParsedTable>();
   private readonly views = new Map<string, ParsedView>();
 
@@ -566,7 +566,7 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
   // ----------------------------------------------------------
 
   /**
-   * Parse a DDL string and return a ready-to-use JdbcDatabaseMetaData.
+   * Parse a DDL string and return a ready-to-use DatabaseMetaData.
    *
    * @param ddl  Raw SQL DDL text (may contain multiple statements).
    */
@@ -628,10 +628,10 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
   }
 
   // ----------------------------------------------------------
-  // JdbcDatabaseMetaData implementation
+  // DatabaseMetaData implementation
   // ----------------------------------------------------------
 
-  async getTables(schemaPattern?: string): Promise<JdbcTableMeta[]> {
+  async getTables(schemaPattern?: string): Promise<TableMeta[]> {
     return Array.from(this.tables.values())
       .filter(
         (t) =>
@@ -645,7 +645,7 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
       }));
   }
 
-  async getColumns(tableName: string): Promise<JdbcColumnMeta[]> {
+  async getColumns(tableName: string): Promise<ColumnMeta[]> {
     const table = this.tables.get(tableName.toUpperCase());
     if (!table) return [];
     return table.columns.map((c) => ({
@@ -659,11 +659,11 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
     }));
   }
 
-  async getForeignKeys(tableName: string): Promise<JdbcForeignKeyMeta[]> {
+  async getForeignKeys(tableName: string): Promise<ForeignKeyMeta[]> {
     const table = this.tables.get(tableName.toUpperCase());
     if (!table) return [];
 
-    const result: JdbcForeignKeyMeta[] = [];
+    const result: ForeignKeyMeta[] = [];
     for (const fk of table.foreignKeys) {
       fk.fkColumns.forEach((fkCol, idx) => {
         result.push({
@@ -679,11 +679,11 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
     return result;
   }
 
-  async getIndexInfo(tableName: string): Promise<JdbcIndexMeta[]> {
+  async getIndexInfo(tableName: string): Promise<IndexMeta[]> {
     const table = this.tables.get(tableName.toUpperCase());
     if (!table) return [];
 
-    const result: JdbcIndexMeta[] = [];
+    const result: IndexMeta[] = [];
     for (const idx of table.indexes) {
       idx.columns.forEach((col, pos) => {
         result.push({
@@ -699,7 +699,7 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
     return result;
   }
 
-  async getViews(schemaPattern?: string): Promise<JdbcViewMeta[]> {
+  async getViews(schemaPattern?: string): Promise<ViewMeta[]> {
     return Array.from(this.views.values())
       .filter(
         (v) =>
@@ -724,7 +724,7 @@ export class DdlDatabaseMetaData implements JdbcDatabaseMetaData {
 
   /**
    * DDL has no actual row data — always returns an empty array.
-   * Live JDBC implementations should override this to run a TABLESAMPLE query.
+   * Live database implementations should override this to run a TABLESAMPLE query.
    */
   async sampleRows(_tableName: string, _limit = 250): Promise<Record<string, unknown>[]> {
     return [];

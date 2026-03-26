@@ -10,7 +10,7 @@
 // using those declarations; subclasses override as needed.
 // ============================================================
 
-import { JdbcColumnMeta, SemanticHierarchy, SemanticMeasure, toTitleCase } from "../types.js";
+import { ColumnMeta, SemanticHierarchy, SemanticMeasure, toTitleCase } from "../types.js";
 import { InferencePlugin } from "./plugin.js";
 
 // ----------------------------------------------------------
@@ -58,7 +58,7 @@ export abstract class AbstractVerticalPlugin implements InferencePlugin {
   // Default implementations
   // ----------------------------------------------------------
 
-  detect(columns: JdbcColumnMeta[]): number {
+  detect(columns: ColumnMeta[]): number {
     const lowerNames = columns.map((c) => c.columnName.toLowerCase());
     const matches = this.signalPatterns.filter((p) =>
       lowerNames.some((n) => p.test(n)),
@@ -66,7 +66,7 @@ export abstract class AbstractVerticalPlugin implements InferencePlugin {
     return Math.min(matches / this.detectionThreshold, 1.0);
   }
 
-  inferHierarchies(columns: JdbcColumnMeta[]): SemanticHierarchy[] {
+  inferHierarchies(columns: ColumnMeta[]): SemanticHierarchy[] {
     const hierarchies: SemanticHierarchy[] = [];
     const usedColumns = new Set<string>();
 
@@ -82,7 +82,7 @@ export abstract class AbstractVerticalPlugin implements InferencePlugin {
   }
 
   /** Default: no additional measures. Subclasses override when needed. */
-  inferMeasures(_columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  inferMeasures(_columns: ColumnMeta[]): SemanticMeasure[] {
     return [];
   }
 
@@ -95,7 +95,7 @@ export abstract class AbstractVerticalPlugin implements InferencePlugin {
    * level patterns.  Returns null when fewer than minLevels columns match.
    */
   protected buildHierarchy(
-    columns: JdbcColumnMeta[],
+    columns: ColumnMeta[],
     seq: HierarchySequence,
     alreadyUsed: Set<string> = new Set(),
   ): SemanticHierarchy | null {
@@ -120,17 +120,17 @@ export abstract class AbstractVerticalPlugin implements InferencePlugin {
 
   /** Find the first column matching a pattern (case-insensitive). */
   protected findColumn(
-    columns: JdbcColumnMeta[],
+    columns: ColumnMeta[],
     pattern: RegExp,
-  ): JdbcColumnMeta | undefined {
+  ): ColumnMeta | undefined {
     return columns.find((c) => pattern.test(c.columnName.toLowerCase()));
   }
 
   /** Find all columns matching a pattern (case-insensitive). */
   protected findColumns(
-    columns: JdbcColumnMeta[],
+    columns: ColumnMeta[],
     pattern: RegExp,
-  ): JdbcColumnMeta[] {
+  ): ColumnMeta[] {
     return columns.filter((c) => pattern.test(c.columnName.toLowerCase()));
   }
 }

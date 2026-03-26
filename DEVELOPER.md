@@ -306,15 +306,20 @@ jdbc-semantic-model.ts          ← orchestrator; call proposeSemanticModel() he
     ├── engine.ts               ← InferenceEngine (registry + orchestrator)
     ├── index.ts                ← public API + createDefaultEngine()
     └── verticals/
-        ├── financial-services.ts
-        ├── retail-ecommerce.ts
-        ├── healthcare.ts
-        ├── telecom.ts
-        ├── manufacturing.ts
-        ├── real-estate.ts
+        ├── education.ts
         ├── energy-utilities.ts
-        ├── media-advertising.ts
+        ├── financial-services.ts
+        ├── government.ts
+        ├── healthcare.ts
         ├── human-resources.ts
+        ├── insurance.ts
+        ├── logistics.ts
+        ├── manufacturing.ts
+        ├── media-advertising.ts
+        ├── pharma.ts
+        ├── real-estate.ts
+        ├── retail-ecommerce.ts
+        ├── telecom.ts
         └── travel-hospitality.ts
 ```
 
@@ -542,15 +547,20 @@ export class MLScoredPlugin implements InferencePlugin {
 
 | Plugin | Key signals | Hierarchies |
 |---|---|---|
+| **Education** | student_id, course_id, enrollment_id, GPA, academic_year, district_id, grade_level | Academic Calendar, District, Course Taxonomy, Credential |
+| **Energy / Utilities** | meter_id, consumption_kwh, rate_class, SAIDI, feeder_id, balancing_authority | Grid Topology, Service Territory, Customer Class, Energy Source, ISO Market, Interval Time |
 | **Financial Services** | ticker, CUSIP, ISIN, SEDOL, FIGI, exchange_code, GICS codes | GICS Industry, Exchange Listing, Asset Class, Portfolio, SIC, Credit Rating |
-| **Retail / E-Commerce** | SKU, UPC/EAN, store_number, promo_code, fiscal_week | Product Taxonomy, Store Geography, Promotion, Brand, Fiscal Calendar, Customer Segment |
+| **Government** | fund_code, agency_code, program_code, CFDA number, appropriation, obligation | Budget Structure, Fund Type, Object Classification, Geography |
 | **Healthcare** | MRN, NPI, ICD-10, CPT, NDC, DRG, encounter_id | Care Facility, ICD Diagnosis, CPT Procedure, Drug Taxonomy, Provider, DRG, Payer |
-| **Telecommunications** | MSISDN, IMSI, IMEI, cell_id, MCC/MNC, ARPU | Network Topology, Technology Generation, Subscriber Account, Product Plan, Coverage Geography, Roaming |
-| **Manufacturing / Supply Chain** | work_order, part_number, BOM, lot_number, plant_code, OEE | Facility, Product BOM, Supplier, Org Cost, Production Shift, Quality Classification |
-| **Real Estate** | APN, MLS number, DOM, cap_rate, NOI, price_per_sqft | Property Geography, Property Type, Commercial Portfolio, MLS Region, Brokerage |
-| **Energy / Utilities** | meter_id, consumption_kwh, rate_class, SAIDI, feeder_id | Grid Topology, Service Territory, Customer Class, Energy Source, ISO Market, Interval Time |
-| **Media / Advertising** | campaign_id, creative_id, insertion_order, CPM/ROAS, DMA | Campaign, Media Buy, Publisher Inventory, Media Channel, Audience, DMA Geography |
 | **Human Resources** | employee_id, hire_date, job_code, pay_grade, cost_center, FTE | Organization, Job Classification, Compensation Band, Work Location, Recruiting Funnel |
+| **Insurance** | policy_number, claim_id, premium, loss_ratio, combined_ratio, peril_code | Policy Lifecycle, Risk Classification, Claim Type, Distribution Channel |
+| **Logistics** | shipment_id, tracking_number, SCAC code, BOL number, origin_zip, transit_days | Origin Geography, Destination Geography, Carrier Network, Warehouse |
+| **Manufacturing / Supply Chain** | work_order, part_number, BOM, lot_number, plant_code, OEE | Facility, Product BOM, Supplier, Org Cost, Production Shift, Quality Classification |
+| **Media / Advertising** | campaign_id, creative_id, insertion_order, CPM/ROAS, DMA | Campaign, Media Buy, Publisher Inventory, Media Channel, Audience, DMA Geography |
+| **Pharma** | clinical_trial_id, compound_id, NDC, adverse_event_id, IND/NDA number, therapeutic_area | Compound Taxonomy, Clinical Phase, Regulatory Pathway, Manufacturing Site |
+| **Real Estate** | APN, MLS number, DOM, cap_rate, NOI, price_per_sqft | Property Geography, Property Type, Commercial Portfolio, MLS Region, Brokerage |
+| **Retail / E-Commerce** | SKU, UPC/EAN, store_number, promo_code, fiscal_week | Product Taxonomy, Store Geography, Promotion, Brand, Fiscal Calendar, Customer Segment |
+| **Telecommunications** | MSISDN, IMSI, IMEI, cell_id, MCC/MNC, ARPU | Network Topology, Technology Generation, Subscriber Account, Product Plan, Coverage Geography, Roaming |
 | **Travel / Hospitality** | reservation_id, check_in/out, rate_code, ADR, RevPAR, PNR | Hotel Portfolio, Revenue Management, Hotel Geography, Loyalty Program, Airline Network, Booking Lead Time |
 
 ---

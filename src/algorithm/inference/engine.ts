@@ -14,7 +14,7 @@
 //   const extraMeasures = engine.inferMeasures(columns);
 // ============================================================
 
-import { JdbcColumnMeta, JdbcIndexMeta, SemanticHierarchy, SemanticMeasure } from "../types.js";
+import { ColumnMeta, IndexMeta, SemanticHierarchy, SemanticMeasure } from "../types.js";
 import { inferHierarchies as baseInferHierarchies, hierarchyColumnSet } from "../hierarchy-inference.js";
 import { InferencePlugin, InferenceEngineOptions, VerticalMatch } from "./plugin.js";
 
@@ -71,7 +71,7 @@ export class InferenceEngine {
    * sorted by score descending.  Only matches at or above the threshold are
    * returned.
    */
-  detectVerticals(columns: JdbcColumnMeta[]): VerticalMatch[] {
+  detectVerticals(columns: ColumnMeta[]): VerticalMatch[] {
     const matches: VerticalMatch[] = this.plugins
       .map((plugin) => ({ plugin, score: plugin.detect(columns) }))
       .filter(({ score }) => score >= this.threshold)
@@ -96,8 +96,8 @@ export class InferenceEngine {
    * from an earlier step is not reused in a later step.
    */
   inferHierarchies(
-    columns: JdbcColumnMeta[],
-    indexes: JdbcIndexMeta[],
+    columns: ColumnMeta[],
+    indexes: IndexMeta[],
   ): { hierarchies: SemanticHierarchy[]; warnings: string[] } {
     // Step 1: generic base inference (returns hierarchies + any advisory warnings)
     const { hierarchies: baseHierarchies, warnings } = baseInferHierarchies(columns, indexes);
@@ -132,7 +132,7 @@ export class InferenceEngine {
    * Returns vertical-specific SemanticMeasure additions from detected plugins.
    * The caller is responsible for merging these with the generic measure list.
    */
-  inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  inferMeasures(columns: ColumnMeta[]): SemanticMeasure[] {
     const matches = this.detectVerticals(columns);
     return matches.flatMap(({ plugin }) => plugin.inferMeasures(columns));
   }
@@ -145,7 +145,7 @@ export class InferenceEngine {
    * Returns all plugin scores for the supplied columns, regardless of
    * threshold.  Useful for debugging detection.
    */
-  diagnose(columns: JdbcColumnMeta[]): Array<{ name: string; score: number }> {
+  diagnose(columns: ColumnMeta[]): Array<{ name: string; score: number }> {
     return this.plugins
       .map((p) => ({ name: p.name, score: p.detect(columns) }))
       .sort((a, b) => b.score - a.score);

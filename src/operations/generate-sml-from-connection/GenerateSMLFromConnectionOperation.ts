@@ -19,7 +19,7 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { SqlService, type ConnectionConfig } from "../../services/SqlService.js";
-import { SqlJdbcAdapter } from "./SqlJdbcAdapter.js";
+import { SqlSchemaAdapter } from "./SqlSchemaAdapter.js";
 import { resolvePiiSeverity, runInferenceAndWrite } from "../generate-sml-shared.js";
 
 // ----------------------------------------------------------
@@ -153,7 +153,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
 
     try {
       await runInferenceAndWrite(
-        new SqlJdbcAdapter(sql, conn, schema),
+        new SqlSchemaAdapter(sql, conn, schema),
         modelName,
         {
           schemaPattern:        schema,

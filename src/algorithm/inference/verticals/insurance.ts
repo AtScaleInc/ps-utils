@@ -6,7 +6,7 @@
 //   loss_ratio, naic_code, coverage_type, underwriter_id.
 // ============================================================
 
-import { JdbcColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
+import { ColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
 import { AbstractVerticalPlugin, HierarchySequence } from "../base-plugin.js";
 
 export class InsurancePlugin extends AbstractVerticalPlugin {
@@ -70,7 +70,7 @@ export class InsurancePlugin extends AbstractVerticalPlugin {
 
   // Ratio columns: AVG/MIN/MAX only (summing ratios is meaningless).
   // Monetary amount columns: SUM/AVG/MIN/MAX.
-  override inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  override inferMeasures(columns: ColumnMeta[]): SemanticMeasure[] {
     const measures: SemanticMeasure[] = [];
 
     const ratioPatterns = /loss_ratio|combined_ratio|expense_ratio/;

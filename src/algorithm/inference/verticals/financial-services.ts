@@ -7,7 +7,7 @@
 //   → 69 industries → 158 sub-industries).
 // ============================================================
 
-import { JdbcColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
+import { ColumnMeta, SemanticMeasure, toTitleCase } from "../../types.js";
 import { AbstractVerticalPlugin, HierarchySequence } from "../base-plugin.js";
 
 export class FinancialServicesPlugin extends AbstractVerticalPlugin {
@@ -102,7 +102,7 @@ export class FinancialServicesPlugin extends AbstractVerticalPlugin {
   ];
 
   // Financial vertical adds ratio/performance measures that generic inference misses
-  override inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[] {
+  override inferMeasures(columns: ColumnMeta[]): SemanticMeasure[] {
     const measures: SemanticMeasure[] = [];
     const ratioColumns = [
       "pe_ratio", "pb_ratio", "ps_ratio", "ev_ebitda",

@@ -12,18 +12,7 @@ import { parse } from "yaml";
  * everything indented with "at " is a stack frame and is discarded.
  */
 function formatError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
-
-  // Prefer the message portion of the first Java exception line ("Foo.BarException: text")
-  for (const line of lines) {
-    const match = line.match(/^[\w$.]+Exception:\s*(.+)/);
-    if (match) return match[1];
-  }
-
-  // Fall back: drop stack-frame lines and return what remains
-  const meaningful = lines.filter((l) => !/^at\s/.test(l));
-  return meaningful.join("\n") || raw;
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**

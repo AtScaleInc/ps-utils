@@ -16,7 +16,7 @@
 // ============================================================
 
 import {
-  JdbcColumnMeta,
+  ColumnMeta,
   SemanticModel,
   isBinaryType,
   SemanticDimension,
@@ -66,7 +66,7 @@ export interface SmlSerializerOptions {
    * When omitted, dataset files include only the columns referenced by the
    * semantic model (measures, hierarchy levels, attributes).
    */
-  columnsByTable?: Map<string, JdbcColumnMeta[]>;
+  columnsByTable?: Map<string, ColumnMeta[]>;
 
   /**
    * Prefix for metric unique_names.  Default: "m_".
@@ -448,7 +448,7 @@ interface LevelAttributeDef {
  */
 function findNameColumn(
   sourceCol: string,
-  colByLower: Map<string, JdbcColumnMeta>,
+  colByLower: Map<string, ColumnMeta>,
 ): string | undefined {
   const lower = sourceCol.toLowerCase();
   // Strip common key suffixes to get stem ("productkey" → "product")
@@ -474,7 +474,7 @@ function findNameColumn(
  */
 function findSortColumn(
   sourceCol: string,
-  colByLower: Map<string, JdbcColumnMeta>,
+  colByLower: Map<string, ColumnMeta>,
 ): string | undefined {
   const lower = sourceCol.toLowerCase();
   // Strip common name/label suffixes to get stem
@@ -507,7 +507,7 @@ function buildDimensionFile(
 
   // Build column lookup maps for A (surrogate key pairing) and C (sort column).
   const rawCols = opts.columnsByTable?.get(dim.sourceTable) ?? [];
-  const colByLower = new Map<string, JdbcColumnMeta>(
+  const colByLower = new Map<string, ColumnMeta>(
     rawCols.map((c) => [c.columnName.toLowerCase(), c]),
   );
 

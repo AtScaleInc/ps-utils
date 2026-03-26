@@ -15,6 +15,10 @@ import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-m
 import { ExecuteSQLOnConnectionOperation } from "./execute-sql-on-connection/ExecuteSQLOnConnectionOperation.js";
 import { ExtractDDLFromConnectionOperation } from "./extract-ddl-from-connection/ExtractDDLFromConnectionOperation.js";
 import { GenerateExcelFromNamespaceOperation } from "./generate-excel-from-namespace/GenerateExcelFromNamespaceOperation.js";
+import { ExtractQueryStatsFromAtScaleOperation } from "./extract-query-stats-from-atscale/ExtractQueryStatsFromAtScaleOperation.js";
+import { ExtractQueriesFromAtScaleOperation } from "./extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
+import { ExecuteAtScaleQueryHarnessOperation } from "./execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
+import { GenerateAtScaleInstallYamlOperation } from "./generate-atscale-install-yaml/GenerateAtScaleInstallYamlOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -42,5 +46,9 @@ export async function buildRegistry(
   registry.register(new ExecuteSQLOnConnectionOperation(services, logger));
   registry.register(new ExtractDDLFromConnectionOperation(services, logger));
   registry.register(new GenerateExcelFromNamespaceOperation(services, logger));
+  registry.register(new ExtractQueryStatsFromAtScaleOperation(services, logger));
+  registry.register(new ExtractQueriesFromAtScaleOperation(services, logger));
+  registry.register(new ExecuteAtScaleQueryHarnessOperation(services, logger));
+  registry.register(new GenerateAtScaleInstallYamlOperation(services, logger));
   return registry;
 }

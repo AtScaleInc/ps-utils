@@ -2,7 +2,7 @@
 // InferencePlugin — the contract every vertical plugin must satisfy
 // ============================================================
 
-import { JdbcColumnMeta, SemanticHierarchy, SemanticMeasure } from "../types.js";
+import { ColumnMeta, SemanticHierarchy, SemanticMeasure } from "../types.js";
 
 // ----------------------------------------------------------
 // Core interface
@@ -38,21 +38,21 @@ export interface InferencePlugin {
    * The engine calls this for every table and activates the plugin only when
    * the score meets or exceeds the configured detectionThreshold.
    */
-  detect(columns: JdbcColumnMeta[]): number;
+  detect(columns: ColumnMeta[]): number;
 
   /**
    * Infer vertical-specific hierarchies from the supplied columns.
    * Only called when detect() returns at or above the threshold.
    * Return an empty array when no hierarchies are applicable.
    */
-  inferHierarchies(columns: JdbcColumnMeta[]): SemanticHierarchy[];
+  inferHierarchies(columns: ColumnMeta[]): SemanticHierarchy[];
 
   /**
    * Infer vertical-specific measures (additional aggregations beyond the
    * generic column-name rules in measure-inference.ts).
    * Return an empty array when not applicable.
    */
-  inferMeasures(columns: JdbcColumnMeta[]): SemanticMeasure[];
+  inferMeasures(columns: ColumnMeta[]): SemanticMeasure[];
 }
 
 // ----------------------------------------------------------

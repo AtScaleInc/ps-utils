@@ -10,7 +10,7 @@
 // default is applied (integer → all four; decimal → AVG/MIN/MAX).
 // ============================================================
 
-import { AggregationType, JdbcColumnMeta, SemanticMeasure, isIntegerType, toTitleCase } from "./types.js";
+import { AggregationType, ColumnMeta, SemanticMeasure, isIntegerType, toTitleCase } from "./types.js";
 
 // ----------------------------------------------------------
 // Aggregation rule table
@@ -147,7 +147,7 @@ export function inferAggregations(columnName: string, jdbcType: string): Aggrega
  * Expand a single numeric column into one SemanticMeasure per
  * inferred aggregation (e.g. "Total Cost", "Average Cost", …).
  */
-export function expandMeasures(col: JdbcColumnMeta): SemanticMeasure[] {
+export function expandMeasures(col: ColumnMeta): SemanticMeasure[] {
   const aggregations = inferAggregations(col.columnName, col.dataType);
   const baseName = toTitleCase(col.columnName);
   const dataType: SemanticMeasure["dataType"] = isIntegerType(col.dataType) ? "integer" : "decimal";

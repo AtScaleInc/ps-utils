@@ -1,30 +1,23 @@
 /**
- * JDBC-based SQL service for Snowflake and Postgres connections.
+ * Native SQL service supporting Postgres, Redshift, and Snowflake
+ * without a JVM dependency.
  */
-import Jdbc from "jdbc";
-import jinst from "jdbc/lib/jinst.js";
+import { Client as PgClient } from "pg";
+import type { Client as PgClientType } from "pg";
+import snowflake from "snowflake-sdk";
+import type { Connection as SnowflakeConnection } from "snowflake-sdk";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
-import { createPrivateKey, createHash } from "crypto";
+import { createPrivateKey } from "crypto";
 import { ServiceProvider } from "./ServiceProvider.js";
 import type { Logger } from "../logging.js";
 
-export type JdbcConfig = {
-  url: string;
-  drivername: string;
-  properties?: Record<string, string>;
-  libpath?: string | string[];
-  user?: string;
-  password?: string;
-  minpoolsize?: number;
-  maxpoolsize?: number;
-};
+// ── Public types ──────────────────────────────────────────────────────────────
 
-export type SqlConnection = {
-  jdbc: any;
-  conn: any;
-};
+export type SqlConnection =
+  | { dialect: "postgres"; client: PgClientType }
+  | { dialect: "redshift"; client: PgClientType }
+  | { dialect: "snowflake"; connection: SnowflakeConnection };
 
 export type ConnectionConfig = {
   connections?: Record<string, any>;
@@ -32,13 +25,10 @@ export type ConnectionConfig = {
   [key: string]: any;
 };
 
-/**
- * SQL service wrapper around the `jdbc` npm package.
- */
+// ── SqlService ────────────────────────────────────────────────────────────────
+
 export class SqlService extends ServiceProvider {
   name = "sql";
-
-  private defaultDrivers = this.getDefaultDriverPaths();
   private logger: Logger | undefined;
 
   constructor(logger?: Logger) {
@@ -46,541 +36,346 @@ export class SqlService extends ServiceProvider {
     this.logger = logger;
   }
 
+  // ── connect ───────────────────────────────────────────────────────────────
+
   async connect(
     config: ConnectionConfig,
     connectionName: string,
-    connectionUser?: string
+    connectionUser?: string,
   ): Promise<SqlConnection> {
-    const jdbcConfig = this.buildJdbcConfig(config, connectionName, connectionUser);
-    this.debugJdbcConfig(jdbcConfig);
-    this.ensureClasspath(jdbcConfig.libpath);
-    const jdbc = new Jdbc(jdbcConfig);
+    const { connection, users } = this.resolveConnectionEntry(config, connectionName);
+    const sql = connection.sql ?? connection.jdbc ?? connection;
+    const dialect: string = sql.dialect ?? "postgres";
 
-    await new Promise<void>((resolve, reject) => {
-      jdbc.initialize((err: Error | null) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
-
-    const conn = await new Promise<any>((resolve, reject) => {
-      jdbc.reserve((err: Error | null, connObj: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(connObj);
-      });
-    });
-
-    return { jdbc, conn };
+    if (dialect === "postgres" || dialect === "redshift") {
+      return this.connectPostgres(dialect as "postgres" | "redshift", sql, users, connectionUser);
+    }
+    if (dialect === "snowflake") {
+      return this.connectSnowflake(sql, users, connectionUser);
+    }
+    throw new Error(
+      `Unsupported SQL dialect: '${dialect}'. Supported dialects: postgres, redshift, snowflake.`,
+    );
   }
+
+  private async connectPostgres(
+    dialect: "postgres" | "redshift",
+    sql: Record<string, any>,
+    users: Record<string, any>,
+    connectionUser?: string,
+  ): Promise<SqlConnection> {
+    const userEntry = this.resolveUserEntry(users, sql.user ?? sql.username, connectionUser);
+    const server = sql.server;
+    const port = Number(sql.port ?? (dialect === "redshift" ? 5439 : 5432));
+    const database = sql.database;
+    const username = userEntry?.username ?? sql.username;
+    const password = userEntry?.password ?? sql.password;
+
+    if (!server || !database) {
+      throw new Error(`${dialect} connection requires 'server' and 'database'.`);
+    }
+
+    const clientConfig: Record<string, any> = { host: server, port, database, user: username, password };
+    if (sql.ssl === false) {
+      clientConfig.ssl = false;
+    } else if (dialect === "redshift") {
+      clientConfig.ssl = { rejectUnauthorized: false };
+    }
+
+    this.logger?.verbose(`[SqlService] Connecting to ${dialect}: ${server}:${port}/${database}`);
+    const client = new PgClient(clientConfig);
+    await client.connect();
+    return { dialect, client };
+  }
+
+  private async connectSnowflake(
+    sql: Record<string, any>,
+    users: Record<string, any>,
+    connectionUser?: string,
+  ): Promise<SqlConnection> {
+    const userKey = sql.snowflake_user ?? sql.user ?? sql.username;
+    const userEntry = this.resolveUserEntry(users, userKey, connectionUser);
+    const username = userEntry?.username ?? (typeof userKey === "string" && !users[userKey] ? userKey : undefined);
+    const password = userEntry?.password ?? sql.password;
+    const { account, warehouse, database, schema, role } = sql;
+
+    const missing = (["account", "warehouse", "database", "schema"] as const).filter((f) => !sql[f]);
+    if (missing.length > 0) {
+      throw new Error(`Snowflake connection missing required field(s): ${missing.join(", ")}.`);
+    }
+    if (!username) {
+      throw new Error("Snowflake connection requires a username.");
+    }
+
+    const connConfig: Record<string, any> = { account, username, warehouse, database, schema };
+    if (role) connConfig.role = role;
+
+    // Private key auth
+    const privateKeyPath = userEntry?.privateKeyPath
+      ? path.isAbsolute(userEntry.privateKeyPath)
+        ? userEntry.privateKeyPath
+        : path.resolve(process.cwd(), userEntry.privateKeyPath)
+      : undefined;
+    const privateKeyBase64 = userEntry?.privateKeyBase64?.replace(/\s+/g, "");
+
+    if (privateKeyPath || privateKeyBase64) {
+      connConfig.authenticator = "SNOWFLAKE_JWT";
+      connConfig.privateKey = privateKeyPath
+        ? this.readPrivateKeyAsPem(privateKeyPath)
+        : Buffer.from(privateKeyBase64!, "base64").toString("utf8");
+      if (userEntry?.privateKeyPassword) {
+        connConfig.privateKeyPass = userEntry.privateKeyPassword;
+      }
+    } else if (password) {
+      connConfig.password = password;
+    } else {
+      throw new Error("Snowflake connection requires a password or private key.");
+    }
+
+    this.logger?.verbose(`[SqlService] Connecting to Snowflake: ${account}/${database}/${schema}`);
+    const connection = snowflake.createConnection(connConfig as any);
+    await new Promise<void>((resolve, reject) => {
+      connection.connect((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    return { dialect: "snowflake", connection };
+  }
+
+  // ── query ─────────────────────────────────────────────────────────────────
 
   async query(connection: SqlConnection, sql: string, params: unknown[] = []): Promise<any[]> {
     this.logger?.verbose(`[SQL] ${sql.trim()}`);
-    const { conn } = connection;
-    const statement = await new Promise<any>((resolve, reject) => {
-      conn.conn.createStatement((err: Error | null, stmt: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(stmt);
+    if (connection.dialect === "postgres" || connection.dialect === "redshift") {
+      const result = await connection.client.query(sql, params.length ? (params as any[]) : undefined);
+      return result.rows;
+    }
+    return new Promise<any[]>((resolve, reject) => {
+      connection.connection.execute({
+        sqlText: sql,
+        binds: params.length ? (params as any[]) : undefined,
+        complete: (err: any, _stmt: any, rows: any[] | undefined) => {
+          if (err) reject(err);
+          else resolve(rows ?? []);
+        },
       });
     });
-
-    const result = await new Promise<any[]>((resolve, reject) => {
-      if (params.length > 0 && statement.executeQuery) {
-        statement.executeQuery(sql, params, (err: Error | null, rs: any) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          rs.toObjArray((err2: Error | null, rows: any[]) => {
-            if (err2) {
-              reject(err2);
-              return;
-            }
-            resolve(rows);
-          });
-        });
-        return;
-      }
-
-      statement.executeQuery(sql, (err: Error | null, rs: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        rs.toObjArray((err2: Error | null, rows: any[]) => {
-          if (err2) {
-            reject(err2);
-            return;
-          }
-          resolve(rows);
-        });
-      });
-    });
-
-    return result;
   }
 
-  async getSchemas(connection: SqlConnection): Promise<any[]> {
-    const meta = await this.getMetadata(connection);
-    return new Promise<any[]>((resolve, reject) => {
-      meta.getSchemas((err: Error | null, rs: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        rs.toObjArray((err2: Error | null, rows: any[]) => {
-          if (err2) {
-            reject(err2);
-            return;
-          }
-          resolve(rows);
-        });
+  // ── execute ───────────────────────────────────────────────────────────────
+
+  async execute(connection: SqlConnection, sql: string): Promise<number> {
+    this.logger?.verbose(`[SQL] ${sql.trim()}`);
+    if (connection.dialect === "postgres" || connection.dialect === "redshift") {
+      const result = await connection.client.query(sql);
+      return result.rowCount ?? 0;
+    }
+    return new Promise<number>((resolve, reject) => {
+      connection.connection.execute({
+        sqlText: sql,
+        complete: (err: any, stmt: any) => {
+          if (err) reject(err);
+          else resolve(stmt?.getNumRowsAffected?.() ?? 0);
+        },
       });
     });
+  }
+
+  // ── close ─────────────────────────────────────────────────────────────────
+
+  async close(connection: SqlConnection): Promise<void> {
+    if (connection.dialect === "postgres" || connection.dialect === "redshift") {
+      await connection.client.end();
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      connection.connection.destroy((err: any) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+
+  // ── metadata ──────────────────────────────────────────────────────────────
+
+  async getSchemas(connection: SqlConnection): Promise<any[]> {
+    return this.query(
+      connection,
+      "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name",
+    );
   }
 
   async getTables(
     connection: SqlConnection,
     schema?: string,
-    tablePattern: string = "%",
-    types: string[] = ["TABLE"]
+    tablePattern = "%",
+    types = ["TABLE"],
   ): Promise<any[]> {
-    const meta = await this.getMetadata(connection);
-    return new Promise<any[]>((resolve, reject) => {
-      meta.getTables(null, schema ?? null, tablePattern, types, (err: Error | null, rs: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        rs.toObjArray((err2: Error | null, rows: any[]) => {
-          if (err2) {
-            reject(err2);
-            return;
-          }
-          resolve(rows);
-        });
-      });
-    });
+    // INFORMATION_SCHEMA uses 'BASE TABLE' for regular tables; accept 'TABLE' as a shorthand.
+    const mappedTypes = types.map((t) => (t === "TABLE" ? "BASE TABLE" : t));
+    const typeList = mappedTypes.map((t) => `'${this.esc(t)}'`).join(", ");
+    const schemaClause = schema ? `AND table_schema = '${this.esc(schema)}'` : "";
+    return this.query(
+      connection,
+      `SELECT table_name  AS TABLE_NAME,
+              table_schema AS TABLE_SCHEM,
+              table_type   AS TABLE_TYPE
+       FROM   information_schema.tables
+       WHERE  table_name LIKE '${this.esc(tablePattern)}'
+         AND  table_type IN (${typeList})
+         ${schemaClause}
+       ORDER BY table_name`,
+    );
   }
 
-  async getViews(connection: SqlConnection, schema?: string, viewPattern: string = "%"): Promise<any[]> {
-    return this.getTables(connection, schema, viewPattern, ["VIEW"]);
+  async getViews(connection: SqlConnection, schema?: string, viewPattern = "%"): Promise<any[]> {
+    const schemaClause = schema ? `AND table_schema = '${this.esc(schema)}'` : "";
+    return this.query(
+      connection,
+      `SELECT table_name       AS TABLE_NAME,
+              view_definition  AS VIEW_DEFINITION
+       FROM   information_schema.views
+       WHERE  table_name LIKE '${this.esc(viewPattern)}'
+         ${schemaClause}
+       ORDER BY table_name`,
+    );
   }
 
   async getColumns(
     connection: SqlConnection,
     schema?: string,
-    tablePattern: string = "%",
-    columnPattern: string = "%"
+    tablePattern = "%",
+    columnPattern = "%",
   ): Promise<any[]> {
-    const meta = await this.getMetadata(connection);
-    return new Promise<any[]>((resolve, reject) => {
-      meta.getColumns(null, schema ?? null, tablePattern, columnPattern, (err: Error | null, rs: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        rs.toObjArray((err2: Error | null, rows: any[]) => {
-          if (err2) {
-            reject(err2);
-            return;
-          }
-          resolve(rows);
-        });
-      });
-    });
+    const schemaClause = schema ? `AND table_schema = '${this.esc(schema)}'` : "";
+    return this.query(
+      connection,
+      `SELECT table_name        AS TABLE_NAME,
+              column_name       AS COLUMN_NAME,
+              data_type         AS TYPE_NAME,
+              COALESCE(character_maximum_length, numeric_precision, 0) AS COLUMN_SIZE,
+              ordinal_position  AS ORDINAL_POSITION,
+              CASE WHEN is_nullable = 'YES' THEN 1 ELSE 0 END AS NULLABLE
+       FROM   information_schema.columns
+       WHERE  table_name   LIKE '${this.esc(tablePattern)}'
+         AND  column_name  LIKE '${this.esc(columnPattern)}'
+         ${schemaClause}
+       ORDER BY table_name, ordinal_position`,
+    );
   }
 
   async getForeignKeys(
     connection: SqlConnection,
     schema?: string,
-    tablePattern: string = "%"
+    tablePattern = "%",
   ): Promise<any[]> {
-    const meta = await this.getMetadata(connection);
-    return new Promise<any[]>((resolve, reject) => {
-      meta.getImportedKeys(null, schema ?? null, tablePattern, (err: Error | null, rs: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        rs.toObjArray((err2: Error | null, rows: any[]) => {
-          if (err2) {
-            reject(err2);
-            return;
-          }
-          resolve(rows);
-        });
-      });
-    });
-  }
-
-  /**
-   * Execute a single SQL statement that does not return rows (DDL, DML).
-   * Returns the update count (0 for DDL, N for INSERT/UPDATE/DELETE).
-   * Use `query()` for SELECT statements.
-   */
-  async execute(connection: SqlConnection, sql: string): Promise<number> {
-    this.logger?.verbose(`[SQL] ${sql.trim()}`);
-    const { conn } = connection;
-    const statement = await new Promise<any>((resolve, reject) => {
-      conn.conn.createStatement((err: Error | null, stmt: any) => {
-        if (err) reject(err);
-        else resolve(stmt);
-      });
-    });
-
-    const isQuery = /^\s*select\b/i.test(sql);
-
-    if (isQuery) {
-      return new Promise<number>((resolve, reject) => {
-        statement.executeQuery(sql, (err: Error | null, _rs: any) => {
-          if (err) reject(err);
-          else resolve(0);
-        });
-      });
+    if (connection.dialect === "snowflake") {
+      return this.getForeignKeysSnowflake(connection, schema, tablePattern);
     }
-
-    return new Promise<number>((resolve, reject) => {
-      statement.executeUpdate(sql, (err: Error | null, updateCount: number) => {
-        if (err) reject(err);
-        else resolve(updateCount ?? 0);
-      });
-    });
+    return this.getForeignKeysPg(connection, schema, tablePattern);
   }
 
-  async close(connection: SqlConnection): Promise<void> {
-    const { jdbc, conn } = connection;
-    await new Promise<void>((resolve, reject) => {
-      jdbc.release(conn, (err: Error | null) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
+  private async getForeignKeysPg(
+    connection: SqlConnection,
+    schema?: string,
+    tablePattern = "%",
+  ): Promise<any[]> {
+    const schemaClause = schema ? `AND tc.table_schema = '${this.esc(schema)}'` : "";
+    return this.query(
+      connection,
+      `SELECT kcu.table_name  AS FKTABLE_NAME,
+              kcu.column_name AS FKCOLUMN_NAME,
+              ccu.table_name  AS PKTABLE_NAME,
+              ccu.column_name AS PKCOLUMN_NAME,
+              kcu.position_in_unique_constraint AS KEY_SEQ,
+              tc.constraint_name AS FK_NAME
+       FROM   information_schema.table_constraints        tc
+       JOIN   information_schema.key_column_usage         kcu
+              ON  tc.constraint_name = kcu.constraint_name
+              AND tc.table_schema    = kcu.table_schema
+       JOIN   information_schema.constraint_column_usage  ccu
+              ON  ccu.constraint_name = tc.constraint_name
+              AND ccu.table_schema    = tc.table_schema
+       WHERE  tc.constraint_type = 'FOREIGN KEY'
+         AND  kcu.table_name LIKE '${this.esc(tablePattern)}'
+         ${schemaClause}
+       ORDER BY kcu.table_name, kcu.ordinal_position`,
+    );
   }
 
-  private async getMetadata(connection: SqlConnection): Promise<any> {
-    return new Promise<any>((resolve, reject) => {
-      connection.conn.conn.getMetaData((err: Error | null, meta: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(meta);
-      });
-    });
+  private async getForeignKeysSnowflake(
+    connection: SqlConnection,
+    schema?: string,
+    tablePattern = "%",
+  ): Promise<any[]> {
+    try {
+      const schemaClause = schema ? `AND kcu.table_schema = '${this.esc(schema)}'` : "";
+      return await this.query(
+        connection,
+        `SELECT kcu.table_name  AS FKTABLE_NAME,
+                kcu.column_name AS FKCOLUMN_NAME,
+                kcu2.table_name AS PKTABLE_NAME,
+                kcu2.column_name AS PKCOLUMN_NAME,
+                kcu.position_in_unique_constraint AS KEY_SEQ,
+                rc.constraint_name AS FK_NAME
+         FROM   information_schema.referential_constraints rc
+         JOIN   information_schema.key_column_usage kcu
+                ON  kcu.constraint_name   = rc.constraint_name
+                AND kcu.constraint_schema = rc.constraint_schema
+         JOIN   information_schema.key_column_usage kcu2
+                ON  kcu2.constraint_name   = rc.unique_constraint_name
+                AND kcu2.constraint_schema = rc.unique_constraint_schema
+                AND kcu2.ordinal_position  = kcu.position_in_unique_constraint
+         WHERE  kcu.table_name LIKE '${this.esc(tablePattern)}'
+           ${schemaClause}
+         ORDER BY kcu.table_name, kcu.ordinal_position`,
+      );
+    } catch {
+      return [];
+    }
   }
 
-  private buildJdbcConfig(
+  // ── private helpers ───────────────────────────────────────────────────────
+
+  /** Escape single quotes for SQL string literals. */
+  private esc(value: string): string {
+    return value.replace(/'/g, "''");
+  }
+
+  private resolveConnectionEntry(
     config: ConnectionConfig,
     connectionName: string,
-    connectionUser?: string
-  ): JdbcConfig {
+  ): { connection: Record<string, any>; users: Record<string, any> } {
     const connections = config.connections ?? {};
     const connection = connections[connectionName] ?? config[connectionName];
     if (!connection) {
-      throw new Error(`Connection not found: ${connectionName}`);
+      throw new Error(`Connection not found: '${connectionName}'`);
     }
-
-    const users = config.users ?? {};
-    const userConfig = connectionUser ? users[connectionUser] : undefined;
-
-    const jdbc = connection.jdbc ?? connection.sql ?? connection;
-    if (!jdbc) {
-      throw new Error("JDBC connection requires configuration.");
-    }
-
-    const { url, drivername, properties, user, password, libpath } = this.normalizeJdbcConfig(
-      config,
-      jdbc,
-      userConfig
-    );
-
-    if (!url || !drivername) {
-      throw new Error("JDBC connection requires url and drivername.");
-    }
-
-    const resolvedProperties: Record<string, string> = {};
-    for (const [key, value] of Object.entries(properties ?? {})) {
-      if (value !== undefined && value !== null) {
-        resolvedProperties[key] = String(value);
-      }
-    }
-
-    if (user) {
-      resolvedProperties.user = user;
-    }
-    if (password) {
-      resolvedProperties.password = password;
-    }
-
-    return {
-      url,
-      drivername,
-      properties: resolvedProperties,
-      libpath: this.normalizeLibpath(libpath ?? jdbc.libpath),
-      minpoolsize: jdbc.minpoolsize,
-      maxpoolsize: jdbc.maxpoolsize,
-    };
+    return { connection, users: config.users ?? {} };
   }
 
-  /**
-   * Resolve a user entry from config.users.
-   * `userKey` may be a key in config.users (e.g. "atscale_user") — if found,
-   * that entry wins over the explicit userConfig passed to connect().
-   * Falls back to userConfig if no matching key exists.
-   */
   private resolveUserEntry(
-    config: ConnectionConfig,
-    userKey: string | undefined,
-    userConfig?: Record<string, any>
+    users: Record<string, any>,
+    userKey?: string,
+    connectionUser?: string,
   ): Record<string, any> | undefined {
-    if (userKey) {
-      const entry = (config.users ?? {})[userKey];
-      if (entry) return entry;
-    }
-    return userConfig;
+    if (userKey && users[userKey]) return users[userKey];
+    if (connectionUser && users[connectionUser]) return users[connectionUser];
+    return undefined;
   }
 
-  private normalizeJdbcConfig(
-    config: ConnectionConfig,
-    jdbc: Record<string, any>,
-    userConfig?: Record<string, any>
-  ): {
-    url?: string;
-    drivername?: string;
-    properties?: Record<string, string>;
-    user?: string;
-    password?: string;
-    libpath?: string;
-  } {
-    if (jdbc.url && jdbc.drivername) {
-      const userEntry = this.resolveUserEntry(config, jdbc.user ?? jdbc.username, userConfig);
-      return {
-        url: jdbc.url,
-        drivername: jdbc.drivername,
-        properties: jdbc.properties,
-        user: userEntry?.username ?? jdbc.user ?? jdbc.username,
-        password: userEntry?.password ?? jdbc.password,
-        libpath: jdbc.libpath,
-      };
-    }
-
-    if (jdbc.dialect === "postgres") {
-      const server = jdbc.server;
-      const port = jdbc.port ?? 5432;
-      const database = jdbc.database;
-      const schema = jdbc.schema;
-      if (!server || !database) {
-        throw new Error("Postgres JDBC config requires server and database.");
-      }
-
-      const userEntry = this.resolveUserEntry(config, jdbc.user ?? jdbc.username, userConfig);
-      const schemaParam = schema ? `?currentSchema=${schema}` : "";
-      return {
-        url: `jdbc:postgresql://${server}:${port}/${database}${schemaParam}`,
-        drivername: "org.postgresql.Driver",
-        user: userEntry?.username ?? jdbc.user ?? jdbc.username,
-        password: userEntry?.password ?? jdbc.password,
-        libpath: jdbc.libpath,
-      };
-    }
-
-    if (jdbc.dialect === "snowflake") {
-      const account = jdbc.account;
-      const warehouse = jdbc.warehouse;
-      const database = jdbc.database;
-      const schema = jdbc.schema;
-      const role = jdbc.role;
-      const authenticator = jdbc.authenticator;
-      const userKey = jdbc.snowflake_user;
-
-      const missing: string[] = [];
-      if (!account) missing.push("account");
-      if (!warehouse) missing.push("warehouse");
-      if (!database) missing.push("database");
-      if (!schema) missing.push("schema");
-      if (missing.length > 0) {
-        throw new Error(
-          `Snowflake JDBC config missing required field(s): ${missing.join(", ")}.`
-        );
-      }
-
-      const snowUser = userKey ? (config.users ?? {})[userKey] : userConfig;
-      const username = snowUser?.username ?? userConfig?.username ?? jdbc.user ?? jdbc.username;
-      if (!username) {
-        throw new Error("Snowflake JDBC config requires a username.");
-      }
-
-      const params: Record<string, string> = {
-        warehouse,
-        db: database,
-        schema,
-      };
-      if (role) {
-        params.role = role;
-      }
-      if (authenticator) {
-        params.authenticator = authenticator;
-      }
-
-      const paramString = Object.entries(params)
-        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-        .join("&");
-
-      const resolvedKeyPath = snowUser?.privateKeyPath
-        ? (path.isAbsolute(snowUser.privateKeyPath)
-            ? snowUser.privateKeyPath
-            : path.resolve(process.cwd(), snowUser.privateKeyPath))
-        : undefined;
-
-      const providedKeyBase64 = snowUser?.privateKeyBase64
-        ? snowUser.privateKeyBase64.replace(/\s+/g, "")
-        : undefined;
-
-      const privateKeyBase64 =
-        providedKeyBase64 ??
-        (resolvedKeyPath ? this.readPrivateKeyAsPkcs8Base64(resolvedKeyPath) : undefined);
-
-      const resolvedAuthenticator =
-        authenticator ?? (resolvedKeyPath || privateKeyBase64 ? "SNOWFLAKE_JWT" : undefined);
-
-      return {
-        url: `jdbc:snowflake://${account}.snowflakecomputing.com/?${paramString}`,
-        drivername: "net.snowflake.client.jdbc.SnowflakeDriver",
-        user: username,
-        password: snowUser?.password ?? userConfig?.password ?? jdbc.password,
-        properties: {
-          ...(resolvedKeyPath ? { private_key_file: resolvedKeyPath } : {}),
-          ...(privateKeyBase64 && !resolvedKeyPath ? { private_key_base64: privateKeyBase64 } : {}),
-          ...(snowUser?.privateKeyPassword
-            ? { private_key_pwd: snowUser.privateKeyPassword }
-            : {}),
-          ...(resolvedAuthenticator ? { authenticator: resolvedAuthenticator } : {}),
-          ...(role ? { role } : {}),
-        },
-        libpath: jdbc.libpath,
-      };
-    }
-
-    if (jdbc.dialect) {
-      throw new Error(`Unsupported SQL dialect: ${jdbc.dialect}`);
-    }
-
-    return {
-      url: jdbc.url,
-      drivername: jdbc.drivername,
-      properties: jdbc.properties,
-      user: userConfig?.username ?? jdbc.user ?? jdbc.username,
-      password: userConfig?.password ?? jdbc.password,
-      libpath: jdbc.libpath,
-    };
-  }
-
-  private getDefaultDriverPaths(): string[] {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const driversDir = path.resolve(__dirname, "..", "..", "resources", "drivers");
-    if (!fs.existsSync(driversDir)) return [];
-    return fs
-      .readdirSync(driversDir)
-      .filter((f) => f.endsWith(".jar"))
-      .map((f) => path.join(driversDir, f));
-  }
-
-  private ensureClasspath(libpath?: string | string[]): void {
-    const normalized = this.normalizeLibpath(libpath);
-    const defaults = this.defaultDrivers;
-    const jars = [...(normalized ?? []), ...defaults].filter((jar) => fs.existsSync(jar));
-
-    if (jinst.isJvmCreated()) {
-      const allowed = new Set(defaults);
-      const hasCustom = (normalized ?? []).some((entry) => !allowed.has(entry));
-      if (hasCustom) {
-        throw new Error(
-          "JVM already created; cannot add custom JDBC driver to classpath. " +
-            "Restart the process or use the default drivers in resources/drivers."
-        );
-      }
-      return;
-    }
-
-    jinst.addOption("-Xrs");
-    jinst.addOption("--add-opens=java.base/java.nio=ALL-UNNAMED");
-    jinst.setupClasspath(jars);
-  }
-
-  private normalizeLibpath(libpath?: string | string[]): string[] | undefined {
-    if (!libpath) {
-      return undefined;
-    }
-    if (Array.isArray(libpath)) {
-      return libpath;
-    }
-    return [libpath];
-  }
-
-  private debugJdbcConfig(config: JdbcConfig): void {
-    const safeProps: Record<string, string> = {};
-    for (const [key, value] of Object.entries(config.properties ?? {})) {
-      if (key.includes("private") || key.includes("password")) {
-        safeProps[key] = "<redacted>";
-      } else {
-        safeProps[key] = value;
-      }
-    }
-
-    console.log("[SqlService] JDBC config:", {
-      url: config.url,
-      drivername: config.drivername,
-      libpath: config.libpath,
-      properties: safeProps,
-    });
-
-    const privateKey = config.properties?.private_key;
-    if (privateKey) {
-      console.log("[SqlService] private_key length:", privateKey.length);
-    }
-    const privateKeyFile = config.properties?.private_key_file;
-    if (privateKeyFile) {
-      const exists = fs.existsSync(privateKeyFile);
-      const size = exists ? fs.statSync(privateKeyFile).size : 0;
-      console.log("[SqlService] private_key_file:", privateKeyFile, "exists:", exists, "size:", size);
-    }
-  }
-
-  private readPrivateKeyAsPkcs8Base64(filePath: string): string {
+  private readPrivateKeyAsPem(filePath: string): string {
     const raw = fs.readFileSync(filePath);
     const text = raw.toString("utf8");
     let keyObject;
-
     try {
-      if (text.includes("BEGIN")) {
-        keyObject = createPrivateKey({ key: text, format: "pem" });
-      } else {
-        keyObject = createPrivateKey({ key: raw, format: "der", type: "pkcs8" });
-      }
+      keyObject = text.includes("BEGIN")
+        ? createPrivateKey({ key: text, format: "pem" })
+        : createPrivateKey({ key: raw, format: "der", type: "pkcs8" });
     } catch {
       keyObject = createPrivateKey({ key: raw, format: "der", type: "pkcs8" });
     }
-
-    if (keyObject.asymmetricKeyType && keyObject.asymmetricKeyType !== "rsa") {
-      throw new Error(`Unsupported private key type: ${keyObject.asymmetricKeyType}`);
-    }
-
-    const pem = Buffer.from(keyObject.export({ format: "pem", type: "pkcs8" }) as string);
-    const hash = createHash("sha256").update(pem).digest("base64");
-    console.log("[SqlService] private_key PEM sha256:", hash);
-    return pem.toString("base64");
+    return keyObject.export({ format: "pem", type: "pkcs8" }) as string;
   }
 }
