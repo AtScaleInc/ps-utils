@@ -81,6 +81,10 @@ flowchart TD
   - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
   - [`atscale-list-data-sources`](#atscale-list-data-sources)
   - [`atscale-create-data-source`](#atscale-create-data-source)
+  - [`atscale-list-repos`](#atscale-list-repos)
+  - [`atscale-create-repo`](#atscale-create-repo)
+  - [`atscale-list-deployments`](#atscale-list-deployments)
+  - [`atscale-deploy-model`](#atscale-deploy-model)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
@@ -101,7 +105,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-model` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -698,6 +702,115 @@ With all options:
 | `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
 **Output:** JSON response from AtScale (`{id, created}`) written to stdout.
+
+---
+
+### `atscale-list-repos`
+
+Lists the git repositories registered in an AtScale instance.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-list-repos
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** Pretty-printed JSON array. Each entry contains `id`, `name`, `url`, and optional `visibleBranchesPattern` and `defaultBranch`.
+
+---
+
+### `atscale-create-repo`
+
+Registers a git repository in an AtScale instance.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-create-repo
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    repo-name: my-sml-repo
+    repo-url: https://github.com/myorg/sml.git
+    default-branch: main
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `repo-name` | Yes | | Human-readable name for the repository |
+| `repo-url` | Yes | | Git remote URL (HTTPS or SSH) |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `repo-type` | No | `catalog` | Repository type: `catalog` or `global_settings` |
+| `visible-branches-pattern` | No | | Glob pattern controlling which branches are visible in the UI |
+| `default-branch` | No | | Default branch name (e.g. `main`) |
+| `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** JSON response containing the created repository `{id, name, url, type}`.
+
+---
+
+### `atscale-list-deployments`
+
+Lists the deployed catalogs (semantic models) in an AtScale instance.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-list-deployments
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** Pretty-printed JSON array. Each entry contains `id`, `name`, `caption`, `publishedAt`, `publishedBy`, and a `models` array.
+
+---
+
+### `atscale-deploy-model`
+
+Deploys a catalog (semantic model) to an AtScale instance from a catalog XML file.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-deploy-model
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    catalog-xml-file: catalog.xml
+    repository-id: 3f8a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `catalog-xml-file` | Yes | | Path to the catalog XML file to deploy |
+| `repository-id` | Yes | | UUID of the repository to deploy against (from `atscale-list-repos`) |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
+| `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** JSON response. If `tableau-servers` is specified, includes a `tableau` array with publish results per site.
 
 ---
 

@@ -91,6 +91,10 @@ flowchart TD
   - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
   - [`atscale-list-data-sources`](#atscale-list-data-sources)
   - [`atscale-create-data-source`](#atscale-create-data-source)
+  - [`atscale-list-repos`](#atscale-list-repos)
+  - [`atscale-create-repo`](#atscale-create-repo)
+  - [`atscale-list-deployments`](#atscale-list-deployments)
+  - [`atscale-deploy-model`](#atscale-deploy-model)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
@@ -853,9 +857,111 @@ The SQL connection's `sql.dialect` controls which API endpoint is called:
 
 | Dialect | Endpoint |
 |---|---|
-| `snowflake` | `POST /v1/public/data-warehouses/snowflake` |
-| `databricks` | `POST /v1/public/data-warehouses/databricks` |
-| `bigquery` | `POST /v1/public/data-warehouses/google-big-query` |
+| `snowflake` | `POST /wapi/p/data-warehouses/snowflake` |
+| `databricks` | `POST /wapi/p/data-warehouses/databricks` |
+| `bigquery` | `POST /wapi/p/data-warehouses/google-big-query` |
+| `postgresql` | `POST /wapi/p/data-warehouses/postgresql` |
+
+---
+
+### `atscale-list-repos`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists the git repositories registered in an AtScale instance.
+
+```bash
+./atscale-utils atscale-list-repos \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** Pretty-printed JSON array to stdout. Each entry contains `id`, `name`, `url`, and optional `visibleBranchesPattern` and `defaultBranch`.
+
+---
+
+### `atscale-create-repo`
+
+[↑ Table of Contents](#table-of-contents)
+
+Registers a git repository in an AtScale instance.
+
+```bash
+./atscale-utils atscale-create-repo \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --name "my-sml-repo" \
+  --url "https://github.com/myorg/sml.git" \
+  --default-branch "main"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--name` | Yes | | Human-readable name for the repository |
+| `--url` | Yes | | Git remote URL (HTTPS or SSH) |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--type` | No | `catalog` | Repository type: `catalog` or `global_settings` |
+| `--visible-branches-pattern` | No | | Glob pattern controlling which branches are visible in the UI |
+| `--default-branch` | No | | Default branch name (e.g. `main`) |
+| `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** JSON response from AtScale containing the created repository `{id, name, url, type}`.
+
+---
+
+### `atscale-list-deployments`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists the deployed catalogs (semantic models) in an AtScale instance.
+
+```bash
+./atscale-utils atscale-list-deployments \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** Pretty-printed JSON array to stdout. Each entry contains `id`, `name`, `caption`, `publishedAt`, `publishedBy`, and a `models` array.
+
+---
+
+### `atscale-deploy-model`
+
+[↑ Table of Contents](#table-of-contents)
+
+Deploys a catalog (semantic model) to an AtScale instance from a catalog XML file.
+
+```bash
+./atscale-utils atscale-deploy-model \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-xml-file "catalog.xml" \
+  --repository-id "3f8a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-xml-file` | Yes | | Path to the catalog XML file to deploy |
+| `--repository-id` | Yes | | UUID of the repository to deploy against (from `atscale-list-repos`) |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
+| `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** JSON response from AtScale. If `--tableau-servers` is specified, includes a `tableau` array with publish results per site.
 
 ---
 

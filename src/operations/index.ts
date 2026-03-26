@@ -21,6 +21,10 @@ import { ExecuteAtScaleQueryHarnessOperation } from "./execute-atscale-query-har
 import { GenerateAtScaleInstallYamlOperation } from "./generate-atscale-install-yaml/GenerateAtScaleInstallYamlOperation.js";
 import { AtScaleListDataSourcesOperation } from "./atscale-list-data-sources/AtScaleListDataSourcesOperation.js";
 import { AtScaleCreateDataSourceOperation } from "./atscale-create-data-source/AtScaleCreateDataSourceOperation.js";
+import { AtScaleListReposOperation } from "./atscale-list-repos/AtScaleListReposOperation.js";
+import { AtScaleCreateRepoOperation } from "./atscale-create-repo/AtScaleCreateRepoOperation.js";
+import { AtScaleListDeploymentsOperation } from "./atscale-list-deployments/AtScaleListDeploymentsOperation.js";
+import { AtScaleDeployModelOperation } from "./atscale-deploy-model/AtScaleDeployModelOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -54,5 +58,9 @@ export async function buildRegistry(
   registry.register(new GenerateAtScaleInstallYamlOperation(services, logger));
   registry.register(new AtScaleListDataSourcesOperation(services, logger));
   registry.register(new AtScaleCreateDataSourceOperation(services, logger));
+  registry.register(new AtScaleListReposOperation(services, logger));
+  registry.register(new AtScaleCreateRepoOperation(services, logger));
+  registry.register(new AtScaleListDeploymentsOperation(services, logger));
+  registry.register(new AtScaleDeployModelOperation(services, logger));
   return registry;
 }

@@ -4,8 +4,8 @@
  * Implements concrete RestEnvironment and RestRequest subclasses for the
  * primary provisioning operations against the AtScale public/internal API:
  *
- *   1. Connect a git repository  — POST /repo
- *   2. List repositories         — GET  /wapi/p/repos
+ *   1. Connect a git repository  — POST /wapi/p/repo
+ *   2. List repositories         — GET  /wapi/p/repo
  *   3. Create a data source      — POST /wapi/p/data-warehouses/{dialect}
  *   4. List data sources         — GET  /wapi/p/data-warehouses
  *   5. Deploy a model (catalog)  — POST /wapi/p/catalogs
@@ -226,7 +226,7 @@ class ConnectGitRepoRequest extends RestRequest<ConnectGitRepoArgs, ConnectGitRe
   readonly method = "POST" as const;
 
   path(_args: ConnectGitRepoArgs): string {
-    return "/repo";
+    return "/wapi/p/repo";
   }
 
   body(args: ConnectGitRepoArgs): unknown {
@@ -257,7 +257,7 @@ class ListReposRequest extends RestRequest<void, ListReposResult> {
   readonly method = "GET" as const;
 
   path(_args: void): string {
-    return "/wapi/p/repos";
+    return "/wapi/p/repo";
   }
 
   parse(data: unknown): ListReposResult {
