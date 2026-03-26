@@ -10,7 +10,7 @@
  * by the AtScale Helm chart).
  */
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../../Parameters.js";
+import { BooleanParameter, ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import crypto from "node:crypto";
@@ -48,10 +48,27 @@ class GenerateAtScaleInstallYamlParameterSet extends ParameterSet {
       required = false;
     })(),
     new (class extends StringParameter {
+      name = "license-key";
+      description =
+        "AtScale license key to embed in the values.yaml. " +
+        "Written to atscale-entitlement.entitlement.licenseKey. " +
+        "If omitted the field is left blank and the key can be uploaded via the UI after install.";
+      required = false;
+    })(),
+    new (class extends StringParameter {
       name = "output-file";
       description = "Output file path for the generated values.yaml";
       required = false;
       defaultValue = "values.yaml";
+    })(),
+    new (class extends BooleanParameter {
+      name = "enable-mcp";
+      description =
+        "Enable the AtScale MCP server sub-chart (atscale-mcp.enabled). " +
+        "Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.";
+      required = false;
+      defaultValue = false;
+      isFlag = true;
     })(),
   ];
 }
@@ -60,7 +77,9 @@ type Params = {
   hostname: string;
   "cert-file"?: string;
   "key-file"?: string;
+  "license-key"?: string;
   "output-file": string;
+  "enable-mcp": boolean;
 };
 
 // ── DER / ASN.1 helpers ────────────────────────────────────────────────────────
@@ -192,7 +211,9 @@ export class GenerateAtScaleInstallYamlOperation extends Operation<Params> {
     // ── Render template ───────────────────────────────────────────────────
     const templatePath = path.join(__dirname, "values.yaml.ejs");
     const template = fs.readFileSync(templatePath, "utf8");
-    const output = ejs.render(template, { hostname, tlsCrt, tlsKey });
+    const licenseKey = params["license-key"] ?? "";
+    const enableMcp = params["enable-mcp"];
+    const output = ejs.render(template, { hostname, tlsCrt, tlsKey, licenseKey, enableMcp });
 
     // ── Write output ──────────────────────────────────────────────────────
     const outputPath = path.resolve(params["output-file"]);

@@ -10,3 +10,10 @@ global:
     tls:
       tlsCrt: "<%= tlsCrt %>"
       tlsKey: "<%= tlsKey %>"
+<% if (licenseKey) { %>
+atscale-entitlement:
+  entitlement:
+    licenseKey: "<%= licenseKey %>"
+<% } %>
+atscale-mcp:
+  enabled: <%= enableMcp %>

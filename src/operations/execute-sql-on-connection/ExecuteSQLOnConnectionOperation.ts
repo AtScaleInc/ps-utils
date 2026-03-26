@@ -18,7 +18,7 @@
 import fs from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../../Parameters.js";
+import { BooleanParameter, ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
@@ -52,10 +52,12 @@ class ExecuteSQLOnConnectionParams extends ParameterSet {
       required     = false;
       defaultValue = "stop";
     })(),
-    new (class extends StringParameter {
-      name        = "dry-run";
-      description = 'Print each statement without executing it. Pass "true" to enable.';
-      required    = false;
+    new (class extends BooleanParameter {
+      name         = "dry-run";
+      description  = "Print each statement without executing it. Pass true/false or use as a standalone flag.";
+      required     = false;
+      defaultValue = false;
+      isFlag       = true;
     })(),
   ];
 }
@@ -65,7 +67,7 @@ type Params = {
   "connection-file": string;
   "connection-name": string;
   "on-error":        string;
-  "dry-run"?:        string;
+  "dry-run":         boolean;
 };
 
 // ----------------------------------------------------------
@@ -187,7 +189,7 @@ export class ExecuteSQLOnConnectionOperation extends Operation<Params> {
 
     const sqlFile       = path.resolve(params["sql-file"]);
     const onError       = (params["on-error"] ?? "stop").toLowerCase();
-    const dryRun        = params["dry-run"]?.toLowerCase() === "true";
+    const dryRun        = params["dry-run"];
 
     // ---- Read and parse the SQL file ----
     if (!fs.existsSync(sqlFile)) {

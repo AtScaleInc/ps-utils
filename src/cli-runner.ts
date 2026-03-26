@@ -128,14 +128,12 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
     console.log(lines.join("\n"));
   }
 
-  /** Parameters that act as boolean flags — present without a value means true. */
-  const FLAG_PARAMS = new Set(["verbose", "dry-run"]);
-
   /**
    * Parse `--key value` or `--key=value` arguments into a map.
-   * knownKeys is used to distinguish "unknown parameter" from "missing value".
+   * knownKeys distinguishes "unknown parameter" from "missing value".
+   * flagKeys are parameters that may be passed without a value (implies true).
    */
-  function parseParams(args: string[], knownKeys?: Set<string>): OperationParams {
+  function parseParams(args: string[], knownKeys?: Set<string>, flagKeys?: Set<string>): OperationParams {
     const params: OperationParams = {};
     for (let i = 0; i < args.length; i += 1) {
       const arg = args[i];
@@ -160,8 +158,7 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
         if (knownKeys && !knownKeys.has(key)) {
           throw new Error(`Unknown parameter: --${key}`);
         }
-        // Allow bare --verbose (and similar boolean flags) without an explicit value
-        if (FLAG_PARAMS.has(key)) {
+        if (flagKeys && flagKeys.has(key)) {
           params[key] = "true";
           continue;
         }
@@ -231,7 +228,11 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       ...operation.parameters.parameters.map((p) => p.name),
       "logfile", "output", "verbose",
     ]);
-    const rawParams = parseParams(argv.slice(1), knownKeys);
+    const flagKeys = new Set([
+      ...operation.parameters.parameters.filter((p) => p.isFlag).map((p) => p.name),
+      "verbose",
+    ]);
+    const rawParams = parseParams(argv.slice(1), knownKeys, flagKeys);
     const { params: filteredParams, logger } = globalInputFilter(rawParams);
     const opRegistry = await buildRegistry(logger);
     resolvedOperation = opRegistry.get(operationName)!;

@@ -565,16 +565,19 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
     operation: generate-atscale-install-yaml
     install-hostname: ${{ inputs.hostname }}
     install-output-file: values.yaml   # optional, default values.yaml
+    enable-mcp: "true"                 # optional, default false
 ```
 
 ```yaml
-# With an existing certificate stored as secrets
+# With an existing certificate and license key stored as secrets
 - uses: AtScaleInc/ps-template@main
   with:
     operation: generate-atscale-install-yaml
     install-hostname: ${{ inputs.hostname }}
     tls-cert-file: tls.crt
     tls-key-file:  tls.key
+    license-key:   ${{ secrets.ATSCALE_LICENSE_KEY }}
+    enable-mcp:    "true"
 ```
 
 | Input | Required | Default | Description |
@@ -582,12 +585,14 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 | `install-hostname` | Yes | | FQDN or IP for the AtScale ingress domain and certificate CN/SAN |
 | `tls-cert-file` | No | | Path to an existing PEM certificate file |
 | `tls-key-file` | No | | Path to an existing PEM private key file (required when `tls-cert-file` is set) |
+| `license-key` | No | | AtScale license key (`atscale-entitlement.entitlement.licenseKey`). Store as `secrets.ATSCALE_LICENSE_KEY`. |
+| `enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart. Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
 | `install-output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **What it does:**
 1. If `tls-cert-file` is omitted, generates a self-signed certificate for `install-hostname` using Node's built-in `crypto` module (no external dependencies)
 2. Base64-encodes the PEM cert and key (double-encodes as required by the Helm chart)
-3. Renders `values.yaml` with `ingressDomain`, `tlsCrt`, and `tlsKey` filled in
+3. Renders `values.yaml` with `ingressDomain`, `tlsCrt`, `tlsKey`, optional `licenseKey`, and `atscale-mcp.enabled` filled in
 
 ---
 

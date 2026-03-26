@@ -62,7 +62,7 @@ case $state in
     _values 'params' --logfile --output --verbose --connection-file --connection-name --query-file --ingest-file --task-file --protocol --concurrent-users --throttle-ms --run-id --output-dir --redact --duration-minutes
     ;;
   generate-atscale-install-yaml)
-    _values 'params' --logfile --output --verbose --hostname --cert-file --key-file --output-file
+    _values 'params' --logfile --output --verbose --hostname --cert-file --key-file --license-key --output-file --enable-mcp
     ;;
     *)
       _values 'params' --logfile --output --verbose

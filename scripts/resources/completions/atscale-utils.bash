@@ -63,7 +63,7 @@ _atscale_utils_complete() {
       params="--logfile --output --verbose --connection-file --connection-name --query-file --ingest-file --task-file --protocol --concurrent-users --throttle-ms --run-id --output-dir --redact --duration-minutes"
       ;;
     generate-atscale-install-yaml)
-      params="--logfile --output --verbose --hostname --cert-file --key-file --output-file"
+      params="--logfile --output --verbose --hostname --cert-file --key-file --license-key --output-file --enable-mcp"
       ;;
     *)
       params="--logfile --output --verbose"

@@ -14,6 +14,8 @@ export abstract class OperationParameter<T extends ParameterValue = ParameterVal
   abstract description: string;
   abstract required: boolean;
   defaultValue?: T;
+  /** When true, the parameter may be passed without a value on the CLI (implies true). */
+  isFlag: boolean = false;
 
   /**
    * Convert raw CLI input into a typed value.
@@ -53,18 +55,22 @@ export abstract class NumberParameter extends OperationParameter<number> {
 }
 
 /**
- * Boolean parameter accepting only "true" or "false" strings.
+ * Boolean parameter accepting common truthy/falsy strings.
+ * Accepted truthy values: true, yes, 1, on
+ * Accepted falsy values:  false, no, 0, off
  */
 export abstract class BooleanParameter extends OperationParameter<boolean> {
   parse(raw: string): boolean {
     const normalized = raw.trim().toLowerCase();
-    if (normalized === "true") {
+    if (["true", "yes", "1", "on"].includes(normalized)) {
       return true;
     }
-    if (normalized === "false") {
+    if (["false", "no", "0", "off"].includes(normalized)) {
       return false;
     }
-    throw new Error(`Parameter ${this.name} must be true or false.`);
+    throw new Error(
+      `Parameter ${this.name} must be a boolean (true/false, yes/no, 1/0, on/off).`,
+    );
   }
 }
 

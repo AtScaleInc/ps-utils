@@ -759,9 +759,10 @@ The `tlsCrt` and `tlsKey` fields in the output are base64-encoded PEM strings â€
 ./atscale-utils generate-atscale-install-yaml \
   --hostname "atscale.example.com"
 
-# Use an existing certificate
+# With a license key and existing certificate
 ./atscale-utils generate-atscale-install-yaml \
   --hostname     "atscale.example.com" \
+  --license-key  "XXXX-XXXX-XXXX-XXXX" \
   --cert-file    "./tls.crt" \
   --key-file     "./tls.key" \
   --output-file  "./helm/values.yaml"
@@ -770,8 +771,10 @@ The `tlsCrt` and `tlsKey` fields in the output are base64-encoded PEM strings â€
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--hostname` | Yes | | FQDN or IP used as the ingress domain and certificate CN/SAN |
+| `--license-key` | No | | AtScale license key; written to `atscale-entitlement.entitlement.licenseKey`. If omitted the key can be uploaded via the UI after install |
 | `--cert-file` | No | | Path to an existing PEM certificate file |
 | `--key-file` | No | | Path to an existing PEM private key file (required when `--cert-file` is set) |
+| `--enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart (`atscale-mcp.enabled`). Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
 | `--output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **Output:** A `values.yaml` ready to pass to `helm install atscale ... --values values.yaml`.
