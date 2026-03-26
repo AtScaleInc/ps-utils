@@ -171,7 +171,7 @@ inputs:
     required: false
 
   # ── generate-atscale-install-yaml ────────────────────────────────────────
-  install-hostname:
+  hostname:
     description: >
       Fully-qualified domain name (or IP) for the AtScale ingress and TLS certificate.
       Used by: generate-atscale-install-yaml.
@@ -410,7 +410,7 @@ runs:
       if: inputs.operation == 'generate-atscale-install-yaml'
       run: |
         ARGS=(
-          --hostname "${{ inputs.install-hostname }}"
+          --hostname "${{ inputs.hostname }}"
         )
         [[ -n "${{ inputs.tls-cert-file }}" ]] && ARGS+=(--cert-file   "${{ inputs.tls-cert-file }}")
         [[ -n "${{ inputs.tls-key-file }}"  ]] && ARGS+=(--key-file    "${{ inputs.tls-key-file }}")
