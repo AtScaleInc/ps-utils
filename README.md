@@ -89,6 +89,8 @@ flowchart TD
   - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
   - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
   - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
+  - [`atscale-list-data-sources`](#atscale-list-data-sources)
+  - [`atscale-create-data-source`](#atscale-create-data-source)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
@@ -782,6 +784,81 @@ The `tlsCrt` and `tlsKey` fields in the output are base64-encoded PEM strings �
 
 ---
 
+### `atscale-list-data-sources`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists the data warehouses (data sources) registered in an AtScale instance and writes the result as JSON to stdout.
+
+```bash
+./atscale-utils atscale-list-data-sources \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** Pretty-printed JSON array to stdout. Each entry contains `id`, `name`, `connectionId`, and a `connections` array of `{id, name}` sub-connection objects.
+
+The connections file must have an `atscale:` block in the named entry. See [AtScale REST `atscale` fields](#atscale-rest-atscale-fields) for the connection format.
+
+---
+
+### `atscale-create-data-source`
+
+[↑ Table of Contents](#table-of-contents)
+
+Registers a data warehouse (data source) in an AtScale instance. Reads the connection details from a named `sql:` entry in the connections file and posts them to the appropriate AtScale API endpoint based on the dialect (`snowflake`, `databricks`, or `bigquery`).
+
+```bash
+./atscale-utils atscale-create-data-source \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --new-connection-name "snow_prod" \
+  --aggregate-schema "ATSCALE_AGGS"
+```
+
+With all options:
+
+```bash
+./atscale-utils atscale-create-data-source \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --new-connection-name "snow_prod" \
+  --aggregate-schema "ATSCALE_AGGS" \
+  --name "Production Snowflake" \
+  --connection-id "snow_prod" \
+  --access-users "admin,atscale-user"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--new-connection-name` | Yes | | Name of the SQL connection entry to register (must have a `sql:` block) |
+| `--aggregate-schema` | Yes | | Schema (or BigQuery dataset) for aggregate table storage |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--name` | No | `--new-connection-name` | Display name for the data warehouse in AtScale (max 128 chars) |
+| `--connection-id` | No | `--new-connection-name` | Logical connection ID embedded in SML files |
+| `--access-users` | No | `""` (everyone group) | Comma-separated AtScale usernames to grant access. Empty string grants access to the built-in `everyone` group. |
+| `--aggregate-project-id` | No | `sql.project` | BigQuery only: GCP project ID for aggregate storage |
+| `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** JSON response from AtScale (`{id, created}`) written to stdout.
+
+The SQL connection's `sql.dialect` controls which API endpoint is called:
+
+| Dialect | Endpoint |
+|---|---|
+| `snowflake` | `POST /v1/public/data-warehouses/snowflake` |
+| `databricks` | `POST /v1/public/data-warehouses/databricks` |
+| `bigquery` | `POST /v1/public/data-warehouses/google-big-query` |
+
+---
+
 ## Extract AtScale Model Workflow
 
 The `extract-model-from-atscale` workflow (`.github/workflows/extract-model-from-atscale.yml`) runs manually from the Actions tab.
@@ -852,6 +929,11 @@ connections:
     sql:                        # required for SQL operations and SML generation
       dialect: postgres | snowflake | redshift | databricks | bigquery | iris
       ...
+    atscale:                    # required for atscale-list-data-sources and other REST operations
+      url: https://<atscale_host>
+      user: <user_key>          # key from users block, or use username/password inline
+      # username: admin         # alternative: inline credentials
+      # password: secret
 ```
 
 ---
@@ -916,7 +998,7 @@ users:
 users:
   admin:
     username: admin
-    password: "@Scale800"
+    password: "<password>"
 
 connections:
   ats_connection:
@@ -1080,6 +1162,62 @@ connections:
       dialect: bigquery
       project_id: my-gcp-project-123
       dataset: analytics
+```
+
+---
+
+### AtScale REST `atscale` fields
+
+Used by `atscale-list-data-sources` and other operations that call the AtScale public REST API. Authenticates via Keycloak OIDC (the standard AtScale auth flow — the same token endpoint used by `atscale-ai-link`).
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `url` | Yes | | Root URL of the AtScale instance (no trailing slash), e.g. `https://atscale.example.com` |
+| `apiToken` | No† | | Static API token generated in the Design Center UI: **profile icon → API Token → Generate**. Automatically exchanged for a short-lived JWT via `POST /v1/token` on each auth cycle. When set, all Keycloak fields are ignored. **Recommended approach.** |
+| `user` | No* | | Key from the `users` block. Resolves `username` and `password` from that entry. |
+| `username` | No* | | Inline username for Keycloak OIDC. Used when `user` is not set. |
+| `password` | No* | | Inline password for Keycloak OIDC. Used when `user` is not set. |
+| `realm` | No | `atscale` | Keycloak realm name |
+| `clientId` | No | `atscale-ai-link` | Keycloak client ID |
+| `clientSecret` | No | | Keycloak client secret. Required when the client is configured as confidential (e.g. `atscale-modeler`). Find it in Keycloak → Clients → \<client\> → Credentials. |
+| `authType` | No | `keycloak` | Authentication type: `keycloak` (OIDC password grant, default) or `basic` (HTTP Basic auth). |
+| `insecure` | No | `true` | Skip TLS certificate verification. Defaults to `true` because AtScale instances commonly use self-signed certificates. Set to `false` to enforce strict certificate validation. |
+
+† Either `apiToken` or credentials (`user`/`username`+`password`) must be provided.
+\* Required when `apiToken` is not set.
+
+**Keycloak client troubleshooting:**
+
+| Error | Meaning | Fix |
+|---|---|---|
+| `invalid_grant` | Client doesn't have Direct Access Grants enabled, or wrong credentials | Try `clientId: atscale-modeler` (or another client with ROPC enabled) |
+| `unauthorized_client` | Client requires a `client_secret` | Add `clientSecret` — find it in Keycloak admin → Clients → \<client\> → Credentials tab |
+| `Invalid token format` (from AtScale API) | The AtScale API does not accept Keycloak JWT Bearer tokens | Set `authType: basic` in the `atscale:` block |
+
+#### Full AtScale REST example
+
+```yaml
+users:
+  admin:
+    username: admin
+    password: "<password>"
+
+connections:
+  my_atscale:
+    atscale:
+      url: https://atscale.example.com
+      user: admin
+```
+
+#### Inline credentials example
+
+```yaml
+connections:
+  my_atscale:
+    atscale:
+      url: https://atscale.example.com
+      username: admin
+      password: "<password>"
 ```
 
 ---

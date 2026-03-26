@@ -79,6 +79,8 @@ flowchart TD
   - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
   - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
   - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
+  - [`atscale-list-data-sources`](#atscale-list-data-sources)
+  - [`atscale-create-data-source`](#atscale-create-data-source)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
@@ -99,7 +101,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -595,6 +597,107 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 1. If `tls-cert-file` is omitted, generates a self-signed certificate for `hostname` using Node's built-in `crypto` module (no external dependencies)
 2. Base64-encodes the PEM cert and key (double-encodes as required by the Helm chart)
 3. Renders `values.yaml` with `ingressDomain`, `tlsCrt`, `tlsKey`, optional `licenseKey`, and `atscale-mcp.enabled` filled in
+
+---
+
+### `atscale-list-data-sources`
+
+Lists the data warehouses (data sources) registered in an AtScale instance and writes the result as JSON to stdout.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block in the named connection. Set `apiToken` to a Design Center API token (profile icon → API Token → Generate) — it is automatically exchanged for a JWT via `POST /v1/token`. See [Connection YAML](README.md#atscale-rest-atscale-fields).
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-list-data-sources
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** Pretty-printed JSON array to stdout. Each entry contains `id`, `name`, `connectionId`, and a `connections` array of `{id, name}` sub-connections.
+
+The named connection must have an `atscale:` block with `url` and credentials (`user` referencing the `users` block, or inline `username`/`password`):
+
+```yaml
+connections:
+  my_atscale:
+    atscale:
+      url: https://atscale.example.com
+      user: admin
+      # clientId: atscale-modeler   # override if atscale-ai-link gives 'invalid_grant'
+      # clientSecret: "<secret>"    # required if the client gives 'unauthorized_client'
+      # insecure: false             # set false to enforce TLS validation (default: true)
+
+users:
+  admin:
+    username: admin
+    password: "<password>"
+```
+
+**Keycloak client troubleshooting:**
+
+| Error | Meaning | Fix |
+|---|---|---|
+| `invalid_grant` | Client doesn't have Direct Access Grants enabled, or wrong credentials | Try `clientId: atscale-modeler` (or another client with ROPC enabled) |
+| `unauthorized_client` | Client requires a `client_secret` | Add `clientSecret` — find it in Keycloak admin → Clients → \<client\> → Credentials tab |
+| `Invalid token format` (from AtScale API) | The AtScale API does not accept Keycloak JWT Bearer tokens | Set `authType: basic` in the `atscale:` block |
+
+---
+
+### `atscale-create-data-source`
+
+Registers a data warehouse (data source) in an AtScale instance using the SQL connection details from the connections file. The dialect (`snowflake`, `databricks`, `bigquery`) is detected automatically from `sql.dialect`.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the AtScale connection entry and a `sql:` block on the SQL connection entry. The API token is automatically exchanged for a JWT via `POST /v1/token`.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-create-data-source
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    new-connection-name: snow_prod
+    aggregate-schema: ATSCALE_AGGS
+```
+
+With all options:
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-create-data-source
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    new-connection-name: snow_prod
+    aggregate-schema: ATSCALE_AGGS
+    name: "Production Snowflake"
+    connection-id: snow_prod
+    access-users: "admin,atscale-user"
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `new-connection-name` | Yes | | Name of the SQL connection entry to register (must have a `sql:` block) |
+| `aggregate-schema` | Yes | | Schema (or BigQuery dataset) for aggregate table storage |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `name` | No | `new-connection-name` | Display name for the data warehouse in AtScale (max 128 chars) |
+| `connection-id` | No | `new-connection-name` | Logical connection ID embedded in SML files |
+| `access-users` | No | `""` (everyone group) | Comma-separated AtScale usernames to grant access. Empty string grants access to the built-in `everyone` group. |
+| `aggregate-project-id` | No | `sql.project` | BigQuery only: GCP project ID for aggregate storage |
+| `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
+
+**Output:** JSON response from AtScale (`{id, created}`) written to stdout.
 
 ---
 

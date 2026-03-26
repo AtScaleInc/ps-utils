@@ -154,7 +154,7 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
 
       const key = withoutPrefix.trim();
       const value = args[i + 1];
-      if (!key || !value || value.startsWith("--")) {
+      if (!key || value === undefined || value === null || value.startsWith("--")) {
         if (knownKeys && !knownKeys.has(key)) {
           throw new Error(`Unknown parameter: --${key}`);
         }

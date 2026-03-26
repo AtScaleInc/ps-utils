@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml
+    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source
     ;;
   args)
     case "$words[2]" in
@@ -63,6 +63,12 @@ case $state in
     ;;
   generate-atscale-install-yaml)
     _values 'params' --logfile --output --verbose --hostname --cert-file --key-file --license-key --output-file --enable-mcp --minimal
+    ;;
+  atscale-list-data-sources)
+    _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --insecure
+    ;;
+  atscale-create-data-source)
+    _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --new-connection-name --aggregate-schema --name --connection-id --access-users --aggregate-project-id --insecure
     ;;
     *)
       _values 'params' --logfile --output --verbose

@@ -19,6 +19,8 @@ inputs:
         execute-sql-on-connection
         extract-ddl-from-connection
         generate-atscale-install-yaml
+        atscale-list-data-sources
+        atscale-create-data-source
         deploy-atscale-microk8s
     required: true
 
@@ -210,6 +212,55 @@ inputs:
     required: false
     default: "false"
 
+  # ── atscale-list-data-sources / atscale-create-data-source ──────────────
+  atscale-connection-name:
+    description: >
+      Name of the AtScale connection entry in the connections file (must have an atscale: block).
+      Used by: atscale-list-data-sources, atscale-create-data-source.
+    required: false
+  new-connection-name:
+    description: >
+      Name of the SQL connection entry to register as a data source (must have a sql: block).
+      Used by: atscale-create-data-source.
+    required: false
+  aggregate-schema:
+    description: >
+      Schema (or BigQuery dataset) for aggregate table storage.
+      Used by: atscale-create-data-source.
+    required: false
+  dw-name:
+    description: >
+      Display name for the data warehouse in AtScale (max 128 chars).
+      Defaults to new-connection-name when omitted.
+      Used by: atscale-create-data-source.
+    required: false
+  connection-id:
+    description: >
+      Logical connection ID embedded in SML files.
+      Defaults to new-connection-name when omitted.
+      Used by: atscale-create-data-source.
+    required: false
+  access-users:
+    description: >
+      Comma-separated AtScale usernames to grant access to the data warehouse.
+      Omit or pass empty string to grant access to the built-in 'everyone' group instead.
+      Used by: atscale-create-data-source.
+    required: false
+    default: ""
+  aggregate-project-id:
+    description: >
+      BigQuery only: GCP project ID for aggregate storage.
+      Defaults to sql.project from the connection config.
+      Used by: atscale-create-data-source.
+    required: false
+  insecure:
+    description: >
+      Skip TLS certificate verification. Overrides the value in the connections file.
+      Accepts true/false, yes/no, 1/0, on/off. Defaults to true.
+      Used by: atscale-list-data-sources, atscale-create-data-source.
+    required: false
+    default: "true"
+
   # ── deploy-atscale-microk8s ───────────────────────────────────────────────
   microk8s-hostname:
     description: IP address or hostname of the MicroK8s server.
@@ -255,7 +306,9 @@ runs:
          inputs.operation == 'generate-sml-from-connection' ||
          inputs.operation == 'generate-tableau-from-namespace' ||
          inputs.operation == 'execute-sql-on-connection' ||
-         inputs.operation == 'extract-ddl-from-connection')
+         inputs.operation == 'extract-ddl-from-connection' ||
+         inputs.operation == 'atscale-list-data-sources' ||
+         inputs.operation == 'atscale-create-data-source')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -419,6 +472,36 @@ runs:
         ARGS+=(--enable-mcp "${{ inputs.enable-mcp }}")
         [[ "${{ inputs.minimal }}" == "true" ]] && ARGS+=(--minimal)
         node "${{ github.action_path }}/dist/cli.js" generate-atscale-install-yaml "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-data-sources ────────────────────────────────────────────
+    - name: List AtScale data sources
+      if: inputs.operation == 'atscale-list-data-sources'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-data-sources \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
+          --insecure "${{ inputs.insecure }}" \
+          --verbose true
+      shell: bash
+
+    # ── atscale-create-data-source ───────────────────────────────────────────
+    - name: Create AtScale data source
+      if: inputs.operation == 'atscale-create-data-source'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --new-connection-name     "${{ inputs.new-connection-name }}"
+          --aggregate-schema        "${{ inputs.aggregate-schema }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.dw-name }}" ]]             && ARGS+=(--name                 "${{ inputs.dw-name }}")
+        [[ -n "${{ inputs.connection-id }}" ]]        && ARGS+=(--connection-id        "${{ inputs.connection-id }}")
+        [[ -n "${{ inputs.access-users }}" ]]         && ARGS+=(--access-users         "${{ inputs.access-users }}")
+        [[ -n "${{ inputs.aggregate-project-id }}" ]] && ARGS+=(--aggregate-project-id "${{ inputs.aggregate-project-id }}")
+        ARGS+=(--insecure "${{ inputs.insecure }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-create-data-source "${ARGS[@]}"
       shell: bash
 
     # ── deploy-atscale-microk8s ───────────────────────────────────────────────

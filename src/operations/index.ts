@@ -19,6 +19,8 @@ import { ExtractQueryStatsFromAtScaleOperation } from "./extract-query-stats-fro
 import { ExtractQueriesFromAtScaleOperation } from "./extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import { ExecuteAtScaleQueryHarnessOperation } from "./execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
 import { GenerateAtScaleInstallYamlOperation } from "./generate-atscale-install-yaml/GenerateAtScaleInstallYamlOperation.js";
+import { AtScaleListDataSourcesOperation } from "./atscale-list-data-sources/AtScaleListDataSourcesOperation.js";
+import { AtScaleCreateDataSourceOperation } from "./atscale-create-data-source/AtScaleCreateDataSourceOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -50,5 +52,7 @@ export async function buildRegistry(
   registry.register(new ExtractQueriesFromAtScaleOperation(services, logger));
   registry.register(new ExecuteAtScaleQueryHarnessOperation(services, logger));
   registry.register(new GenerateAtScaleInstallYamlOperation(services, logger));
+  registry.register(new AtScaleListDataSourcesOperation(services, logger));
+  registry.register(new AtScaleCreateDataSourceOperation(services, logger));
   return registry;
 }
