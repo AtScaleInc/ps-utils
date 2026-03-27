@@ -74,28 +74,33 @@ flowchart TD
 
 - [Setup](#setup)
 - [Operations](#operations)
-  - [`extract-model-from-atscale`](#extract-model-from-atscale)
-  - [`extract-model-from-sml`](#extract-model-from-sml)
-  - [`generate-namespace-from-model`](#generate-namespace-from-model)
-  - [`execute-sql-on-connection`](#execute-sql-on-connection)
-  - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
-  - [`generate-sml-from-connection`](#generate-sml-from-connection)
-  - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
-  - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
-  - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
-  - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
-  - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
-  - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
-  - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
-  - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
-  - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
-  - [`atscale-list-data-sources`](#atscale-list-data-sources)
-  - [`atscale-create-data-source`](#atscale-create-data-source)
-  - [`atscale-list-repos`](#atscale-list-repos)
-  - [`atscale-create-repo`](#atscale-create-repo)
-  - [`atscale-list-deployments`](#atscale-list-deployments)
-  - [`atscale-deploy-model`](#atscale-deploy-model)
-  - [`atscale-list-model-errors`](#atscale-list-model-errors)
+  - Namespace Processing
+    - [`generate-namespace-from-model`](#generate-namespace-from-model)
+    - [`extract-model-from-atscale`](#extract-model-from-atscale)
+    - [`extract-model-from-sml`](#extract-model-from-sml)
+  - SML Processing
+    - [`execute-sql-on-connection`](#execute-sql-on-connection)
+    - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
+    - [`generate-sml-from-connection`](#generate-sml-from-connection)
+    - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+  - BI Tool Integration
+    - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
+    - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
+    - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
+    - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+  - Query Processing
+    - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
+    - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
+    - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+  - AtScale Config
+    - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
+    - [`atscale-list-data-sources`](#atscale-list-data-sources)
+    - [`atscale-create-data-source`](#atscale-create-data-source)
+    - [`atscale-list-repos`](#atscale-list-repos)
+    - [`atscale-create-repo`](#atscale-create-repo)
+    - [`atscale-list-deployments`](#atscale-list-deployments)
+    - [`atscale-deploy-repo`](#atscale-deploy-repo)
+    - [`atscale-list-model-errors`](#atscale-list-model-errors)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
@@ -939,33 +944,29 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 
 ---
 
-### `atscale-deploy-model`
+### `atscale-deploy-repo`
 
 [↑ Table of Contents](#table-of-contents)
 
-Deploys a catalog (semantic model) to an AtScale instance from a catalog XML file.
+Instructs AtScale to deploy (publish) a git repository that is already configured in AtScale.  AtScale pulls the SML files directly from its configured git repo and publishes them to the catalog.  No local file I/O is performed.
 
 ```bash
-./atscale-utils atscale-deploy-model \
+./atscale-utils atscale-deploy-repo \
   --connection-file "./connections.yaml" \
   --atscale-connection-name "my_atscale" \
-  --catalog-xml-file "catalog.xml" \
-  --repository-id "3f8a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
+  --repo-id "8c1a201b-0f9c-51c7-a2a1-63b13836d4b7"
 ```
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `--catalog-xml-file` | Yes | | Path to the catalog XML file to deploy |
-| `--repository-id` | No† | | UUID of the repository to deploy against (from `atscale-list-repos`) |
-| `--repository-name` | No† | | Name of the repository to deploy against. Looked up automatically via `atscale-list-repos`. |
+| `--repo-id` | Yes | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
+| `--project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys. |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
-
-† Either `--repository-id` or `--repository-name` is required.
 | `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
-**Output:** JSON response from AtScale. If `--tableau-servers` is specified, includes a `tableau` array with publish results per site.
+**Output:** JSON response containing `projectId` and `projectName` of the deployed catalog.
 
 ---
 

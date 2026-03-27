@@ -532,6 +532,43 @@ class DeployModelRequest extends RestRequest<DeployModelArgs, DeployModelResult>
   }
 }
 
+// ── 5b. Deploy repo (trigger AtScale to publish from configured git repo) ─────
+
+export type DeployRepoArgs = {
+  /** UUID of the repository already configured in AtScale (from atscale-list-repos). */
+  repoId: string;
+  /** Optional UUID of an existing project to update. Omit for first-time deploys. */
+  projectId?: string;
+  /** Optional Tableau servers to publish to after deployment. */
+  tableauServers?: TableauServerTarget[];
+};
+
+export type DeployRepoResult = {
+  projectId?:   string;
+  projectName?: string;
+  [key: string]: unknown;
+};
+
+class DeployRepoRequest extends RestRequest<DeployRepoArgs, DeployRepoResult> {
+  readonly method = "POST" as const;
+
+  path(_args: DeployRepoArgs): string {
+    return "/wapi/git/deploy/catalog";
+  }
+
+  body(args: DeployRepoArgs): unknown {
+    return {
+      repoId:         args.repoId,
+      tableauServers: args.tableauServers ?? [],
+      ...(args.projectId ? { projectId: args.projectId } : {}),
+    };
+  }
+
+  parse(data: unknown): DeployRepoResult {
+    return (data ?? {}) as DeployRepoResult;
+  }
+}
+
 // ── 6. Validate model (engine checks) ────────────────────────────────────────
 
 export type ValidateModelCheckColumn = {
@@ -635,6 +672,7 @@ export class AtScaleRestClientService extends ServiceProvider {
   private readonly createDataSourceRequest  = new CreateDataSourceRequest();
   private readonly listDataSourcesRequest   = new ListDataSourcesRequest();
   private readonly deployModelRequest       = new DeployModelRequest();
+  private readonly deployRepoRequest        = new DeployRepoRequest();
   private readonly validateModelRequest     = new ValidateModelRequest();
   private readonly listModelsRequest        = new ListModelsRequest();
 
@@ -703,6 +741,17 @@ export class AtScaleRestClientService extends ServiceProvider {
     args: DeployModelArgs,
   ): Promise<DeployModelResult> {
     return this.restClient.execute(this.deployModelRequest, args, env);
+  }
+
+  /**
+   * Deploy SML files from a local directory to a configured git repo in AtScale.
+   * Maps to: POST /wapi/git/deploy/catalog
+   */
+  async deployRepo(
+    env: AtScaleEnvironment,
+    args: DeployRepoArgs,
+  ): Promise<DeployRepoResult> {
+    return this.restClient.execute(this.deployRepoRequest, args, env);
   }
 
   /**

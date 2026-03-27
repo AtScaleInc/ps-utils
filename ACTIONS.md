@@ -84,7 +84,7 @@ flowchart TD
   - [`atscale-list-repos`](#atscale-list-repos)
   - [`atscale-create-repo`](#atscale-create-repo)
   - [`atscale-list-deployments`](#atscale-list-deployments)
-  - [`atscale-deploy-model`](#atscale-deploy-model)
+  - [`atscale-deploy-repo`](#atscale-deploy-repo)
   - [`atscale-list-model-errors`](#atscale-list-model-errors)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
@@ -106,7 +106,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-model`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-repo`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -786,35 +786,31 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 
 ---
 
-### `atscale-deploy-model`
+### `atscale-deploy-repo`
 
-Deploys a catalog (semantic model) to an AtScale instance from a catalog XML file.
+Instructs AtScale to deploy (publish) a git repository that is already configured in AtScale.  AtScale pulls the SML files directly from its configured git repo and publishes them to the catalog.  No local file I/O is performed.
 
 **Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
 
 ```yaml
 - uses: AtScaleInc/ps-template@main
   with:
-    operation: atscale-deploy-model
+    operation: atscale-deploy-repo
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
     atscale-connection-name: my_atscale
-    catalog-xml-file: catalog.xml
-    repository-id: 3f8a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+    repo-id: 8c1a201b-0f9c-51c7-a2a1-63b13836d4b7
 ```
 
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `catalog-xml-file` | Yes | | Path to the catalog XML file to deploy |
-| `repository-id` | No† | | UUID of the repository to deploy against (from `atscale-list-repos`) |
-| `repository-name` | No† | | Name of the repository to deploy against. Looked up automatically. |
+| `repo-id` | Yes | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
+| `project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys. |
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
-
-† Either `repository-id` or `repository-name` is required.
 | `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
-**Output:** JSON response. If `tableau-servers` is specified, includes a `tableau` array with publish results per site.
+**Output:** JSON response containing `projectId` and `projectName` of the deployed catalog.
 
 ---
 

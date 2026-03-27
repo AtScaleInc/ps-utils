@@ -453,6 +453,11 @@ export async function proposeSemanticModel(
       const toCols   = group.map((fk) => fk.pkColumnName);
       // Skip identity self-joins (PK referencing itself — semantically redundant).
       if (group[0].pkTableName === tableName && fromCols.join() === toCols.join()) continue;
+      // Skip multi-column FK snowflake joins. AtScale requires to.level to be the
+      // target's is_unique_key LA *and* the source to have an LA with matching
+      // key_columns.length — constraints that conflict for composite FKs whose
+      // columns differ from the target's PK columns (self-joins, bridge tables).
+      if (fromCols.length > 1) continue;
       snowflakeRelationships.push({
         fromColumns: fromCols,
         toTable:     group[0].pkTableName,
