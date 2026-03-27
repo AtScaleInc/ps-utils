@@ -713,9 +713,15 @@ function buildDimensionFile(
     }
   }
 
-  // F: Add hidden join-key level_attributes for each snowflake FK group.
-  // AtScale resolves to.level against the SOURCE dimension's own LAs, so each
-  // relationship needs an LA here whose key_columns exactly match join_columns.
+  // F: Add join-key level_attributes for each snowflake FK group.
+  // Two rules must both be satisfied:
+  //   (validator) to.level must exist in the SOURCE dimension with
+  //               key_columns.length == join_columns.length.
+  //   (compiler)  to.level must be a VISIBLE LA in the TARGET dimension.
+  // For self-joins (toTable == sourceTable) the same LA serves both roles, so
+  // it must be visible.  For non-self-joins the LA in the source dimension
+  // only needs to exist (can be hidden); visibility is satisfied by the target
+  // dimension's own LA (its unique-key or self-join FK LA).
   const fkLaAdded = new Set<string>();
   for (const sr of dim.snowflakeRelationships ?? []) {
     const laUniqueName = sr.fromColumns.length === 1
@@ -732,6 +738,10 @@ function buildDimensionFile(
     const colMeta  = colByLower.get(firstCol.toLowerCase());
     const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
     const nameColName = colIsInt ? findNameColumn(firstCol, colByLower) : undefined;
+    // Self-join FK LAs must be visible so the compiler can find them as a
+    // to.level target within this same dimension.  Non-self-join source-side
+    // LAs only satisfy the validator's existence check and stay hidden.
+    const isSelfJoin = sr.toTable === dim.sourceTable;
     // Use a synthetic key so we don't overwrite any existing single-column entry.
     levelAttrMap.set(`__fk_${laUniqueName}`, {
       unique_name: laUniqueName,
@@ -739,7 +749,7 @@ function buildDimensionFile(
       dataset: dim.sourceTable,
       name_column: nameColName ?? firstCol,
       key_columns: sr.fromColumns,
-      is_hidden: true,
+      is_hidden: !isSelfJoin,
     });
   }
 
