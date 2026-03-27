@@ -50,9 +50,13 @@ inputs:
     description: AtScale model identifier (cube name).
     required: false
 
-  # ── extract-model-from-sml / generate-sml-from-connection / generate-sml-from-ddl
+  # ── extract-model-from-sml / generate-sml-from-connection / generate-sml-from-ddl / atscale-list-model-errors
   model-name:
-    description: Model name used when reading or generating an SML project.
+    description: >
+      Model name used when reading or generating an SML project, or the model
+      label/unique_name to validate.
+      Used by: extract-model-from-sml, generate-sml-from-connection,
+               generate-sml-from-ddl, atscale-list-model-errors.
     required: false
 
   # ── extract-model-from-atscale / extract-model-from-sml ──────────────────
@@ -61,9 +65,12 @@ inputs:
     required: false
     default: model.yaml
 
-  # ── extract-model-from-sml ────────────────────────────────────────────────
+  # ── extract-model-from-sml / atscale-list-model-errors ───────────────────
   sml-dir:
-    description: Path to the SML project directory.
+    description: >
+      Path to the SML project directory.
+      Used by: extract-model-from-sml,
+               atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
     required: false
 
   # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
@@ -217,11 +224,14 @@ inputs:
     required: false
     default: "false"
 
-  # ── atscale-list-data-sources / atscale-create-data-source ──────────────
+  # ── atscale-* operations (all that talk to AtScale) ──────────────────────
   atscale-connection-name:
     description: >
       Name of the AtScale connection entry in the connections file (must have an atscale: block).
-      Used by: atscale-list-data-sources, atscale-create-data-source.
+      Used by: atscale-list-data-sources, atscale-create-data-source,
+               atscale-list-repos, atscale-create-repo,
+               atscale-list-deployments, atscale-deploy-model,
+               atscale-list-model-errors.
     required: false
   new-connection-name:
     description: >
@@ -269,11 +279,13 @@ inputs:
     required: false
     default: "true"
 
-  # ── atscale-create-repo ───────────────────────────────────────────────────
+  # ── atscale-create-repo / atscale-list-model-errors ──────────────────────
   repo-name:
     description: >
-      Human-readable name for the git repository.
-      Used by: atscale-create-repo.
+      Human-readable name for the git repository, or name of an AtScale-connected
+      git repository to clone and validate.
+      Used by: atscale-create-repo,
+               atscale-list-model-errors (remote mode — provide this OR sml-dir/repo-id).
     required: false
   repo-url:
     description: >
@@ -323,21 +335,6 @@ inputs:
     required: false
 
   # ── atscale-list-model-errors ─────────────────────────────────────────────
-  sml-dir:
-    description: >
-      Path to the SML directory (must contain models/, dimensions/, datasets/).
-      Used by: atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
-    required: false
-  model-name:
-    description: >
-      Model label or unique_name to validate (defaults to first model found).
-      Used by: atscale-list-model-errors.
-    required: false
-  repo-name:
-    description: >
-      Name of an AtScale-connected git repository to clone and validate.
-      Used by: atscale-list-model-errors (remote mode — provide this OR sml-dir).
-    required: false
   repo-id:
     description: >
       UUID of an AtScale-connected git repository to clone and validate.
