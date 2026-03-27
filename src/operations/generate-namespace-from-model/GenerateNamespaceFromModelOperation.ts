@@ -220,7 +220,7 @@ function reconstructSemanticModel(
       kind:       "dimension",
       name:       dimName,
       sourceTable: dimName,
-      primaryKey,
+      primaryKeys: [primaryKey],
       attributes:  [],
       hierarchies,
     });

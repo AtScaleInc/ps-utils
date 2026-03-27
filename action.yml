@@ -25,6 +25,7 @@ inputs:
         atscale-create-repo
         atscale-list-deployments
         atscale-deploy-model
+        atscale-list-model-errors
         deploy-atscale-microk8s
     required: true
 
@@ -263,7 +264,8 @@ inputs:
       Accepts true/false, yes/no, 1/0, on/off. Defaults to true.
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
-               atscale-list-deployments, atscale-deploy-model.
+               atscale-list-deployments, atscale-deploy-model,
+               atscale-list-model-errors.
     required: false
     default: "true"
 
@@ -304,6 +306,13 @@ inputs:
   repository-id:
     description: >
       UUID of the repository to deploy against (from atscale-list-repos).
+      Either this or repository-name is required.
+      Used by: atscale-deploy-model.
+    required: false
+  repository-name:
+    description: >
+      Name of the repository to deploy against. Looked up automatically via atscale-list-repos.
+      Either this or repository-id is required.
       Used by: atscale-deploy-model.
     required: false
   tableau-servers:
@@ -311,6 +320,33 @@ inputs:
       Optional JSON array of Tableau servers to publish to after deployment.
       Example: '[{"name":"my-ts","sites":["Default"]}]'
       Used by: atscale-deploy-model.
+    required: false
+
+  # ── atscale-list-model-errors ─────────────────────────────────────────────
+  sml-dir:
+    description: >
+      Path to the SML directory (must contain models/, dimensions/, datasets/).
+      Used by: atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
+    required: false
+  model-name:
+    description: >
+      Model label or unique_name to validate (defaults to first model found).
+      Used by: atscale-list-model-errors.
+    required: false
+  repo-name:
+    description: >
+      Name of an AtScale-connected git repository to clone and validate.
+      Used by: atscale-list-model-errors (remote mode — provide this OR sml-dir).
+    required: false
+  repo-id:
+    description: >
+      UUID of an AtScale-connected git repository to clone and validate.
+      Used by: atscale-list-model-errors (remote mode — provide this OR sml-dir).
+    required: false
+  branch:
+    description: >
+      Branch name to check out when cloning in remote mode (defaults to repo default branch).
+      Used by: atscale-list-model-errors.
     required: false
 
   # ── deploy-atscale-microk8s ───────────────────────────────────────────────
@@ -364,7 +400,8 @@ runs:
          inputs.operation == 'atscale-list-repos' ||
          inputs.operation == 'atscale-create-repo' ||
          inputs.operation == 'atscale-list-deployments' ||
-         inputs.operation == 'atscale-deploy-model')
+         inputs.operation == 'atscale-deploy-model' ||
+         inputs.operation == 'atscale-list-model-errors')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -608,12 +645,31 @@ runs:
           --connection-file         "${{ github.action_path }}/connection.yml"
           --atscale-connection-name "${{ inputs.atscale-connection-name }}"
           --catalog-xml-file        "${{ inputs.catalog-xml-file }}"
-          --repository-id           "${{ inputs.repository-id }}"
           --insecure                "${{ inputs.insecure }}"
           --verbose true
         )
+        [[ -n "${{ inputs.repository-id }}"   ]] && ARGS+=(--repository-id   "${{ inputs.repository-id }}")
+        [[ -n "${{ inputs.repository-name }}" ]] && ARGS+=(--repository-name "${{ inputs.repository-name }}")
         [[ -n "${{ inputs.tableau-servers }}" ]] && ARGS+=(--tableau-servers "${{ inputs.tableau-servers }}")
         node "${{ github.action_path }}/dist/cli.js" atscale-deploy-model "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-model-errors ─────────────────────────────────────────────
+    - name: List AtScale model errors
+      if: inputs.operation == 'atscale-list-model-errors'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.sml-dir }}"    ]] && ARGS+=(--sml-dir    "${{ inputs.sml-dir }}")
+        [[ -n "${{ inputs.repo-name }}"  ]] && ARGS+=(--repo-name  "${{ inputs.repo-name }}")
+        [[ -n "${{ inputs.repo-id }}"    ]] && ARGS+=(--repo-id    "${{ inputs.repo-id }}")
+        [[ -n "${{ inputs.branch }}"     ]] && ARGS+=(--branch     "${{ inputs.branch }}")
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
       shell: bash
 
     # ── deploy-atscale-microk8s ───────────────────────────────────────────────

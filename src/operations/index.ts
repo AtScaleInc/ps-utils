@@ -25,6 +25,7 @@ import { AtScaleListReposOperation } from "./atscale-list-repos/AtScaleListRepos
 import { AtScaleCreateRepoOperation } from "./atscale-create-repo/AtScaleCreateRepoOperation.js";
 import { AtScaleListDeploymentsOperation } from "./atscale-list-deployments/AtScaleListDeploymentsOperation.js";
 import { AtScaleDeployModelOperation } from "./atscale-deploy-model/AtScaleDeployModelOperation.js";
+import { AtScaleListModelErrorsOperation } from "./atscale-list-model-errors/AtScaleListModelErrorsOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -62,5 +63,6 @@ export async function buildRegistry(
   registry.register(new AtScaleCreateRepoOperation(services, logger));
   registry.register(new AtScaleListDeploymentsOperation(services, logger));
   registry.register(new AtScaleDeployModelOperation(services, logger));
+  registry.register(new AtScaleListModelErrorsOperation(services, logger));
   return registry;
 }

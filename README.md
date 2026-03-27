@@ -95,6 +95,7 @@ flowchart TD
   - [`atscale-create-repo`](#atscale-create-repo)
   - [`atscale-list-deployments`](#atscale-list-deployments)
   - [`atscale-deploy-model`](#atscale-deploy-model)
+  - [`atscale-list-model-errors`](#atscale-list-model-errors)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
@@ -956,12 +957,65 @@ Deploys a catalog (semantic model) to an AtScale instance from a catalog XML fil
 |---|---|---|---|
 | `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
 | `--catalog-xml-file` | Yes | | Path to the catalog XML file to deploy |
-| `--repository-id` | Yes | | UUID of the repository to deploy against (from `atscale-list-repos`) |
+| `--repository-id` | No† | | UUID of the repository to deploy against (from `atscale-list-repos`) |
+| `--repository-name` | No† | | Name of the repository to deploy against. Looked up automatically via `atscale-list-repos`. |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
+
+† Either `--repository-id` or `--repository-name` is required.
 | `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
 **Output:** JSON response from AtScale. If `--tableau-servers` is specified, includes a `tableau` array with publish results per site.
+
+---
+
+### `atscale-list-model-errors`
+
+[↑ Table of Contents](#table-of-contents)
+
+Validates an SML model and lists any structural or engine-level problems.
+
+Runs in two phases:
+1. **Structural** — local cross-reference check of all SML YAML files (datasets, dimensions, level attributes, model relationships).
+2. **Engine** (if Phase 1 passes) — calls `POST /catalog/validate-model` to validate column joinability and uniqueness against the actual data warehouse.
+
+Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
+
+**Local mode** (validate SML files on disk):
+
+```bash
+./atscale-utils atscale-list-model-errors \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --sml-dir "./sml" \
+  --model-name "sales_demo"
+```
+
+**Remote mode** (clone an AtScale-connected git repo and validate):
+
+```bash
+./atscale-utils atscale-list-model-errors \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --repo-name "my-sml-repo" \
+  --branch "main" \
+  --model-name "sales_demo"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--sml-dir` | †One of | | Path to the SML directory (must contain `models/`, `dimensions/`, `datasets/`) |
+| `--repo-name` | †One of | | Name of an AtScale-connected git repository to validate |
+| `--repo-id` | †One of | | UUID of an AtScale-connected git repository to validate |
+| `--branch` | No | repo default | Branch to check out (remote mode only) |
+| `--model-name` | No | first model | Model `label` or `unique_name` to validate |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+† Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
+
+**Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
 
 ---
 

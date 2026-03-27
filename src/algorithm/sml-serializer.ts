@@ -205,6 +205,10 @@ function toKebab(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function toTitleCase(s: string): string {
+  return s.replace(/(^|[\s_-])(\w)/g, (_, sep, ch) => (sep ? " " : "") + ch.toUpperCase()).trim();
+}
+
 function toCamelCase(s: string): string {
   const words = s
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -317,6 +321,16 @@ function inferTimeUnit(levelName: string): string | undefined {
 
 function isTimeDimension(dim: SemanticDimension): boolean {
   return /date|time|fiscal|calendar|period/i.test(dim.name);
+}
+
+/**
+ * SML unique_name for a dimension YAML object.
+ * AtScale compares unique_names case-insensitively across all object types, so
+ * a dimension named "Queries" would collide with a dataset named "queries".
+ * We append " Dim" to all dimension unique_names to guarantee no collision.
+ */
+function dimUniqueName(dimName: string): string {
+  return `${dimName} Dim`;
 }
 
 // ----------------------------------------------------------
@@ -637,61 +651,70 @@ function buildDimensionFile(
     levelAttrMap.set(attr.sourceColumn, la);
   }
 
-  // PK as a level_attribute if not already included
-  if (!levelAttrMap.has(dim.primaryKey)) {
-    const colMeta = colByLower.get(dim.primaryKey.toLowerCase());
-    const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+  // PK as a level_attribute if not already included.
+  // For composite PKs all key columns are gathered into one level_attribute.
+  if (dim.primaryKeys.length > 0) {
+    const firstPk = dim.primaryKeys[0];
+    if (!levelAttrMap.has(firstPk)) {
+      const colMeta = colByLower.get(firstPk.toLowerCase());
+      const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
 
-    // A: surrogate key pairing for the PK
-    const nameColName = colIsInt ? findNameColumn(dim.primaryKey, colByLower) : undefined;
+      // A: surrogate key pairing for the PK
+      const nameColName = colIsInt ? findNameColumn(firstPk, colByLower) : undefined;
 
-    // C: sort column pairing
-    const displayCol = nameColName ?? dim.primaryKey;
-    const displayColMeta = colByLower.get(displayCol.toLowerCase());
-    const sortColName = displayColMeta && STRING_TYPES.has(displayColMeta.dataType.toUpperCase())
-      ? findSortColumn(displayCol, colByLower)
-      : undefined;
+      // C: sort column pairing (only when single-column PK for simplicity)
+      const displayCol = nameColName ?? firstPk;
+      const displayColMeta = colByLower.get(displayCol.toLowerCase());
+      const sortColName = dim.primaryKeys.length === 1 && displayColMeta && STRING_TYPES.has(displayColMeta.dataType.toUpperCase())
+        ? findSortColumn(displayCol, colByLower)
+        : undefined;
 
-    const la: LevelAttributeDef = {
-      unique_name: laName(dim.primaryKey, laPrefix),
-      label: dim.primaryKey,
-      dataset: dim.sourceTable,
-      name_column: nameColName ?? dim.primaryKey,
-      key_columns: [dim.primaryKey],
-      is_unique_key: true,   // B: PK is always the unique key
-    };
+      const la: LevelAttributeDef = {
+        unique_name: laName(firstPk, laPrefix),
+        label: firstPk,
+        dataset: dim.sourceTable,
+        name_column: nameColName ?? firstPk,
+        key_columns: dim.primaryKeys,   // all PK columns (composite-key safe)
+        is_unique_key: true,            // B: PK is always the unique key
+      };
 
-    if (sortColName) la.sort_column = sortColName;
+      if (sortColName) la.sort_column = sortColName;
 
-    const tu = inferTimeUnit(dim.primaryKey);
-    if (isTime && tu) la.time_unit = tu;
+      const tu = inferTimeUnit(firstPk);
+      if (isTime && tu) la.time_unit = tu;
 
-    if (isTime) la.folder = "Date Attributes";
+      if (isTime) la.folder = "Date Attributes";
 
-    levelAttrMap.set(dim.primaryKey, la);
-  } else {
-    // B: PK may have been added already via a hierarchy level; mark it unique.
-    const existing = levelAttrMap.get(dim.primaryKey);
-    if (existing) existing.is_unique_key = true;
+      levelAttrMap.set(firstPk, la);
+    } else {
+      // B: PK may have been added already via a hierarchy level; mark it unique
+      // and expand key_columns to include all PK columns.
+      const existing = levelAttrMap.get(firstPk);
+      if (existing) {
+        existing.is_unique_key = true;
+        if (dim.primaryKeys.length > 1) existing.key_columns = dim.primaryKeys;
+      }
+    }
   }
 
   // F: Add hidden join-key level_attributes for snowflake FK columns.
   // These columns are excluded from dim.attributes but are needed in the
   // dimension file so AtScale can resolve intra-dimension snowflake joins.
   for (const sr of dim.snowflakeRelationships ?? []) {
-    if (levelAttrMap.has(sr.fromColumn)) continue;
-    const colMeta = colByLower.get(sr.fromColumn.toLowerCase());
-    const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
-    // E: FK join keys with no display companion → hidden
-    const nameColName = colIsInt ? findNameColumn(sr.fromColumn, colByLower) : undefined;
-    levelAttrMap.set(sr.fromColumn, {
-      unique_name: laName(sr.fromColumn, laPrefix),
-      label: sr.fromColumn,
-      dataset: dim.sourceTable,
-      name_column: nameColName ?? sr.fromColumn,
-      key_columns: [sr.fromColumn],
-      is_hidden: !nameColName,  // E: hidden when there's no meaningful display name
-    });
+    for (const col of sr.fromColumns) {
+      if (levelAttrMap.has(col)) continue;
+      const colMeta  = colByLower.get(col.toLowerCase());
+      const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+      const nameColName = colIsInt ? findNameColumn(col, colByLower) : undefined;
+      levelAttrMap.set(col, {
+        unique_name: laName(col, laPrefix),
+        label: col,
+        dataset: dim.sourceTable,
+        name_column: nameColName ?? col,
+        key_columns: [col],
+        is_hidden: !nameColName,
+      });
+    }
   }
 
   // Serialise level_attributes
@@ -732,20 +755,20 @@ function buildDimensionFile(
 
   // F: Snowflake relationships within the dimension — dimension-to-dimension joins.
   const snowflakeRels = (dim.snowflakeRelationships ?? []).map((sr) => ({
-    unique_name: `${dim.sourceTable}_${sr.toTable}_${sr.fromColumn}`,
+    unique_name: `${dim.sourceTable}_${sr.toTable}_${sr.fromColumns.join("_")}`,
     from: {
       dataset:      dim.sourceTable,
-      join_columns: [sr.fromColumn],
+      join_columns: sr.fromColumns,
     },
     to: {
-      dimension: toKebab(sr.toTable),
-      level:     laName(sr.toColumn, laPrefix),
+      dimension: dimUniqueName(toTitleCase(sr.toTable)),
+      level:     laName(sr.toColumns[0], laPrefix),
     },
     type: "snowflake",
   }));
 
   const dimObj: Record<string, YamlValue> = {
-    unique_name: dim.name,
+    unique_name: dimUniqueName(dim.name),
     object_type: "dimension",
     label: dim.name,
     ...(dim.description ? { description: dim.description } : {}),
@@ -839,7 +862,7 @@ function buildModelFile(
 
     // Resolve the join level: prefer the level whose source column matches
     // the FK column; fall back to the dimension's primary key.
-    let joinLevel: string = laName(dim.primaryKey, laPrefix);
+    let joinLevel: string = dim.primaryKeys.length > 0 ? laName(dim.primaryKeys[0], laPrefix) : "";
     for (const h of dim.hierarchies) {
       const match = h.levels.find(
         (l) => l.sourceColumn.toLowerCase() === rel.toColumn.toLowerCase(),
@@ -852,7 +875,7 @@ function buildModelFile(
       rel: {
         unique_name: relUniqueName,
         from: { dataset: fact.sourceTable, join_columns: rel.fromColumns ?? [rel.fromColumn] } as unknown as YamlValue,
-        to:   { dimension: dim.name, level: joinLevel }                     as unknown as YamlValue,
+        to:   { dimension: dimUniqueName(dim.name), level: joinLevel }       as unknown as YamlValue,
       },
       dimName: dim.name,
       fromCol: rel.fromColumn,
@@ -894,7 +917,10 @@ function buildModelFile(
   const degenerateDimNames = model.dimensions
     .filter((d) => !dimensionsWithRelationships.has(d.name))
     .filter((d) => !isFactLikeDimension(d, factSourceTables))
-    .map((d) => d.name);
+    // A true degenerate dimension lives on a fact table — exclude standalone
+    // dimension tables that have no relationship path to any fact.
+    .filter((d) => factSourceTables.has(d.sourceTable))
+    .map((d) => dimUniqueName(d.name));
 
   // ---- Metrics -----------------------------------------------------------
 

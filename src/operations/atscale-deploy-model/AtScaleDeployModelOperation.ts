@@ -2,14 +2,14 @@
  * AtScaleDeployModel
  *
  * Deploys a catalog (semantic model) to an AtScale instance from a catalog XML
- * file and an existing repository ID.
+ * file and an existing repository ID or name.
  *
  * Example:
  *
  *   atscale-deploy-model \
  *     --atscale-connection-name my_atscale \
  *     --catalog-xml-file catalog.xml \
- *     --repository-id 3f8a1b2c-...
+ *     --repository-name my-sml-repo
  */
 import fs from "fs";
 import { Operation } from "../Operation.js";
@@ -45,8 +45,13 @@ class AtScaleDeployModelParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "repository-id";
-      description = "UUID of the repository to deploy against (from atscale-list-repos)";
-      required    = true;
+      description = "UUID of the repository to deploy against (from atscale-list-repos). Either this or --repository-name is required.";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "repository-name";
+      description = "Name of the repository to deploy against. Looked up via atscale-list-repos. Either this or --repository-id is required.";
+      required    = false;
     })(),
     new (class extends StringParameter {
       name        = "tableau-servers";
@@ -65,7 +70,8 @@ type Params = {
   "connection-file": string;
   "atscale-connection-name": string;
   "catalog-xml-file": string;
-  "repository-id": string;
+  "repository-id"?: string;
+  "repository-name"?: string;
   "tableau-servers"?: string;
   "insecure"?: boolean;
 };
@@ -140,12 +146,32 @@ export class AtScaleDeployModelOperation extends Operation<Params> {
   }
 
   async run(params: Params): Promise<void> {
+    if (!params["repository-id"] && !params["repository-name"]) {
+      throw new Error("Either --repository-id or --repository-name is required");
+    }
+
     const yaml       = this.services.get<YamlService>("yaml");
     const atScaleSvc = this.services.get<AtScaleRestClientService>("atscale-rest");
 
     const config     = yaml.readFromFile<Record<string, any>>(params["connection-file"]);
     const env        = resolveAtScaleEnv(config, params["atscale-connection-name"], params["insecure"]);
     const catalogXml = fs.readFileSync(params["catalog-xml-file"], "utf-8");
+
+    let repositoryId = params["repository-id"];
+
+    if (!repositoryId) {
+      const repoName = params["repository-name"]!;
+      this.logger.verbose(`[AtScaleDeployModel] Looking up repository '${repoName}'`);
+      const repos = await atScaleSvc.listRepos(env);
+      const repo = repos.find(r => r.name === repoName);
+      if (!repo) {
+        throw new Error(
+          `Repository '${repoName}' not found. Available: ${repos.map(r => r.name).join(", ") || "(none)"}`,
+        );
+      }
+      repositoryId = repo.id;
+      this.logger.verbose(`[AtScaleDeployModel] Resolved repository '${repoName}' → ${repositoryId}`);
+    }
 
     let tableauServers: TableauServerTarget[] | undefined;
     if (params["tableau-servers"]) {
@@ -156,7 +182,7 @@ export class AtScaleDeployModelOperation extends Operation<Params> {
 
     const result = await atScaleSvc.deployModel(env, {
       catalogXml,
-      repositoryId:  params["repository-id"],
+      repositoryId,
       tableauServers,
     });
 

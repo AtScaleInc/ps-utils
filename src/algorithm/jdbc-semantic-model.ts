@@ -108,8 +108,12 @@ function classifyTables(
   columnsByTable: Map<string, ColumnMeta[]>,
   foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>,
 ): { factTables: Set<string>; dimensionTables: Set<string> } {
-  // FACT: table name ends with "fact" (word boundary), OR has FKs to ≥2 distinct
-  // tables AND at least one numeric non-FK column.
+  // FACT: table name ends with "fact" (word boundary), OR has at least one FK
+  // to another table AND at least one numeric non-FK, non-PK column.
+  // Requiring at least one FK prevents pure dimension/lookup tables from being
+  // misclassified.  Requiring a numeric non-FK column excludes bridge tables
+  // (e.g. order_product with only key columns) and 1:1 extension tables
+  // (e.g. queries_planned with only text/JSON columns).
   // DIMENSION: everything else.
   const factTables = new Set<string>();
   const dimensionTables = new Set<string>();
@@ -121,12 +125,12 @@ function classifyTables(
     const uniqueParentTables = new Set(fks.map((fk) => fk.pkTableName));
 
     const hasFactSuffix = /(?:^|[_\s])fact$/i.test(table.tableName);
-    const hasMultipleFKs = uniqueParentTables.size >= 2;
+    const hasFKs = uniqueParentTables.size >= 1;
     const hasNumericNonFKCols = cols.some(
-      (c) => !fkColumns.has(c.columnName) && isNumericType(c.dataType),
+      (c) => !fkColumns.has(c.columnName) && !c.isPrimaryKey && isNumericType(c.dataType),
     );
 
-    if (hasFactSuffix || (hasMultipleFKs && hasNumericNonFKCols)) {
+    if (hasFactSuffix || (hasFKs && hasNumericNonFKCols)) {
       factTables.add(table.tableName);
     } else {
       dimensionTables.add(table.tableName);
@@ -354,11 +358,26 @@ export async function proposeSemanticModel(
     const cols = applyProfileTypeOverrides(rawCols, profileMap.get(tableName));
     const idxs = rawMetadata.indexesByTable.get(tableName) ?? [];
     const fks = rawMetadata.foreignKeysByTable.get(tableName) ?? [];
-    const pkCol = cols.find((c) => c.isPrimaryKey);
+    const pkCols = cols.filter((c) => c.isPrimaryKey);
 
-    if (!pkCol) {
-      warnings.push(`Dimension table "${tableName}" has no primary key detected.`);
+    // Columns excluded from the flat attribute list: PK, FKs, hierarchy columns.
+    const fkColumns = new Set(fks.map((fk) => fk.fkColumnName));
+
+    // When no explicit PK is declared, infer the composite key from all NOT NULL
+    // non-FK columns. This avoids generating a level_attribute referencing a
+    // non-existent "id" column.
+    const inferredPkCols = pkCols.length === 0
+      ? rawCols.filter((c) => !c.nullable && !fkColumns.has(c.columnName))
+      : pkCols;
+
+    if (pkCols.length === 0) {
+      warnings.push(
+        `Dimension table "${tableName}" has no primary key — inferring composite key from NOT NULL columns: [${inferredPkCols.map((c) => c.columnName).join(", ")}]`,
+      );
     }
+
+    const primaryKeys = inferredPkCols.map((c) => c.columnName);
+    const pkColumnSet = new Set(primaryKeys);
 
     // Detect and exclude PII / HIPAA columns — combines name-based and
     // pattern-based detection; accumulates flags for the final warning list.
@@ -371,7 +390,7 @@ export async function proposeSemanticModel(
     // When an engine is provided it wraps the base inference and adds
     // vertical-specific hierarchies on top.
     const nonPkCols = cols.filter(
-      (c) => !c.isPrimaryKey && !piiExclusion.has(c.columnName),
+      (c) => !pkColumnSet.has(c.columnName) && !piiExclusion.has(c.columnName),
     );
     const hierarchyResult = inferenceEngine
       ? inferenceEngine.inferHierarchies(nonPkCols, idxs)
@@ -385,13 +404,10 @@ export async function proposeSemanticModel(
     const { hierarchies } = hierarchyResult;
     const hierarchyCols = hierarchyColumnSet(hierarchies);
 
-    // Columns excluded from the flat attribute list: PK, FKs, hierarchy columns.
-    const fkColumns = new Set(fks.map((fk) => fk.fkColumnName));
     const excluded = new Set([
       ...Array.from(fkColumns),
       ...Array.from(hierarchyCols),
     ]);
-    if (pkCol) excluded.add(pkCol.columnName);
 
     // Group _name / _description companions into their parent's labels.
     const { attributes } = groupSecondaryAttributes(nonPkCols, excluded);
@@ -423,14 +439,26 @@ export async function proposeSemanticModel(
     }
 
     // F: Detect dimension-to-dimension FK relationships (snowflake schema).
-    // FK columns that point to other dimension tables become snowflake joins.
-    const snowflakeRelationships: SnowflakeRelationship[] = fks
-      .filter((fk) => dimensionTables.has(fk.pkTableName))
-      .map((fk) => ({
-        fromColumn: fk.fkColumnName,
-        toTable:    fk.pkTableName,
-        toColumn:   fk.pkColumnName,
-      }));
+    // Group by constraint name to build composite joins correctly.
+    const sfksByConstraint = new Map<string, typeof fks>();
+    for (const fk of fks.filter((fk) => dimensionTables.has(fk.pkTableName))) {
+      const g = sfksByConstraint.get(fk.constraintName) ?? [];
+      g.push(fk);
+      sfksByConstraint.set(fk.constraintName, g);
+    }
+    const snowflakeRelationships: SnowflakeRelationship[] = [];
+    for (const [, group] of sfksByConstraint) {
+      group.sort((a, b) => a.keySeq - b.keySeq);
+      const fromCols = group.map((fk) => fk.fkColumnName);
+      const toCols   = group.map((fk) => fk.pkColumnName);
+      // Skip identity self-joins (PK referencing itself — semantically redundant).
+      if (group[0].pkTableName === tableName && fromCols.join() === toCols.join()) continue;
+      snowflakeRelationships.push({
+        fromColumns: fromCols,
+        toTable:     group[0].pkTableName,
+        toColumns:   toCols,
+      });
+    }
 
     // H: Table-level remarks for dimension description.
     const tableRemark = rawMetadata.tables
@@ -442,7 +470,7 @@ export async function proposeSemanticModel(
       kind: "dimension",
       name: toTitleCase(tableName),
       sourceTable: tableName,
-      primaryKey: pkCol?.columnName ?? "id",
+      primaryKeys,
       attributes,
       hierarchies,
       ...(tableRemark          ? { description:             tableRemark            } : {}),
@@ -762,7 +790,7 @@ export function printSemanticModel(model: SemanticModel): void {
   console.log(`\nDIMENSION DATASETS (${model.dimensions.length})`);
   for (const d of model.dimensions) {
     console.log(`  [DIM] ${d.name}  →  source: ${d.sourceTable}`);
-    console.log(`    PK: ${d.primaryKey}`);
+    console.log(`    PK: ${d.primaryKeys.join(", ")}`);
 
     if (d.hierarchies.length) {
       console.log(`    Hierarchies (${d.hierarchies.length}):`);

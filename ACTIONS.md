@@ -85,6 +85,7 @@ flowchart TD
   - [`atscale-create-repo`](#atscale-create-repo)
   - [`atscale-list-deployments`](#atscale-list-deployments)
   - [`atscale-deploy-model`](#atscale-deploy-model)
+  - [`atscale-list-model-errors`](#atscale-list-model-errors)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
@@ -105,7 +106,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-model` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-model`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -805,12 +806,71 @@ Deploys a catalog (semantic model) to an AtScale instance from a catalog XML fil
 |---|---|---|---|
 | `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
 | `catalog-xml-file` | Yes | | Path to the catalog XML file to deploy |
-| `repository-id` | Yes | | UUID of the repository to deploy against (from `atscale-list-repos`) |
+| `repository-id` | No† | | UUID of the repository to deploy against (from `atscale-list-repos`) |
+| `repository-name` | No† | | Name of the repository to deploy against. Looked up automatically. |
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
+
+† Either `repository-id` or `repository-name` is required.
 | `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
 **Output:** JSON response. If `tableau-servers` is specified, includes a `tableau` array with publish results per site.
+
+---
+
+### `atscale-list-model-errors`
+
+Validates an SML model against the AtScale engine and reports any problems.
+
+Runs two validation phases:
+1. **Structural** (always) — local YAML cross-reference check: verifies that all datasets, columns, dimensions, and level attributes referenced in the model and relationships actually exist in the SML files.
+2. **Engine** (if Phase 1 passes) — POSTs column-joinability and uniqueness checks to AtScale's `POST /catalog/validate-model` API; reports `Incorrect` results as errors and `Warning` results as warnings.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
+
+Supports two source modes — provide exactly one:
+- **Local** (`sml-dir`): validate SML files already checked out in the workflow workspace (typical CI/CD pre-deploy gate).
+- **Remote** (`repo-name` or `repo-id`): AtScale clones the connected git repository and validates a specific branch.
+
+#### Local mode (CI/CD pre-deploy)
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-list-model-errors
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    sml-dir: ./sml
+    model-name: sales_demo
+```
+
+#### Remote mode (post-connect inspection)
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: atscale-list-model-errors
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    repo-name: my-sml-repo
+    branch: main
+    model-name: sales_demo
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `sml-dir` | †One of | | Path to the SML directory (must contain `models/`, `dimensions/`, `datasets/`) |
+| `repo-name` | †One of | | Name of an AtScale-connected git repository to validate |
+| `repo-id` | †One of | | UUID of an AtScale-connected git repository to validate |
+| `branch` | No | repo default | Branch to check out (remote mode only) |
+| `model-name` | No | first model found | Model `label` or `unique_name` to validate |
+| `connection-file` | Yes | `connections.yaml` | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification |
+
+† Provide exactly one of `sml-dir`, `repo-name`, or `repo-id`.
+
+**Output:** JSON with `model`, `problems` array (each with `phase`, `severity`, `message`, optional `location`), and `summary` counts.
 
 ---
 

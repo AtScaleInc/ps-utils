@@ -122,7 +122,8 @@ export interface SemanticDimension {
   kind: "dimension";
   name: string;
   sourceTable: string;
-  primaryKey: string;
+  /** All primary-key column names (may be composite). Empty when no PK was detected. */
+  primaryKeys: string[];
   attributes: SemanticAttribute[];
   hierarchies: SemanticHierarchy[];
   /** Non-empty table remarks, emitted as SML description. */
@@ -159,12 +160,12 @@ export interface SemanticRelationship {
  * Emitted as a `relationships:` block inside the dimension SML file.
  */
 export interface SnowflakeRelationship {
-  /** FK column on the owning (parent) dimension table. */
-  fromColumn: string;
+  /** FK columns on the owning dimension table (composite-key safe). */
+  fromColumns: string[];
   /** The lookup table being joined (a sibling dataset within the same dimension). */
   toTable: string;
-  /** PK column on the lookup table. */
-  toColumn: string;
+  /** PK columns on the lookup table (parallel to fromColumns). */
+  toColumns: string[];
 }
 
 export interface SemanticView {

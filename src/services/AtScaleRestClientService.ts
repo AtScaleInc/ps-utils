@@ -9,7 +9,8 @@
  *   3. Create a data source      — POST /wapi/p/data-warehouses/{dialect}
  *   4. List data sources         — GET  /wapi/p/data-warehouses
  *   5. Deploy a model (catalog)  — POST /wapi/p/catalogs
- *   6. List models (catalogs)    — GET  /wapi/p/catalogs
+ *   6. Validate model            — POST /wapi/p/catalog/validate-model
+ *   7. List deployments          — GET  /wapi/p/projects/deployed
  *
  * Authentication: set `apiToken` in the connections file to a Design Center
  * API token (profile icon → API Token → Generate). The token is automatically
@@ -531,7 +532,67 @@ class DeployModelRequest extends RestRequest<DeployModelArgs, DeployModelResult>
   }
 }
 
-// ── 6. List models (catalogs) ─────────────────────────────────────────────────
+// ── 6. Validate model (engine checks) ────────────────────────────────────────
+
+export type ValidateModelCheckColumn = {
+  name:     string;   // field name expected by NestJS DTO (becomes "name" after kebab-case conversion)
+  type:     string;
+  dataType: string;
+};
+
+export type ValidateModelCheckSide = {
+  dsId:    string;
+  dsType:  string;
+  columns: ValidateModelCheckColumn[];
+};
+
+export type ValidateModelCheck = {
+  id:           string;
+  checkType:    string;
+  from:         ValidateModelCheckSide;
+  to:           ValidateModelCheckSide;
+  connectionId: string;
+  database:     string;
+  schema:       string;
+  isSnowflake:  boolean;
+};
+
+export type ValidateModelArgs = {
+  connectionId: string;
+  database:     string;
+  schema:       string;
+  checks:       ValidateModelCheck[];
+};
+
+export type ValidateModelResult = {
+  checks: Array<{
+    id:     string;
+    result: string; // engine returns e.g. "correct", "incorrect", "warning", "unknown" (case may vary)
+  }>;
+};
+
+class ValidateModelRequest extends RestRequest<ValidateModelArgs, ValidateModelResult> {
+  readonly method = "POST" as const;
+
+  path(_args: ValidateModelArgs): string {
+    return "/wapi/p/catalog/validate-model";
+  }
+
+  body(args: ValidateModelArgs): unknown {
+    return {
+      connectionId: args.connectionId,
+      database:     args.database,
+      schema:       args.schema,
+      checks:       args.checks,
+    };
+  }
+
+  parse(data: unknown): ValidateModelResult {
+    return (data ?? { checks: [] }) as ValidateModelResult;
+  }
+}
+
+// ── 7. List models (catalogs) ─────────────────────────────────────────────────
 
 export type ListModelsResult = Array<{
   id: string;
@@ -552,7 +613,7 @@ class ListModelsRequest extends RestRequest<void, ListModelsResult> {
   readonly method = "GET" as const;
 
   path(_args: void): string {
-    return "/wapi/p/catalogs";
+    return "/wapi/p/projects/deployed";
   }
 
   parse(data: unknown): ListModelsResult {
@@ -574,6 +635,7 @@ export class AtScaleRestClientService extends ServiceProvider {
   private readonly createDataSourceRequest  = new CreateDataSourceRequest();
   private readonly listDataSourcesRequest   = new ListDataSourcesRequest();
   private readonly deployModelRequest       = new DeployModelRequest();
+  private readonly validateModelRequest     = new ValidateModelRequest();
   private readonly listModelsRequest        = new ListModelsRequest();
 
   constructor(private readonly restClient: RestClientService) {
@@ -618,6 +680,18 @@ export class AtScaleRestClientService extends ServiceProvider {
    */
   async listDataSources(env: AtScaleEnvironment): Promise<ListDataSourcesResult> {
     return this.restClient.execute(this.listDataSourcesRequest, undefined, env);
+  }
+
+  /**
+   * Validate an SML model against the AtScale engine.
+   * Sends column-joinability and uniqueness checks and returns pass/fail results.
+   * Maps to: POST /wapi/p/catalog/validate-model
+   */
+  async validateModel(
+    env: AtScaleEnvironment,
+    args: ValidateModelArgs,
+  ): Promise<ValidateModelResult> {
+    return this.restClient.execute(this.validateModelRequest, args, env);
   }
 
   /**
