@@ -670,7 +670,9 @@ function buildDimensionFile(
         : undefined;
 
       const la: LevelAttributeDef = {
-        unique_name: laName(firstPk, laPrefix),
+        unique_name: dim.primaryKeys.length === 1
+          ? laName(firstPk, laPrefix)
+          : laName(`${dim.sourceTable}_key`, laPrefix),
         label: firstPk,
         dataset: dim.sourceTable,
         name_column: nameColName ?? firstPk,
@@ -697,24 +699,34 @@ function buildDimensionFile(
     }
   }
 
-  // F: Add hidden join-key level_attributes for snowflake FK columns.
-  // These columns are excluded from dim.attributes but are needed in the
-  // dimension file so AtScale can resolve intra-dimension snowflake joins.
+  // F: Add hidden join-key level_attributes for each snowflake FK group.
+  // AtScale resolves to.level against the SOURCE dimension's own LAs, so each
+  // relationship needs an LA here whose key_columns exactly match join_columns.
+  const fkLaAdded = new Set<string>();
   for (const sr of dim.snowflakeRelationships ?? []) {
-    for (const col of sr.fromColumns) {
-      if (levelAttrMap.has(col)) continue;
-      const colMeta  = colByLower.get(col.toLowerCase());
-      const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
-      const nameColName = colIsInt ? findNameColumn(col, colByLower) : undefined;
-      levelAttrMap.set(col, {
-        unique_name: laName(col, laPrefix),
-        label: col,
-        dataset: dim.sourceTable,
-        name_column: nameColName ?? col,
-        key_columns: [col],
-        is_hidden: !nameColName,
-      });
-    }
+    const laUniqueName = sr.fromColumns.length === 1
+      ? laName(sr.fromColumns[0], laPrefix)
+      : laName(`${sr.toTable}_key`, laPrefix);
+    if (fkLaAdded.has(laUniqueName)) continue;
+    // Skip if an existing LA already has this unique_name with the right key count.
+    const alreadyOk = Array.from(levelAttrMap.values()).some(
+      (la) => la.unique_name === laUniqueName && la.key_columns.length === sr.fromColumns.length,
+    );
+    if (alreadyOk) { fkLaAdded.add(laUniqueName); continue; }
+    fkLaAdded.add(laUniqueName);
+    const firstCol = sr.fromColumns[0];
+    const colMeta  = colByLower.get(firstCol.toLowerCase());
+    const colIsInt = colMeta ? isIntegerType(colMeta.dataType) : false;
+    const nameColName = colIsInt ? findNameColumn(firstCol, colByLower) : undefined;
+    // Use a synthetic key so we don't overwrite any existing single-column entry.
+    levelAttrMap.set(`__fk_${laUniqueName}`, {
+      unique_name: laUniqueName,
+      label: firstCol,
+      dataset: dim.sourceTable,
+      name_column: nameColName ?? firstCol,
+      key_columns: sr.fromColumns,
+      is_hidden: true,
+    });
   }
 
   // Serialise level_attributes
@@ -762,7 +774,9 @@ function buildDimensionFile(
     },
     to: {
       dimension: dimUniqueName(toTitleCase(sr.toTable)),
-      level:     laName(sr.toColumns[0], laPrefix),
+      level:     sr.fromColumns.length === 1
+          ? laName(sr.fromColumns[0], laPrefix)
+          : laName(`${sr.toTable}_key`, laPrefix),
     },
     type: "snowflake",
   }));
@@ -862,7 +876,9 @@ function buildModelFile(
 
     // Resolve the join level: prefer the level whose source column matches
     // the FK column; fall back to the dimension's primary key.
-    let joinLevel: string = dim.primaryKeys.length > 0 ? laName(dim.primaryKeys[0], laPrefix) : "";
+    let joinLevel: string = dim.primaryKeys.length === 1
+      ? laName(dim.primaryKeys[0], laPrefix)
+      : dim.primaryKeys.length > 1 ? laName(`${dim.sourceTable}_key`, laPrefix) : "";
     for (const h of dim.hierarchies) {
       const match = h.levels.find(
         (l) => l.sourceColumn.toLowerCase() === rel.toColumn.toLowerCase(),
