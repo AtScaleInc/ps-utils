@@ -669,10 +669,24 @@ function buildDimensionFile(
         ? findSortColumn(displayCol, colByLower)
         : undefined;
 
+      // Collision check: if any snowflake relationship uses firstPk as a
+      // single-column FK, it will also need an LA named la_<firstPk> with
+      // key_columns=[firstPk] (1 col).  The unique-key LA has key_columns=all
+      // PK cols (N cols).  AtScale validates join_columns.length == LA
+      // key_columns.length, so these two LAs cannot share the same unique_name.
+      // In that case, rename the unique-key LA to la_<table>_key.
+      const singleColFkCols = new Set(
+        (dim.snowflakeRelationships ?? [])
+          .filter((sr) => sr.fromColumns.length === 1)
+          .map((sr) => sr.fromColumns[0].toLowerCase()),
+      );
+      const uniqueKeyCollides =
+        dim.primaryKeys.length > 1 &&
+        singleColFkCols.has(firstPk.toLowerCase());
       const la: LevelAttributeDef = {
-        unique_name: dim.primaryKeys.length === 1
-          ? laName(firstPk, laPrefix)
-          : laName(`${dim.sourceTable}_key`, laPrefix),
+        unique_name: uniqueKeyCollides
+          ? laName(`${dim.sourceTable}_key`, laPrefix)
+          : laName(firstPk, laPrefix),
         label: firstPk,
         dataset: dim.sourceTable,
         name_column: nameColName ?? firstPk,
@@ -876,9 +890,7 @@ function buildModelFile(
 
     // Resolve the join level: prefer the level whose source column matches
     // the FK column; fall back to the dimension's primary key.
-    let joinLevel: string = dim.primaryKeys.length === 1
-      ? laName(dim.primaryKeys[0], laPrefix)
-      : dim.primaryKeys.length > 1 ? laName(`${dim.sourceTable}_key`, laPrefix) : "";
+    let joinLevel: string = dim.primaryKeys.length > 0 ? laName(dim.primaryKeys[0], laPrefix) : "";
     for (const h of dim.hierarchies) {
       const match = h.levels.find(
         (l) => l.sourceColumn.toLowerCase() === rel.toColumn.toLowerCase(),
