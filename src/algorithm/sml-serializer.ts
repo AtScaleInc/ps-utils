@@ -147,13 +147,17 @@ function toYaml(value: YamlValue, indent = 0): string {
 
   if (Array.isArray(value)) {
     if (value.length === 0) return "[]";
+    const itemPad = " ".repeat(indent + 2);
     return value
       .map((item) => {
-        const rendered = toYaml(item, indent + 2);
+        // Render the item without leading indent so the first key lands
+        // immediately after "- ", matching AtScale's expected SML format.
+        const rendered = toYaml(item, 0);
         if (rendered.includes("\n")) {
-          // Multi-line block item: first line on same line as `-`
+          // Multi-line block item: first key on same line as `-`,
+          // subsequent lines shifted to indent+2.
           const [first, ...rest] = rendered.split("\n");
-          return `${pad}- ${first}\n${rest.map((l) => `${pad}  ${l}`).join("\n")}`;
+          return `${pad}- ${first}\n${rest.map((l) => (l ? `${itemPad}${l}` : "")).join("\n")}`;
         }
         return `${pad}- ${rendered}`;
       })
@@ -248,9 +252,9 @@ const JDBC_TO_SML: Record<string, string> = {
   INTEGER: "int",       INT: "int",         SMALLINT: "int",
   TINYINT: "int",       MEDIUMINT: "int",   INT2: "int",
   INT4: "int",
-  BIGINT: "bigint",     INT8: "bigint",
+  BIGINT: "long",       INT8: "long",
   // Floating-point types
-  FLOAT: "float",       REAL: "float",
+  FLOAT: "double",      REAL: "double",
   DOUBLE: "double",
   // Decimal types
   DECIMAL: "decimal",   NUMERIC: "decimal", NUMBER: "decimal",
@@ -333,8 +337,6 @@ function dimUniqueName(dimName: string): string {
   return dimName;
 }
 
-/** Allowed calcs to advertise on non-leaf hierarchy levels. */
-const DMA_CALCS = ["Ancestor", "Descendants", "Lag", "ParallelPeriod", "Range", "Siblings"] as const;
 
 // ----------------------------------------------------------
 // 1. Catalog file
@@ -359,14 +361,9 @@ function buildCatalog(model: SemanticModel, opts: SmlSerializerOptions): string 
 // 2. Connection file
 // ----------------------------------------------------------
 
-/** Full unique_name for the generated connection object (includes `.connection` suffix). */
-function connectionUniqueName(opts: SmlSerializerOptions): string {
-  return `${opts.connectionName}.connection`;
-}
-
 function buildConnection(opts: SmlSerializerOptions): string {
   return yamlDoc({
-    unique_name: connectionUniqueName(opts),
+    unique_name: opts.connectionName,
     object_type: "connection",
     label: opts.connectionName,
     as_connection: opts.connectionName,
@@ -434,13 +431,12 @@ function buildDataset(
     }));
   }
 
+  // database/schema live in the connection file, not in individual datasets.
   return yamlDoc({
     unique_name: datasetUniqueName(tableName),
     object_type: "dataset",
     label: tableName,
-    connection_id: connectionUniqueName(opts),
-    ...(opts.database ? { database: opts.database } : {}),
-    ...(opts.schema   ? { schema:   opts.schema   } : {}),
+    connection_id: opts.connectionName,
     table: physicalTableName,
     columns,
   });
@@ -462,7 +458,6 @@ interface LevelAttributeDef {
   is_hidden?: boolean;
   description?: string;
   folder?: string;
-  allowed_calcs_for_dma?: readonly string[];
   secondary_attributes?: Array<Record<string, YamlValue>>;
 }
 
@@ -529,7 +524,6 @@ function findSortColumn(
 function buildDimensionFile(
   dim: SemanticDimension,
   opts: SmlSerializerOptions,
-  isDegenerate = false,
 ): string {
   const isTime = isTimeDimension(dim);
 
@@ -543,14 +537,6 @@ function buildDimensionFile(
   const attrByCol = new Map<string, typeof dim.attributes[number]>(
     dim.attributes.map((a) => [a.sourceColumn, a]),
   );
-
-  // Track non-leaf hierarchy level columns — these get allowed_calcs_for_dma.
-  const nonLeafLevelColumns = new Set<string>();
-  for (const h of dim.hierarchies) {
-    for (let i = 0; i < h.levels.length - 1; i++) {
-      nonLeafLevelColumns.add(h.levels[i].sourceColumn.toLowerCase());
-    }
-  }
 
   // Collect all level attributes needed:
   // - One per hierarchy level
@@ -607,11 +593,6 @@ function buildDimensionFile(
         la.folder = "Date Attributes";
       } else if (attr?.folder) {
         la.folder = attr.folder;
-      }
-
-      // Non-leaf levels get allowed_calcs_for_dma.
-      if (nonLeafLevelColumns.has(l.sourceColumn.toLowerCase())) {
-        la.allowed_calcs_for_dma = DMA_CALCS;
       }
 
       levelAttrMap.set(key, la);
@@ -778,13 +759,41 @@ function buildDimensionFile(
     (h) => ({
       unique_name: h.name,
       label: h.name,
-      filter_empty: "yes",
+      // filter_empty is only meaningful on time hierarchies (avoids blank rows)
+      ...(isTime ? { filter_empty: "yes" } : {}),
       ...(isTime ? { folder: "Date Attributes" } : {}),
       levels: h.levels.map((l) => ({
         unique_name: laName(l.sourceColumn),
       })),
     }),
   );
+
+  // AtScale requires `to.level` in model relationships to reference a hierarchy
+  // level, not just a level_attribute. The PK column (which carries
+  // is_unique_key: true) is excluded from hierarchy inference because it is not
+  // in nonPkCols — so it is never in any inferred hierarchy. When the PK is
+  // absent from every hierarchy, add it as the leaf of a synthetic hierarchy so
+  // model relationships that point to this dimension resolve correctly.
+  if (dim.primaryKeys.length > 0) {
+    const pkLaName = laName(dim.primaryKeys[0]);
+    const pkInHierarchy = dim.hierarchies.some((h) =>
+      h.levels.some((l) => laName(l.sourceColumn) === pkLaName),
+    );
+    if (!pkInHierarchy) {
+      // Collect all non-hidden, non-PK level_attribute unique_names in insertion
+      // order, then append the PK as the leaf level.
+      // Only include the PK as the single level — adding other levels risks
+      // duplicating them across hierarchies (e.g. a date column already in
+      // an inferred hierarchy) which AtScale rejects.
+      hierarchies.push({
+        unique_name: `${dim.name} Hierarchy`,
+        label: `${dim.name} Hierarchy`,
+        ...(isTime ? { filter_empty: "yes" } : {}),
+        ...(isTime ? { folder: "Date Attributes" } : {}),
+        levels: [{ unique_name: pkLaName }],
+      });
+    }
+  }
 
   // Serialise level_attributes
   const level_attributes: Array<Record<string, YamlValue>> = Array.from(
@@ -797,15 +806,12 @@ function buildDimensionFile(
       name_column: la.name_column,
       key_columns: la.key_columns,
     };
-    if (la.is_unique_key)          obj.is_unique_key = true;
-    if (la.is_hidden)              obj.is_hidden = true;
-    if (la.description)            obj.description = la.description;
-    if (la.folder)                 obj.folder = la.folder;
-    if (la.sort_column)            obj.sort_column = la.sort_column;
-    if (la.time_unit)              obj.time_unit = la.time_unit;
-    if (la.allowed_calcs_for_dma?.length) {
-      obj.allowed_calcs_for_dma = Array.from(la.allowed_calcs_for_dma) as unknown as YamlValue;
-    }
+    if (la.is_unique_key) obj.is_unique_key = true;
+    if (la.is_hidden)     obj.is_hidden = true;
+    if (la.description)   obj.description = la.description;
+    if (la.folder)        obj.folder = la.folder;
+    if (la.sort_column)   obj.sort_column = la.sort_column;
+    if (la.time_unit)     obj.time_unit = la.time_unit;
     if (la.secondary_attributes?.length) {
       obj.secondary_attributes = la.secondary_attributes as unknown as YamlValue;
     }
@@ -830,9 +836,8 @@ function buildDimensionFile(
     unique_name: dimUniqueName(dim.name),
     object_type: "dimension",
     label: dim.name,
-    ...(isDegenerate ? { is_degenerate: true } : {}),
     ...(dim.description ? { description: dim.description } : {}),
-    ...(isTime ? { type: "time" } : {}),
+    type: isTime ? "time" : "standard",
     hierarchies: hierarchies as unknown as YamlValue,
     level_attributes: level_attributes as unknown as YamlValue,
   };
@@ -841,8 +846,6 @@ function buildDimensionFile(
   if (snowflakeRels.length > 0) {
     dimObj.relationships = snowflakeRels as unknown as YamlValue;
   }
-
-  dimObj.modeler_metadata = { version: "0", modified: "false" };
 
   return yamlDoc(dimObj);
 }
@@ -1022,7 +1025,6 @@ function buildModelFile(
     unique_name: model.name,
     object_type: "model",
     label: model.name,
-    include_default_drillthrough: true,
     relationships: relationships as unknown as YamlValue,
     metrics: uniqueMetrics as unknown as YamlValue,
   };
@@ -1074,10 +1076,11 @@ export function serializeToSml(
   // Pre-compute which fact tables have at least one valid single-column model
   // relationship so metric file generation can be restricted to connected facts.
   const factBySourceTable = new Map(model.facts.map((f) => [f.sourceTable, f]));
+  const factByName = new Map(model.facts.map((f) => [f.name, f]));
   const dimByNameOuter = new Map(model.dimensions.map((d) => [d.name, d]));
   const connectedFactSourceTables = new Set<string>();
   for (const rel of model.relationships) {
-    const fact = factBySourceTable.get(rel.fromDataset);
+    const fact = factByName.get(rel.fromDataset) ?? factBySourceTable.get(rel.fromDataset);
     const dim  = dimByNameOuter.get(rel.toDataset);
     if (!fact || !dim) continue;
     if (isFactLikeDimension(dim, factSourceTables)) continue;
@@ -1086,21 +1089,12 @@ export function serializeToSml(
   }
 
   // Identify degenerate dimensions (columns live on a fact table itself).
-  const dimensionsWithRelationships = new Set(model.relationships.map((r) => r.toDataset));
-  const degenerateSourceTables = new Set(
-    model.dimensions
-      .filter((d) => !dimensionsWithRelationships.has(d.name))
-      .filter((d) => !isFactLikeDimension(d, factSourceTables))
-      .filter((d) => factSourceTables.has(d.sourceTable))
-      .map((d) => d.sourceTable),
-  );
-
   // catalog.yml
   output.set("catalog.yml", buildCatalog(model, opts));
 
-  // connections/{name}.connection.yml
+  // connections/{name}.yml
   output.set(
-    `connections/${toKebab(opts.connectionName)}.connection.yml`,
+    `connections/${toKebab(opts.connectionName)}.yml`,
     buildConnection(opts),
   );
 
@@ -1128,11 +1122,10 @@ export function serializeToSml(
   // dimensions/{name}.yml (skip bridge/junction tables)
   for (const dim of model.dimensions) {
     if (isFactLikeDimension(dim, factSourceTables)) continue;
-    const isDegenerate = degenerateSourceTables.has(dim.sourceTable);
     const dimFilename = opts.camelCaseFiles ? toCamelCase(dim.sourceTable) : dim.sourceTable;
     output.set(
       `dimensions/${dimFilename}.yml`,
-      buildDimensionFile(dim, opts, isDegenerate),
+      buildDimensionFile(dim, opts),
     );
   }
 
