@@ -80,7 +80,7 @@ case $state in
     _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --insecure
     ;;
   atscale-deploy-repo)
-    _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --repo-id --project-id --tableau-servers --insecure
+    _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-id --repo-name --project-name --project-id --tableau-servers --insecure
     ;;
   atscale-list-model-errors)
     _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-name --repo-id --branch --model-name --insecure

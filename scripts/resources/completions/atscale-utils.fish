@@ -24,5 +24,5 @@ complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-create-data-so
 complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-list-repos' -a '--logfile --output --verbose --connection-file --atscale-connection-name --insecure'
 complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-create-repo' -a '--logfile --output --verbose --connection-file --atscale-connection-name --name --url --type --visible-branches-pattern --default-branch --insecure'
 complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-list-deployments' -a '--logfile --output --verbose --connection-file --atscale-connection-name --insecure'
-complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-deploy-repo' -a '--logfile --output --verbose --connection-file --atscale-connection-name --repo-id --project-id --tableau-servers --insecure'
+complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-deploy-repo' -a '--logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-id --repo-name --project-name --project-id --tableau-servers --insecure'
 complete -c atscale-utils -n '__fish_seen_subcommand_from atscale-list-model-errors' -a '--logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-name --repo-id --branch --model-name --insecure'

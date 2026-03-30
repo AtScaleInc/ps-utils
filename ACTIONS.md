@@ -788,29 +788,37 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 
 ### `atscale-deploy-repo`
 
-Instructs AtScale to deploy (publish) a git repository that is already configured in AtScale.  AtScale pulls the SML files directly from its configured git repo and publishes them to the catalog.  No local file I/O is performed.
+Reads local SML files, uploads them to an AtScale git-backed repository, and publishes the catalog. The `auth_session` cookie required by the deploy endpoint is acquired automatically via Keycloak — no manually-obtained browser cookie is needed.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block containing `apiToken` **and** `user` (or inline `username`/`password`) in the named connection. The API token is used for `/wapi/p/` endpoints; the username/password are used to acquire the session cookie for the deploy endpoint.
 
 ```yaml
+- uses: actions/checkout@v4
+
 - uses: AtScaleInc/ps-template@main
   with:
     operation: atscale-deploy-repo
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
     atscale-connection-name: my_atscale
-    repo-id: 8c1a201b-0f9c-51c7-a2a1-63b13836d4b7
+    sml-dir: ./sml-output
+    repo-name: my-sml-repo
 ```
+
+Either `repo-id` or `repo-name` must be provided. When only `repo-name` is given, the operation calls `atscale-list-repos` to look up the corresponding UUID.
 
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `repo-id` | Yes | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
-| `project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys. |
+| `sml-dir` | Yes | | Path to the local SML directory (all `*.yml` files are uploaded) |
+| `repo-id` | One of | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
+| `repo-name` | One of | | Name of the git repository already configured in AtScale. Looked up automatically if `repo-id` is omitted. |
+| `project-name` | No | `{catalog.unique_name}_{defaultBranch}` | Override the catalog project name |
+| `project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys (auto-detected if the project already exists). |
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
 | `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
-**Output:** JSON response containing `projectId` and `projectName` of the deployed catalog.
+**Output:** JSON response from AtScale, e.g. `{"tableau":[],"permissions":{"isSuccessful":true}}`.
 
 ---
 

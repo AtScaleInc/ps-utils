@@ -7,6 +7,7 @@ Upcoming features:
 - Rudy's aggregate util
 - Complete GitActions
 - SSO
+- Generate Modeling Report
 
 
 
@@ -948,25 +949,54 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 
 [↑ Table of Contents](#table-of-contents)
 
-Instructs AtScale to deploy (publish) a git repository that is already configured in AtScale.  AtScale pulls the SML files directly from its configured git repo and publishes them to the catalog.  No local file I/O is performed.
+Reads local SML files, uploads them to an AtScale git-backed repository, and publishes the catalog. The operation:
+1. Collects all `*.yml` files from `--sml-dir`
+2. Looks up the repository by `--repo-name` (or uses `--repo-id` directly)
+3. Derives the project name as `{catalog.unique_name}_{repo.defaultBranch}` (overridable via `--project-name`)
+4. Generates the catalog XML and calls the AtScale deploy endpoint
+5. Automatically acquires an `auth_session` cookie via Keycloak when the deploy endpoint requires one — no manual browser cookie needed
+
+The `atscale:` block must include either `apiToken` or username/password credentials. When `apiToken` is set, add `user:` (or `username:`/`password:`) as well — the username/password are used to acquire the session cookie for the deploy endpoint, while the API token is used for all other REST calls.
 
 ```bash
 ./atscale-utils atscale-deploy-repo \
   --connection-file "./connections.yaml" \
   --atscale-connection-name "my_atscale" \
-  --repo-id "8c1a201b-0f9c-51c7-a2a1-63b13836d4b7"
+  --sml-dir "./sml-output" \
+  --repo-name "my-sml-repo"
 ```
+
+Either `--repo-id` or `--repo-name` must be provided. When only `--repo-name` is given, the operation calls `atscale-list-repos` to look up the corresponding UUID.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `--repo-id` | Yes | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
-| `--project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys. |
+| `--sml-dir` | Yes | | Path to the local directory containing SML `*.yml` files to deploy |
+| `--repo-id` | One of | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
+| `--repo-name` | One of | | Name of the git repository already configured in AtScale. Looked up automatically if `--repo-id` is omitted. |
+| `--project-name` | No | `{catalog.unique_name}_{defaultBranch}` | Override the catalog project name |
+| `--project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys (auto-detected if the project already exists). |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
 | `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
 
-**Output:** JSON response containing `projectId` and `projectName` of the deployed catalog.
+**Output:** JSON response from AtScale, e.g. `{"tableau":[],"permissions":{"isSuccessful":true}}`.
+
+**Connection format** (the `atscale:` block must include `user:` or inline credentials alongside `apiToken:` so that the session cookie can be acquired automatically):
+
+```yaml
+users:
+  vm_user:
+    username: atscale-kc-admin
+    password: "<password>"
+
+connections:
+  my_atscale:
+    atscale:
+      url: https://atscale.example.com
+      apiToken: "<api-token>"   # used for /wapi/p/ endpoints
+      user: vm_user             # used to acquire auth_session cookie for deploy
+```
 
 ---
 
@@ -1334,7 +1364,7 @@ Used by `atscale-list-data-sources` and other operations that call the AtScale p
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `url` | Yes | | Root URL of the AtScale instance (no trailing slash), e.g. `https://atscale.example.com` |
-| `apiToken` | No† | | Static API token generated in the Design Center UI: **profile icon → API Token → Generate**. Automatically exchanged for a short-lived JWT via `POST /v1/token` on each auth cycle. When set, all Keycloak fields are ignored. **Recommended approach.** |
+| `apiToken` | No† | | Static API token generated in the Design Center UI: **profile icon → API Token → Generate**. Automatically exchanged for a short-lived JWT via `POST /v1/token` on each auth cycle. **Recommended approach.** |
 | `user` | No* | | Key from the `users` block. Resolves `username` and `password` from that entry. |
 | `username` | No* | | Inline username for Keycloak OIDC. Used when `user` is not set. |
 | `password` | No* | | Inline password for Keycloak OIDC. Used when `user` is not set. |
@@ -1342,10 +1372,11 @@ Used by `atscale-list-data-sources` and other operations that call the AtScale p
 | `clientId` | No | `atscale-ai-link` | Keycloak client ID |
 | `clientSecret` | No | | Keycloak client secret. Required when the client is configured as confidential (e.g. `atscale-modeler`). Find it in Keycloak → Clients → \<client\> → Credentials. |
 | `authType` | No | `keycloak` | Authentication type: `keycloak` (OIDC password grant, default) or `basic` (HTTP Basic auth). |
+| `sessionCookie` | No | | Pre-obtained `auth_session` cookie value. If omitted, the cookie is acquired automatically via Keycloak when needed (e.g. for `atscale-deploy-repo`). Rarely needed — provide username/password instead and let the tool acquire it. |
 | `insecure` | No | `true` | Skip TLS certificate verification. Defaults to `true` because AtScale instances commonly use self-signed certificates. Set to `false` to enforce strict certificate validation. |
 
 † Either `apiToken` or credentials (`user`/`username`+`password`) must be provided.
-\* Required when `apiToken` is not set.
+\* Required when `apiToken` is not set. Also used by `atscale-deploy-repo` to acquire the session cookie automatically, even when `apiToken` is set.
 
 **Keycloak client troubleshooting:**
 

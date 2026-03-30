@@ -326,8 +326,8 @@ inputs:
   repo-id:
     description: >
       UUID of an AtScale-connected git repository.
-      Used by: atscale-deploy-repo (required),
-               atscale-list-model-errors (remote mode — provide this OR sml-dir).
+      Used by: atscale-deploy-repo (provide this OR repo-name),
+               atscale-list-model-errors (remote mode — provide this OR sml-dir/repo-name).
     required: false
   branch:
     description: >

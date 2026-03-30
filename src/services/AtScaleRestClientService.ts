@@ -9,6 +9,7 @@
  *   3. Create a data source      — POST /wapi/p/data-warehouses/{dialect}
  *   4. List data sources         — GET  /wapi/p/data-warehouses
  *   5. Deploy a model (catalog)  — POST /wapi/p/catalogs
+ *   5b. Deploy SML to git repo  — POST /wapi/git/deploy/catalog
  *   6. Validate model            — POST /wapi/p/catalog/validate-model
  *   7. List deployments          — GET  /wapi/p/projects/deployed
  *
@@ -91,11 +92,13 @@ export type AtScaleEnvironmentConfig = {
    */
   authType?: "keycloak" | "basic";
   /**
-   * Session cookie for the AtScale Design Center Next.js API (`/wapi/p/` endpoints).
-   * Obtain by logging in to the Design Center in your browser, then copying the
-   * `auth_session` cookie value from DevTools → Application → Cookies.
+   * Session cookie for the AtScale Design Center (`/wapi/git/` endpoints).
+   * When omitted, the session cookie is acquired automatically by completing
+   * the Keycloak authorization-code flow using `username` and `password`.
    *
-   * Only needed when `apiToken` JWT exchange is not available. Prefer `apiToken`.
+   * Manual override: log in to the Design Center, copy the `auth_session`
+   * cookie value from DevTools → Application → Cookies, and paste it here.
+   * Useful for debugging when automatic acquisition fails.
    */
   sessionCookie?: string;
   /**
@@ -105,6 +108,12 @@ export type AtScaleEnvironmentConfig = {
    * certificate validation.
    */
   insecure?: boolean;
+  /**
+   * @internal — When true, `authenticate()` returns a cookie-based auth
+   * credential instead of a Bearer JWT.  Set by the deploy operation so
+   * that `/wapi/git/deploy/catalog` requests carry the `auth_session` cookie.
+   */
+  cookieAuth?: boolean;
 };
 
 /**
@@ -121,6 +130,7 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
   readonly authType: "keycloak" | "basic";
   readonly apiToken?: string;
   readonly sessionCookie?: string;
+  readonly cookieAuth: boolean;
 
   constructor(config: AtScaleEnvironmentConfig) {
     super();
@@ -134,22 +144,29 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
     this.authType      = config.authType ?? "keycloak";
     this.apiToken      = config.apiToken;
     this.sessionCookie = config.sessionCookie;
+    this.cookieAuth    = config.cookieAuth ?? false;
     this.insecure      = config.insecure !== false;
   }
 
   protected override async authenticate(): Promise<RestAuth> {
+    if (!this.cookieAuth) {
+      // Normal JWT / Basic / Keycloak OIDC path
+      if (this.apiToken) return this.exchangeApiToken();
+      if (this.authType === "basic") {
+        this.logger?.verbose(`[REST:Auth] Using Basic auth for ${this.baseUrl}`);
+        return { type: "basic", username: this.username, password: this.password };
+      }
+      return super.authenticate();
+    }
+
+    // Cookie-auth path (required by /wapi/git/deploy/catalog)
     if (this.sessionCookie) {
-      this.logger?.verbose(`[REST:Auth] Using session cookie for ${this.baseUrl}`);
+      this.logger?.verbose(`[REST:Auth] Using explicit session cookie for ${this.baseUrl}`);
       return { type: "cookie", name: "auth_session", value: this.sessionCookie };
     }
-    if (this.apiToken) {
-      return this.exchangeApiToken();
-    }
-    if (this.authType === "basic") {
-      this.logger?.verbose(`[REST:Auth] Using Basic auth for ${this.baseUrl}`);
-      return { type: "basic", username: this.username, password: this.password };
-    }
-    return super.authenticate();
+    // Acquire the cookie automatically via the Keycloak authorization-code flow.
+    const cookie = await this.acquireSessionCookie();
+    return { type: "cookie", name: "auth_session", value: cookie };
   }
 
   private async exchangeApiToken(): Promise<RestAuth> {
@@ -171,6 +188,113 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
     }
     this.logger?.verbose(`[REST:Auth] JWT obtained`);
     return { type: "bearer", token: response.data.accessToken };
+  }
+
+  /**
+   * Acquire an `auth_session` cookie from the AtScale Design Center by
+   * completing the Keycloak authorization-code flow headlessly:
+   *
+   *   1. GET /signin             → state cookie + Keycloak redirect URL
+   *   2. GET <Keycloak login>    → form-action URL (includes `execution` param)
+   *   3. POST username+password  → 302 redirect to /signin/callback?code=…
+   *   4. GET /signin/callback    → Set-Cookie: auth_session=…
+   *
+   * Requires `username` and `password` to be set on this environment.
+   */
+  private async acquireSessionCookie(): Promise<string> {
+    if (!this.username || !this.password) {
+      throw new Error(
+        `atscale-deploy-repo requires Keycloak credentials to acquire the Design Center ` +
+        `session cookie automatically. ` +
+        `Add 'username' and 'password' (or a 'user:' reference) to the atscale: block ` +
+        `in your connections file.`,
+      );
+    }
+
+    const agentCfg = this.insecure
+      ? { httpsAgent: new https.Agent({ rejectUnauthorized: false }) }
+      : {};
+    const cookies: Record<string, string> = {};
+
+    const addCookies = (headers: Record<string, any>) => {
+      const sc = headers["set-cookie"];
+      if (!sc) return;
+      for (const c of Array.isArray(sc) ? sc : [sc]) {
+        const m = c.match(/^([^=]+)=([^;]*)/);
+        if (m) cookies[m[1]] = m[2];
+      }
+    };
+
+    const cookieHdr = () =>
+      Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+
+    const req = (cfg: Record<string, any>) =>
+      axios({ ...agentCfg, validateStatus: () => true, maxRedirects: 0, ...cfg });
+
+    this.logger?.verbose(`[REST:Auth] Acquiring auth_session via Keycloak form flow`);
+
+    // Step 1: GET /signin → keycloak_oauth_state cookie + Keycloak redirect URL
+    const r1 = await req({ url: `${this.baseUrl}/signin` });
+    addCookies(r1.headers);
+    const kcUrl: string = r1.headers["location"] ?? "";
+    if (!kcUrl) {
+      throw new Error(
+        `[REST:Auth] ${this.baseUrl}/signin did not redirect to Keycloak ` +
+        `(status ${r1.status}). Verify the AtScale URL is correct.`,
+      );
+    }
+
+    // Step 2: GET Keycloak login page → form-action URL (includes execution param)
+    const r2 = await req({ url: kcUrl, headers: { Cookie: cookieHdr() } });
+    addCookies(r2.headers);
+    const formActionMatches = [
+      ...String(r2.data).matchAll(
+        /["'`](https?:[^"'`]+login-actions\/authenticate[^"'`]+)[`"']/g,
+      ),
+    ];
+    const formActionUrl = formActionMatches[0]?.[1];
+    if (!formActionUrl) {
+      throw new Error(
+        `[REST:Auth] Could not extract Keycloak login form-action URL from the login page. ` +
+        `The Keycloak theme may have changed.`,
+      );
+    }
+
+    // Step 3: POST credentials → 302 redirect to /signin/callback?code=…
+    const r3 = await req({
+      method: "POST",
+      url: formActionUrl,
+      headers: { Cookie: cookieHdr(), "Content-Type": "application/x-www-form-urlencoded" },
+      data: new URLSearchParams({ username: this.username, password: this.password }).toString(),
+    });
+    addCookies(r3.headers);
+
+    if (r3.status < 300 || r3.status >= 400) {
+      throw new Error(
+        `[REST:Auth] Keycloak login failed (status ${r3.status}). ` +
+        `Check username/password in the atscale: block of your connections file.`,
+      );
+    }
+
+    const rawLocation: string = r3.headers["location"] ?? "";
+    const callbackUrl = rawLocation.startsWith("http")
+      ? rawLocation
+      : `${this.baseUrl}${rawLocation}`;
+
+    // Step 4: GET /signin/callback?code=… → Set-Cookie: auth_session=…
+    const r4 = await req({ url: callbackUrl, headers: { Cookie: cookieHdr() } });
+    addCookies(r4.headers);
+
+    const sessionValue = cookies["auth_session"];
+    if (!sessionValue) {
+      throw new Error(
+        `[REST:Auth] /signin/callback did not set an auth_session cookie ` +
+        `(status ${r4.status}). The Keycloak code exchange may have failed.`,
+      );
+    }
+
+    this.logger?.verbose(`[REST:Auth] auth_session cookie acquired`);
+    return sessionValue;
   }
 }
 
@@ -252,6 +376,7 @@ export type ListReposResult = Array<{
   name: string;
   url: string;
   visibleBranchesPattern?: string | null;
+  defaultBranch?: string | null;
 }>;
 
 class ListReposRequest extends RestRequest<void, ListReposResult> {
@@ -532,11 +657,29 @@ class DeployModelRequest extends RestRequest<DeployModelArgs, DeployModelResult>
   }
 }
 
-// ── 5b. Deploy repo (trigger AtScale to publish from configured git repo) ─────
+// ── 5b. Deploy SML files to git repo + publish ────────────────────────────────
+
+export type SmlRawFile = {
+  /** Relative path of the file within the SML directory, e.g. "models/telemetry.yml". */
+  relativePath: string;
+  /** Raw YAML content of the file. */
+  rawContent: string;
+};
 
 export type DeployRepoArgs = {
   /** UUID of the repository already configured in AtScale (from atscale-list-repos). */
   repoId: string;
+  /** SML files to deploy. Typically all *.yml files under the SML project directory. */
+  smlRawFiles: SmlRawFile[];
+  /**
+   * Compiled catalog XML (project_2_0 schema).  Required by the endpoint; generated
+   * automatically from the SML files by the operation layer.
+   */
+  projectXml: string;
+  /** Catalog name in the format `{catalog.unique_name}_{defaultBranch}`. */
+  projectName: string;
+  /** Connection IDs referenced by the SML datasets. */
+  conIds: string[];
   /** Optional UUID of an existing project to update. Omit for first-time deploys. */
   projectId?: string;
   /** Optional Tableau servers to publish to after deployment. */
@@ -559,7 +702,13 @@ class DeployRepoRequest extends RestRequest<DeployRepoArgs, DeployRepoResult> {
   body(args: DeployRepoArgs): unknown {
     return {
       repoId:         args.repoId,
+      projectName:    args.projectName,
+      conIds:         args.conIds,
+      smlRawFiles:    args.smlRawFiles,
+      projectXml:     args.projectXml,
+      cubes:          [],
       tableauServers: args.tableauServers ?? [],
+      perspectives:   [],
       ...(args.projectId ? { projectId: args.projectId } : {}),
     };
   }
@@ -631,18 +780,22 @@ class ValidateModelRequest extends RestRequest<ValidateModelArgs, ValidateModelR
 
 // ── 7. List models (catalogs) ─────────────────────────────────────────────────
 
+/**
+ * Actual response shape from GET /wapi/p/projects/deployed:
+ *   [{repoId, name, projects: [{id, name, caption, models: [...]}]}]
+ */
 export type ListModelsResult = Array<{
-  id: string;
+  repoId: string;
   name: string;
-  caption: string;
-  publishedAt: string;
-  publishedBy: string;
-  models: Array<{
+  projects: Array<{
     id: string;
     name: string;
-    caption: string;
-    description?: string;
-    connectionIds: string[];
+    caption?: string;
+    models?: Array<{
+      id: string;
+      name: string;
+      caption?: string;
+    }>;
   }>;
 }>;
 
@@ -744,7 +897,9 @@ export class AtScaleRestClientService extends ServiceProvider {
   }
 
   /**
-   * Deploy SML files from a local directory to a configured git repo in AtScale.
+   * Deploy local SML files to a configured git repo in AtScale and publish.
+   * Requires `sessionCookie` auth in the AtScale connection (the Design Center
+   * `auth_session` cookie value); the API token JWT is not accepted by this endpoint.
    * Maps to: POST /wapi/git/deploy/catalog
    */
   async deployRepo(
