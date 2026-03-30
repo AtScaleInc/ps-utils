@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-repo atscale-list-model-errors
+    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors
     ;;
   args)
     case "$words[2]" in
@@ -79,8 +79,8 @@ case $state in
   atscale-list-deployments)
     _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --insecure
     ;;
-  atscale-deploy-repo)
-    _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-id --repo-name --project-name --project-id --tableau-servers --insecure
+  atscale-deploy-catalog)
+    _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-id --repo-name --project-name --tableau-servers --insecure
     ;;
   atscale-list-model-errors)
     _values 'params' --logfile --output --verbose --connection-file --atscale-connection-name --sml-dir --repo-name --repo-id --branch --model-name --insecure

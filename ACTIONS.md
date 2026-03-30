@@ -84,7 +84,7 @@ flowchart TD
   - [`atscale-list-repos`](#atscale-list-repos)
   - [`atscale-create-repo`](#atscale-create-repo)
   - [`atscale-list-deployments`](#atscale-list-deployments)
-  - [`atscale-deploy-repo`](#atscale-deploy-repo)
+  - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
   - [`atscale-list-model-errors`](#atscale-list-model-errors)
   - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
@@ -106,7 +106,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-repo`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -786,7 +786,7 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 
 ---
 
-### `atscale-deploy-repo`
+### `atscale-deploy-catalog`
 
 Reads local SML files, uploads them to an AtScale git-backed repository, and publishes the catalog. The `auth_session` cookie required by the deploy endpoint is acquired automatically via Keycloak — no manually-obtained browser cookie is needed.
 
@@ -797,7 +797,7 @@ Reads local SML files, uploads them to an AtScale git-backed repository, and pub
 
 - uses: AtScaleInc/ps-template@main
   with:
-    operation: atscale-deploy-repo
+    operation: atscale-deploy-catalog
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
     atscale-connection-name: my_atscale
     sml-dir: ./sml-output
@@ -813,7 +813,6 @@ Either `repo-id` or `repo-name` must be provided. When only `repo-name` is given
 | `repo-id` | One of | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
 | `repo-name` | One of | | Name of the git repository already configured in AtScale. Looked up automatically if `repo-id` is omitted. |
 | `project-name` | No | `{catalog.unique_name}_{defaultBranch}` | Override the catalog project name |
-| `project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys (auto-detected if the project already exists). |
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
 | `insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |

@@ -680,8 +680,8 @@ export type DeployRepoArgs = {
   projectName: string;
   /** Connection IDs referenced by the SML datasets. */
   conIds: string[];
-  /** Optional UUID of an existing project to update. Omit for first-time deploys. */
-  projectId?: string;
+  /** UUID of the project to deploy. For new deploys, generate a new v4 UUID. For updates, use the existing project UUID. */
+  projectId: string;
   /** Optional Tableau servers to publish to after deployment. */
   tableauServers?: TableauServerTarget[];
 };
@@ -702,6 +702,7 @@ class DeployRepoRequest extends RestRequest<DeployRepoArgs, DeployRepoResult> {
   body(args: DeployRepoArgs): unknown {
     return {
       repoId:         args.repoId,
+      projectId:      args.projectId,
       projectName:    args.projectName,
       conIds:         args.conIds,
       smlRawFiles:    args.smlRawFiles,
@@ -709,7 +710,6 @@ class DeployRepoRequest extends RestRequest<DeployRepoArgs, DeployRepoResult> {
       cubes:          [],
       tableauServers: args.tableauServers ?? [],
       perspectives:   [],
-      ...(args.projectId ? { projectId: args.projectId } : {}),
     };
   }
 

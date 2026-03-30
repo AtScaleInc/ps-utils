@@ -100,7 +100,7 @@ flowchart TD
     - [`atscale-list-repos`](#atscale-list-repos)
     - [`atscale-create-repo`](#atscale-create-repo)
     - [`atscale-list-deployments`](#atscale-list-deployments)
-    - [`atscale-deploy-repo`](#atscale-deploy-repo)
+    - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
@@ -945,7 +945,7 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 
 ---
 
-### `atscale-deploy-repo`
+### `atscale-deploy-catalog`
 
 [↑ Table of Contents](#table-of-contents)
 
@@ -959,7 +959,7 @@ Reads local SML files, uploads them to an AtScale git-backed repository, and pub
 The `atscale:` block must include either `apiToken` or username/password credentials. When `apiToken` is set, add `user:` (or `username:`/`password:`) as well — the username/password are used to acquire the session cookie for the deploy endpoint, while the API token is used for all other REST calls.
 
 ```bash
-./atscale-utils atscale-deploy-repo \
+./atscale-utils atscale-deploy-catalog \
   --connection-file "./connections.yaml" \
   --atscale-connection-name "my_atscale" \
   --sml-dir "./sml-output" \
@@ -975,7 +975,6 @@ Either `--repo-id` or `--repo-name` must be provided. When only `--repo-name` is
 | `--repo-id` | One of | | UUID of the git repository already configured in AtScale (from `atscale-list-repos`) |
 | `--repo-name` | One of | | Name of the git repository already configured in AtScale. Looked up automatically if `--repo-id` is omitted. |
 | `--project-name` | No | `{catalog.unique_name}_{defaultBranch}` | Override the catalog project name |
-| `--project-id` | No | | UUID of an existing AtScale project to update. Omit for first-time deploys (auto-detected if the project already exists). |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--tableau-servers` | No | | JSON array of Tableau servers to publish to, e.g. `[{"name":"ts1","sites":["Default"]}]` |
 | `--insecure` | No | `true` | Skip TLS certificate verification. Overrides the `insecure` field in the connections file. |
@@ -1372,11 +1371,11 @@ Used by `atscale-list-data-sources` and other operations that call the AtScale p
 | `clientId` | No | `atscale-ai-link` | Keycloak client ID |
 | `clientSecret` | No | | Keycloak client secret. Required when the client is configured as confidential (e.g. `atscale-modeler`). Find it in Keycloak → Clients → \<client\> → Credentials. |
 | `authType` | No | `keycloak` | Authentication type: `keycloak` (OIDC password grant, default) or `basic` (HTTP Basic auth). |
-| `sessionCookie` | No | | Pre-obtained `auth_session` cookie value. If omitted, the cookie is acquired automatically via Keycloak when needed (e.g. for `atscale-deploy-repo`). Rarely needed — provide username/password instead and let the tool acquire it. |
+| `sessionCookie` | No | | Pre-obtained `auth_session` cookie value. If omitted, the cookie is acquired automatically via Keycloak when needed (e.g. for `atscale-deploy-catalog`). Rarely needed — provide username/password instead and let the tool acquire it. |
 | `insecure` | No | `true` | Skip TLS certificate verification. Defaults to `true` because AtScale instances commonly use self-signed certificates. Set to `false` to enforce strict certificate validation. |
 
 † Either `apiToken` or credentials (`user`/`username`+`password`) must be provided.
-\* Required when `apiToken` is not set. Also used by `atscale-deploy-repo` to acquire the session cookie automatically, even when `apiToken` is set.
+\* Required when `apiToken` is not set. Also used by `atscale-deploy-catalog` to acquire the session cookie automatically, even when `apiToken` is set.
 
 **Keycloak client troubleshooting:**
 

@@ -1,18 +1,26 @@
 /**
- * AtScaleDeployRepo
+ * AtScaleDeployCatalog
  *
  * Reads SML files from a local directory and deploys them to an AtScale
  * instance via the Design Center git-deploy endpoint.  AtScale stores the
  * files in the configured git repository and publishes the compiled catalog.
  *
- * Authentication: this endpoint requires the Design Center `auth_session`
- * cookie.  Add `sessionCookie: <value>` to the `atscale:` block of your
- * connections file.  Obtain the value from browser DevTools → Application →
- * Cookies after logging in to the Design Center.
+ * Before deploying, the operation calls the same endpoint as
+ * atscale-list-deployments (GET /wapi/p/projects/deployed) to check whether
+ * the model is already deployed.  If a matching project is found the existing
+ * project UUID is reused, making repeated deploys idempotent.  For first-time
+ * deploys a new UUID is generated automatically.
+ *
+ * Authentication: the deploy endpoint requires the Design Center `auth_session`
+ * cookie.  The cookie is acquired automatically via the Keycloak
+ * authorization-code flow — no manual browser cookie is needed.  Ensure the
+ * `atscale:` block includes `user:` (or inline `username:`/`password:`) so the
+ * credentials are available for the cookie flow, even when `apiToken:` is also
+ * set.
  *
  * Example:
  *
- *   atscale-deploy-repo \
+ *   atscale-deploy-catalog \
  *     --connection-file connections.yaml \
  *     --atscale-connection-name my_atscale \
  *     --sml-dir ./sml \
@@ -21,6 +29,7 @@
 import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
+import { v4 as uuidv4 } from "uuid";
 import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter, BooleanParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
@@ -44,7 +53,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleDeployRepoParams extends ParameterSet {
+class AtScaleDeployCatalogParams extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -54,7 +63,7 @@ class AtScaleDeployRepoParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "atscale-connection-name";
-      description = "Name of the AtScale connection entry (must have an atscale: block with sessionCookie)";
+      description = "Name of the AtScale connection entry (must have an atscale: block)";
       required    = true;
     })(),
     new (class extends StringParameter {
@@ -74,12 +83,7 @@ class AtScaleDeployRepoParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "project-name";
-      description = "Catalog name to deploy as. Defaults to the unique_name from catalog.yml in --sml-dir.";
-      required    = false;
-    })(),
-    new (class extends StringParameter {
-      name        = "project-id";
-      description = "UUID of an existing AtScale project to update. Omit for first-time deploys.";
+      description = "Catalog project name to deploy as. Defaults to {catalog.unique_name}_{repo.defaultBranch}.";
       required    = false;
     })(),
     new (class extends StringParameter {
@@ -102,7 +106,6 @@ type Params = {
   "repo-id"?: string;
   "repo-name"?: string;
   "project-name"?: string;
-  "project-id"?: string;
   "tableau-servers"?: string;
   "insecure"?: boolean;
 };
@@ -187,15 +190,6 @@ function collectSmlFiles(dir: string): SmlRawFile[] {
   return results;
 }
 
-/** Read the unique_name from the catalog.yml in the SML directory. */
-function inferProjectName(smlDir: string): string | undefined {
-  const catalogPath = path.join(smlDir, "catalog.yml");
-  if (!fs.existsSync(catalogPath)) return undefined;
-  const content = fs.readFileSync(catalogPath, "utf8");
-  const match = content.match(/^unique_name:\s*(.+)$/m);
-  return match ? match[1].trim() : undefined;
-}
-
 /** Scan all SML files for connection_id values and return unique ones. */
 function inferConIds(smlFiles: SmlRawFile[]): string[] {
   const ids = new Set<string>();
@@ -209,10 +203,10 @@ function inferConIds(smlFiles: SmlRawFile[]): string[] {
 
 // ── Operation ─────────────────────────────────────────────────────────────────
 
-export class AtScaleDeployRepoOperation extends Operation<Params> {
-  name        = "atscale-deploy-repo";
+export class AtScaleDeployCatalogOperation extends Operation<Params> {
+  name        = "atscale-deploy-catalog";
   description = "Deploy local SML files to an AtScale git repository and publish the catalog";
-  parameters  = new AtScaleDeployRepoParams();
+  parameters  = new AtScaleDeployCatalogParams();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);
@@ -222,7 +216,7 @@ export class AtScaleDeployRepoOperation extends Operation<Params> {
     const yamlSvc    = this.services.get<YamlService>("yaml");
     const atScaleSvc = this.services.get<AtScaleRestClientService>("atscale-rest");
 
-    const config = yamlSvc.readFromFile<Record<string, any>>(params["connection-file"]);
+    const config   = yamlSvc.readFromFile<Record<string, any>>(params["connection-file"]);
     const connName = params["atscale-connection-name"];
     const insecure = params["insecure"];
 
@@ -236,7 +230,7 @@ export class AtScaleDeployRepoOperation extends Operation<Params> {
     // Collect SML files from the directory.
     const smlDir   = params["sml-dir"];
     const smlFiles = collectSmlFiles(smlDir);
-    this.logger.verbose(`[AtScaleDeployRepo] Collected ${smlFiles.length} SML files from ${smlDir}`);
+    this.logger.verbose(`[AtScaleDeployCatalog] Collected ${smlFiles.length} SML files from ${smlDir}`);
 
     // Parse all SML files into typed maps.
     let catalogObj: SmlCatalog | undefined;
@@ -268,7 +262,7 @@ export class AtScaleDeployRepoOperation extends Operation<Params> {
 
     // Infer connection IDs from SML dataset files.
     const conIds = inferConIds(smlFiles);
-    this.logger.verbose(`[AtScaleDeployRepo] Inferred connection IDs: ${conIds.join(", ")}`);
+    this.logger.verbose(`[AtScaleDeployCatalog] Inferred connection IDs: ${conIds.join(", ")}`);
 
     // Parse optional Tableau servers.
     let tableauServers: TableauServerTarget[] | undefined;
@@ -293,37 +287,35 @@ export class AtScaleDeployRepoOperation extends Operation<Params> {
           `Available repos: ${repos.map((r) => r.name).join(", ")}`,
         );
       }
-      repoId       = match.id;
+      repoId        = match.id;
       defaultBranch = match.defaultBranch ?? "main";
-      this.logger.verbose(`[AtScaleDeployRepo] Resolved repo '${repoName}' → ${repoId} (branch: ${defaultBranch})`);
+      this.logger.verbose(`[AtScaleDeployCatalog] Resolved repo '${repoName}' → ${repoId} (branch: ${defaultBranch})`);
     }
 
     // Derive projectName: {catalog.unique_name}_{defaultBranch}
     // The explicit --project-name flag overrides this.
     const catalogUniqueName = catalogObj.unique_name as string;
     const projectName = params["project-name"] ?? `${catalogUniqueName}_${defaultBranch}`;
-    this.logger.verbose(`[AtScaleDeployRepo] Project name: ${projectName}`);
+    this.logger.verbose(`[AtScaleDeployCatalog] Project name: ${projectName}`);
 
-    // Look up existing projectId from deployed projects (needed for updates).
-    let projectId = params["project-id"];
-    if (!projectId) {
-      try {
-        const deployed = await atScaleSvc.listModels(envApi);
-        const repoEntry = deployed.find((e) => e.repoId === repoId);
-        if (repoEntry) {
-          const proj = repoEntry.projects.find((p) => p.name === projectName);
-          if (proj) {
-            projectId = proj.id;
-            this.logger.verbose(`[AtScaleDeployRepo] Found existing projectId: ${projectId}`);
-          }
-        }
-      } catch (e) {
-        this.logger.verbose(`[AtScaleDeployRepo] Could not look up existing projectId: ${(e as Error).message}`);
-      }
+    // Check whether this model is already deployed by calling the same endpoint
+    // as atscale-list-deployments (GET /wapi/p/projects/deployed).  Reuse the
+    // existing project UUID if found so repeated deploys are idempotent.
+    // The API always requires projectId, so generate a new UUID for new deploys.
+    let projectId: string;
+    const deployed = await atScaleSvc.listModels(envApi);
+    const repoEntry = deployed.find((e) => e.repoId === repoId);
+    const existingProject = repoEntry?.projects.find((p) => p.name === projectName);
+    if (existingProject) {
+      projectId = existingProject.id;
+      this.logger.verbose(`[AtScaleDeployCatalog] Found existing deployment — reusing projectId: ${projectId}`);
+    } else {
+      projectId = uuidv4();
+      this.logger.verbose(`[AtScaleDeployCatalog] No existing deployment — generated projectId: ${projectId}`);
     }
 
     // Generate catalog XML from the SML objects.
-    this.logger.verbose(`[AtScaleDeployRepo] Generating catalog XML...`);
+    this.logger.verbose(`[AtScaleDeployCatalog] Generating catalog XML...`);
     const projectXml = buildCatalogXml({
       catalog:        catalogObj,
       model:          modelObj,
@@ -334,10 +326,10 @@ export class AtScaleDeployRepoOperation extends Operation<Params> {
       projectName,
       projectId,
     });
-    this.logger.verbose(`[AtScaleDeployRepo] Generated projectXml (${projectXml.length} bytes)`);
+    this.logger.verbose(`[AtScaleDeployCatalog] Generated projectXml (${projectXml.length} bytes)`);
 
     this.logger.verbose(
-      `[AtScaleDeployRepo] Deploying '${projectName}' (${smlFiles.length} files) ` +
+      `[AtScaleDeployCatalog] Deploying '${projectName}' (${smlFiles.length} files) ` +
       `to repo ${repoId} on ${envDeploy.baseUrl}`,
     );
 
