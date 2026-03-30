@@ -24,7 +24,7 @@ inputs:
         atscale-list-repos
         atscale-create-repo
         atscale-list-deployments
-        atscale-deploy-repo
+        atscale-deploy-catalog
         atscale-list-model-errors
         deploy-atscale-microk8s
     required: true
@@ -70,6 +70,7 @@ inputs:
     description: >
       Path to the SML project directory.
       Used by: extract-model-from-sml,
+               atscale-deploy-catalog (required),
                atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
     required: false
 
@@ -230,7 +231,7 @@ inputs:
       Name of the AtScale connection entry in the connections file (must have an atscale: block).
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
-               atscale-list-deployments, atscale-deploy-repo,
+               atscale-list-deployments, atscale-deploy-catalog,
                atscale-list-model-errors.
     required: false
   new-connection-name:
@@ -274,7 +275,7 @@ inputs:
       Accepts true/false, yes/no, 1/0, on/off. Defaults to true.
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
-               atscale-list-deployments, atscale-deploy-repo,
+               atscale-list-deployments, atscale-deploy-catalog,
                atscale-list-model-errors.
     required: false
     default: "true"
@@ -283,8 +284,9 @@ inputs:
   repo-name:
     description: >
       Human-readable name for the git repository, or name of an AtScale-connected
-      git repository to clone and validate.
+      git repository.
       Used by: atscale-create-repo,
+               atscale-deploy-catalog (provide this OR repo-id),
                atscale-list-model-errors (remote mode — provide this OR sml-dir/repo-id).
     required: false
   repo-url:
@@ -309,24 +311,24 @@ inputs:
       Used by: atscale-create-repo.
     required: false
 
-  # ── atscale-deploy-repo ──────────────────────────────────────────────────
+  # ── atscale-deploy-catalog ───────────────────────────────────────────────────
+  project-name:
+    description: >
+      Catalog project name to deploy as. Defaults to {catalog.unique_name}_{repo.defaultBranch}.
+      Used by: atscale-deploy-catalog.
+    required: false
   tableau-servers:
     description: >
       Optional JSON array of Tableau servers to publish to after deployment.
       Example: '[{"name":"my-ts","sites":["Default"]}]'
-      Used by: atscale-deploy-repo.
-    required: false
-  project-id:
-    description: >
-      UUID of an existing AtScale project to update. Omit for first-time deploys.
-      Used by: atscale-deploy-repo.
+      Used by: atscale-deploy-catalog.
     required: false
 
-  # ── atscale-deploy-repo / atscale-list-model-errors ──────────────────────
+  # ── atscale-deploy-catalog / atscale-list-model-errors ───────────────────────
   repo-id:
     description: >
       UUID of an AtScale-connected git repository.
-      Used by: atscale-deploy-repo (provide this OR repo-name),
+      Used by: atscale-deploy-catalog (provide this OR repo-name),
                atscale-list-model-errors (remote mode — provide this OR sml-dir/repo-name).
     required: false
   branch:
@@ -386,7 +388,7 @@ runs:
          inputs.operation == 'atscale-list-repos' ||
          inputs.operation == 'atscale-create-repo' ||
          inputs.operation == 'atscale-list-deployments' ||
-         inputs.operation == 'atscale-deploy-repo' ||
+         inputs.operation == 'atscale-deploy-catalog' ||
          inputs.operation == 'atscale-list-model-errors')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
@@ -623,20 +625,22 @@ runs:
           --verbose true
       shell: bash
 
-    # ── atscale-deploy-repo ───────────────────────────────────────────────────
-    - name: Deploy AtScale SML repo
-      if: inputs.operation == 'atscale-deploy-repo'
+    # ── atscale-deploy-catalog ───────────────────────────────────────────────────
+    - name: Deploy AtScale catalog
+      if: inputs.operation == 'atscale-deploy-catalog'
       run: |
         ARGS=(
           --connection-file         "${{ github.action_path }}/connection.yml"
           --atscale-connection-name "${{ inputs.atscale-connection-name }}"
-          --repo-id                 "${{ inputs.repo-id }}"
+          --sml-dir                 "${{ inputs.sml-dir }}"
           --insecure                "${{ inputs.insecure }}"
           --verbose true
         )
-        [[ -n "${{ inputs.project-id }}"      ]] && ARGS+=(--project-id      "${{ inputs.project-id }}")
+        [[ -n "${{ inputs.repo-id }}"         ]] && ARGS+=(--repo-id         "${{ inputs.repo-id }}")
+        [[ -n "${{ inputs.repo-name }}"       ]] && ARGS+=(--repo-name       "${{ inputs.repo-name }}")
+        [[ -n "${{ inputs.project-name }}"    ]] && ARGS+=(--project-name    "${{ inputs.project-name }}")
         [[ -n "${{ inputs.tableau-servers }}" ]] && ARGS+=(--tableau-servers "${{ inputs.tableau-servers }}")
-        node "${{ github.action_path }}/dist/cli.js" atscale-deploy-repo "${ARGS[@]}"
+        node "${{ github.action_path }}/dist/cli.js" atscale-deploy-catalog "${ARGS[@]}"
       shell: bash
 
     # ── atscale-list-model-errors ─────────────────────────────────────────────
