@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors
+    _values 'operations' echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors
     ;;
   args)
     case "$words[2]" in
@@ -42,6 +42,9 @@ case $state in
     ;;
   generate-namespace-from-model)
     _values 'params' --logfile --output --verbose --model-file --model-name --title --max-suggestions --min-score --output-file
+    ;;
+  generate-metrics-from-model)
+    _values 'params' --logfile --output --verbose --model-file --model-name --max-suggestions --min-score --include-tuples --format --output-file
     ;;
   execute-sql-on-connection)
     _values 'params' --logfile --output --verbose --sql-file --connection-file --connection-name --on-error --dry-run

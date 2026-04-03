@@ -14,8 +14,10 @@ inputs:
         generate-sml-from-connection
         generate-sml-from-ddl
         generate-namespace-from-model
+        generate-metrics-from-model
         generate-tableau-from-namespace
         generate-excel-from-namespace
+        generate-powerbi-from-namespace
         execute-sql-on-connection
         extract-ddl-from-connection
         generate-atscale-install-yaml
@@ -120,9 +122,12 @@ inputs:
     description: Path to the DDL SQL file to parse for SML generation.
     required: false
 
-  # ── generate-namespace-from-model ─────────────────────────────────────────
+  # ── generate-namespace-from-model / generate-metrics-from-model ──────────
   model-file:
-    description: Path to the model YAML file (input for generate-namespace-from-model and generate-tableau-from-namespace).
+    description: >
+      Path to the model YAML file.
+      Used by: generate-namespace-from-model, generate-metrics-from-model,
+               generate-tableau-from-namespace.
     required: false
   title:
     description: Title for the generated namespace / Tableau workbook.
@@ -135,26 +140,44 @@ inputs:
     description: "Minimum relevance score for included suggestions (default: 0.5)."
     required: false
     default: "0.5"
+  include-tuples:
+    description: >
+      Include multi-dimension suggestions (true/false, default: true).
+      Used by: generate-metrics-from-model.
+    required: false
+    default: "true"
   output-file:
     description: >
       Output file path.
       For generate-namespace-from-model: namespace YAML output (omit to print to stdout).
+      For generate-metrics-from-model: suggestions output (omit to print to stdout).
       For extract-ddl-from-connection: DDL output (omit to print to stdout).
       For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
     required: false
 
-  # ── generate-tableau-from-namespace ──────────────────────────────────────
+  # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
   namespace-file:
     description: Path to the namespace YAML file.
+    required: false
+  aliases-file:
+    description: >
+      Path to an optional aliases YAML file mapping friendly names to model columns.
+      Used by: generate-tableau-from-namespace, generate-excel-from-namespace,
+               generate-powerbi-from-namespace.
     required: false
   tableau-version:
     description: "Target Tableau version — 2024 or 2025 (default: 2025)."
     required: false
     default: "2025"
   target-file:
-    description: "Output path for the generated Tableau workbook (default: tableau.twb)."
+    description: "Output path for the generated Tableau or Excel workbook."
     required: false
-    default: tableau.twb
+  target-folder:
+    description: >
+      Output folder name for the generated Power BI project (written under output/).
+      Used by: generate-powerbi-from-namespace.
+    required: false
+    default: powerbi
 
   # ── generate-sml-from-ddl (additional) ───────────────────────────────────
   database:
@@ -381,6 +404,8 @@ runs:
         (inputs.operation == 'extract-model-from-atscale' ||
          inputs.operation == 'generate-sml-from-connection' ||
          inputs.operation == 'generate-tableau-from-namespace' ||
+         inputs.operation == 'generate-excel-from-namespace' ||
+         inputs.operation == 'generate-powerbi-from-namespace' ||
          inputs.operation == 'execute-sql-on-connection' ||
          inputs.operation == 'extract-ddl-from-connection' ||
          inputs.operation == 'atscale-list-data-sources' ||
@@ -478,6 +503,22 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" generate-namespace-from-model "${ARGS[@]}"
       shell: bash
 
+    # ── generate-metrics-from-model ──────────────────────────────────────────
+    - name: Generate metrics from model
+      if: inputs.operation == 'generate-metrics-from-model'
+      run: |
+        ARGS=(
+          --model-file      "${{ inputs.model-file }}"
+          --max-suggestions "${{ inputs.max-suggestions }}"
+          --min-score       "${{ inputs.min-score }}"
+          --include-tuples  "${{ inputs.include-tuples }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]]  && ARGS+=(--model-name  "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-metrics-from-model "${ARGS[@]}"
+      shell: bash
+
     # ── generate-tableau-from-namespace ──────────────────────────────────────
     - name: Generate Tableau workbook from namespace
       if: inputs.operation == 'generate-tableau-from-namespace'
@@ -488,9 +529,10 @@ runs:
           --connection-file  "${{ github.action_path }}/connection.yml"
           --connection-name  "${{ inputs.connection-name }}"
           --tableau-version  "${{ inputs.tableau-version }}"
-          --target-file      "${{ inputs.target-file }}"
           --verbose true
         )
+        [[ -n "${{ inputs.aliases-file }}" ]] && ARGS+=(--aliases-file "${{ inputs.aliases-file }}")
+        [[ -n "${{ inputs.target-file }}"  ]] && ARGS+=(--target-file  "${{ inputs.target-file }}")
         node "${{ github.action_path }}/dist/cli.js" generate-tableau-from-namespace "${ARGS[@]}"
       shell: bash
 
@@ -503,10 +545,27 @@ runs:
           --model-file      "${{ inputs.model-file }}"
           --connection-file "${{ github.action_path }}/connection.yml"
           --connection-name "${{ inputs.connection-name }}"
-          --target-file     "${{ inputs.target-file }}"
           --verbose true
         )
+        [[ -n "${{ inputs.aliases-file }}" ]] && ARGS+=(--aliases-file "${{ inputs.aliases-file }}")
+        [[ -n "${{ inputs.target-file }}"  ]] && ARGS+=(--target-file  "${{ inputs.target-file }}")
         node "${{ github.action_path }}/dist/cli.js" generate-excel-from-namespace "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-powerbi-from-namespace ──────────────────────────────────────
+    - name: Generate Power BI project from namespace
+      if: inputs.operation == 'generate-powerbi-from-namespace'
+      run: |
+        ARGS=(
+          --namespace-file  "${{ inputs.namespace-file }}"
+          --model-file      "${{ inputs.model-file }}"
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --target-folder   "${{ inputs.target-folder }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.aliases-file }}" ]] && ARGS+=(--aliases-file "${{ inputs.aliases-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-powerbi-from-namespace "${ARGS[@]}"
       shell: bash
 
     # ── execute-sql-on-connection ─────────────────────────────────────────────

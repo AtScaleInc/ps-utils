@@ -109,13 +109,14 @@ const AGG_RULES: AggRule[] = [
   },
 ];
 
-/** Prefix labels used when constructing measure names. */
-const AGG_PREFIX: Record<AggregationType, string> = {
-  SUM:   "Total",
-  AVG:   "Average",
-  MIN:   "Minimum",
-  MAX:   "Maximum",
-  COUNT: "Count",
+/** Suffix labels appended to measure display names. */
+const AGG_SUFFIX: Record<AggregationType, string> = {
+  SUM:                    "Sum",
+  AVG:                    "Avg",
+  MIN:                    "Min",
+  MAX:                    "Max",
+  COUNT:                  "Count",
+  DISTINCT_COUNT_ESTIMATE: "Distinct Count",
 };
 
 // Data-type fallbacks applied when no name rule matches.
@@ -153,7 +154,7 @@ export function expandMeasures(col: ColumnMeta): SemanticMeasure[] {
   const dataType: SemanticMeasure["dataType"] = isIntegerType(col.dataType) ? "integer" : "decimal";
 
   return aggregations.map((agg) => ({
-    name:         `${AGG_PREFIX[agg]} ${baseName}`,
+    name:         `${baseName} ${AGG_SUFFIX[agg]}`,
     sourceColumn: col.columnName,
     dataType,
     aggregation:  agg,

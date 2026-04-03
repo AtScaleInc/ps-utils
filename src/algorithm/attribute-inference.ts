@@ -21,6 +21,18 @@ import {
   toTitleCase,
 } from "./types.js";
 
+// System/ETL column patterns excluded from dimension attributes.
+const SYSTEM_COLUMN_PATTERNS = [
+  /^au_/i,
+  /^source_create/i,
+  /^source_update/i,
+  /^qlik_last/i,
+];
+
+export function isSystemColumn(columnName: string): boolean {
+  return SYSTEM_COLUMN_PATTERNS.some((p) => p.test(columnName));
+}
+
 // Suffixes that signal a label column, in priority order.
 const LABEL_SUFFIXES: Array<{ suffix: string; kind: SemanticLabel["kind"] }> = [
   { suffix: "_description", kind: "description" },

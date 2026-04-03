@@ -69,6 +69,7 @@ flowchart TD
   - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
   - [`extract-model-from-atscale`](#extract-model-from-atscale)
   - [`extract-model-from-sml`](#extract-model-from-sml)
+  - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - [`generate-namespace-from-model`](#generate-namespace-from-model)
   - [`generate-sml-from-connection`](#generate-sml-from-connection)
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
@@ -176,6 +177,56 @@ Reads a local SML directory and outputs a `model.yaml` in the same format as `ex
 
 ---
 
+### `generate-metrics-from-model`
+
+Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql` sections, and runs the analysis-suggestions engine to produce a ranked list of suggested metric × dimension combinations. Each suggestion includes a relevance score, analysis type, measure details, and the dimensions to slice by. Useful for quickly discovering the most analytically valuable queries a model supports.
+
+**Output formats:**
+- `text` (default) — human-readable numbered list
+- `yaml` — structured YAML suitable for downstream processing
+
+**Requires:** No secrets — only a `model.yaml` file produced by a prior step or committed to the repo.
+
+#### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `model-file` | — | Path to the `model.yaml` file (**required**) |
+| `model-name` | first model | Model name when `model.yaml` contains multiple models |
+| `max-suggestions` | `25` | Maximum number of suggestions to output |
+| `min-score` | `0.5` | Minimum relevance score [0–1] |
+| `include-tuples` | `true` | Include multi-dimension suggestions |
+| `format` | `text` | Output format: `text` or `yaml` |
+| `output-file` | stdout | File to write output to (omit to print to stdout) |
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    max-suggestions: "20"         # optional, default 25
+    min-score: "0.6"              # optional, default 0.5
+    include-tuples: "true"        # optional, default true
+    output-file: suggestions.txt  # optional, prints to stdout if omitted
+```
+
+**YAML output** (for downstream scripting):
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    format: yaml
+    output-file: suggestions.yaml
+```
+
+---
+
 ### `generate-namespace-from-model`
 
 Reads a `model.yaml` file and auto-generates a namespace YAML using the analysis-suggestions engine. Each suggestion becomes a worksheet (`line`, `bar`, or `text`). Time-based line charts include an `xAxisGranularity` field and the granularity is embedded in the worksheet title (e.g. "Sum Queries by Week"). The output is ready to pass directly to any BI generator.
@@ -272,6 +323,8 @@ With table filtering:
 
 Connects to a live database, introspects its schema, runs semantic model inference, and writes a complete SML directory.
 
+**Inference highlights:** composite primary/foreign keys, FK graph-topology classification, bridge/junction table detection (classified as shared dimensions), naming convention patterns (`dim_*`, `fct_*`, `lkp_*`, `bridge_*`, `xref_*`, etc.), `information_schema` FK queries with driver-level fallback, one model relationship per hierarchy leaf level.
+
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
 #### Using the composite action
@@ -296,6 +349,8 @@ Connects to a live database, introspects its schema, runs semantic model inferen
 ### `generate-sml-from-ddl`
 
 Parses a SQL DDL file from the repository and generates SML files without a live database connection. No secrets required.
+
+All inference capabilities from `generate-sml-from-connection` apply — composite keys, bridge detection, naming patterns, and one-relationship-per-hierarchy. FK constraints in the DDL (`FOREIGN KEY (…) REFERENCES …`) are parsed and used for relationship inference.
 
 **Requires:** No secrets — the DDL file must be present in the repository.
 

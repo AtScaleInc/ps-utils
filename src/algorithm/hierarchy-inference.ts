@@ -77,6 +77,25 @@ const KNOWN_HIERARCHY_SEQUENCES: Array<{ name: string; levels: string[] }> = [
 ];
 
 // ----------------------------------------------------------
+// Level label helper
+// ----------------------------------------------------------
+
+/**
+ * Derive a human-readable label for a hierarchy level column.
+ * Strips common dimension prefixes/suffixes and key column suffixes,
+ * then applies Title Case.
+ */
+function levelLabel(columnName: string): string {
+  return toTitleCase(
+    columnName
+      .replace(/^dim_/i, "")
+      .replace(/_dimension$/i, "")
+      .replace(/_(key|id|sk)$/i, "")
+      .replace(/_level$/i, ""),
+  );
+}
+
+// ----------------------------------------------------------
 // Index-based inference
 // ----------------------------------------------------------
 
@@ -100,7 +119,7 @@ function inferFromIndexes(
     const sorted = [...idxCols].sort((a, b) => a.ordinalPosition - b.ordinalPosition);
     const levels = sorted
       .filter((i) => colByName.has(i.columnName))
-      .map((i) => ({ name: toTitleCase(i.columnName), sourceColumn: i.columnName }));
+      .map((i) => ({ name: levelLabel(i.columnName), sourceColumn: i.columnName }));
 
     if (levels.length >= 2) {
       hierarchies.push({ name: toTitleCase(indexName), levels, sourceIndex: indexName });
@@ -157,7 +176,7 @@ function inferFromKnownSequences(
     if (matchedColumns.length >= 2) {
       hierarchies.push({
         name: `${seq.name} Hierarchy`,
-        levels: matchedColumns.map((c) => ({ name: toTitleCase(c.columnName), sourceColumn: c.columnName })),
+        levels: matchedColumns.map((c) => ({ name: levelLabel(c.columnName), sourceColumn: c.columnName })),
       });
       matchedColumns.forEach((c) => usedColumns.add(c.columnName.toLowerCase()));
     }
@@ -198,8 +217,8 @@ function inferFromSubPrefix(
       hierarchies.push({
         name: `${toTitleCase(parentKey)} Hierarchy`,
         levels: [
-          { name: toTitleCase(parentCol.columnName), sourceColumn: parentCol.columnName },
-          { name: toTitleCase(col.columnName), sourceColumn: col.columnName },
+          { name: levelLabel(parentCol.columnName), sourceColumn: parentCol.columnName },
+          { name: levelLabel(col.columnName), sourceColumn: col.columnName },
         ],
       });
       usedColumns.add(lower);
@@ -261,7 +280,7 @@ function inferFromSharedPrefix(
     hierarchies.push({
       name: `${toTitleCase(prefix)} Hierarchy`,
       levels: sorted.map(({ col }) => ({
-        name: toTitleCase(col.columnName),
+        name: levelLabel(col.columnName),
         sourceColumn: col.columnName,
       })),
     });
@@ -309,7 +328,7 @@ function inferDateFallback(
 
   const hierarchy: SemanticHierarchy = {
     name: "Date Hierarchy",
-    levels: dateCols.map((c) => ({ name: toTitleCase(c.columnName), sourceColumn: c.columnName })),
+    levels: dateCols.map((c) => ({ name: levelLabel(c.columnName), sourceColumn: c.columnName })),
   };
 
   // Warn when every level in the fallback hierarchy matches a validity-range

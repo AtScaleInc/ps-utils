@@ -97,13 +97,15 @@ def main():
     username = user_obj.get("username", user_key)
     password = user_obj.get("password", "")
 
-    # installer:true means AtScale is running on the installer port (10502)
-    # rather than the default embedded port.  Only append if no port is
-    # already present in the URL.
-    if connection.get("installer") and ":" not in mdx_url.split("//", 1)[-1]:
-        mdx_url = f"{mdx_url}:10502"
-
-    xmla_url    = f"{mdx_url}/xmla/{org_id}"
+    # installer:true means AtScale is running on the installer port (10502).
+    # Non-installer (cloud/container) connections embed the full endpoint in
+    # the url field already — use it as-is.
+    if connection.get("installer"):
+        if ":" not in mdx_url.split("//", 1)[-1]:
+            mdx_url = f"{mdx_url}:10502"
+        xmla_url = f"{mdx_url}/xmla/{org_id}"
+    else:
+        xmla_url = mdx_url
     conn_string = (
         f"Provider=MSOLAP.8;"
         f"Data Source={xmla_url};"

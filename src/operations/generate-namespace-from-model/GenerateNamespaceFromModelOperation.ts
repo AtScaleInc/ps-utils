@@ -27,16 +27,14 @@ import {
   generateAnalysisSuggestions,
   type AnalysisSuggestion,
 } from "../../algorithm/analysis-suggestions.js";
-import type {
-  SemanticModel,
-  SemanticFact,
-  SemanticDimension,
-  SemanticMeasure,
-  SemanticRelationship,
-  SemanticHierarchy,
-  AggregationType,
-} from "../../algorithm/types.js";
 import { stringify } from "yaml";
+import {
+  INTEGER_TYPES,
+  DECIMAL_TYPES,
+  DATETIME_TYPES,
+  reconstructSemanticModel,
+  selectModel,
+} from "../model-yaml-reader.js";
 
 // ----------------------------------------------------------
 // Parameters
@@ -89,31 +87,8 @@ type Params = {
 };
 
 // ----------------------------------------------------------
-// Data-type helpers
+// Local helpers (namespace-specific)
 // ----------------------------------------------------------
-
-/** Integer data_type_string values from model.yaml */
-const INTEGER_TYPES = new Set([
-  "INT1","INT2","INT4","INT8",
-  "INT_UNSIGNED1","INT_UNSIGNED2","INT_UNSIGNED4","INT_UNSIGNED8",
-]);
-
-/** Floating / decimal data_type_string values from model.yaml */
-const DECIMAL_TYPES = new Set(["FLOAT32","FLOAT64","DECIMAL","NUMERIC","CURRENCY"]);
-
-/** Datetime data_type_string values that support xAxisGranularity */
-const DATETIME_TYPES = new Set(["DATETIME","DATE_DOUBLE"]);
-
-function toMeasureDataType(dt: string): "integer" | "decimal" {
-  return INTEGER_TYPES.has(dt) ? "integer" : "decimal";
-}
-
-function toAggType(agg: string): AggregationType {
-  const map: Record<string, AggregationType> = {
-    sum: "SUM", avg: "AVG", count: "COUNT", min: "MIN", max: "MAX",
-  };
-  return map[agg?.toLowerCase()] ?? "SUM";
-}
 
 /** Determine xAxisGranularity based on column data type. */
 function granularityFor(dataType: string): string {
@@ -138,126 +113,6 @@ function formatFor(dataType: string): string | undefined {
   if (INTEGER_TYPES.has(dataType)) return "integer";
   if (DECIMAL_TYPES.has(dataType)) return "decimal:2";
   return undefined;
-}
-
-// ----------------------------------------------------------
-// SemanticModel reconstruction from model.yaml
-// ----------------------------------------------------------
-
-type ReconstructedModel = {
-  model:       SemanticModel;
-  /** dimensionName → levelCaption → query_name (column key) */
-  levelColMap: Map<string, Map<string, string>>;
-  /** column key → data_type_string */
-  colTypeMap:  Map<string, string>;
-};
-
-/**
- * Build a synthetic SemanticModel from the mdx + sql sections of model.yaml
- * so that generateAnalysisSuggestions can score and rank analysis patterns.
- */
-function reconstructSemanticModel(
-  modelName: string,
-  modelData: Record<string, any>,
-): ReconstructedModel {
-  const mdx        = (modelData.mdx ?? {}) as Record<string, any>;
-  const sqlColumns = ((modelData.sql ?? {}).columns ?? {}) as Record<string, any>;
-
-  // column key → data_type_string (from sql.columns)
-  const colTypeMap = new Map<string, string>();
-  for (const [key, col] of Object.entries(sqlColumns)) {
-    colTypeMap.set(key, (col as any).data_type ?? "WSTR");
-  }
-
-  // Build SemanticMeasure[] from mdx.metrics
-  // Skip measures that the model has mapped to role=dimension (e.g. DATE_DOUBLE)
-  const measures: SemanticMeasure[] = [];
-  for (const m of (mdx.metrics ?? []) as any[]) {
-    if (!m?.query_name) continue;
-    const sqlCol = sqlColumns[m.query_name];
-    if (sqlCol?.role === "dimension") continue;
-    measures.push({
-      name:         m.caption ?? m.query_name,
-      sourceColumn: m.query_name,
-      dataType:     toMeasureDataType(m.data_type_string ?? "FLOAT64"),
-      aggregation:  toAggType(m.agg_type_string ?? "sum"),
-    });
-  }
-
-  // Build SemanticDimension[] + SemanticRelationship[] from mdx.attributes
-  const dimensions:   SemanticDimension[]   = [];
-  const relationships: SemanticRelationship[] = [];
-  const levelColMap   = new Map<string, Map<string, string>>();
-
-  for (const [dimName, dimHierarchies] of Object.entries(
-    (mdx.attributes ?? {}) as Record<string, Record<string, any[]>>,
-  )) {
-    const hierarchies: SemanticHierarchy[] = [];
-    const dimLevelMap  = new Map<string, string>();
-
-    for (const [hierName, levelsRaw] of Object.entries(dimHierarchies ?? {})) {
-      const levels = (levelsRaw as any[])
-        .filter(Boolean)
-        .sort((a, b) => (a.level_number ?? 0) - (b.level_number ?? 0));
-
-      hierarchies.push({
-        name:   hierName,
-        levels: levels.map((l) => ({
-          name:         l.caption ?? l.query_name,
-          sourceColumn: l.query_name,
-        })),
-      });
-
-      for (const l of levels) {
-        dimLevelMap.set(l.caption ?? l.query_name, l.query_name);
-      }
-    }
-
-    const primaryKey =
-      hierarchies[0]?.levels[0]?.sourceColumn ?? dimName.toLowerCase();
-
-    dimensions.push({
-      kind:       "dimension",
-      name:       dimName,
-      sourceTable: dimName,
-      primaryKeys: [primaryKey],
-      attributes:  [],
-      hierarchies,
-    });
-
-    // Synthetic relationship: the fact joins to every dimension
-    relationships.push({
-      fromDataset:     modelName,
-      fromColumn:      primaryKey,
-      toDataset:       dimName,
-      toColumn:        primaryKey,
-      constraintName:  `${modelName}_${dimName}`.toLowerCase(),
-      cardinality:     "MANY_TO_ONE",
-    });
-
-    levelColMap.set(dimName, dimLevelMap);
-  }
-
-  const fact: SemanticFact = {
-    kind:                "fact",
-    name:                modelName,
-    sourceTable:         modelName,
-    measures,
-    degenerateDimensions: [],
-  };
-
-  const model: SemanticModel = {
-    name:          modelName,
-    generatedAt:   new Date().toISOString(),
-    facts:         [fact],
-    dimensions,
-    relationships,
-    views:         [],
-    suggestions:   [],
-    warnings:      [],
-  };
-
-  return { model, levelColMap, colTypeMap };
 }
 
 // ----------------------------------------------------------
@@ -524,21 +379,11 @@ export class GenerateNamespaceFromModelOperation extends Operation<Params> {
     const modelFile = yaml.readFromFile<Record<string, any>>(params["model-file"]);
 
     // ---- Select model ----
-    let modelName: string;
-    let modelData: Record<string, any>;
-
-    if (params["model-name"]) {
-      if (!(params["model-name"] in modelFile)) {
-        throw new Error(
-          `Model "${params["model-name"]}" not found in ${params["model-file"]}`,
-        );
-      }
-      modelName = params["model-name"];
-      modelData = modelFile[modelName] as Record<string, any>;
-    } else {
-      modelName = Object.keys(modelFile)[0];
-      modelData = modelFile[modelName] as Record<string, any>;
-    }
+    const { modelName, modelData } = selectModel(
+      modelFile,
+      params["model-name"],
+      params["model-file"],
+    );
 
     this.logger.info(`Using model: ${modelName}`);
 

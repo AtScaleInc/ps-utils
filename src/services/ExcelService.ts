@@ -74,11 +74,17 @@ export class ExcelService extends ServiceProvider {
     const username = (userObj["username"] as string | undefined) ?? userKey;
     const password = (userObj["password"] as string | undefined) ?? "";
 
-    if (connection["installer"] && !/:\d+/.test(mdxUrl.split("//")[1] ?? "")) {
-      mdxUrl = `${mdxUrl}:10502`;
+    let xmlaUrl: string;
+    if (connection["installer"]) {
+      if (!/:\d+/.test(mdxUrl.split("//")[1] ?? "")) {
+        mdxUrl = `${mdxUrl}:10502`;
+      }
+      xmlaUrl = `${mdxUrl}/xmla/${orgId}`;
+    } else {
+      // Non-installer (cloud/container) connections embed the full endpoint
+      // in the url field already — use it as-is.
+      xmlaUrl = mdxUrl;
     }
-
-    const xmlaUrl   = `${mdxUrl}/xmla/${orgId}`;
     const connString =
       `Provider=MSOLAP.8;` +
       `Data Source=${xmlaUrl};` +

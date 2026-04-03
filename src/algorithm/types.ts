@@ -81,7 +81,7 @@ export type SemanticDataType =
   | "boolean"
   | "unknown";
 
-export type AggregationType = "SUM" | "AVG" | "COUNT" | "MIN" | "MAX";
+export type AggregationType = "SUM" | "AVG" | "COUNT" | "MIN" | "MAX" | "DISTINCT_COUNT_ESTIMATE";
 
 /** A label (name or description) sourced from a companion column. */
 export interface SemanticLabel {

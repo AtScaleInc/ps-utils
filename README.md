@@ -76,6 +76,7 @@ flowchart TD
 - [Setup](#setup)
 - [Operations](#operations)
   - Namespace Processing
+    - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-namespace-from-model`](#generate-namespace-from-model)
     - [`extract-model-from-atscale`](#extract-model-from-atscale)
     - [`extract-model-from-sml`](#extract-model-from-sml)
@@ -181,6 +182,15 @@ With optional overrides:
 
 Connects to a live database, introspects its schema, runs semantic model inference, and writes a complete set of AtScale SML files to a directory.
 
+**Inference engine capabilities:**
+- **Composite keys** — tables with multi-column primary keys produce `key_columns` arrays in SML level attributes.
+- **FK-based classification** — fact vs. dimension classification uses foreign key graph topology. Tables that only receive FKs (high in-degree) are classified as dimensions. Tables with FK references to multiple tables plus numeric payload columns are classified as facts.
+- **Bridge / cross-reference tables** — junction tables with FKs to ≥2 tables and ≤1 payload column are automatically classified as shared dimensions (the AtScale pattern for bridge tables). A `[BRIDGE TABLE]` advisory is emitted in the model warnings.
+- **Naming convention patterns** — prefix/suffix patterns take priority over structural heuristics: `dim_*` / `*_dim`, `fct_*` / `*_fct` / `fact_*` / `*_fact`, `lkp_*` / `ref_*` / `lookup_*`, `bridge_*` / `xref_*` / `junction_*` / `map_*`, etc.
+- **`information_schema` FK queries** — foreign key metadata is read from `INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS` and `KEY_COLUMN_USAGE` for accurate composite-key support. Falls back to the driver-level API when `information_schema` is not accessible (e.g. Snowflake).
+- **One relationship per hierarchy** — when a dimension has multiple hierarchies, one model relationship is emitted per hierarchy leaf level so all hierarchies are visible in BI tools.
+- **Distinct count estimate** — measures inferred as distinct-countable entities use `distinct count estimate` aggregation (preferred over `distinct count` for AtScale aggregation engine compatibility).
+
 ```bash
 ./atscale-utils generate-sml-from-connection \
   --connection-file "./connections.yaml" \
@@ -240,6 +250,8 @@ With optional overrides:
 
 Parses a SQL DDL file (`CREATE TABLE` / `CREATE VIEW` statements) and generates AtScale SML files without a live database connection. Useful for offline model generation and CI pipelines.
 
+All inference capabilities described under `generate-sml-from-connection` (composite keys, bridge table detection, naming patterns, one-relationship-per-hierarchy) apply equally to the DDL path. FK constraints declared in the DDL (`FOREIGN KEY (col1, col2) REFERENCES …`) are parsed and used for composite join inference.
+
 ```bash
 ./atscale-utils generate-sml-from-ddl \
   --ddl-file "./schema.sql" \
@@ -278,6 +290,42 @@ With optional overrides:
 | `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
 
 **Output layout:** Same as `generate-sml-from-connection`.
+
+---
+
+### `generate-metrics-from-model`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql` sections, and runs the analysis-suggestions engine to produce a ranked list of suggested metric × dimension combinations. Each suggestion includes a relevance score, analysis type, the measure being analysed, and the dimension hierarchy to slice by.
+
+```bash
+./atscale-utils generate-metrics-from-model \
+  --model-file "./model.yaml"
+```
+
+With options:
+
+```bash
+./atscale-utils generate-metrics-from-model \
+  --model-file "./model.yaml" \
+  --model-name "SalesModel" \
+  --max-suggestions 20 \
+  --min-score 0.6 \
+  --include-tuples true \
+  --format yaml \
+  --output-file "./suggestions.yaml"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--model-file` | Yes | | Path to the `model.yaml` file |
+| `--model-name` | No | First model | Model name when `model.yaml` contains multiple models |
+| `--max-suggestions` | No | `25` | Maximum number of suggestions to output |
+| `--min-score` | No | `0.5` | Minimum relevance score `[0–1]` |
+| `--include-tuples` | No | `true` | Include multi-dimension suggestions |
+| `--format` | No | `text` | Output format: `text` or `yaml` |
+| `--output-file` | No | stdout | File to write output to |
 
 ---
 

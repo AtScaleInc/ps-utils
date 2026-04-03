@@ -29,7 +29,7 @@ import {
 } from "./types.js";
 
 import { inferHierarchies, hierarchyColumnSet } from "./hierarchy-inference.js";
-import { groupSecondaryAttributes, applyMultilingualGrouping } from "./attribute-inference.js";
+import { groupSecondaryAttributes, applyMultilingualGrouping, isSystemColumn } from "./attribute-inference.js";
 import { expandMeasures } from "./measure-inference.js";
 import {
   ProfileMap,
@@ -103,41 +103,136 @@ async function readMetadata(
 // 2. Classifier: facts vs. dimensions
 // ----------------------------------------------------------
 
+// Naming convention patterns for classification (highest confidence signal).
+// Order matters within each array: patterns are tested with .some(), so earlier
+// patterns are effectively higher priority only if the arrays were prioritised —
+// in practice every pattern in the array is equally weighted.
+
+/** Fact table prefix/suffix conventions. */
+const FACT_NAME_PATTERNS: RegExp[] = [
+  /^fct_/i, /_fct$/i,
+  /^fact_/i, /_fact$/i,
+  /_trans$/i, /_transaction$/i, /_transactions$/i,
+  /_event$/i, /_events$/i,
+  /_log$/i,  /_logs$/i,
+  /_sales$/i, /_orders$/i, /_purchases$/i,
+  /_activity$/i, /_activities$/i,
+];
+
+/**
+ * Bridge / cross-reference / junction table name patterns.
+ * These tables are modelled as shared dimensions in AtScale —
+ * they have no payload measures and cross-reference two or more other tables.
+ */
+const BRIDGE_NAME_PATTERNS: RegExp[] = [
+  /^bridge_/i, /_bridge$/i,
+  /^xref_/i,   /_xref$/i,
+  /^map_/i,    /_map$/i,
+  /^assoc_/i,  /_assoc$/i,
+  /^link_/i,   /_link$/i,
+  /^junction_/i, /_junction$/i,
+  /^jct_/i,    /_jct$/i,
+  /^rel_/i,    /_rel$/i,
+];
+
+/** Strong dimension name patterns (dim_ prefix or _dim suffix). */
+const DIMENSION_NAME_PATTERNS: RegExp[] = [
+  /^dim_/i, /_dim$/i,
+];
+
+/**
+ * Lookup / reference / code table name patterns.
+ * These are always dimensions; they contain descriptive attributes, not measures.
+ */
+const LOOKUP_NAME_PATTERNS: RegExp[] = [
+  /^lkp_/i, /_lkp$/i,
+  /^lookup_/i, /_lookup$/i,
+  /^ref_/i,    /_ref$/i,
+  /^reference_/i, /_reference$/i,
+  /^type_/i,   /_type$/i,
+  /^status_/i, /_status$/i,
+  /^code_/i,   /_code$/i,
+];
+
 function classifyTables(
   tables: TableMeta[],
   columnsByTable: Map<string, ColumnMeta[]>,
   foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>,
-): { factTables: Set<string>; dimensionTables: Set<string> } {
-  // FACT: table name ends with "fact" (word boundary), OR has at least one FK
-  // to another table AND at least one numeric non-FK, non-PK column.
-  // Requiring at least one FK prevents pure dimension/lookup tables from being
-  // misclassified.  Requiring a numeric non-FK column excludes bridge tables
-  // (e.g. order_product with only key columns) and 1:1 extension tables
-  // (e.g. queries_planned with only text/JSON columns).
-  // DIMENSION: everything else.
+): { factTables: Set<string>; dimensionTables: Set<string>; bridgeTables: Set<string> } {
   const factTables = new Set<string>();
   const dimensionTables = new Set<string>();
+  // Bridge tables (cross-reference / junction tables) are a subset of
+  // dimensionTables. They are modelled as shared dimensions in AtScale.
+  const bridgeTables = new Set<string>();
 
   for (const table of tables) {
     const fks = foreignKeysByTable.get(table.tableName) ?? [];
     const cols = columnsByTable.get(table.tableName) ?? [];
     const fkColumns = new Set(fks.map((fk) => fk.fkColumnName));
+    const pkColumns = new Set(cols.filter((c) => c.isPrimaryKey).map((c) => c.columnName));
     const uniqueParentTables = new Set(fks.map((fk) => fk.pkTableName));
 
-    const hasFactSuffix = /(?:^|[_\s])fact$/i.test(table.tableName);
     const hasFKs = uniqueParentTables.size >= 1;
     const hasNumericNonFKCols = cols.some(
       (c) => !fkColumns.has(c.columnName) && !c.isPrimaryKey && isNumericType(c.dataType),
     );
 
-    if (hasFactSuffix || (hasFKs && hasNumericNonFKCols)) {
-      factTables.add(table.tableName);
-    } else {
+    // Non-key columns: columns that are neither PK nor FK.
+    const allKeyColNames = new Set([...Array.from(fkColumns), ...Array.from(pkColumns)]);
+    const nonKeyColCount = cols.filter((c) => !allKeyColNames.has(c.columnName)).length;
+
+    // Naming pattern signals (evaluated once for clarity).
+    const hasBridgeName    = BRIDGE_NAME_PATTERNS.some((p)    => p.test(table.tableName));
+    const hasDimName       = DIMENSION_NAME_PATTERNS.some((p) => p.test(table.tableName));
+    const hasLookupName    = LOOKUP_NAME_PATTERNS.some((p)    => p.test(table.tableName));
+    const hasFactName      = FACT_NAME_PATTERNS.some((p)      => p.test(table.tableName));
+    // Legacy pattern kept for backward compatibility.
+    const hasLegacyFactSuffix = /(?:^|[_\s])fact$/i.test(table.tableName);
+
+    // Structural bridge detection: a table with FK references to 2+ distinct
+    // tables and ≤1 non-key payload columns is almost certainly a cross-reference
+    // or junction table. Exclude tables with explicit dimension/lookup names that
+    // happen to have 2 FKs (e.g. a reference table joining category to type).
+    const isBridgeByStructure =
+      uniqueParentTables.size >= 2 &&
+      nonKeyColCount <= 1 &&
+      !hasDimName &&
+      !hasLookupName &&
+      !hasFactName &&
+      !hasLegacyFactSuffix;
+
+    // --- Classification priority (highest confidence first) ---
+
+    // 1. Explicit bridge name or structural cross-reference → shared dimension.
+    if (hasBridgeName || isBridgeByStructure) {
       dimensionTables.add(table.tableName);
+      bridgeTables.add(table.tableName);
+      continue;
     }
+
+    // 2. Explicit lookup / dimension name → dimension (no measures expected).
+    if (hasDimName || hasLookupName) {
+      dimensionTables.add(table.tableName);
+      continue;
+    }
+
+    // 3. Explicit fact name → fact.
+    if (hasFactName || hasLegacyFactSuffix) {
+      factTables.add(table.tableName);
+      continue;
+    }
+
+    // 4. FK topology + numeric payload → fact.
+    if (hasFKs && hasNumericNonFKCols) {
+      factTables.add(table.tableName);
+      continue;
+    }
+
+    // 5. Everything else → dimension.
+    dimensionTables.add(table.tableName);
   }
 
-  return { factTables, dimensionTables };
+  return { factTables, dimensionTables, bridgeTables };
 }
 
 // ----------------------------------------------------------
@@ -278,11 +373,22 @@ export async function proposeSemanticModel(
   // Fact tables have FKs to ≥2 distinct tables AND at least one numeric non-FK column.
   // Everything else is treated as a dimension (or skipped if unclassifiable).
   // ==========================================================================
-  let { factTables, dimensionTables } = classifyTables(
+  let { factTables, dimensionTables, bridgeTables } = classifyTables(
     rawMetadata.tables,
     rawMetadata.columnsByTable,
     rawMetadata.foreignKeysByTable,
   );
+
+  // Phase 4: Emit advisory warnings for bridge / cross-reference tables.
+  // Bridge tables are modelled as shared dimensions in AtScale — each fact
+  // that references the bridge joins to it via a normal dimension relationship.
+  for (const bridgeTable of bridgeTables) {
+    warnings.push(
+      `[BRIDGE TABLE] "${bridgeTable}" classified as a shared dimension ` +
+      `(cross-reference / junction table: FKs to ≥2 tables, ≤1 payload column). ` +
+      `In AtScale, model it as a common dimension referenced by multiple fact datasets.`,
+    );
+  }
 
   // Apply explicit fact table override when provided
   if (opts.factTables?.length) {
@@ -390,7 +496,10 @@ export async function proposeSemanticModel(
     // When an engine is provided it wraps the base inference and adds
     // vertical-specific hierarchies on top.
     const nonPkCols = cols.filter(
-      (c) => !pkColumnSet.has(c.columnName) && !piiExclusion.has(c.columnName),
+      (c) =>
+        !pkColumnSet.has(c.columnName) &&
+        !piiExclusion.has(c.columnName) &&
+        !isSystemColumn(c.columnName),
     );
     const hierarchyResult = inferenceEngine
       ? inferenceEngine.inferHierarchies(nonPkCols, idxs)

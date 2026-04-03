@@ -231,9 +231,45 @@ function laName(columnName: string, _prefix?: string): string {
   return columnName.toLowerCase();
 }
 
-function metricUniqueName(measure: SemanticMeasure, prefix: string): string {
-  return `${prefix}${measure.sourceColumn.toLowerCase()}_${measure.aggregation.toLowerCase()}`;
+/**
+ * Derive the abbreviation for a fact table name by taking the first letter
+ * of each underscore-delimited word.  e.g. "fact_inventory_transaction" → "fit".
+ */
+function factTableAbbrev(tableName: string): string {
+  return tableName
+    .split("_")
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .toLowerCase();
 }
+
+/**
+ * Derive a human-readable label for a dimension from its source table name.
+ * Strips the `dim_` prefix and `_dimension` suffix, then applies Title Case.
+ */
+function dimensionLabel(sourceTable: string): string {
+  return toTitleCase(
+    sourceTable
+      .replace(/^dim_/i, "")
+      .replace(/_dimension$/i, ""),
+  );
+}
+
+function metricUniqueName(measure: SemanticMeasure, fact: SemanticFact, prefix: string): string {
+  const abbrev = factTableAbbrev(fact.sourceTable);
+  return `${prefix}${abbrev}_${measure.sourceColumn.toLowerCase()}_${measure.aggregation.toLowerCase()}`;
+}
+
+/** Display form of aggregation type used in metric descriptions. */
+const AGG_TO_DISPLAY: Record<AggregationType, string> = {
+  SUM:                    "Sum",
+  AVG:                    "Average",
+  MIN:                    "Minimum",
+  MAX:                    "Maximum",
+  COUNT:                  "Count",
+  DISTINCT_COUNT_ESTIMATE: "Distinct Count",
+};
 
 // ----------------------------------------------------------
 // Data type mappings
@@ -276,11 +312,12 @@ function smlDataType(jdbcType: string): string {
 }
 
 const AGG_TO_SML: Record<AggregationType, string> = {
-  SUM:   "sum",
-  AVG:   "average",
-  MIN:   "minimum",
-  MAX:   "maximum",
-  COUNT: "count non-null",
+  SUM:                    "sum",
+  AVG:                    "average",
+  MIN:                    "minimum",
+  MAX:                    "maximum",
+  COUNT:                  "count non-null",
+  DISTINCT_COUNT_ESTIMATE: "distinct count estimate",
 };
 
 // ----------------------------------------------------------
@@ -435,7 +472,7 @@ function buildDataset(
   return yamlDoc({
     unique_name: datasetUniqueName(tableName),
     object_type: "dataset",
-    label: tableName,
+    label: toTitleCase(tableName),
     connection_id: opts.connectionName,
     table: physicalTableName,
     columns,
@@ -455,10 +492,31 @@ interface LevelAttributeDef {
   sort_column?: string;
   time_unit?: string;
   is_unique_key?: boolean;
+  /**
+   * When false, indicates the name_column values are not unique within the
+   * composite key (required for composite-key level attributes).
+   */
+  contains_unique_names?: boolean;
   is_hidden?: boolean;
+  /** When true, emits is_hidden: true (surrogate integer key with a companion display column). */
+  is_surrogate_key?: boolean;
   description?: string;
   folder?: string;
   secondary_attributes?: Array<Record<string, YamlValue>>;
+}
+
+/**
+ * Human-readable label for a level attribute column.
+ * Strips surrogate-key suffixes (_key, _id, _sk) and dimension affixes.
+ */
+function levelLabel(columnName: string): string {
+  return toTitleCase(
+    columnName
+      .replace(/^dim_/i, "")
+      .replace(/_dimension$/i, "")
+      .replace(/_(key|id|sk)$/i, "")
+      .replace(/_level$/i, ""),
+  );
 }
 
 // ----------------------------------------------------------
@@ -573,13 +631,16 @@ function buildDimensionFile(
 
       const la: LevelAttributeDef = {
         unique_name: laName(l.sourceColumn),
-        label: l.name,
+        label: levelLabel(l.sourceColumn),
         dataset: datasetUniqueName(dim.sourceTable),
         name_column: nameColName ?? l.sourceColumn,
         key_columns: [l.sourceColumn],
       };
 
       if (sortColName) la.sort_column = sortColName;
+      if (colIsInt && nameColName && /_(key|id|sk)$/i.test(l.sourceColumn)) {
+        la.is_surrogate_key = true;
+      }
 
       const tu = inferTimeUnit(l.name) ?? (nameColName ? inferTimeUnit(nameColName) : undefined);
       if (isTime && tu) la.time_unit = tu;
@@ -635,13 +696,16 @@ function buildDimensionFile(
 
     const la: LevelAttributeDef = {
       unique_name: laName(attr.sourceColumn),
-      label: attr.name,
+      label: levelLabel(attr.sourceColumn),
       dataset: datasetUniqueName(dim.sourceTable),
       name_column: nameColName ?? attr.sourceColumn,
       key_columns: [attr.sourceColumn],
     };
 
     if (sortColName) la.sort_column = sortColName;
+    if (colIsInt && nameColName && /_(key|id|sk)$/i.test(attr.sourceColumn)) {
+      la.is_surrogate_key = true;
+    }
 
     const tu = inferTimeUnit(attr.name) ?? inferTimeUnit(attr.sourceColumn);
     if (isTime && tu) la.time_unit = tu;
@@ -691,18 +755,20 @@ function buildDimensionFile(
       const uniqueKeyCollides =
         dim.primaryKeys.length > 1 &&
         singleColFkCols.has(firstPk.toLowerCase());
-      // AtScale requires is_unique_key LAs to have exactly ONE key column.
-      // Composite PK dimensions cannot be marked as uniquely keyed.
-      const isSingleColumnPk = dim.primaryKeys.length === 1;
+      const isCompositePk = dim.primaryKeys.length > 1;
       const la: LevelAttributeDef = {
         unique_name: uniqueKeyCollides
           ? laName(`${dim.sourceTable}_key`)
           : laName(firstPk),
-        label: firstPk,
+        label: levelLabel(firstPk),
         dataset: datasetUniqueName(dim.sourceTable),
         name_column: nameColName ?? firstPk,
-        key_columns: isSingleColumnPk ? dim.primaryKeys : [firstPk],
-        ...(isSingleColumnPk ? { is_unique_key: true } : {}),
+        // Composite PKs: include all key columns; AtScale supports multi-column
+        // key_columns with is_unique_key: true when contains_unique_names: false.
+        key_columns: dim.primaryKeys,
+        is_unique_key: true,
+        ...(isCompositePk ? { contains_unique_names: false } : {}),
+        ...(colIsInt && nameColName && /_(key|id|sk)$/i.test(firstPk) ? { is_surrogate_key: true } : {}),
       };
 
       if (sortColName) la.sort_column = sortColName;
@@ -715,11 +781,13 @@ function buildDimensionFile(
       levelAttrMap.set(firstPk, la);
 
     } else {
-      // B: PK may have been added already via a hierarchy level; mark it unique
-      // only when there is a single PK column (AtScale rejects multi-column is_unique_key).
+      // B: PK may have been added already via a hierarchy level; mark it as
+      // the unique key and ensure all PK columns are included.
       const existing = levelAttrMap.get(firstPk);
-      if (existing && dim.primaryKeys.length === 1) {
+      if (existing) {
         existing.is_unique_key = true;
+        existing.key_columns = dim.primaryKeys;
+        if (dim.primaryKeys.length > 1) existing.contains_unique_names = false;
       }
     }
   }
@@ -757,13 +825,14 @@ function buildDimensionFile(
   // the reference SML structure).
   const hierarchies: Array<Record<string, YamlValue>> = dim.hierarchies.map(
     (h) => ({
-      unique_name: h.name,
+      unique_name: h.name.toLowerCase().replace(/\s+/g, "_"),
       label: h.name,
       // filter_empty is only meaningful on time hierarchies (avoids blank rows)
       ...(isTime ? { filter_empty: "yes" } : {}),
       ...(isTime ? { folder: "Date Attributes" } : {}),
-      levels: h.levels.map((l) => ({
+      levels: h.levels.map((l, i) => ({
         unique_name: laName(l.sourceColumn),
+        ...(i === h.levels.length - 1 ? { visualize_in_bi_tool: false } : {}),
       })),
     }),
   );
@@ -786,11 +855,11 @@ function buildDimensionFile(
       // duplicating them across hierarchies (e.g. a date column already in
       // an inferred hierarchy) which AtScale rejects.
       hierarchies.push({
-        unique_name: `${dim.name} Hierarchy`,
-        label: `${dim.name} Hierarchy`,
+        unique_name: `${dim.sourceTable}_hierarchy`,
+        label: `${dimensionLabel(dim.sourceTable)} Hierarchy`,
         ...(isTime ? { filter_empty: "yes" } : {}),
         ...(isTime ? { folder: "Date Attributes" } : {}),
-        levels: [{ unique_name: pkLaName }],
+        levels: [{ unique_name: pkLaName, visualize_in_bi_tool: false }],
       });
     }
   }
@@ -806,8 +875,9 @@ function buildDimensionFile(
       name_column: la.name_column,
       key_columns: la.key_columns,
     };
-    if (la.is_unique_key) obj.is_unique_key = true;
-    if (la.is_hidden)     obj.is_hidden = true;
+    if (la.is_unique_key)            obj.is_unique_key = true;
+    if (la.contains_unique_names === false) obj.contains_unique_names = false;
+    if (la.is_hidden || la.is_surrogate_key) obj.is_hidden = true;
     if (la.description)   obj.description = la.description;
     if (la.folder)        obj.folder = la.folder;
     if (la.sort_column)   obj.sort_column = la.sort_column;
@@ -835,7 +905,7 @@ function buildDimensionFile(
   const dimObj: Record<string, YamlValue> = {
     unique_name: dimUniqueName(dim.name),
     object_type: "dimension",
-    label: dim.name,
+    label: dimensionLabel(dim.sourceTable),
     ...(dim.description ? { description: dim.description } : {}),
     type: isTime ? "time" : "standard",
     hierarchies: hierarchies as unknown as YamlValue,
@@ -868,17 +938,29 @@ function buildMetricFile(
   opts: SmlSerializerOptions,
 ): string {
   const prefix = opts.metricPrefix ?? "m_";
-  const label = opts.camelCaseMeasures
-    ? toCamelCase(measure.sourceColumn)
-    : humanizeLabel(measure.sourceColumn);
+  // measure.name is already "<Column Title Case> <Agg suffix>" per measure-inference.ts
+  const label = measure.name;
+
+  // Format: #,##0 for columns that support SUM/COUNT; #,##0.00 for rate/ratio-only columns.
+  const siblingsHaveSumOrCount = fact.measures
+    .filter((m) => m.sourceColumn === measure.sourceColumn)
+    .some((m) => m.aggregation === "SUM" || m.aggregation === "COUNT");
+  const format = siblingsHaveSumOrCount ? "#,##0" : "#,##0.00";
+
+  const description =
+    `${AGG_TO_DISPLAY[measure.aggregation]} of ${humanizeLabel(measure.sourceColumn)} ` +
+    `from ${toTitleCase(fact.sourceTable)}`;
 
   return yamlDoc({
-    unique_name: metricUniqueName(measure, prefix),
+    unique_name: metricUniqueName(measure, fact, prefix),
     object_type: "metric",
     label,
     calculation_method: AGG_TO_SML[measure.aggregation],
     dataset: datasetUniqueName(fact.sourceTable),
     column: measure.sourceColumn,
+    description,
+    format,
+    folder: `${fact.sourceTable}_metrics`,
   });
 }
 
@@ -930,30 +1012,44 @@ function buildModelFile(
     // cannot be modeled as regular or degenerate dimensions in AtScale SML.
     if (isFactLikeDimension(dim, factSourceTables)) continue;
 
-    // AtScale does not support composite join_columns in model relationships.
-    // Skip any FK that spans more than one column.
-    if ((rel.fromColumns?.length ?? 1) > 1) continue;
+    const joinCols = rel.fromColumns ?? [rel.fromColumn];
 
-    // Resolve the join level: prefer the level whose source column matches
-    // the FK column; fall back to the dimension's primary key.
-    let joinLevel: string = dim.primaryKeys.length > 0 ? laName(dim.primaryKeys[0]) : "";
-    for (const h of dim.hierarchies) {
-      const match = h.levels.find(
-        (l) => l.sourceColumn.toLowerCase() === rel.toColumn.toLowerCase(),
-      );
-      if (match) { joinLevel = laName(match.sourceColumn); break; }
+    // Per AtScale best practices: create one relationship per hierarchy leaf
+    // level so that every hierarchy in the dimension is accessible from the
+    // BI tool.  When no hierarchies exist, fall back to the PK level.
+    const targetHierarchies = dim.hierarchies.length > 0
+      ? dim.hierarchies
+      : null;
+
+    if (targetHierarchies) {
+      for (const h of targetHierarchies) {
+        const leafLevel = h.levels[h.levels.length - 1];
+        if (!leafLevel) continue;
+        const joinLevel = laName(leafLevel.sourceColumn);
+        const hierSlug  = h.name.toLowerCase().replace(/\s+/g, "_");
+        relEntries.push({
+          rel: {
+            unique_name: `${fact.sourceTable}_${toKebab(dim.name)}_${rel.fromColumn}_${hierSlug}`,
+            from: { dataset: datasetUniqueName(fact.sourceTable), join_columns: joinCols } as unknown as YamlValue,
+            to:   { dimension: dimUniqueName(dim.name), level: joinLevel }                 as unknown as YamlValue,
+          },
+          dimName: dim.name,
+          fromCol: rel.fromColumn,
+        });
+      }
+    } else {
+      // Fallback: join to the PK level attribute
+      const joinLevel = dim.primaryKeys.length > 0 ? laName(dim.primaryKeys[0]) : "";
+      relEntries.push({
+        rel: {
+          unique_name: `${fact.sourceTable}_${toKebab(dim.name)}_${rel.fromColumn}`,
+          from: { dataset: datasetUniqueName(fact.sourceTable), join_columns: joinCols } as unknown as YamlValue,
+          to:   { dimension: dimUniqueName(dim.name), level: joinLevel }                 as unknown as YamlValue,
+        },
+        dimName: dim.name,
+        fromCol: rel.fromColumn,
+      });
     }
-
-    const relUniqueName = `${fact.sourceTable}_${toKebab(dim.name)}_${rel.fromColumn}`;
-    relEntries.push({
-      rel: {
-        unique_name: relUniqueName,
-        from: { dataset: datasetUniqueName(fact.sourceTable), join_columns: rel.fromColumns ?? [rel.fromColumn] } as unknown as YamlValue,
-        to:   { dimension: dimUniqueName(dim.name), level: joinLevel }                                            as unknown as YamlValue,
-      },
-      dimName: dim.name,
-      fromCol: rel.fromColumn,
-    });
   }
 
   // ---- Role-playing dimensions -------------------------------------------
@@ -962,13 +1058,23 @@ function buildModelFile(
   // AtScale substitutes {0} with dimension/level names in the UI.
   // No separate role_playing_dimensions block is needed.
 
-  const dimRelCount = new Map<string, number>();
+  // Role-playing: a dimension is role-played when the SAME dimension is joined
+  // via DIFFERENT FK columns (e.g. order_date_key and ship_date_key both point
+  // to dim_date).  Multiple relationships to the same dim via the SAME FK column
+  // (one per hierarchy) are NOT role-playing — they share the same fromCol.
+  const dimFkPairs = new Set<string>();
+  for (const { dimName, fromCol } of relEntries) {
+    dimFkPairs.add(`${dimName}|${fromCol}`);
+  }
+  // Count distinct FK columns per dimension
+  const dimDistinctFkCount = new Map<string, number>();
   for (const { dimName } of relEntries) {
-    dimRelCount.set(dimName, (dimRelCount.get(dimName) ?? 0) + 1);
+    const pairs = Array.from(dimFkPairs).filter((p) => p.startsWith(`${dimName}|`));
+    dimDistinctFkCount.set(dimName, pairs.length);
   }
 
   for (const entry of relEntries) {
-    if ((dimRelCount.get(entry.dimName) ?? 0) <= 1) continue;
+    if ((dimDistinctFkCount.get(entry.dimName) ?? 0) <= 1) continue;
     // Humanise the FK column name and strip a trailing "Key" suffix for brevity
     // e.g. OrderDateKey → "Order Date", ShipDateKey → "Ship Date"
     const label = entry.fromCol
@@ -1008,7 +1114,7 @@ function buildModelFile(
   const allMetrics = model.facts
     .filter((f) => connectedFactTables.has(datasetUniqueName(f.sourceTable)))
     .flatMap((f) =>
-      f.measures.map((m) => ({ unique_name: metricUniqueName(m, metricPrefix) })),
+      f.measures.map((m) => ({ unique_name: metricUniqueName(m, f, metricPrefix) })),
     );
   const seenMetrics = new Set<string>();
   const uniqueMetrics = allMetrics.filter(({ unique_name }) => {
@@ -1024,7 +1130,7 @@ function buildModelFile(
   const modelObj: Record<string, YamlValue> = {
     unique_name: model.name,
     object_type: "model",
-    label: model.name,
+    label: opts.catalogName ?? model.name,
     relationships: relationships as unknown as YamlValue,
     metrics: uniqueMetrics as unknown as YamlValue,
   };
@@ -1084,7 +1190,6 @@ export function serializeToSml(
     const dim  = dimByNameOuter.get(rel.toDataset);
     if (!fact || !dim) continue;
     if (isFactLikeDimension(dim, factSourceTables)) continue;
-    if ((rel.fromColumns?.length ?? 1) > 1) continue;
     connectedFactSourceTables.add(fact.sourceTable);
   }
 
@@ -1134,7 +1239,7 @@ export function serializeToSml(
   for (const fact of model.facts) {
     if (!connectedFactSourceTables.has(fact.sourceTable)) continue;
     for (const measure of fact.measures) {
-      const uniqueName = metricUniqueName(measure, metricPrefix);
+      const uniqueName = metricUniqueName(measure, fact, metricPrefix);
       if (seenMetrics.has(uniqueName)) continue;
       seenMetrics.add(uniqueName);
       output.set(

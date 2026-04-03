@@ -107,7 +107,10 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
       if (!mdxUser) {
         throw new Error(`User '${connection.mdx.user}' not found in ${connectionFile}`);
       }
-      const connectionString = connection.mdx.url.replace(/\/$/, "") + '/engine/xmla/' + mdxUser.token
+      const baseUrl = connection.mdx.url.replace(/\/$/, "");
+      const connectionString = connection.installer
+        ? `${baseUrl}/engine/xmla/${mdxUser.token}`
+        : baseUrl;
       template = fs.readFileSync(`${__dirname}/modelReference.ejs`, "utf8");
       output = ejs.render(template, {
         model, connection, connectionString

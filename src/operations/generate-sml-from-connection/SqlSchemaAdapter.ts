@@ -77,7 +77,9 @@ export class SqlSchemaAdapter implements DatabaseMetaData {
   }
 
   private async fetchPrimaryKeys(tableName: string): Promise<Set<string>> {
-    // Query INFORMATION_SCHEMA for primary keys.
+    // Query INFORMATION_SCHEMA for primary keys ordered by key sequence.
+    // Ordering by ORDINAL_POSITION ensures composite PK columns are returned
+    // in declaration order, matching the key_columns array in AtScale SML.
     try {
       const rows = await this.sql.query(
         this.conn,
@@ -89,7 +91,8 @@ export class SqlSchemaAdapter implements DatabaseMetaData {
              AND tc.TABLE_NAME      = kcu.TABLE_NAME
           WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
             AND tc.TABLE_SCHEMA    = '${this.schema}'
-            AND tc.TABLE_NAME      = '${tableName}'`,
+            AND tc.TABLE_NAME      = '${tableName}'
+          ORDER BY kcu.ORDINAL_POSITION`,
       );
       return new Set(rows.map((r) => str(r, "COLUMN_NAME").toUpperCase()));
     } catch {
@@ -103,6 +106,13 @@ export class SqlSchemaAdapter implements DatabaseMetaData {
   // ----------------------------------------------------------
 
   async getForeignKeys(tableName: string): Promise<ForeignKeyMeta[]> {
+    // Prefer INFORMATION_SCHEMA — it correctly handles composite foreign keys
+    // and is portable across PostgreSQL, Snowflake (via compatibility view),
+    // and most ANSI-SQL databases.  Fall back to the driver-level API when
+    // the INFORMATION_SCHEMA query fails (permission issue or unsupported dialect).
+    const fromInfoSchema = await this.fetchForeignKeysFromInfoSchema(tableName);
+    if (fromInfoSchema.length > 0) return fromInfoSchema;
+
     const rows = await this.sql.getForeignKeys(this.conn, this.schema, tableName);
     return rows.map((r) => ({
       fkTableName:    str(r, "FKTABLE_NAME", tableName),
@@ -112,6 +122,55 @@ export class SqlSchemaAdapter implements DatabaseMetaData {
       keySeq:         num(r, "KEY_SEQ", 1),
       constraintName: str(r, "FK_NAME"),
     }));
+  }
+
+  /**
+   * Query INFORMATION_SCHEMA for foreign key metadata.
+   *
+   * Uses the standard four-table join across REFERENTIAL_CONSTRAINTS,
+   * KEY_COLUMN_USAGE, and CONSTRAINT_COLUMN_USAGE, which returns one row per
+   * FK column (supporting composite keys) with the correct ORDINAL_POSITION.
+   *
+   * Works with PostgreSQL and databases that implement the ANSI INFORMATION_SCHEMA
+   * views (SQL Server, MySQL ≥8, BigQuery, etc.).  Snowflake does not populate
+   * KEY_COLUMN_USAGE for FK relationships; the query will return 0 rows and the
+   * caller falls back to the driver-level API.
+   *
+   * Returns [] on any error so the caller can degrade gracefully.
+   */
+  private async fetchForeignKeysFromInfoSchema(tableName: string): Promise<ForeignKeyMeta[]> {
+    try {
+      const rows = await this.sql.query(
+        this.conn,
+        `SELECT
+             kcu.TABLE_NAME       AS FKTABLE_NAME,
+             kcu.COLUMN_NAME      AS FKCOLUMN_NAME,
+             ccu.TABLE_NAME       AS PKTABLE_NAME,
+             ccu.COLUMN_NAME      AS PKCOLUMN_NAME,
+             kcu.ORDINAL_POSITION AS KEY_SEQ,
+             rc.CONSTRAINT_NAME   AS FK_NAME
+           FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+           JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+             ON  rc.CONSTRAINT_NAME   = kcu.CONSTRAINT_NAME
+             AND rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+           JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu
+             ON  rc.UNIQUE_CONSTRAINT_NAME   = ccu.CONSTRAINT_NAME
+             AND rc.UNIQUE_CONSTRAINT_SCHEMA = ccu.CONSTRAINT_SCHEMA
+          WHERE kcu.TABLE_SCHEMA = '${this.schema}'
+            AND kcu.TABLE_NAME   = '${tableName}'
+          ORDER BY rc.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`,
+      );
+      return rows.map((r) => ({
+        fkTableName:    str(r, "FKTABLE_NAME", tableName),
+        fkColumnName:   str(r, "FKCOLUMN_NAME"),
+        pkTableName:    str(r, "PKTABLE_NAME"),
+        pkColumnName:   str(r, "PKCOLUMN_NAME"),
+        keySeq:         num(r, "KEY_SEQ", 1),
+        constraintName: str(r, "FK_NAME"),
+      }));
+    } catch {
+      return [];
+    }
   }
 
   // ----------------------------------------------------------
