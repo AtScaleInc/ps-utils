@@ -5,6 +5,7 @@ import { EchoOperation } from "./echo/EchoOperation.js";
 import { ToggleOperation } from "./toggle/ToggleOperation.js";
 import { ExtractAtScaleModelOperation } from "./extract-model-from-atscale/ExtractAtScaleModelOperation.js";
 import { GeneratePowerBIFromNamespaceOperation } from "./generate-powerbi-from-namespace/GeneratePowerBIFromNamespaceOperation.js";
+import { GenerateNotebookFromConnectionOperation } from "./generate-notebook-from-connection/GenerateNotebookFromConnectionOperation.js";
 import { GenerateTableauFromNamespaceOperation } from "./generate-tableau-from-namespace/GenerateTableauFromNamespaceOperation.js";
 import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOperation.js";
 import { PythonHelloWorldOperation } from "./python/PythonHelloWorldOperation.js";
@@ -44,6 +45,7 @@ export async function buildRegistry(
   registry.register(new ToggleOperation(services, logger));
   registry.register(new ExtractAtScaleModelOperation(services, logger));
   registry.register(new GeneratePowerBIFromNamespaceOperation(services, logger));
+  registry.register(new GenerateNotebookFromConnectionOperation(services, logger));
   registry.register(new GenerateTableauFromNamespaceOperation(services, logger));
   registry.register(new EchoConnectionMetaDataOperation(services, logger));
   registry.register(new PythonHelloWorldOperation(services, logger));

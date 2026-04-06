@@ -1,0 +1,174 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "de0962f8",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    <%if (connection.installer) { %>
+    "pip install \"atscale < 3\""
+    <% } else { %>
+    "pip install \"atscale\""
+    <% } %>
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3b31027d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from atscale.client import Client\n",
+    <% if (connection.installer) { %>
+    "from atscale.project import Project\n",
+    <% } else { %>
+    "from atscale.repo import Repo\n",
+    "from atscale.catalog import Catalog\n",
+    <% } %>
+    "from atscale.data_model import DataModel"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "e127156a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "client = Client(\n",
+    "    server=\"<%= connection.mdx.url %>\"\n",
+         <% if (connection.installer) { %>
+    "    organization=\"<%= connection.mdx.organization_id %>\",\n",
+         <% } %>
+    "    username=\"<%= mdxUser.username %>\",\n",
+    "    password=\"<%= mdxUser.password %>\",\n",
+    ")\n",
+    "client.connect()"
+   ]
+  },
+  <% if (connection.installer) { %>
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6b97b362",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "project = client.select_project()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "d2aba933",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model = project.select_data_model()"
+   ]
+  },
+  <% } else { %>
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6b97b362",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "repo = client.select_repo()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "fe8fb119",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "catalog = repo.select_catalog()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "d2aba933",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model = catalog.select_data_model()"
+   ]
+  },
+  <% } %>
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "d9ad09cf",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model.get_folders()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0d77d524",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model.get_all_numeric_feature_names()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "640c0541",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model.get_all_categorical_feature_names()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "02e6c1c4",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model.get_dimensions()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "39c73874",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model.get_hierarchies()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0db9d42a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "data_model.get_data(feature_list=[])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "7aa6263c",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ]
+}
