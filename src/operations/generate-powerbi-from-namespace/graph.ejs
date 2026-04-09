@@ -150,7 +150,51 @@
             "Property": "<%= measure %>"
           }
         },
-        "type": "Advanced"
+        "type": "Advanced",
+        <% if (worksheet.filters && worksheet.filters.length > 0) { 
+             let alreadyFiltered = false;
+             worksheet.filters.forEach((filter) => { if (filter.field == measure && filter.excludeNull == true && alreadyFiltered == false) { %>
+          "filter": {
+            "Version": 2,
+            "From": [
+              {
+                "Name": "c",
+                "Entity": "CubeMeasures",
+                "Type": 0
+              }
+            ],
+            "Where": [
+              {
+                "Condition": {
+                  "Not": {
+                    "Expression": {
+                      "Comparison": {
+                        "ComparisonKind": 0,
+                        "Left": {
+                          "Measure": {
+                            "Expression": {
+                              "SourceRef": {
+                                "Source": "c"
+                              }
+                            },
+                            "Property": "<%= measure %>"
+                          }
+                        },
+                        "Right": {
+                          "Literal": {
+                            "Value": "null"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        <% }
+          alreadyFiltered = true;
+        });}%>
       },
       {
         "name": "855061c636a2fd0f74c8",
@@ -169,7 +213,109 @@
             "Level": "<%= level %>"
           }
         },
-        "type": "Categorical"
+        <% if (worksheet.limit) { %>
+          "type": "TopN",
+          "filter": {
+            "Version": 2,
+            "From": [
+              {
+                "Name": "subquery",
+                "Expression": {
+                  "Subquery": {
+                    "Query": {
+                      "Version": 2,
+                      "From": [
+                        {
+                          "Name": "p",
+                          "Entity": "<%= dimension %>",
+                          "Type": 0
+                        },
+                        {
+                          "Name": "c",
+                          "Entity": "CubeMeasures",
+                          "Type": 0
+                        }
+                      ],
+                      "Select": [
+                        {
+                          "HierarchyLevel": {
+                            "Expression": {
+                              "Hierarchy": {
+                                "Expression": {
+                                  "SourceRef": {
+                                    "Source": "p"
+                                  }
+                                },
+                                "Hierarchy": "<%= hierarchy %>"
+                              }
+                            },
+                            "Level": "<%= level %>"
+                          },
+                          "Name": "field"
+                        }
+                      ],
+                      "OrderBy": [
+                        {
+                          "Direction": 2,
+                          "Expression": {
+                            "Measure": {
+                              "Expression": {
+                                "SourceRef": {
+                                  "Source": "c"
+                                }
+                              },
+                              "Property": "<%= measure %>"
+                            }
+                          }
+                        }
+                      ],
+                      "Top": <%= worksheet.limit %>
+                    }
+                  }
+                },
+                "Type": 2
+              },
+              {
+                "Name": "p",
+                "Entity": "<%= dimension %>",
+                "Type": 0
+              }
+            ],
+            "Where": [
+              {
+                "Condition": {
+                  "In": {
+                    "Expressions": [
+                      {
+                        "HierarchyLevel": {
+                          "Expression": {
+                            "Hierarchy": {
+                              "Expression": {
+                                "SourceRef": {
+                                  "Source": "p"
+                                }
+                              },
+                              "Hierarchy": "<%= hierarchy %>"
+                            }
+                          },
+                          "Level": "<%= level %>"
+                        }
+                      }
+                    ],
+                    "Table": {
+                      "SourceRef": {
+                        "Source": "subquery"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        <% }
+          else {%>
+        "type": "Categorical",
+        <% } %>
       }
     ]
   }

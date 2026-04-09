@@ -43,7 +43,7 @@ worksheets:
     model: internet_sales
     graphType: text
     measures:
-      - Order Quantity
+      - orderquantity1
     format: "integer"
     description: Total Units Sold
 
@@ -52,7 +52,7 @@ worksheets:
     model: internet_sales
     graphType: text
     measures:
-      - Sales Amount
+      - salesamount1
     format: "integer"
     description: Total Sales
 
@@ -61,22 +61,31 @@ worksheets:
     title: Total Orders per Year
     model: internet_sales
     graphType: line
-    xAxis: Order Year
+    xAxis: Order YearMonth
     xAxisGranularity: year
-    yAxis: Order Quantity
+    yAxis: orderquantity1
+    limit: 5
 
   kpi_total_sales_per_country:
     title: Total Sales per Country
     model: internet_sales
     graphType: bar
-    xAxis: Sales Amount
-    yAxis: Country
+    xAxis: salesamount1
+    yAxis: CountryCity
+    limit: 5
+    filters:
+    - field: salesamount1
+      excludeNull: true
+
   kpi_total_sales_per_country2:
     title: Total Sales per Country
     model: internet_sales
     graphType: bar
-    xAxis: Country
-    yAxis: Sales Amount
+    xAxis: CountryCity
+    yAxis: salesamount1
+    filters:
+    - field: salesamount1
+      excludeNull: true
 
 dashboards:
   # ============================================================================
