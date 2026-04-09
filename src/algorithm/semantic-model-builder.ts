@@ -100,6 +100,103 @@ async function readMetadata(
 }
 
 // ----------------------------------------------------------
+// 1b. Naming-convention FK inference
+// ----------------------------------------------------------
+
+/**
+ * Augments `foreignKeysByTable` with synthetic FK entries inferred from column
+ * names when no explicit constraint was declared.
+ *
+ * Rule: if a column named `<stem>_id`, `<stem>_key`, or `<stem>_sk` exists,
+ * and there is a table named `<stem>` or `<stem>s` (or `<stem>es`) whose
+ * primary key is a *single column* with the same name, synthesise a FK from
+ * this column to that table's PK.
+ *
+ * Only single-column PK targets are considered — inferring a join to a
+ * composite PK from a single column would produce an invalid partial join.
+ *
+ * Returns the list of inferred FK descriptions so the caller can emit warnings.
+ */
+function inferNamingConventionFKs(
+  tables: TableMeta[],
+  columnsByTable: Map<string, ColumnMeta[]>,
+  foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>,
+): Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }> {
+  // Build lookup: lowercase table name → { original name, single-column PK or null }
+  const tableIndex = new Map<string, { tableName: string; pkCol: string | null }>();
+  for (const t of tables) {
+    const cols = columnsByTable.get(t.tableName) ?? [];
+    const pkCols = cols.filter((c) => c.isPrimaryKey).map((c) => c.columnName);
+    tableIndex.set(t.tableName.toLowerCase(), {
+      tableName: t.tableName,
+      pkCol: pkCols.length === 1 ? pkCols[0] : null,
+    });
+  }
+
+  const FK_SUFFIX = /_(id|key|sk)$/i;
+  const inferred: Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }> = [];
+
+  for (const table of tables) {
+    const cols = columnsByTable.get(table.tableName) ?? [];
+    const existingFKs = foreignKeysByTable.get(table.tableName) ?? [];
+
+    // Track which (column → pkTable) pairs are already covered by a declared FK.
+    const covered = new Set(existingFKs.map((fk) => `${fk.fkColumnName.toLowerCase()}|${fk.pkTableName.toLowerCase()}`));
+
+    const newFKs: import("./types").ForeignKeyMeta[] = [];
+
+    for (const col of cols) {
+      if (!FK_SUFFIX.test(col.columnName)) continue;
+
+      const stem = col.columnName.replace(FK_SUFFIX, "").toLowerCase();
+      if (!stem) continue;
+
+      // Candidate table name forms: exact, +s, +es, y→ies
+      const candidates = [
+        stem,
+        stem + "s",
+        stem + "es",
+        stem.endsWith("y") ? stem.slice(0, -1) + "ies" : null,
+      ].filter(Boolean) as string[];
+
+      for (const candidate of candidates) {
+        const match = tableIndex.get(candidate);
+        if (!match) continue;
+        if (match.tableName === table.tableName) continue;  // skip self-reference
+        if (!match.pkCol) continue;  // skip composite-PK targets
+        if (match.pkCol.toLowerCase() !== col.columnName.toLowerCase()) continue;
+
+        const coverKey = `${col.columnName.toLowerCase()}|${match.tableName.toLowerCase()}`;
+        if (covered.has(coverKey)) break;  // already declared — don't duplicate
+
+        newFKs.push({
+          fkTableName:    table.tableName,
+          fkColumnName:   col.columnName,
+          pkTableName:    match.tableName,
+          pkColumnName:   match.pkCol,
+          keySeq:         1,
+          constraintName: `inferred_${table.tableName}_${col.columnName}`,
+        });
+        covered.add(coverKey);
+        inferred.push({
+          fromTable:  table.tableName,
+          fromColumn: col.columnName,
+          toTable:    match.tableName,
+          toColumn:   match.pkCol,
+        });
+        break;  // matched — don't try further candidate forms
+      }
+    }
+
+    if (newFKs.length > 0) {
+      foreignKeysByTable.set(table.tableName, [...existingFKs, ...newFKs]);
+    }
+  }
+
+  return inferred;
+}
+
+// ----------------------------------------------------------
 // 2. Classifier: facts vs. dimensions
 // ----------------------------------------------------------
 
@@ -357,6 +454,24 @@ export async function proposeSemanticModel(
   // Phase 1: Read all schema metadata from the database
   // ==========================================================================
   const rawMetadata = await readMetadata(db, schemaPattern);
+
+  // ==========================================================================
+  // Phase 1b: Naming-convention FK inference
+  // Synthesise FK relationships for columns named <stem>_id / <stem>_key /
+  // <stem>_sk when a table named <stem> or <stem>s exists with a matching
+  // single-column PK.  Only runs when no explicit FK already covers the pair.
+  // ==========================================================================
+  const inferredFKs = inferNamingConventionFKs(
+    rawMetadata.tables,
+    rawMetadata.columnsByTable,
+    rawMetadata.foreignKeysByTable,   // mutated in place
+  );
+  for (const { fromTable, fromColumn, toTable, toColumn } of inferredFKs) {
+    warnings.push(
+      `[INFERRED FK] "${fromTable}"."${fromColumn}" → "${toTable}"."${toColumn}" ` +
+      `(naming convention — no constraint declared in schema)`,
+    );
+  }
 
   // ==========================================================================
   // Phase 2: Column profiling (optional — requires db.sampleRows)
@@ -659,6 +774,21 @@ export async function proposeSemanticModel(
     // Collapse multilingual variants in degenerate dimensions too.
     applyMultilingualGrouping(degenerateDimensions);
 
+    // Always add a COUNT metric.  Prefer the primary key column (it is never null
+    // and gives an unambiguous row count).  Fall back to the first non-nullable
+    // non-PII column when no PK is declared.
+    const countCol =
+      pkCol ??
+      cols.find((c) => !c.nullable && !factPiiExclusion.has(c.columnName));
+    if (countCol) {
+      measures.push({
+        name:         `${toTitleCase(countCol.columnName)} Count`,
+        sourceColumn: countCol.columnName,
+        dataType:     "integer",
+        aggregation:  "COUNT",
+      });
+    }
+
     if (measures.length === 0) {
       warnings.push(`Fact table "${tableName}" has no numeric measure columns.`);
     }
@@ -851,6 +981,7 @@ export async function proposeSemanticModel(
     views,
     suggestions: [],
     warnings,
+    columnsByTable: rawMetadata.columnsByTable,
   };
 
   // Generate analysis suggestions if requested
@@ -989,7 +1120,7 @@ export function printSemanticModel(model: SemanticModel): void {
 //
 // Implement DatabaseMetaData for your driver, then call:
 //
-//   import { proposeSemanticModel, printSemanticModel } from "./jdbc-semantic-model.js";
+//   import { proposeSemanticModel, printSemanticModel } from "./semantic-model-builder.js";
 //
 //   const model = await proposeSemanticModel(myDbMeta, "SalesModel", "public");
 //   printSemanticModel(model);

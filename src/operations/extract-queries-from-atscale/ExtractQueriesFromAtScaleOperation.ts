@@ -89,9 +89,10 @@ class ExtractQueriesParameterSet extends ParameterSet {
       name = "db-schema";
       description =
         "Postgres schema prefix for the AtScale backend tables " +
-        "(e.g. 'engine' or 'atscale.engine'). Default matches the standard container deployment.";
+        "(e.g. 'engine' or 'atscale.engine'). Defaults to the schema in the connection file, " +
+        "then 'engine' (standard container deployment).";
       required = false;
-      defaultValue = "engine";
+      defaultValue = "";
     })(),
   ];
 }
@@ -302,7 +303,14 @@ export class ExtractQueriesFromAtScaleOperation extends Operation<Params> {
 
     const days = Math.max(1, parseInt(params.days, 10) || 60);
     const minExec = Math.max(1, parseInt(params["min-executions"], 10) || 1);
-    const schema = params["db-schema"];
+    // Resolve the Postgres schema to query.  Priority:
+    //   1. Explicit --db-schema CLI flag (user override)
+    //   2. schema field on the connection entry in the connection file
+    //   3. Hard-coded fallback "engine" (standard container deployment)
+    const connEntry = connConfig.connections?.[connName];
+    const connSchema = connEntry?.sql?.schema;
+    const installerMode = !!(connEntry as any)?.installer;
+    const schema = params["db-schema"] || connSchema || (installerMode ? "atscale" : "engine");
     const protocol = params.protocol.toLowerCase();
     const outputDir = path.resolve(params["output-dir"]);
     fs.mkdirSync(outputDir, { recursive: true });
@@ -342,12 +350,28 @@ export class ExtractQueriesFromAtScaleOperation extends Operation<Params> {
           } catch (err) {
             const raw = err instanceof Error ? err.message : String(err);
             const msg = raw.split("\n")[0].trim();
+            const connSql = connEntry?.sql ?? {};
+            const serverDesc = [connSql.server, connSql.port].filter(Boolean).join(":");
+            const dbDesc = connSql.database ?? "(unknown)";
             this.logger.log(
               `  WARN: query failed (language=${lang}, model=${model}): ${msg}`,
             );
             this.logger.log(
-              `  TIP:  Check --db-schema matches your AtScale deployment. ` +
-              `Common values: 'engine' (container) or 'atscale' (older installer).`,
+              `  Connection: ${serverDesc}  database: ${dbDesc}  schema: ${schema}`,
+            );
+            this.logger.log(
+              `  The table '${schema}.queries' was not found. ` +
+              `Try a different --db-schema value. Common values:`,
+            );
+            this.logger.log(`    --db-schema engine          (standard container / cloud deployment)`);
+            this.logger.log(`    --db-schema atscale         (older on-premise installer)`);
+            this.logger.log(`    --db-schema atscale.engine  (installer with explicit schema path)`);
+            this.logger.log(
+              `  To discover the correct schema, connect to the Postgres database and run:`,
+            );
+            this.logger.log(
+              `    SELECT table_schema, table_name FROM information_schema.tables` +
+              ` WHERE table_name = 'queries' ORDER BY table_schema;`,
             );
             continue;
           }

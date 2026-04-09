@@ -293,7 +293,7 @@ The inference engine backs the `generate-sml-from-connection` and `generate-sml-
 ### Architecture overview
 
 ```
-jdbc-semantic-model.ts          ← orchestrator; call proposeSemanticModel() here
+semantic-model-builder.ts          ← orchestrator; call proposeSemanticModel() here
 │
 ├── types.ts                    ← all shared interfaces and utility functions
 ├── hierarchy-inference.ts      ← generic hierarchy inference (indexes + naming)
@@ -371,14 +371,14 @@ SemanticDimension { hierarchies, attributes (with labels) }
 | `analysis-suggestions.ts` | Business analysis suggestion generator (pairs & tuples) |
 | `sml-serializer.ts` | AtScale SML YAML serializer |
 | `ddl-reader.ts` | DDL text → `JdbcDatabaseMetaData` implementation |
-| `jdbc-semantic-model.ts` | Main entry point: `proposeSemanticModel()`, `printSemanticModel()` |
+| `semantic-model-builder.ts` | Main entry point: `proposeSemanticModel()`, `printSemanticModel()` |
 
 ---
 
 ### Using the inference engine directly
 
 ```typescript
-import { proposeSemanticModel, printSemanticModel } from "./jdbc-semantic-model";
+import { proposeSemanticModel, printSemanticModel } from "./semantic-model-builder";
 import { createDefaultEngine } from "./inference";
 
 // 1. Implement JdbcDatabaseMetaData for your driver
@@ -568,7 +568,7 @@ export class MLScoredPlugin implements InferencePlugin {
 ### AtScale SML output
 
 ```typescript
-import { proposeSemanticModel } from "./jdbc-semantic-model";
+import { proposeSemanticModel } from "./semantic-model-builder";
 import { createDefaultEngine } from "./inference";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -612,11 +612,57 @@ sml-output/
 | Fact / Dimension source table | `dataset` (one per table) |
 | `SemanticDimension` | `dimension` with `level_attributes` + `hierarchies` |
 | Hierarchy level | `level_attribute` with `key_columns`, `name_column`, optional `time_unit` |
-| Secondary label (`_name`, `_description`) | `secondary_attributes` on the parent level |
+| Secondary label (`_name`, `_description`) | `secondary_attributes` on the parent level_attribute |
+| All non-system columns (when DDL/metadata available) | `secondary_attributes` on the hierarchy leaf level |
 | `SemanticMeasure` | `metric` with `calculation_method` |
 | `SemanticRelationship` | entry in `model.relationships` |
 | Degenerate dimensions (no FK) | listed under `model.dimensions` |
 | Time dimension | `dimension.type: time` + `time_unit` per level |
+
+**Secondary attributes:**
+
+When full column metadata is available (i.e., `SmlSerializerOptions.columnsByTable` is populated — always the case when using `generate-sml-from-connection` or `generate-sml-from-ddl`), every non-system column in a dimension's source table is emitted as a `secondary_attribute` on the leaf level of each hierarchy. This makes every column directly accessible in AtScale without needing a dedicated level_attribute entry.
+
+Inclusion / exclusion rules:
+- **Excluded**: columns matching system/ETL patterns (`au_*`, `source_create*`, `source_update*`, `qlik_last*`) — same patterns as `isSystemColumn()` in `attribute-inference.ts`
+- **PK columns**: included but their `unique_name` receives a `_sa` suffix (e.g., `customer_key` → `customer_key_sa`) to avoid collision with the `level_attribute` of the same name that carries `is_unique_key: true`
+- **All other columns**: emitted with `unique_name` equal to the column name, `contains_unique_names: false`, `is_unique_key: false`
+
+Example (source table has columns `customer_key`, `customer_name`, `batch_id`, `au_created_by`):
+
+```yaml
+hierarchies:
+  - unique_name: dim_customer_hierarchy
+    label: Customer Hierarchy
+    levels:
+      - unique_name: customer_key
+        visualize_in_bi_tool: false
+        secondary_attributes:
+          - unique_name: customer_key_sa      # PK → _sa suffix
+            label: Customer Key
+            contains_unique_names: false
+            dataset: dim_customer
+            is_unique_key: false
+            key_columns: [customer_key]
+            name_column: customer_key
+          - unique_name: customer_name
+            label: Customer Name
+            contains_unique_names: false
+            dataset: dim_customer
+            is_unique_key: false
+            key_columns: [customer_name]
+            name_column: customer_name
+          - unique_name: batch_id
+            label: Batch Id
+            contains_unique_names: false
+            dataset: dim_customer
+            is_unique_key: false
+            key_columns: [batch_id]
+            name_column: batch_id
+          # au_created_by excluded (system column pattern)
+```
+
+The REPORT.md summary includes a **Secondary Attributes** count showing the total across all dimensions when column metadata is available.
 
 **SML options:**
 

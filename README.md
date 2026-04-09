@@ -7,8 +7,6 @@ Upcoming features:
 - Rudy's aggregate util
 - Complete GitActions
 - SSO
-- Generate Modeling Report
-
 
 
 ```mermaid
@@ -85,6 +83,7 @@ flowchart TD
     - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+    - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
   - BI Tool Integration
     - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
@@ -687,7 +686,7 @@ Connects to the AtScale internal Postgres backend and extracts deduplicated quer
 
 Supports two config formats:
 - **`connections.yaml`** — the standard connections file used by this project (pass `--connection-name` to select the entry)
-- **`systems.properties`** — the Gatling project config file; connection details and model list are read automatically
+- **`systems.properties`** — legacy properties file; connection details and model list are read automatically
 
 ```bash
 # Using a connections.yaml file
@@ -699,7 +698,7 @@ Supports two config formats:
   --protocol all \
   --output-dir "./queries"
 
-# Using a Gatling systems.properties file
+# Using a systems.properties file
 ./atscale-utils extract-queries-from-atscale \
   --connection-file "./systems.properties" \
   --models "SalesModel"
@@ -707,7 +706,7 @@ Supports two config formats:
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `--connection-file` | Yes | | Path to `connections.yaml` or a Gatling `systems.properties` file |
+| `--connection-file` | Yes | | Path to `connections.yaml` or a `systems.properties` file |
 | `--connection-name` | No | `default` | Connection name within `connections.yaml` (ignored for `.properties` files) |
 | `--models` | No* | | Comma-separated model/cube names to extract. Required for YAML mode; overrides `atscale.models` for `.properties` mode |
 | `--days` | No | `60` | Look-back window in days |
@@ -737,10 +736,10 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 Supports three input modes:
 - **`--query-file`** — JSON file produced by `extract-queries-from-atscale`
-- **`--ingest-file`** — Gatling-style CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`)
-- **`--task-file`** — Gatling executor task YAML/JSON (runs all tasks sequentially, inferring protocol from `simulationClass`)
+- **`--ingest-file`** — ingest CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`)
+- **`--task-file`** — executor task YAML/JSON (runs all tasks sequentially, inferring protocol from `simulationClass`)
 
-Supports two connection config formats: `connections.yaml` or Gatling `systems.properties`.
+Supports two connection config formats: `connections.yaml` or `systems.properties`.
 
 ```bash
 # Direct mode — XMLA queries from a JSON file
@@ -752,7 +751,7 @@ Supports two connection config formats: `connections.yaml` or Gatling `systems.p
   --concurrent-users 5 \
   --output-dir "./run_results"
 
-# Direct mode — SQL queries from a Gatling ingest CSV
+# Direct mode — SQL queries from an ingest CSV
 ./atscale-utils execute-atscale-query-harness \
   --connection-file "./connections.yaml" \
   --connection-name "ats_connection" \
@@ -770,7 +769,7 @@ Supports two connection config formats: `connections.yaml` or Gatling `systems.p
   --concurrent-users 5 \
   --duration-minutes 10
 
-# Task-file mode — run all Gatling executor tasks from a YAML file
+# Task-file mode — run all executor tasks from a YAML file
 ./atscale-utils execute-atscale-query-harness \
   --connection-file "./systems.properties" \
   --connection-name "SalesModel" \
@@ -779,11 +778,11 @@ Supports two connection config formats: `connections.yaml` or Gatling `systems.p
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `--connection-file` | Yes | | Path to `connections.yaml` or a Gatling `systems.properties` file |
+| `--connection-file` | Yes | | Path to `connections.yaml` or a `systems.properties` file |
 | `--connection-name` | Yes | | Connection name (YAML mode) or model name (`.properties` mode) |
 | `--query-file` | No | | JSON file from `extract-queries-from-atscale` |
-| `--ingest-file` | No | | Gatling ingest CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`) |
-| `--task-file` | No | | Gatling executor task YAML or JSON file |
+| `--ingest-file` | No | | Ingest CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`) |
+| `--task-file` | No | | Executor task YAML or JSON file |
 | `--protocol` | No | `xmla` | Query protocol: `xmla` or `sql` (ignored in task-file mode) |
 | `--concurrent-users` | No | `1` | Number of parallel workers (ignored in task-file mode) |
 | `--throttle-ms` | No | `5` | Minimum milliseconds between query dispatches per worker |
@@ -800,7 +799,7 @@ Supports two connection config formats: `connections.yaml` or Gatling `systems.p
 
 **Injection step compatibility (task-file mode):**
 
-| Gatling step type | Behaviour |
+| Step type | Behaviour |
 |---|---|
 | `AtOnceUsers`, `RampUsers`, `ConstantUsersPerSec`, `RampUsersPerSec` | One-pass — runs each query once with the specified concurrency |
 | `ConstantConcurrentUsers`, `RampConcurrentUsers` | Timed loop — cycles the query list for `durationMinutes` |
@@ -1094,6 +1093,51 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 † Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
+
+---
+
+### `generate-ddl-from-atscale`
+
+[↑ Table of Contents](#table-of-contents)
+
+Generates DDL (`CREATE TABLE` statements) by reading table and column metadata from an AtScale data source via the REST API. No direct database connection is required — AtScale acts as the metadata broker.
+
+```bash
+./atscale-utils generate-ddl-from-atscale \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --data-source-name "snowflake_prod" \
+  --database "MY_DATABASE" \
+  --schema "PUBLIC"
+```
+
+With optional filters and output file:
+
+```bash
+./atscale-utils generate-ddl-from-atscale \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --data-source-name "snowflake_prod" \
+  --database "MY_DATABASE" \
+  --schema "PUBLIC" \
+  --tables "fact_*,dim_*" \
+  --output-file "./schema.ddl"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--data-source-name` | Yes | | Name of the data source as registered in AtScale (display name or `connectionId`) |
+| `--database` | Yes | | Database (catalog) name |
+| `--schema` | Yes | | Schema name |
+| `--tables` | No | all tables | Comma-separated table names or glob patterns (`*`, `?`) — e.g. `"fact_*,dim_*"` |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--output-file` | No | stdout | Output file path for the generated DDL |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** One `CREATE TABLE` statement per matched table. Output includes a header comment with data source name, database, schema, and timestamp.
+
+**Foreign keys:** The AtScale metadata API does not expose FK relationships. FK constraints are not included in the output; a header comment documents this. Use `extract-ddl-from-connection` if FK constraints are required.
 
 ---
 

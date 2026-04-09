@@ -190,6 +190,11 @@ export interface SemanticModel {
    */
   sml?: Map<string, string>;
   warnings: string[];
+  /**
+   * Raw column metadata for every table in the schema, keyed by source table name.
+   * Populated by proposeSemanticModel; useful for report generation.
+   */
+  columnsByTable?: Map<string, ColumnMeta[]>;
 }
 
 // ----------------------------------------------------------

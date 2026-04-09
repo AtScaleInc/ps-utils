@@ -27,6 +27,7 @@ import { AtScaleCreateRepoOperation } from "./atscale-create-repo/AtScaleCreateR
 import { AtScaleListDeploymentsOperation } from "./atscale-list-deployments/AtScaleListDeploymentsOperation.js";
 import { AtScaleDeployCatalogOperation } from "./atscale-deploy-catalog/AtScaleDeployCatalogOperation.js";
 import { AtScaleListModelErrorsOperation } from "./atscale-list-model-errors/AtScaleListModelErrorsOperation.js";
+import { GenerateDDLFromAtScaleOperation } from "./generate-ddl-from-atscale/GenerateDDLFromAtScaleOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -66,5 +67,6 @@ export async function buildRegistry(
   registry.register(new AtScaleListDeploymentsOperation(services, logger));
   registry.register(new AtScaleDeployCatalogOperation(services, logger));
   registry.register(new AtScaleListModelErrorsOperation(services, logger));
+  registry.register(new GenerateDDLFromAtScaleOperation(services, logger));
   return registry;
 }

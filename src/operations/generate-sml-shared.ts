@@ -5,15 +5,16 @@
  *   resolvePiiSeverity  — normalise the --pii-severity CLI parameter
  *   writeSmlFiles       — write a Map<relativePath, yaml> to disk
  *   runInferenceAndWrite — call proposeSemanticModel, log warnings,
- *                          write SML files, and log a summary
+ *                          write SML files, write REPORT.md, and log a summary
  */
 import fs from "fs";
 import path from "path";
 import type { Logger } from "../logging.js";
 import type { DatabaseMetaData } from "../algorithm/types.js";
-import type { ProposeOptions } from "../algorithm/jdbc-semantic-model.js";
-import { proposeSemanticModel } from "../algorithm/jdbc-semantic-model.js";
+import type { ProposeOptions } from "../algorithm/semantic-model-builder.js";
+import { proposeSemanticModel } from "../algorithm/semantic-model-builder.js";
 import { createDefaultEngine } from "../algorithm/inference/index.js";
+import { generateReport, copyStyleGuide, type ReportOptions } from "../algorithm/report-generator.js";
 
 // ----------------------------------------------------------
 // PII severity resolver
@@ -58,7 +59,7 @@ export type InferenceOptions = Omit<ProposeOptions, "inferenceEngine" | "suggest
 
 /**
  * Run semantic model inference on `db`, write the resulting SML files to
- * `outputDir`, and log warnings + a summary.
+ * `outputDir`, write REPORT.md, and log warnings + a summary.
  *
  * @param tag  Short identifier used in log prefixes, e.g. "GenerateSMLFromDDL".
  */
@@ -90,6 +91,24 @@ export async function runInferenceAndWrite(
     logger.log(`\n[${tag}] Wrote ${model.sml.size} SML file(s) to: ${outputDir}`);
   } else {
     logger.log(`[${tag}] No SML output was generated.`);
+  }
+
+  // Write REPORT.md
+  const smlOpts = options.sml;
+  const reportOpts: ReportOptions = {
+    connectionName: smlOpts?.connectionName ?? "unknown",
+    catalogName:    smlOpts?.catalogName,
+    schema:         smlOpts?.schema,
+    database:       smlOpts?.database,
+    dialect:        smlOpts?.dialect,
+  };
+  const reportContent = generateReport(model, reportOpts);
+  const reportPath    = path.join(outputDir, "REPORT.md");
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(reportPath, reportContent, "utf8");
+  logger.log(`  → REPORT.md`);
+  if (copyStyleGuide(outputDir)) {
+    logger.log(`  → STYLE.md`);
   }
 
   logger.log(

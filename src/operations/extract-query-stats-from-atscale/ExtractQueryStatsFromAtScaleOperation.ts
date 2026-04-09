@@ -236,13 +236,38 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     catalogName: string,
     modelName: string,
   ): Promise<string[]> {
-    const statement =
-      "SELECT LEVEL_NAME FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName " +
-      "and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
-    const rows = await this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName,
+    const rows = await this.getLevelMetadataRows(
+      token, installer, atscaleUrl, organizationId, catalogName, modelName,
     );
     return rows.map((r) => r.LEVEL_NAME).filter(Boolean);
+  }
+
+  /**
+   * Returns dimension/hierarchy/level metadata for every non-All, non-Measures
+   * level in the cube.  Used to build the metric-by-hierarchy CSV.
+   */
+  private async getLevelMetadataRows(
+    token: string,
+    installer: boolean,
+    atscaleUrl: string,
+    organizationId: string,
+    catalogName: string,
+    modelName: string,
+  ): Promise<Record<string, string>[]> {
+    const statement =
+      "SELECT DIMENSION_UNIQUE_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NAME " +
+      "FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName " +
+      "and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
+    return this.getDmvData(
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName,
+    );
+  }
+
+  /** Strip MDX bracket notation, e.g. "[Customer].[Customer Hierarchy]" → "Customer Hierarchy". */
+  private stripBrackets(s: string): string {
+    // Take the last bracket-enclosed segment, or the whole string if no brackets.
+    const match = s.match(/\[([^\]]+)\]$/);
+    return match ? match[1] : s;
   }
 
   /** Returns AtScale internal GUIDs needed for the query history REST API. */
@@ -440,11 +465,30 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
     // --- Discover model schema ---
     this.logger.info("Fetching measure and attribute names from DMV…");
-    const [measureNames, attributeNames, ids] = await Promise.all([
+    const [measureNames, levelMetaRows, ids] = await Promise.all([
       this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName),
-      this.getAttributeNames(token, installer, atscaleUrl, organizationId, catalogName, modelName),
+      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName),
       this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName),
     ]);
+    const attributeNames = levelMetaRows.map((r) => r.LEVEL_NAME).filter(Boolean);
+
+    // Map from level name → { dimension, hierarchy, level } for the new CSV.
+    // When a level name appears in multiple hierarchies, all entries are kept.
+    type LevelMeta = { dimension: string; hierarchy: string; level: string };
+    const levelMetaByName = new Map<string, LevelMeta[]>();
+    for (const row of levelMetaRows) {
+      const levelName = row.LEVEL_NAME;
+      if (!levelName) continue;
+      const entry: LevelMeta = {
+        dimension: this.stripBrackets(row.DIMENSION_UNIQUE_NAME ?? ""),
+        hierarchy: this.stripBrackets(row.HIERARCHY_UNIQUE_NAME ?? ""),
+        level:     levelName,
+      };
+      const existing = levelMetaByName.get(levelName);
+      if (existing) existing.push(entry);
+      else levelMetaByName.set(levelName, [entry]);
+    }
+
     this.logger.info(
       `Found ${measureNames.length} measure(s) and ${attributeNames.length} attribute level(s)`,
     );
@@ -515,6 +559,85 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     const occurrenceFile = `${filePrefix}_occurrences.csv`;
     fs.writeFileSync(occurrenceFile, this.toCsv(occurrenceRows), "utf8");
     this.logger.info(`Wrote occurrence matrix to ${occurrenceFile}`);
+
+    // -----------------------------------------------------------------------
+    // Metric-by-hierarchy CSV
+    // Rows: dimension, hierarchy, level, metric, occurrences
+    // One row per (dimension × hierarchy × level × metric) combination observed
+    // in queries; zero-count combinations are omitted.
+    // -----------------------------------------------------------------------
+
+    // key: JSON.stringify([dimension, hierarchy, level, metric])
+    const hierMetricCounts = new Map<string, number>();
+    for (const [key, count] of occurrenceDict) {
+      const [attr, measure] = parsePairKey(key);
+      if (!attr || !measure) continue;  // skip attribute-only or measure-only rows
+      const metas = levelMetaByName.get(attr);
+      if (!metas) continue;
+      for (const meta of metas) {
+        const hKey = JSON.stringify([meta.dimension, meta.hierarchy, meta.level, measure]);
+        hierMetricCounts.set(hKey, (hierMetricCounts.get(hKey) ?? 0) + count);
+      }
+    }
+
+    const hierRows: Array<Array<string | number | null>> = [
+      ["dimension", "hierarchy", "level", "metric", "occurrences"],
+    ];
+    // Sort by dimension → hierarchy → level → metric for readability
+    const sortedHierKeys = Array.from(hierMetricCounts.keys()).sort();
+    for (const hKey of sortedHierKeys) {
+      const [dimension, hierarchy, level, metric] = JSON.parse(hKey) as string[];
+      hierRows.push([dimension, hierarchy, level, metric, hierMetricCounts.get(hKey)!]);
+    }
+
+    const hierFile = `${filePrefix}_metric_by_hierarchy.csv`;
+    fs.writeFileSync(hierFile, this.toCsv(hierRows), "utf8");
+    this.logger.info(`Wrote metric-by-hierarchy breakdown to ${hierFile}`);
+
+    // -----------------------------------------------------------------------
+    // Pivot table CSV
+    // Rows: metrics  |  Columns: "Hierarchy > Level"  |  Values: occurrences
+    // -----------------------------------------------------------------------
+
+    // Collect ordered unique column keys: "hierarchy > level", sorted for stability.
+    const pivotColKeys = Array.from(
+      new Set(
+        sortedHierKeys.map((hKey) => {
+          const [, hierarchy, level] = JSON.parse(hKey) as string[];
+          return `${hierarchy} > ${level}`;
+        }),
+      ),
+    ).sort();
+
+    // Build lookup: "metric|hierarchy > level" → count
+    const pivotLookup = new Map<string, number>();
+    for (const hKey of sortedHierKeys) {
+      const [, hierarchy, level, metric] = JSON.parse(hKey) as string[];
+      const colKey = `${hierarchy} > ${level}`;
+      pivotLookup.set(`${metric}|${colKey}`, hierMetricCounts.get(hKey)!);
+    }
+
+    // All metrics that appear in the pivot (sorted for stability).
+    const pivotMetrics = Array.from(
+      new Set(
+        sortedHierKeys.map((hKey) => (JSON.parse(hKey) as string[])[3]),
+      ),
+    ).sort();
+
+    const pivotRows: Array<Array<string | number | null>> = [
+      ["metric", ...pivotColKeys],
+    ];
+    for (const metric of pivotMetrics) {
+      const row: Array<string | number | null> = [metric];
+      for (const colKey of pivotColKeys) {
+        row.push(pivotLookup.get(`${metric}|${colKey}`) ?? 0);
+      }
+      pivotRows.push(row);
+    }
+
+    const pivotFile = `${filePrefix}_metric_pivot.csv`;
+    fs.writeFileSync(pivotFile, this.toCsv(pivotRows), "utf8");
+    this.logger.info(`Wrote metric pivot table to ${pivotFile}`);
 
     // -----------------------------------------------------------------------
     // Monthly breakdown CSV (optional)

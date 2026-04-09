@@ -46,7 +46,7 @@ flowchart TD
     ATSDB -->|extract-queries-from-atscale| QJSON["Query JSON<br/>(queries/*.json)"]
     QJSON -->|execute-atscale-query-harness| RCSV["Results CSV<br/>(run_results/*.csv)"]
     ATS -->|execute-atscale-query-harness| RCSV
-    ATS -->|extract-query-stats-from-atscale| STATSCSV["Stats CSV<br/>(occurrences.csv)"]
+    ATS -->|extract-query-stats-from-atscale| STATSCSV["Stats CSVs<br/>(occurrences, metric_by_hierarchy, metric_pivot)"]
 
     click MODEL href "#extract-model-from-atscale" "extract-model-from-atscale"
     click DDL2 href "#extract-ddl-from-connection" "extract-ddl-from-connection"
@@ -107,7 +107,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a Gatling `systems.properties` for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a `systems.properties` file for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -519,15 +519,17 @@ Paginates through the AtScale query history REST API for a given time window and
 
 **Outputs:**
 - `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
+- `{output-dir}/{catalog}_{model}_metric_by_hierarchy.csv` — long-form table: dimension, hierarchy, level, metric, and occurrence count for every observed combination
+- `{output-dir}/{catalog}_{model}_metric_pivot.csv` — pivot table with metrics as rows, `"Hierarchy > Level"` pairs as columns, and occurrence counts as cell values
 - `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts for all 12 months of `monthly-year` (only when `monthly: "true"`)
 
 ---
 
 ### `extract-queries-from-atscale`
 
-Connects to the AtScale internal Postgres backend and extracts deduplicated query history for one or more models. Outputs one JSON file per (model, protocol) pair for use with `execute-atscale-query-harness`. Accepts both `connections.yaml` and Gatling `systems.properties`.
+Connects to the AtScale internal Postgres backend and extracts deduplicated query history for one or more models. Outputs one JSON file per (model, protocol) pair for use with `execute-atscale-query-harness`. Accepts both `connections.yaml` and `systems.properties`.
 
-**Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file (with a `sql:` block pointing at the AtScale Postgres backend) or a Gatling `systems.properties` file.
+**Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file (with a `sql:` block pointing at the AtScale Postgres backend) or a `systems.properties` file.
 
 #### Using the composite action
 
@@ -546,14 +548,14 @@ Connects to the AtScale internal Postgres backend and extracts deduplicated quer
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `connection-file` | Yes | | Contents of `connections.yaml` or a Gatling `systems.properties` (pass via secret) |
+| `connection-file` | Yes | | Contents of `connections.yaml` or a `systems.properties` file (pass via secret) |
 | `connection-name` | No | `default` | Connection name within `connections.yaml` (ignored for `.properties` files) |
 | `models` | No* | | Comma-separated model/cube names. Required for YAML mode; overrides `atscale.models` for `.properties` mode |
 | `days` | No | `60` | Look-back window in days |
 | `output-dir` | No | `queries` | Directory to write output JSON files |
 | `protocol` | No | `all` | Protocol to extract: `sql`, `xmla`, or `all` |
 | `min-executions` | No | `1` | Exclude queries seen fewer than N times |
-| `db-schema` | No | `engine` | Postgres schema prefix (e.g. `engine` or `atscale.engine`) |
+| `db-schema` | No | connection schema, then `atscale`/`engine` | Postgres schema prefix. Defaults to the `schema` field in the connection entry, then `atscale` (installer) or `engine` (container) based on the `installer` flag. |
 
 \* Required when using a `connections.yaml` file.
 
@@ -563,9 +565,9 @@ Connects to the AtScale internal Postgres backend and extracts deduplicated quer
 
 ### `execute-atscale-query-harness`
 
-Replays extracted queries against a live AtScale instance, measuring response time and row count for each. Supports SQL and XMLA/MDX protocols, concurrent workers, throttling, and timed-duration run modes. Accepts query input as a JSON file (from `extract-queries-from-atscale`), a Gatling ingest CSV, or a Gatling executor task YAML/JSON.
+Replays extracted queries against a live AtScale instance, measuring response time and row count for each. Supports SQL and XMLA/MDX protocols, concurrent workers, throttling, and timed-duration run modes. Accepts query input as a JSON file (from `extract-queries-from-atscale`), an ingest CSV, or an executor task YAML/JSON.
 
-**Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file or a Gatling `systems.properties` file.
+**Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file or a `systems.properties` file.
 
 #### Using the composite action
 
@@ -583,7 +585,7 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 ```
 
 ```yaml
-# Task-file mode — run all Gatling executor tasks
+# Task-file mode — run all executor tasks
 - uses: AtScaleInc/ps-template@main
   with:
     operation: execute-atscale-query-harness
@@ -594,11 +596,11 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `connection-file` | Yes | | Contents of `connections.yaml` or a Gatling `systems.properties` (pass via secret) |
+| `connection-file` | Yes | | Contents of `connections.yaml` or a `systems.properties` file (pass via secret) |
 | `connection-name` | Yes | | Connection name (YAML mode) or model name (`.properties` mode) |
 | `query-file` | No | | JSON file from `extract-queries-from-atscale` |
-| `ingest-file` | No | | Gatling ingest CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`) |
-| `task-file` | No | | Gatling executor task YAML or JSON |
+| `ingest-file` | No | | Ingest CSV (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`) |
+| `task-file` | No | | Executor task YAML or JSON |
 | `protocol` | No | `xmla` | Query protocol: `xmla` or `sql` (ignored in task-file mode) |
 | `concurrent-users` | No | `1` | Number of parallel workers (ignored in task-file mode) |
 | `throttle-ms` | No | `5` | Minimum ms between dispatches per worker |
@@ -929,6 +931,76 @@ Supports two source modes — provide exactly one:
 † Provide exactly one of `sml-dir`, `repo-name`, or `repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each with `phase`, `severity`, `message`, optional `location`), and `summary` counts.
+
+---
+
+### `generate-ddl-from-atscale`
+
+Generates DDL (`CREATE TABLE` statements) by reading table and column metadata directly from an AtScale data source via the REST API. No direct database connection is required — AtScale acts as the metadata broker.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block. Set `apiToken` to a Design Center API token — it is automatically exchanged for a JWT via `POST /v1/token`.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-ddl-from-atscale
+    connection-file:          ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name:  my_atscale
+    data-source-name:         snowflake_prod
+    database:                 MY_DATABASE
+    schema:                   PUBLIC
+    output-file:              schema.ddl   # optional, omit to print to stdout
+```
+
+With a table filter:
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-ddl-from-atscale
+    connection-file:          ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name:  my_atscale
+    data-source-name:         snowflake_prod
+    database:                 MY_DATABASE
+    schema:                   PUBLIC
+    tables:                   "fact_*,dim_*"
+    output-file:              schema.ddl
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `data-source-name` | Yes | | Name of the data source as registered in AtScale (display name or `connectionId`) |
+| `database` | Yes | | Database (catalog) name to read tables from |
+| `schema` | Yes | | Schema name to read tables from |
+| `tables` | No | all tables | Comma-separated table names or glob patterns (`*`, `?`) — e.g. `"fact_*,dim_*"` |
+| `output-file` | No | stdout | Output file path for the generated DDL |
+| `insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** One `CREATE TABLE` statement per matched table, preceded by a header comment identifying the data source, database, schema, and timestamp.
+
+**Discovery flow:**
+1. Calls `GET /wapi/p/data-warehouses` to resolve `data-source-name` → `connectionId`
+2. Calls `GET /v1/data-sources/conn/{connectionId}/databases/{database}/schemas/{schema}/tables` to enumerate tables
+3. Calls `GET /v1/data-sources/conn/{connectionId}/databases/{database}/schemas/{schema}/tables/{table}/info` per table for column metadata
+
+**Foreign keys:** The AtScale data-source metadata API exposes column-level information only — FK relationships are not available. The DDL header will include a comment noting this. Use `extract-ddl-from-connection` for FK support via a direct database connection.
+
+The connections file must have an `atscale:` block in the named entry:
+
+```yaml
+connections:
+  my_atscale:
+    atscale:
+      url: https://atscale.example.com
+      apiToken: "<Design Center API token>"   # recommended
+      # or: username / password with Keycloak
+```
 
 ---
 

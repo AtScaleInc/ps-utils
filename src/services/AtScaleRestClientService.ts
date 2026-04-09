@@ -114,6 +114,13 @@ export type AtScaleEnvironmentConfig = {
    * that `/wapi/git/deploy/catalog` requests carry the `auth_session` cookie.
    */
   cookieAuth?: boolean;
+  /**
+   * When true and `apiToken` is set, the raw API token is sent directly as
+   * `Authorization: Bearer <apiToken>` without exchanging it for a JWT via
+   * `POST /v1/token`.  Required by the `/v1/data-sources/` metadata endpoints,
+   * which accept the token directly but reject the exchanged JWT.
+   */
+  useRawApiToken?: boolean;
 };
 
 /**
@@ -131,27 +138,35 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
   readonly apiToken?: string;
   readonly sessionCookie?: string;
   readonly cookieAuth: boolean;
+  readonly useRawApiToken: boolean;
 
   constructor(config: AtScaleEnvironmentConfig) {
     super();
     const realm = config.realm ?? "atscale";
-    this.baseUrl      = config.baseUrl.replace(/\/$/, "");
-    this.authUrl      = `${this.baseUrl}/auth/realms/${realm}/protocol/openid-connect/token`;
-    this.username     = config.username ?? "";
-    this.password     = config.password ?? "";
-    this.clientId     = config.clientId ?? "atscale-ai-link";
-    this.clientSecret  = config.clientSecret;
-    this.authType      = config.authType ?? "keycloak";
-    this.apiToken      = config.apiToken;
-    this.sessionCookie = config.sessionCookie;
-    this.cookieAuth    = config.cookieAuth ?? false;
-    this.insecure      = config.insecure !== false;
+    this.baseUrl        = config.baseUrl.replace(/\/$/, "");
+    this.authUrl        = `${this.baseUrl}/auth/realms/${realm}/protocol/openid-connect/token`;
+    this.username       = config.username ?? "";
+    this.password       = config.password ?? "";
+    this.clientId       = config.clientId ?? "atscale-ai-link";
+    this.clientSecret   = config.clientSecret;
+    this.authType       = config.authType ?? "keycloak";
+    this.apiToken       = config.apiToken;
+    this.sessionCookie  = config.sessionCookie;
+    this.cookieAuth     = config.cookieAuth ?? false;
+    this.useRawApiToken = config.useRawApiToken ?? false;
+    this.insecure       = config.insecure !== false;
   }
 
   protected override async authenticate(): Promise<RestAuth> {
     if (!this.cookieAuth) {
       // Normal JWT / Basic / Keycloak OIDC path
-      if (this.apiToken) return this.exchangeApiToken();
+      if (this.apiToken) {
+        if (this.useRawApiToken) {
+          this.logger?.verbose(`[REST:Auth] Using raw API token for ${this.baseUrl}`);
+          return { type: "bearer", token: this.apiToken };
+        }
+        return this.exchangeApiToken();
+      }
       if (this.authType === "basic") {
         this.logger?.verbose(`[REST:Auth] Using Basic auth for ${this.baseUrl}`);
         return { type: "basic", username: this.username, password: this.password };
@@ -811,6 +826,77 @@ class ListModelsRequest extends RestRequest<void, ListModelsResult> {
   }
 }
 
+// ── 8. List tables in a schema ────────────────────────────────────────────────
+
+export type ListTablesArgs = {
+  connectionId: string;
+  database:     string;
+  schema:       string;
+};
+
+export type TableEntry = {
+  name: string;
+  [key: string]: unknown;
+};
+
+export type ListTablesResult = TableEntry[];
+
+class ListTablesRequest extends RestRequest<ListTablesArgs, ListTablesResult> {
+  readonly method = "GET" as const;
+
+  path(args: ListTablesArgs): string {
+    return (
+      `/wapi/p/data-sources/conn/${encodeURIComponent(args.connectionId)}` +
+      `/databases/${encodeURIComponent(args.database)}` +
+      `/schemas/${encodeURIComponent(args.schema)}/tables`
+    );
+  }
+
+  parse(data: unknown): ListTablesResult {
+    return (Array.isArray(data) ? data : []) as ListTablesResult;
+  }
+}
+
+// ── 9. Get table info (columns) ───────────────────────────────────────────────
+
+export type GetTableInfoArgs = {
+  connectionId: string;
+  database:     string;
+  schema:       string;
+  table:        string;
+};
+
+export type ColumnInfo = {
+  name:        string;
+  dataType:    string;
+  nullable?:   boolean;
+  primaryKey?: boolean;
+  [key: string]: unknown;
+};
+
+export type TableInfoResult = {
+  name?:    string;
+  columns?: ColumnInfo[];
+  [key: string]: unknown;
+};
+
+class GetTableInfoRequest extends RestRequest<GetTableInfoArgs, TableInfoResult> {
+  readonly method = "GET" as const;
+
+  path(args: GetTableInfoArgs): string {
+    return (
+      `/wapi/p/data-sources/conn/${encodeURIComponent(args.connectionId)}` +
+      `/databases/${encodeURIComponent(args.database)}` +
+      `/schemas/${encodeURIComponent(args.schema)}` +
+      `/tables/${encodeURIComponent(args.table)}/info`
+    );
+  }
+
+  parse(data: unknown): TableInfoResult {
+    return (data ?? {}) as TableInfoResult;
+  }
+}
+
 // ── AtScaleRestClientService ───────────────────────────────────────────────────
 
 /**
@@ -828,6 +914,8 @@ export class AtScaleRestClientService extends ServiceProvider {
   private readonly deployRepoRequest        = new DeployRepoRequest();
   private readonly validateModelRequest     = new ValidateModelRequest();
   private readonly listModelsRequest        = new ListModelsRequest();
+  private readonly listTablesRequest        = new ListTablesRequest();
+  private readonly getTableInfoRequest      = new GetTableInfoRequest();
 
   constructor(private readonly restClient: RestClientService) {
     super();
@@ -915,5 +1003,21 @@ export class AtScaleRestClientService extends ServiceProvider {
    */
   async listModels(env: AtScaleEnvironment): Promise<ListModelsResult> {
     return this.restClient.execute(this.listModelsRequest, undefined, env);
+  }
+
+  /**
+   * List all tables in a given database/schema via the data source connection.
+   * Maps to: GET /v1/data-sources/conn/{connectionId}/databases/{database}/schemas/{schema}/tables
+   */
+  async listTables(env: AtScaleEnvironment, args: ListTablesArgs): Promise<ListTablesResult> {
+    return this.restClient.execute(this.listTablesRequest, args, env);
+  }
+
+  /**
+   * Get column metadata for a specific table.
+   * Maps to: GET /v1/data-sources/conn/{connectionId}/databases/{database}/schemas/{schema}/tables/{table}/info
+   */
+  async getTableInfo(env: AtScaleEnvironment, args: GetTableInfoArgs): Promise<TableInfoResult> {
+    return this.restClient.execute(this.getTableInfoRequest, args, env);
   }
 }

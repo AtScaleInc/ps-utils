@@ -28,6 +28,7 @@ inputs:
         atscale-list-deployments
         atscale-deploy-catalog
         atscale-list-model-errors
+        generate-ddl-from-atscale
         deploy-atscale-microk8s
     required: true
 
@@ -255,7 +256,13 @@ inputs:
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
                atscale-list-deployments, atscale-deploy-catalog,
-               atscale-list-model-errors.
+               atscale-list-model-errors, generate-ddl-from-atscale.
+    required: false
+  data-source-name:
+    description: >
+      Name of the data source as registered in AtScale (matches the display name or connectionId).
+      Used to resolve the connection ID for metadata queries.
+      Used by: generate-ddl-from-atscale.
     required: false
   new-connection-name:
     description: >
@@ -299,7 +306,7 @@ inputs:
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
                atscale-list-deployments, atscale-deploy-catalog,
-               atscale-list-model-errors.
+               atscale-list-model-errors, generate-ddl-from-atscale.
     required: false
     default: "true"
 
@@ -414,7 +421,8 @@ runs:
          inputs.operation == 'atscale-create-repo' ||
          inputs.operation == 'atscale-list-deployments' ||
          inputs.operation == 'atscale-deploy-catalog' ||
-         inputs.operation == 'atscale-list-model-errors')
+         inputs.operation == 'atscale-list-model-errors' ||
+         inputs.operation == 'generate-ddl-from-atscale')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -718,6 +726,24 @@ runs:
         [[ -n "${{ inputs.branch }}"     ]] && ARGS+=(--branch     "${{ inputs.branch }}")
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-ddl-from-atscale ────────────────────────────────────────────
+    - name: Generate DDL from AtScale data source
+      if: inputs.operation == 'generate-ddl-from-atscale'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --data-source-name        "${{ inputs.data-source-name }}"
+          --database                "${{ inputs.database }}"
+          --schema                  "${{ inputs.schema }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.tables }}" ]]      && ARGS+=(--tables      "${{ inputs.tables }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-ddl-from-atscale "${ARGS[@]}"
       shell: bash
 
     # ── deploy-atscale-microk8s ───────────────────────────────────────────────
