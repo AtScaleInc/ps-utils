@@ -179,6 +179,15 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
       this.logger?.verbose(`[REST:Auth] Using explicit session cookie for ${this.baseUrl}`);
       return { type: "cookie", name: "auth_session", value: this.sessionCookie };
     }
+    // SSO environments do not support the Keycloak username/password form flow.
+    // When an API token is available but no username is configured, fall back to
+    // an exchanged JWT Bearer token. The Design Center metadata endpoints
+    // (/wapi/p/data-sources/...) accept the exchanged JWT in addition to the
+    // auth_session cookie.
+    if (this.apiToken && !this.username) {
+      this.logger?.verbose(`[REST:Auth] No username configured — using exchanged JWT Bearer (SSO-compatible)`);
+      return this.exchangeApiToken();
+    }
     // Acquire the cookie automatically via the Keycloak authorization-code flow.
     const cookie = await this.acquireSessionCookie();
     return { type: "cookie", name: "auth_session", value: cookie };
