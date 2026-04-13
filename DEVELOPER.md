@@ -715,7 +715,7 @@ const meta = DdlDatabaseMetaData.fromDdl(`
 | Column data types | Single-word and multi-word (e.g. `TIMESTAMP WITH TIME ZONE`) |
 | `NOT NULL` | Sets `nullable: false` |
 | `PRIMARY KEY` | Inline and table-level `CONSTRAINT … PRIMARY KEY (cols)` |
-| `FOREIGN KEY … REFERENCES` | Single and compound keys; optional constraint name |
+| `FOREIGN KEY … REFERENCES` | Single and compound keys; optional constraint name; inline in CREATE TABLE or via `ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY` |
 | `--` and `/* */` comments | Stripped before parsing |
 | Multi-statement files | Statements split at `;` boundaries |
 

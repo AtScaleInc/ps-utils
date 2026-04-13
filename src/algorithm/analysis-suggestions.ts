@@ -645,7 +645,11 @@ export function generateAnalysisSuggestions(
       model.relationships,
       dimensionMap,
     );
-    all.push(...suggestionsForFact(fact, connectedDims, opts));
+    // Avoid spread (`push(...array)`) — V8 passes spread elements as individual
+    // call-stack arguments, which overflows on large schemas. Iterate instead.
+    for (const s of suggestionsForFact(fact, connectedDims, opts)) {
+      all.push(s);
+    }
   }
 
   return deduplicate(all)

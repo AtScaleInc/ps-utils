@@ -16,7 +16,7 @@
 //   Block (/* */) and line (--) comments stripped
 //
 // Limitations:
-//   • No support for ALTER TABLE — run DDL through a migration tool first
+//   • ALTER TABLE ADD CONSTRAINT FOREIGN KEY is supported; other ALTER TABLE forms are ignored
 //   • CHECK / DEFAULT / GENERATED constraints are ignored
 //   • Index cardinality/type is always reported as "OTHER"
 //   • Compound foreign keys are supported (col1, col2) REFERENCES tbl(c1, c2)
@@ -595,8 +595,22 @@ export class DdlDatabaseMetaData implements DatabaseMetaData {
         if (view) {
           instance.views.set(view.viewName.toUpperCase(), view);
         }
+      } else if (/^ALTER\s+TABLE\s+/i.test(upper) && /\bFOREIGN\s+KEY\b/i.test(upper)) {
+        // ALTER TABLE [schema.]table ADD [CONSTRAINT name] FOREIGN KEY (...) REFERENCES ...
+        const headerMatch = stmt.match(
+          /ALTER\s+TABLE\s+([\w."'`\[\]]+)\s+ADD\s+(?:CONSTRAINT\s+(\w+)\s+)?FOREIGN\s+KEY/i,
+        );
+        if (headerMatch) {
+          const { name: tableName } = parseQualifiedName(headerMatch[1]);
+          const constraintName = headerMatch[2] ?? `fk_${tableName}_alter`;
+          const fk = parseForeignKeyConstraint(stmt, constraintName);
+          if (fk) {
+            const table = instance.tables.get(tableName.toUpperCase());
+            if (table) table.foreignKeys.push(fk);
+          }
+        }
       }
-      // ALTER TABLE, CREATE SEQUENCE, etc. are silently ignored
+      // CREATE SEQUENCE, etc. are silently ignored
     }
 
     return instance;

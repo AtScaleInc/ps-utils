@@ -19,8 +19,11 @@ flowchart TD
     CONN["Connections YAML<br/>(connections.yaml)"]
     ALIASES["Aliases YAML<br/>(aliases.yaml)<br/>[optional]"]
 
+    DB  -->|extract-ddl-from-connection| DDL
+    ATS -->|generate-ddl-from-atscale| DDL
     DDL -->|generate-sml-from-ddl| SML
     DB  -->|generate-sml-from-connection| SML
+    DB  -->|execute-sql-on-connection| SQLOUT["SQL Results<br/>(stdout)"]
 
     subgraph SML["SML Output"]
         direction TB
@@ -31,11 +34,12 @@ flowchart TD
         models["models/"]
     end
 
-    SML -->|deploy to| ATS
+    SML -->|atscale-deploy-catalog| ATS
     ATS -->|extract-model-from-atscale| MODEL["model.yaml"]
     SML -->|extract-model-from-sml| MODEL
 
     MODEL -->|generate-namespace-from-model| NS
+    MODEL -->|generate-metrics-from-model| METRICS["Metrics YAML<br/>(metrics/*.yml)"]
     MODEL --> TWB
     MODEL --> XLSX
     NS    --> TWB
@@ -59,6 +63,9 @@ flowchart TD
 
     HOSTNAME["Hostname"] -->|generate-atscale-install-yaml| VALUESYAML["values.yaml<br/>(Helm install)"]
 
+    ATS -->|"atscale-list-data-sources<br/>atscale-list-repos<br/>atscale-list-deployments<br/>atscale-list-model-errors"| ATSLISTING["AtScale Info<br/>(stdout)"]
+    CONN -->|"atscale-create-data-source<br/>atscale-create-repo"| ATS
+
     click MODEL href "#extract-model-from-atscale" "extract-model-from-atscale"
     click TWB href "#generate-tableau-from-namespace" "generate-tableau-from-namespace"
     click XLSX href "#generate-excel-from-namespace" "generate-excel-from-namespace"
@@ -67,6 +74,10 @@ flowchart TD
     click RCSV href "#execute-atscale-query-harness" "execute-atscale-query-harness"
     click STATSCSV href "#extract-query-stats-from-atscale" "extract-query-stats-from-atscale"
     click VALUESYAML href "#generate-atscale-install-yaml" "generate-atscale-install-yaml"
+    click METRICS href "#generate-metrics-from-model" "generate-metrics-from-model"
+    click SQLOUT href "#execute-sql-on-connection" "execute-sql-on-connection"
+    click DDL href "#extract-ddl-from-connection" "extract-ddl-from-connection"
+    click ATSLISTING href "#atscale-list-data-sources" "atscale-list-data-sources"
 ```
 
 ## Table of Contents
