@@ -95,6 +95,10 @@ flowchart TD
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
+    - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
+    - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
+    - [`generate-data-from-data-shape`](#generate-data-from-data-shape)
+    - [`generate-data-from-data-shape-to-connection`](#generate-data-from-data-shape-to-connection)
   - BI Tool Integration
     - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
@@ -115,6 +119,7 @@ flowchart TD
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
+- [SML Style Config (`sml.style.yaml`)](#sml-style-config-smlstyleyaml)
 - [Model YAML (`model.yaml`)](#model-yaml-modelyaml)
 - [Namespace YAML (`namespace.yaml`)](#namespace-yaml-namespaceyaml)
 - [Aliases YAML (`aliases.yaml`)](#aliases-yaml-aliasesyaml)
@@ -226,12 +231,15 @@ With optional overrides:
   --camel-case-measures true
 ```
 
+Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--sample-size`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--connection-file` | No | `connections.yaml` | Path to connections file |
 | `--connection-name` | Yes | | Connection name in the file |
 | `--model-name` | Yes | | Name for the generated semantic model |
 | `--output-dir` | Yes | | Directory to write SML files |
+| `--sml-config-file` | No | `sml.style.yaml` | Path to the [SML style config](#sml-style-config-smlstyleyaml) to read settings from |
 | `--schema` | No | From connection config | Override the database schema to introspect |
 | `--catalog-name` | No | `model-name` | Display name for the generated catalog |
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
@@ -239,6 +247,8 @@ With optional overrides:
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
 | `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
 | `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
+| `--min-hierarchies-per-dim` | No | `1` | Minimum hierarchies a dimension must have to be included; dimensions with fewer are dropped |
+| `--max-hierarchies-per-dim` | No | `4` | Maximum hierarchies kept per dimension; extras are truncated |
 
 **Output layout:**
 
@@ -250,6 +260,7 @@ With optional overrides:
   dimensions/<dimension>.yml
   metrics/<metric>.yml
   models/<modelName>.yml
+  sml.style.yaml   ← effective settings used for this generation
 ```
 
 ---
@@ -284,12 +295,15 @@ With optional overrides:
   --camel-case-measures true
 ```
 
+Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--ddl-file` | Yes | | Path to the SQL DDL file |
 | `--model-name` | No | DDL filename stem | Name for the generated semantic model |
 | `--output-dir` | Yes | | Directory to write SML files |
 | `--connection-name` | No | `my_connection` | Connection name to embed in SML files |
+| `--sml-config-file` | No | `sml.style.yaml` | Path to the [SML style config](#sml-style-config-smlstyleyaml) to read settings from |
 | `--catalog-name` | No | `model-name` | Display name for the generated catalog |
 | `--schema` | No | | Filter DDL to only tables in this schema |
 | `--database` | No | | Database name to embed in the SML connection file |
@@ -298,8 +312,10 @@ With optional overrides:
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
 | `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
 | `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
+| `--min-hierarchies-per-dim` | No | `1` | Minimum hierarchies a dimension must have to be included; dimensions with fewer are dropped |
+| `--max-hierarchies-per-dim` | No | `4` | Maximum hierarchies kept per dimension; extras are truncated |
 
-**Output layout:** Same as `generate-sml-from-connection`.
+**Output layout:** Same as `generate-sml-from-connection` (including `sml.style.yaml`).
 
 ---
 
@@ -327,10 +343,13 @@ With options:
   --output-file "./suggestions.yaml"
 ```
 
+The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include-tuples`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are written to `sml.style.yaml` in the output file's directory (or the working directory when writing to stdout).
+
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--model-file` | Yes | | Path to the `model.yaml` file |
 | `--model-name` | No | First model | Model name when `model.yaml` contains multiple models |
+| `--sml-config-file` | No | `sml.style.yaml` | Path to the [SML style config](#sml-style-config-smlstyleyaml) to read settings from |
 | `--max-suggestions` | No | `25` | Maximum number of suggestions to output |
 | `--min-score` | No | `0.5` | Minimum relevance score `[0–1]` |
 | `--include-tuples` | No | `true` | Include multi-dimension suggestions |
@@ -1014,7 +1033,7 @@ Reads local SML files, uploads them to an AtScale git-backed repository, and pub
 4. Generates the catalog XML and calls the AtScale deploy endpoint
 5. Automatically acquires an `auth_session` cookie via Keycloak when the deploy endpoint requires one — no manual browser cookie needed
 
-The `atscale:` block must include either `apiToken` or username/password credentials. When `apiToken` is set, add `user:` (or `username:`/`password:`) as well — the username/password are used to acquire the session cookie for the deploy endpoint, while the API token is used for all other REST calls.
+Either `apiToken` (on the user entry in the `users:` block) or username/password credentials must be available. When `apiToken` is set on the user entry, the username/password from the same entry are used to acquire the session cookie for the deploy endpoint, while the API token is used for all other REST calls.
 
 ```bash
 ./atscale-utils atscale-deploy-catalog \
@@ -1039,20 +1058,20 @@ Either `--repo-id` or `--repo-name` must be provided. When only `--repo-name` is
 
 **Output:** JSON response from AtScale, e.g. `{"tableau":[],"permissions":{"isSuccessful":true}}`.
 
-**Connection format** (the `atscale:` block must include `user:` or inline credentials alongside `apiToken:` so that the session cookie can be acquired automatically):
+**Connection format** (`apiToken` and credentials both live on the user entry — the API token is used for all REST calls, while username/password are used to acquire the session cookie for the deploy endpoint):
 
 ```yaml
 users:
   vm_user:
-    username: atscale-kc-admin
+    apiToken: "<api-token>"       # used for /wapi/p/ endpoints
+    username: atscale-kc-admin    # used to acquire auth_session cookie for deploy
     password: "<password>"
 
 connections:
   my_atscale:
     atscale:
       url: https://atscale.example.com
-      apiToken: "<api-token>"   # used for /wapi/p/ endpoints
-      user: vm_user             # used to acquire auth_session cookie for deploy
+      user: vm_user
 ```
 
 ---
@@ -1149,6 +1168,181 @@ With optional filters and output file:
 **Output:** One `CREATE TABLE` statement per matched table. Output includes a header comment with data source name, database, schema, and timestamp.
 
 **Foreign keys:** The AtScale metadata API does not expose FK relationships. FK constraints are not included in the output; a header comment documents this. Use `extract-ddl-from-connection` if FK constraints are required.
+
+---
+
+### `extract-data-shape-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
+
+No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
+
+Large fact tables are automatically sampled via `TABLESAMPLE SYSTEM` or a `LIMIT`-based fallback (see `--target-fact-rows` and `--no-tablesample`). Sample sizes are computed using the Cochran formula (z² × 0.25 / e²) with finite-population correction, guaranteeing statistical significance without reading the entire table.
+
+```bash
+./atscale-utils extract-data-shape-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --sml-path        "./sml-output" \
+  --output-file     "./data-shape.yaml"
+```
+
+With sampling tuning:
+
+```bash
+./atscale-utils extract-data-shape-from-connection \
+  --connection-file    "./connections.yaml" \
+  --connection-name    "snow_demo" \
+  --sml-path           "./sml-output" \
+  --target-fact-rows   50000 \
+  --target-column-rows 5000 \
+  --no-tablesample          # use for MySQL / MariaDB
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Connection name in the file |
+| `--sml-path` | Yes | | Path to the SML output directory or a model.yml file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--output-file` | No | `data-shape.yaml` | Output path for the fingerprint YAML |
+| `--target-fact-rows` | No | `100000` | Target row count when sampling large fact tables (0 = no sampling) |
+| `--target-column-rows` | No | `10000` | Target row count for measure column distribution sampling (0 = no sampling) |
+| `--tablesample` / `--no-tablesample` | No | `true` | Use `TABLESAMPLE SYSTEM` for fact sampling. Set `--no-tablesample` for databases that do not support it (e.g. MySQL) |
+
+**Output:** A `data-shape.yaml` fingerprint file containing:
+- Dimension hierarchy level cardinalities, null key fractions, and rollup ratios (P50/P95/shape)
+- Leaf-level fact densities (avg/stddev/P50/P90/P99), coverage fraction, and cold-member fraction
+- Measure distributions (null fraction, min/max/mean, percentiles, additivity classification)
+- Pairwise conformed dimension overlap across facts (intersection/union fraction)
+
+All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`). The mapping from original names to IDs is discarded at the end of each run.
+
+See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
+
+---
+
+### `generate-ddl-from-data-shape`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `data-shape.yaml` fingerprint file produced by `extract-data-shape-from-connection` and emits `CREATE TABLE` DDL statements. No database connection is required.
+
+Table and column names are synthetic — the original names are not stored in the fingerprint. The same fingerprint always produces identical DDL regardless of when it is run.
+
+```bash
+./atscale-utils generate-ddl-from-data-shape \
+  --input-file "./data-shape.yaml" \
+  --output-file "./schema.sql"
+```
+
+With dialect selection:
+
+```bash
+./atscale-utils generate-ddl-from-data-shape \
+  --input-file  "./data-shape.yaml" \
+  --dialect     snowflake \
+  --output-file "./schema.sql"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `--output-file` | No | stdout | Output path for the generated DDL |
+| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+
+**Output:** One `CREATE TABLE` statement per dimension and fact. Dimension tables are emitted first so `FOREIGN KEY` references resolve correctly.
+
+**Dialect notes:**
+- `bigquery` — `PRIMARY KEY` and `FOREIGN KEY` constraints are omitted (not supported)
+- `snowflake` — integer types are mapped to `NUMBER(n,0)`, decimals to `NUMBER(18,4)`
+- All other dialects — standard ANSI SQL types (`SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL(18,4)`, `VARCHAR(200)`)
+
+See [STATISTICS.md](STATISTICS.md) §Phase 7 for the reconstruction algorithm.
+
+---
+
+### `generate-data-from-data-shape`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `data-shape.yaml` fingerprint file and generates statistically equivalent synthetic data, writing one CSV file per table to an output directory. No database connection is required.
+
+```bash
+./atscale-utils generate-data-from-data-shape \
+  --input-file "./data-shape.yaml" \
+  --output-dir "./data"
+```
+
+With a scale factor and reproducible seed:
+
+```bash
+./atscale-utils generate-data-from-data-shape \
+  --input-file    "./data-shape.yaml" \
+  --output-dir    "./data" \
+  --scale-factor  0.01 \
+  --seed          42
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `--output-dir` | No | `data` | Directory where CSV files are written |
+| `--scale-factor` | No | `1.0` | Scale row and member counts (e.g. `0.01` = 1% of real size) |
+| `--seed` | No | — | Integer random seed for reproducible output |
+
+**Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
+
+See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
+
+---
+
+### `generate-data-from-data-shape-to-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+End-to-end pipeline: reads a `data-shape.yaml` fingerprint, generates synthetic data in memory, and loads it directly into a live database. Combines `generate-data-from-data-shape` and `generate-ddl-from-data-shape` into a single step.
+
+```bash
+./atscale-utils generate-data-from-data-shape-to-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --input-file      "./data-shape.yaml" \
+  --drop-if-exists  true \
+  --create-tables   true \
+  --dialect         snowflake
+```
+
+With scale factor and batch tuning:
+
+```bash
+./atscale-utils generate-data-from-data-shape-to-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "pg_sandbox" \
+  --input-file      "./data-shape.yaml" \
+  --scale-factor    0.1 \
+  --seed            42 \
+  --schema          PUBLIC \
+  --batch-size      1000
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-file` | No | `connections.yaml` | Path to the connections YAML file |
+| `--connection-name` | Yes | — | Name of the connection to use |
+| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `--scale-factor` | No | `1.0` | Scale row and member counts |
+| `--seed` | No | — | Integer random seed for reproducible output |
+| `--create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
+| `--drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `--create-tables` |
+| `--dialect` | No | `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `--batch-size` | No | `500` | Rows per `INSERT` statement |
+| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+
+**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order respects FK constraints throughout.
+
+See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
@@ -1270,6 +1464,17 @@ users:
     key_file: resources/keys/bigquery-service-account.json
     # Alternative: inline base64-encoded JSON key
     # key_base64: "<base64-encoded-json>"
+```
+
+#### AtScale API token
+
+```yaml
+users:
+  my_user:
+    apiToken: "<api-token>"   # profile icon → API Token → Generate
+    # Optional: also add username/password if atscale-deploy-catalog is needed
+    # username: atscale-kc-admin
+    # password: "<password>"
 ```
 
 ---
@@ -1466,10 +1671,9 @@ Used by `atscale-list-data-sources` and other operations that call the AtScale p
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `url` | Yes | | Root URL of the AtScale instance (no trailing slash), e.g. `https://atscale.example.com` |
-| `apiToken` | No† | | Static API token generated in the Design Center UI: **profile icon → API Token → Generate**. Automatically exchanged for a short-lived JWT via `POST /v1/token` on each auth cycle. **Recommended approach.** |
-| `user` | No* | | Key from the `users` block. Resolves `username` and `password` from that entry. |
-| `username` | No* | | Inline username for Keycloak OIDC. Used when `user` is not set. |
-| `password` | No* | | Inline password for Keycloak OIDC. Used when `user` is not set. |
+| `user` | No† | | Key from the `users` block. Resolves `username`, `password`, and `apiToken` from that entry. |
+| `username` | No† | | Inline username for Keycloak OIDC. Used when `user` is not set. |
+| `password` | No† | | Inline password for Keycloak OIDC. Used when `user` is not set. |
 | `realm` | No | `atscale` | Keycloak realm name |
 | `clientId` | No | `atscale-ai-link` | Keycloak client ID |
 | `clientSecret` | No | | Keycloak client secret. Required when the client is configured as confidential (e.g. `atscale-modeler`). Find it in Keycloak → Clients → \<client\> → Credentials. |
@@ -1477,8 +1681,7 @@ Used by `atscale-list-data-sources` and other operations that call the AtScale p
 | `sessionCookie` | No | | Pre-obtained `auth_session` cookie value. If omitted, the cookie is acquired automatically via Keycloak when needed (e.g. for `atscale-deploy-catalog`). Rarely needed — provide username/password instead and let the tool acquire it. |
 | `insecure` | No | `true` | Skip TLS certificate verification. Defaults to `true` because AtScale instances commonly use self-signed certificates. Set to `false` to enforce strict certificate validation. |
 
-† Either `apiToken` or credentials (`user`/`username`+`password`) must be provided.
-\* Required when `apiToken` is not set. Also used by `atscale-deploy-catalog` to acquire the session cookie automatically, even when `apiToken` is set.
+† Either `user` (referencing a `users:` entry with `apiToken` or `username`/`password`) or inline `username`/`password` must be provided.
 
 **Keycloak client troubleshooting:**
 
@@ -1488,7 +1691,21 @@ Used by `atscale-list-data-sources` and other operations that call the AtScale p
 | `unauthorized_client` | Client requires a `client_secret` | Add `clientSecret` — find it in Keycloak admin → Clients → \<client\> → Credentials tab |
 | `Invalid token format` (from AtScale API) | The AtScale API does not accept Keycloak JWT Bearer tokens | Set `authType: basic` in the `atscale:` block |
 
-#### Full AtScale REST example
+#### API token example (recommended)
+
+```yaml
+users:
+  my_user:
+    apiToken: "<api-token>"   # profile icon → API Token → Generate
+
+connections:
+  my_atscale:
+    atscale:
+      url: https://atscale.example.com
+      user: my_user
+```
+
+#### Username/password example
 
 ```yaml
 users:
@@ -1546,6 +1763,72 @@ connections:
       port: 1972
       namespace: MYAPP
       user: iris_user
+```
+
+---
+
+## SML Style Config (`sml.style.yaml`)
+
+An optional YAML file that stores SML generation parameters so you don't have to repeat them on every command. Used by `generate-sml-from-ddl`, `generate-sml-from-connection`, and `generate-metrics-from-model`.
+
+**Priority:** CLI flags always override the file. Any parameter not supplied on the CLI falls back to the file, then to the hardcoded default.
+
+**Input vs. output:** `--sml-config-file` is the *input* path only. After generation, the **effective settings** (all values including defaults) are always written to `<output-dir>/sml.style.yaml` — a fixed location independent of the input path. If `--sml-config-file` points to the same file (e.g. you pass `--sml-config-file sml-output/sml.style.yaml`), it is simply overwritten.
+
+**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`resources/style/sml.style.yaml`](resources/style/sml.style.yaml). Copy it to your working directory as a starting point.
+
+### All fields
+
+```yaml
+# ── generate-sml-from-ddl / generate-sml-from-connection ─────────────────────
+pii-severity: MEDIUM          # "HIGH" | "MEDIUM" | "LOW" | "none"
+fact-tables:                  # force-classify tables as facts (list or empty)
+  - FactSales
+  - FactOrders
+catalog-name: My Catalog      # display name; omit to default to model-name
+camel-case-files: false       # camelCase SML filenames
+camel-case-measures: false    # camelCase metric labels
+sample-size: 250              # rows per table for type inference (0 to disable)
+                              # note: always 0 for generate-sml-from-ddl
+min-hierarchies-per-dim: 1   # drop dimensions with fewer than this many hierarchies
+max-hierarchies-per-dim: 4   # keep at most this many hierarchies per dimension
+
+# ── generate-metrics-from-model ───────────────────────────────────────────────
+max-suggestions: 25           # maximum suggestions to output
+min-score: 0.5                # minimum relevance score [0–1]
+include-tuples: true          # include multi-dimension suggestions
+```
+
+### Typical workflow
+
+First run (no file yet — all defaults apply):
+
+```bash
+./atscale-utils generate-sml-from-ddl \
+  --ddl-file schema.sql \
+  --output-dir sml-output
+# → sml-output/sml.style.yaml written with all effective settings
+```
+
+Edit `sml-output/sml.style.yaml`, then re-run pointing `--sml-config-file` at it. The output overwrites the same file:
+
+```bash
+./atscale-utils generate-sml-from-ddl \
+  --ddl-file schema.sql \
+  --output-dir sml-output \
+  --sml-config-file sml-output/sml.style.yaml
+# → sml-output/sml.style.yaml overwritten with updated effective settings
+```
+
+Or keep a project-level `sml.style.yaml` in the working directory (the default input path) and let the output land separately in the output directory:
+
+```bash
+# Reads from ./sml.style.yaml (CWD default), writes to sml-output/sml.style.yaml
+./atscale-utils generate-sml-from-connection \
+  --connection-file connections.yaml \
+  --connection-name snow_demo \
+  --model-name SalesModel \
+  --output-dir sml-output
 ```
 
 ---
