@@ -29,6 +29,11 @@ import { AtScaleListDeploymentsOperation } from "./atscale-list-deployments/AtSc
 import { AtScaleDeployCatalogOperation } from "./atscale-deploy-catalog/AtScaleDeployCatalogOperation.js";
 import { AtScaleListModelErrorsOperation } from "./atscale-list-model-errors/AtScaleListModelErrorsOperation.js";
 import { GenerateDDLFromAtScaleOperation } from "./generate-ddl-from-atscale/GenerateDDLFromAtScaleOperation.js";
+import { ExtractDataShapeFromConnectionOperation } from "./extract-data-shape-from-connection/ExtractDataShapeFromConnectionOperation.js";
+import { GenerateDDLFromDataShapeOperation } from "./generate-ddl-from-data-shape/GenerateDDLFromDataShapeOperation.js";
+import { GenerateDataFromDataShapeOperation } from "./generate-data-from-data-shape/GenerateDataFromDataShapeOperation.js";
+import { GenerateDataFromDataShapeToConnectionOperation } from "./generate-data-from-data-shape-to-connection/GenerateDataFromDataShapeToConnectionOperation.js";
+import { GenerateEnhancedQueryResultsOperation } from "./generate-enhanced-query-results/GenerateEnhancedQueryResultsOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -70,5 +75,10 @@ export async function buildRegistry(
   registry.register(new AtScaleDeployCatalogOperation(services, logger));
   registry.register(new AtScaleListModelErrorsOperation(services, logger));
   registry.register(new GenerateDDLFromAtScaleOperation(services, logger));
+  registry.register(new ExtractDataShapeFromConnectionOperation(services, logger));
+  registry.register(new GenerateDDLFromDataShapeOperation(services, logger));
+  registry.register(new GenerateDataFromDataShapeOperation(services, logger));
+  registry.register(new GenerateDataFromDataShapeToConnectionOperation(services, logger));
+  registry.register(new GenerateEnhancedQueryResultsOperation(services, logger));
   return registry;
 }

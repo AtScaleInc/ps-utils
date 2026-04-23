@@ -9,28 +9,432 @@
  */
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import type { SemanticModel } from "./types.js";
 import type { SmlSerializerOptions } from "./sml-serializer.js";
 import { isSystemColumn } from "./attribute-inference.js";
 
 // ----------------------------------------------------------
-// Style guide loader / copier
+// Style guide generator
 // ----------------------------------------------------------
 
-function styleGuidePath(): string {
-  // Compiled module lives at dist/algorithm/report-generator.js
-  // STYLE.md is at the project root: ../../STYLE.md relative to dist/algorithm/
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(moduleDir, "../../STYLE.md");
+/**
+ * Settings that affect the content of the generated STYLE.md.
+ * Mirrors the relevant fields of SmlStyleConfig but lives in the algorithm
+ * layer to avoid importing from the operations layer.
+ */
+export interface StyleGuideOptions {
+  /** Resolved catalog display name (model-name fallback already applied). */
+  catalogName:       string;
+  /** PII exclusion threshold: "HIGH" | "MEDIUM" | "LOW" | "none". */
+  piiSeverity:       string;
+  /** Whether dataset/dimension filenames use camelCase. */
+  camelCaseFiles:    boolean;
+  /** Whether metric labels use camelCase. */
+  camelCaseMeasures: boolean;
+  /** Tables explicitly forced as facts (empty = auto-detected). */
+  factTables:        string[];
+  /** Rows sampled per table for type inference (0 = disabled). */
+  sampleSize:        number;
+  /** Minimum hierarchies a dimension must have to be included (default 1). */
+  minHierarchiesPerDim: number;
+  /** Maximum hierarchies kept per dimension (default 4). */
+  maxHierarchiesPerDim: number;
 }
 
-/** Copy STYLE.md to outputDir. Returns true on success. */
-export function copyStyleGuide(outputDir: string): boolean {
+function buildStyleGuide(opts: StyleGuideOptions): string {
+  const { catalogName, piiSeverity, camelCaseFiles, camelCaseMeasures, factTables, sampleSize, minHierarchiesPerDim, maxHierarchiesPerDim } = opts;
+
+  // ── Derived descriptions ──────────────────────────────────────────────────
+  const piiDesc = piiSeverity.toUpperCase() === "NONE"
+    ? "Disabled — all columns included regardless of PII classification"
+    : `${piiSeverity.toUpperCase()} and above — columns at lower severity are included`;
+
+  const fileNamingDesc = camelCaseFiles
+    ? "camelCase — source table name converted to lowerCamelCase (e.g. `factInventoryTransaction.yml`)"
+    : "snake_case — source table name used as-is (e.g. `fact_inventory_transaction.yml`)";
+
+  const labelNamingDesc = camelCaseMeasures
+    ? "camelCase — column + aggregation in lowerCamelCase (e.g. `primaryQuantitySum`)"
+    : "Title Case — column Title Case + aggregation suffix (e.g. `Primary Quantity Sum`)";
+
+  const factTablesDesc = factTables.length > 0
+    ? factTables.map((t) => `\`${t}\``).join(", ")
+    : "Auto-detected via FK topology and naming patterns";
+
+  const sampleDesc = sampleSize === 0 ? "Disabled" : `${sampleSize} rows per table`;
+  const hierarchyLimitsDesc = `min ${minHierarchiesPerDim} / max ${maxHierarchiesPerDim} per dimension`;
+
+  // ── Metric label examples ─────────────────────────────────────────────────
+  const metricLabelRows = camelCaseMeasures
+    ? [
+        "| `primary_quantity` | `SUM` | `primaryQuantitySum` |",
+        "| `extended_cost` | `AVG` | `extendedCostAvg` |",
+        "| `line_amount` | `MIN` | `lineAmountMin` |",
+      ]
+    : [
+        "| `primary_quantity` | `SUM` | `Primary Quantity Sum` |",
+        "| `extended_cost` | `AVG` | `Extended Cost Avg` |",
+        "| `line_amount` | `MIN` | `Line Amount Min` |",
+      ];
+
+  // ── File naming examples ──────────────────────────────────────────────────
+  const dsExamples = camelCaseFiles
+    ? [
+        "| `fact_inventory_transaction` | `datasets/factInventoryTransaction.yml` |",
+        "| `dim_customer_dimension` | `datasets/dimCustomerDimension.yml` |",
+        "| `dim_product_dimension` | `dimensions/dimProductDimension.yml` |",
+      ]
+    : [
+        "| `fact_inventory_transaction` | `datasets/fact_inventory_transaction.yml` |",
+        "| `dim_customer_dimension` | `datasets/dim_customer_dimension.yml` |",
+        "| `dim_product_dimension` | `dimensions/dim_product_dimension.yml` |",
+      ];
+
+  // ── PII exclusion section ─────────────────────────────────────────────────
+  const piiUppercase = piiSeverity.toUpperCase();
+  let piiSectionBody: string;
+  if (piiUppercase === "NONE") {
+    piiSectionBody = [
+      "PII exclusion is **disabled** for this generation (`pii-severity: none`). All columns from",
+      "dimension source tables are included as secondary attributes regardless of any PII",
+      "classification — subject only to the system-column patterns below.",
+    ].join("\n");
+  } else {
+    const severityRows: string[] = [];
+    if (piiUppercase === "HIGH" || piiUppercase === "MEDIUM" || piiUppercase === "LOW") {
+      severityRows.push("| HIGH | SSN / national ID, passwords, credit card / payment card numbers, biometric identifiers |");
+    }
+    if (piiUppercase === "MEDIUM" || piiUppercase === "LOW") {
+      severityRows.push("| MEDIUM | Email addresses, phone numbers, date of birth, government ID numbers |");
+    }
+    if (piiUppercase === "LOW") {
+      severityRows.push("| LOW | Full names, street addresses, ZIP/postal codes, IP addresses |");
+    }
+    piiSectionBody = [
+      `PII exclusion threshold: **${piiSeverity.toUpperCase()}** — columns at this severity`,
+      `and above are excluded from secondary attributes. Columns at lower severity levels are`,
+      `included. Adjust via \`pii-severity\` in \`sml.style.yaml\` or \`--pii-severity\` on the CLI.`,
+      ``,
+      `The following PII severity levels were **excluded** during this generation:`,
+      ``,
+      `| Severity | Examples |`,
+      `|---|---|`,
+      ...severityRows,
+    ].join("\n");
+  }
+
+  // ── Fact classification note ──────────────────────────────────────────────
+  const factClassNote = factTables.length > 0
+    ? `\n> **Fact table override:** The following tables were explicitly classified as facts via \`fact-tables\` in \`sml.style.yaml\`: ${factTables.map((t) => `\`${t}\``).join(", ")}. Automatic FK-topology classification was bypassed for these tables.\n`
+    : "";
+
+  // ── Build the full document ───────────────────────────────────────────────
+  return [
+    `# AtScale SML Naming Conventions`,
+    ``,
+    `> Generated by \`generate-sml-from-connection\` / \`generate-sml-from-ddl\`.`,
+    `> Settings from \`sml.style.yaml\` — edit that file to change these conventions.`,
+    ``,
+    `## Generation Settings`,
+    ``,
+    `| Setting | Value |`,
+    `|---|---|`,
+    `| **Catalog** | ${catalogName} |`,
+    `| **PII Exclusion** | ${piiDesc} |`,
+    `| **File Naming** | ${fileNamingDesc} |`,
+    `| **Metric Labels** | ${labelNamingDesc} |`,
+    `| **Fact Tables** | ${factTablesDesc} |`,
+    `| **Sample Size** | ${sampleDesc} |`,
+    `| **Hierarchies per Dim** | ${hierarchyLimitsDesc} |`,
+    ``,
+    `---`,
+    ``,
+    `## 1. Metrics (Measures)`,
+    ``,
+    `### 1.1 Unique Name`,
+    ``,
+    `**Pattern:** \`m_<fact_abbrev>_<column>_<aggregation>\``,
+    ``,
+    `The fact-table abbreviation is the initials of each word in the fact table name.`,
+    ``,
+    `| Fact table | Abbreviation |`,
+    `|---|---|`,
+    `| \`fact_inventory_transaction\` | \`fit\` |`,
+    `| \`fact_sales_order_line\` | \`fsol\` |`,
+    `| \`fact_purchase_order\` | \`fpo\` |`,
+    `| \`fact_general_ledger\` | \`fgl\` |`,
+    ``,
+    `**Examples:**`,
+    ``,
+    `| Column | Aggregation | Unique Name |`,
+    `|---|---|---|`,
+    `| \`primary_quantity\` | \`sum\` | \`m_fit_primary_quantity_sum\` |`,
+    `| \`extended_cost\` | \`avg\` | \`m_fit_extended_cost_avg\` |`,
+    `| \`order_amount\` | \`sum\` | \`m_fsol_order_amount_sum\` |`,
+    ``,
+    `---`,
+    ``,
+    `### 1.2 Display Name (Label)`,
+    ``,
+    ...(camelCaseMeasures
+      ? [
+          `**Pattern:** \`<columnCamelCase><AggSuffix>\` (lowerCamelCase)`,
+          ``,
+          `The column name is converted to camelCase and the aggregation suffix is appended`,
+          `in TitleCase (no space).`,
+        ]
+      : [
+          `**Pattern:** \`<Column Title Case> <Aggregate>\``,
+          ``,
+          `The aggregate suffix is appended (not prepended) using its full display form.`,
+        ]),
+    ``,
+    `| Aggregation | Display suffix |`,
+    `|---|---|`,
+    `| \`SUM\` | \`Sum\` |`,
+    `| \`AVG\` | \`Avg\` |`,
+    `| \`MIN\` | \`Min\` |`,
+    `| \`MAX\` | \`Max\` |`,
+    `| \`COUNT\` | \`Count\` |`,
+    ``,
+    `**Examples:**`,
+    ``,
+    `| Column | Aggregation | Label |`,
+    `|---|---|---|`,
+    ...metricLabelRows,
+    ``,
+    `---`,
+    ``,
+    `### 1.3 Format`,
+    ``,
+    `All metrics default to \`"#,##0"\` (Standard — thousands separator, no decimals).`,
+    `Rate/ratio metrics (those whose aggregation set contains only \`AVG/MIN/MAX\`) use`,
+    `\`"#,##0.00"\` (two decimal places).`,
+    ``,
+    `\`\`\`mermaid`,
+    `flowchart LR`,
+    `    A[Metric] --> B{Aggregations include SUM?}`,
+    `    B -- Yes --> C["format: #,##0"]`,
+    `    B -- No --> D["format: #,##0.00"]`,
+    `\`\`\``,
+    ``,
+    `---`,
+    ``,
+    `### 1.4 Folders`,
+    ``,
+    `Group all metrics from the same fact table into a subfolder named after that table.`,
+    `The folder name is always derived from the source table name (snake_case), independent`,
+    `of the file naming setting.`,
+    ``,
+    `| Fact table | Folder |`,
+    `|---|---|`,
+    `| \`fact_inventory_transaction\` | \`fact_inventory_transaction_metrics\` |`,
+    `| \`fact_sales_order_line\` | \`fact_sales_order_line_metrics\` |`,
+    ``,
+    `\`\`\`mermaid`,
+    `graph TD`,
+    `    Model --> F1["fact_inventory_transaction_metrics/"]`,
+    `    Model --> F2["fact_sales_order_line_metrics/"]`,
+    `    F1 --> M1[m_fit_primary_quantity_sum]`,
+    `    F1 --> M2[m_fit_extended_cost_avg]`,
+    `    F2 --> M3[m_fsol_order_amount_sum]`,
+    `\`\`\``,
+    ``,
+    `---`,
+    ``,
+    `## 2. Dimensions`,
+    ``,
+    `### 2.1 Display Name (Label)`,
+    ``,
+    `Strip the \`dim_\` prefix and \`_dimension\` suffix from the source table name, then convert`,
+    `the remaining words to Title Case.`,
+    ``,
+    `| Source table | Label |`,
+    `|---|---|`,
+    `| \`dim_po_line_dimension\` | \`PO Line\` |`,
+    `| \`dim_customer_dimension\` | \`Customer\` |`,
+    `| \`dim_product_dimension\` | \`Product\` |`,
+    `| \`dim_date\` | \`Date\` |`,
+    ``,
+    `---`,
+    ``,
+    `## 3. Hierarchies`,
+    ``,
+    `### 3.1 Display Name (Label)`,
+    ``,
+    `Strip \`dim_\`/\`_dimension\`, Title Case the result, then append \` Hierarchy\`.`,
+    ``,
+    `| Source table | Hierarchy label |`,
+    `|---|---|`,
+    `| \`dim_po_line_dimension\` | \`PO Line Hierarchy\` |`,
+    `| \`dim_customer_dimension\` | \`Customer Hierarchy\` |`,
+    ``,
+    `### 3.2 Hierarchy Count Limits`,
+    ``,
+    `| Setting | Value |`,
+    `|---|---|`,
+    `| **min-hierarchies-per-dim** | ${minHierarchiesPerDim} — dimensions with fewer hierarchies are excluded from the model |`,
+    `| **max-hierarchies-per-dim** | ${maxHierarchiesPerDim} — if more hierarchies are inferred, only the first ${maxHierarchiesPerDim} are kept |`,
+    ``,
+    `Configure via \`min-hierarchies-per-dim\` / \`max-hierarchies-per-dim\` in \`sml.style.yaml\` or the corresponding CLI flags.`,
+    ``,
+    `### 3.3 Unique Name`,
+    ``,
+    `Replace spaces with underscores and lowercase the full label.`,
+    ``,
+    `| Hierarchy label | Hierarchy unique_name |`,
+    `|---|---|`,
+    `| \`PO Line Hierarchy\` | \`po_line_hierarchy\` |`,
+    `| \`Date Hierarchy\` | \`date_hierarchy\` |`,
+    `| \`Geography Hierarchy\` | \`geography_hierarchy\` |`,
+    ``,
+    `\`\`\`mermaid`,
+    `flowchart LR`,
+    `    A["dim_po_line_dimension"] -->|strip dim_/_dimension| B["po_line"]`,
+    `    B -->|Title Case + Hierarchy| C["label: PO Line Hierarchy"]`,
+    `    C -->|lowercase + underscores| D["unique_name: po_line_hierarchy"]`,
+    `\`\`\``,
+    ``,
+    `---`,
+    ``,
+    `## 4. Levels`,
+    ``,
+    `### 4.1 Unique Name`,
+    ``,
+    `Set the level's \`unique_name\` to the key column name (snake_case, as-is from the source`,
+    `table). Do **not** append suffixes such as \`_level\` or \`_attribute\`.`,
+    ``,
+    `| Key column | Level unique_name |`,
+    `|---|---|`,
+    `| \`po_line_key\` | \`po_line_key\` |`,
+    `| \`customer_key\` | \`customer_key\` |`,
+    `| \`date_key\` | \`date_key\` |`,
+    ``,
+    `### 4.2 Display Name (Label)`,
+    ``,
+    `Strip \`dim_\`, \`_dimension\`, \`_key\`, \`_id\`, \`_sk\`, and \`_level\` suffixes from the column`,
+    `name, then Title Case.`,
+    ``,
+    `| Key column | Level label |`,
+    `|---|---|`,
+    `| \`po_line_key\` | \`PO Line\` |`,
+    `| \`customer_key\` | \`Customer\` |`,
+    `| \`date_key\` | \`Date\` |`,
+    ``,
+    `### 4.3 Visualize in BI Tool`,
+    ``,
+    `The leaf (most granular) level of every hierarchy must have`,
+    `\`visualize_in_bi_tool: false\` so that surrogate key values are not exposed to`,
+    `end-users in BI tools.`,
+    ``,
+    `---`,
+    ``,
+    `## 5. Secondary Attributes`,
+    ``,
+    `### 5.1 Inclusion Rule`,
+    ``,
+    piiSectionBody,
+    ``,
+    `In addition, columns whose names match any of the following system-column patterns`,
+    `are always excluded regardless of PII setting:`,
+    ``,
+    `| Pattern | Rationale |`,
+    `|---|---|`,
+    `| \`au_*\` | AtScale system columns |`,
+    `| \`source_create*\` | ETL audit columns |`,
+    `| \`source_update*\` | ETL audit columns |`,
+    `| \`qlik_last*\` | Qlik replication metadata |`,
+    ``,
+    `The key/leaf column must also be included (as a secondary attribute on the leaf level`,
+    `attribute).`,
+    ``,
+    `### 5.2 Display Name`,
+    ``,
+    `Replace underscores with spaces and capitalize each word.`,
+    ``,
+    `| Column name | Secondary attribute label |`,
+    `|---|---|`,
+    `| \`source_system_code\` | \`Source System Code\` |`,
+    `| \`po_line_status_desc\` | \`Po Line Status Desc\` |`,
+    `| \`created_date\` | \`Created Date\` |`,
+    ``,
+    `---`,
+    ``,
+    `## 6. Additional Conventions`,
+    ``,
+    `### 6.1 Dataset Labels`,
+    ``,
+    `Dataset labels use Title Case derived from the source table name rather than the raw`,
+    `snake_case name.`,
+    ``,
+    `| Table name | Dataset label |`,
+    `|---|---|`,
+    `| \`fact_inventory_transaction\` | \`Fact Inventory Transaction\` |`,
+    `| \`dim_customer_dimension\` | \`Dim Customer Dimension\` |`,
+    ``,
+    `### 6.2 Model and Catalog Labels`,
+    ``,
+    `The catalog label for this generation is **${catalogName}**.`,
+    `The model \`label\` matches the catalog label, not the technical model unique_name.`,
+    `Configure via \`catalog-name\` in \`sml.style.yaml\` or \`--catalog-name\` on the CLI.`,
+    ``,
+    `### 6.3 Metric Description`,
+    ``,
+    `Each metric carries an auto-generated \`description\` in the form:`,
+    ``,
+    `> \`<Aggregation display> of <Column human name> from <Fact table Title Case>\``,
+    ``,
+    `Example: \`Sum of Primary Quantity from Fact Inventory Transaction\``,
+    ``,
+    `### 6.4 Surrogate Key Level Attributes`,
+    ``,
+    `When a level attribute's key column ends in \`_key\`, \`_sk\`, or \`_id\` and its data type`,
+    `is an integer **and** a companion display column exists (resolved by \`findNameColumn\`),`,
+    `the level attribute is marked \`is_hidden: true\` so the raw surrogate key is not visible`,
+    `in BI tool field lists.`,
+    ``,
+    `### 6.5 Fact Table Abbreviation Collisions`,
+    ``,
+    `Two fact tables may share the same abbreviation (e.g. \`fact_item_type\` and`,
+    `\`fact_invoice_total\` both abbreviate to \`fit\`). When this occurs, metric unique_names`,
+    `will collide. Verify that all fact table abbreviations are unique across the model;`,
+    `disambiguate by renaming tables at the source or by adding the \`--metric-prefix\` option`,
+    `with an explicit prefix.`,
+    ``,
+    `### 6.6 Metric File Naming`,
+    ``,
+    `Metric filenames use the full \`unique_name\` (including fact abbreviation) converted to`,
+    `kebab-case, ensuring no collisions when multiple fact tables share measure column names.`,
+    ``,
+    `### 6.7 Dataset and Dimension File Naming`,
+    ``,
+    ...(camelCaseFiles
+      ? [
+          `Dataset and dimension filenames use **camelCase** derived from the source table name`,
+          `(\`camel-case-files: true\`).`,
+        ]
+      : [
+          `Dataset and dimension filenames use the **raw source table name** (snake_case,`,
+          `\`camel-case-files: false\`).`,
+        ]),
+    ``,
+    `| Source table | Output file |`,
+    `|---|---|`,
+    ...dsExamples,
+    ``,
+    ...(factClassNote ? [factClassNote] : []),
+  ].join("\n");
+}
+
+/**
+ * Generate STYLE.md in outputDir reflecting the actual generation settings.
+ * Returns true on success.
+ */
+export function generateStyleGuide(outputDir: string, opts: StyleGuideOptions): boolean {
   try {
-    const src  = styleGuidePath();
     const dest = path.join(outputDir, "STYLE.md");
-    fs.copyFileSync(src, dest);
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(dest, buildStyleGuide(opts), "utf8");
     return true;
   } catch {
     return false;

@@ -46,6 +46,8 @@ flowchart TD
     ATSDB -->|extract-queries-from-atscale| QJSON["Query JSON<br/>(queries/*.json)"]
     QJSON -->|execute-atscale-query-harness| RCSV["Results CSV<br/>(run_results/*.csv)"]
     ATS -->|execute-atscale-query-harness| RCSV
+    RCSV -->|generate-enhanced-query-results| ECSV["Enhanced CSV<br/>(*_enhanced.csv)"]
+    ATSDB -->|generate-enhanced-query-results| ECSV
     ATS -->|extract-query-stats-from-atscale| STATSCSV["Stats CSVs<br/>(occurrences, metric_by_hierarchy, metric_pivot)"]
 
     click MODEL href "#extract-model-from-atscale" "extract-model-from-atscale"
@@ -56,6 +58,7 @@ flowchart TD
     click PBI href "#generate-powerbi-from-namespace" "generate-powerbi-from-namespace"
     click QJSON href "#extract-queries-from-atscale" "extract-queries-from-atscale"
     click RCSV href "#execute-atscale-query-harness" "execute-atscale-query-harness"
+    click ECSV href "#generate-enhanced-query-results" "generate-enhanced-query-results"
     click STATSCSV href "#extract-query-stats-from-atscale" "extract-query-stats-from-atscale"
 ```
 
@@ -67,6 +70,10 @@ flowchart TD
 - [Operations](#operations)
   - [`execute-sql-on-connection`](#execute-sql-on-connection)
   - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
+  - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
+  - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
+  - [`generate-data-from-data-shape`](#generate-data-from-data-shape)
+  - [`generate-data-from-data-shape-to-connection`](#generate-data-from-data-shape-to-connection)
   - [`extract-model-from-atscale`](#extract-model-from-atscale)
   - [`extract-model-from-sml`](#extract-model-from-sml)
   - [`generate-metrics-from-model`](#generate-metrics-from-model)
@@ -79,6 +86,7 @@ flowchart TD
   - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
   - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
   - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+  - [`generate-enhanced-query-results`](#generate-enhanced-query-results)
   - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
   - [`atscale-list-data-sources`](#atscale-list-data-sources)
   - [`atscale-create-data-source`](#atscale-create-data-source)
@@ -193,9 +201,10 @@ Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql`
 |---|---|---|
 | `model-file` | — | Path to the `model.yaml` file (**required**) |
 | `model-name` | first model | Model name when `model.yaml` contains multiple models |
-| `max-suggestions` | `25` | Maximum number of suggestions to output |
-| `min-score` | `0.5` | Minimum relevance score [0–1] |
-| `include-tuples` | `true` | Include multi-dimension suggestions |
+| `sml-config-file` | `sml.style.yaml` | Path to the SML style config to read settings from. Effective settings are written to `sml.style.yaml` in the output file's directory after generation. |
+| `max-suggestions` | `25` | Maximum number of suggestions to output. Can also be set in `sml.style.yaml`. |
+| `min-score` | `0.5` | Minimum relevance score [0–1]. Can also be set in `sml.style.yaml`. |
+| `include-tuples` | `true` | Include multi-dimension suggestions. Can also be set in `sml.style.yaml`. |
 | `format` | `text` | Output format: `text` or `yaml` |
 | `output-file` | stdout | File to write output to (omit to print to stdout) |
 
@@ -212,6 +221,17 @@ Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql`
     min-score: "0.6"              # optional, default 0.5
     include-tuples: "true"        # optional, default true
     output-file: suggestions.txt  # optional, prints to stdout if omitted
+```
+
+**Using a style config file** (persist settings between runs):
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    sml-config-file: sml.style.yaml   # optional, default "sml.style.yaml"
+    output-file: suggestions.txt
 ```
 
 **YAML output** (for downstream scripting):
@@ -319,6 +339,211 @@ With table filtering:
 
 ---
 
+### `extract-data-shape-from-connection`
+
+Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data without reading any actual values. The fingerprint captures hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
+
+All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `F1`, `F1.M2`). Large fact tables are automatically sampled via `TABLESAMPLE SYSTEM` or a `LIMIT`-based fallback.
+
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection. An SML directory (from `generate-sml-from-connection` or `generate-sml-from-ddl`) must be available in the workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-sml-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+    output-dir: sml-output
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-data-shape-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+    sml-path: sml-output
+    output-file: data-shape.yaml
+```
+
+With sampling tuning and MySQL (`--no-tablesample`):
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-data-shape-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: mysql_prod
+    sml-path: sml-output
+    output-file: data-shape.yaml
+    target-fact-rows: "50000"
+    target-column-rows: "5000"
+    tablesample: "false"
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-name` | Yes | | Name of the connection entry in the connections file |
+| `sml-path` | Yes | | Path to the SML output directory or a model.yml file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `output-file` | No | `data-shape.yaml` | Output path for the fingerprint YAML |
+| `target-fact-rows` | No | `100000` | Target row count for fact table sampling (0 = no limit) |
+| `target-column-rows` | No | `10000` | Target row count for measure column sampling (0 = no limit) |
+| `tablesample` | No | `true` | Set to `"false"` to disable `TABLESAMPLE SYSTEM` (required for MySQL/MariaDB) |
+
+**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. See [STATISTICS.md](../STATISTICS.md) for the full algorithm description.
+
+---
+
+### `generate-ddl-from-data-shape`
+
+Reads a `data-shape.yaml` fingerprint file and emits `CREATE TABLE` DDL. No database connection is required — the fingerprint contains all structural information needed to reconstruct the schema.
+
+Dimension tables are emitted first so foreign key references are always valid. Table and column names are synthetic and deterministic: the same fingerprint always produces identical DDL.
+
+**Requires:** No secrets. The fingerprint file must be present in the workspace (typically an artifact from a prior `extract-data-shape-from-connection` step).
+
+#### Using the composite action
+
+```yaml
+# Typical pipeline: extract shape → generate DDL
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-data-shape-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+    sml-path: sml-output
+    output-file: data-shape.yaml
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-ddl-from-data-shape
+    input-file: data-shape.yaml
+    output-file: schema.sql
+```
+
+With Snowflake dialect:
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-ddl-from-data-shape
+    input-file: data-shape.yaml
+    dialect: snowflake
+    output-file: schema_snowflake.sql
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `output-file` | No | stdout | Output path for the generated DDL |
+| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+
+**Dialect notes:** `bigquery` omits `PRIMARY KEY`/`FOREIGN KEY` constraints. `snowflake` maps integers to `NUMBER(n,0)`. All others use standard ANSI types.
+
+---
+
+### `generate-data-from-data-shape`
+
+Reads a `data-shape.yaml` fingerprint and generates statistically equivalent synthetic CSV data. No database connection is required.
+
+**Requires:** No secrets. The fingerprint file must be present in the workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-data-from-data-shape
+    input-file: data-shape.yaml
+    output-dir: data
+```
+
+With scale factor and seed:
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-data-from-data-shape
+    input-file: data-shape.yaml
+    output-dir: data
+    scale-factor: "0.01"
+    seed: "42"
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `output-dir` | No | `data` | Directory where CSV files are written |
+| `scale-factor` | No | `1.0` | Scale row and member counts |
+| `seed` | No | — | Integer seed for reproducible output |
+
+**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …).
+
+---
+
+### `generate-data-from-data-shape-to-connection`
+
+End-to-end pipeline: reads a `data-shape.yaml` fingerprint, generates synthetic data in memory, and loads it into a live database. Optionally drops and recreates the schema first.
+
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block for the named connection.
+
+#### Using the composite action
+
+Minimal — insert into existing tables:
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-data-from-data-shape-to-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+    input-file: data-shape.yaml
+```
+
+Full pipeline — extract shape, generate DDL, populate:
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: extract-data-shape-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_prod
+    sml-path: sml-output
+    output-file: data-shape.yaml
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-data-from-data-shape-to-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_sandbox
+    input-file: data-shape.yaml
+    drop-if-exists: "true"
+    dialect: snowflake
+    schema: PUBLIC
+    scale-factor: "0.1"
+    seed: "42"
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | — | Connections YAML secret |
+| `connection-name` | Yes | — | Name of the target connection |
+| `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `scale-factor` | No | `1.0` | Scale row and member counts |
+| `seed` | No | — | Integer seed for reproducible output |
+| `create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
+| `drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `create-tables` |
+| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `batch-size` | No | `500` | Rows per `INSERT` statement |
+| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+
+**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order ensures FK constraints are respected throughout.
+
+---
+
 ### `generate-sml-from-connection`
 
 Connects to a live database, introspects its schema, runs semantic model inference, and writes a complete SML directory.
@@ -326,6 +551,8 @@ Connects to a live database, introspects its schema, runs semantic model inferen
 **Inference highlights:** composite primary/foreign keys, FK graph-topology classification, bridge/junction table detection (classified as shared dimensions), naming convention patterns (`dim_*`, `fct_*`, `lkp_*`, `bridge_*`, `xref_*`, etc.), `information_schema` FK queries with driver-level fallback, one model relationship per hierarchy leaf level.
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
+
+Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -337,11 +564,14 @@ Connects to a live database, introspects its schema, runs semantic model inferen
     connection-name: snow_demo
     model-name: SalesModel
     output-dir: sml-output
+    sml-config-file: sml.style.yaml                   # optional — input settings file
     pii-severity: MEDIUM                              # optional
     schema: PUBLIC                                    # optional
     fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
     camel-case-files: "true"                          # optional — camelCase filenames
     camel-case-measures: "true"                       # optional — camelCase metric labels
+    min-hierarchies-per-dim: "1"                      # optional — drop dimensions with fewer hierarchies
+    max-hierarchies-per-dim: "4"                      # optional — cap hierarchies per dimension
 ```
 
 ---
@@ -353,6 +583,8 @@ Parses a SQL DDL file from the repository and generates SML files without a live
 All inference capabilities from `generate-sml-from-connection` apply — composite keys, bridge detection, naming patterns, and one-relationship-per-hierarchy. FK constraints in the DDL (`FOREIGN KEY (…) REFERENCES …`) are parsed and used for relationship inference.
 
 **Requires:** No secrets — the DDL file must be present in the repository.
+
+Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -366,10 +598,13 @@ All inference capabilities from `generate-sml-from-connection` apply — composi
     model-name: SalesModel        # optional
     output-dir: sml-output
     connection-name: snow_demo    # optional — embedded in SML files
+    sml-config-file: sml.style.yaml  # optional — input settings file
     pii-severity: MEDIUM          # optional
     fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
     camel-case-files: "true"      # optional — camelCase filenames
     camel-case-measures: "true"   # optional — camelCase metric labels
+    min-hierarchies-per-dim: "1"  # optional — drop dimensions with fewer hierarchies
+    max-hierarchies-per-dim: "4"  # optional — cap hierarchies per dimension
 ```
 
 ---
@@ -608,8 +843,54 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 | `output-dir` | No | `run_results` | Directory to write the output CSV |
 | `redact` | No | `false` | When `"true"`, omits inbound query text from log output |
 | `duration-minutes` | No | `0` | Run for this many minutes cycling the query list (0 = one pass) |
+| `annotate-queries` | No | `true` | When `"true"`, prepends a `/* {run_query_id, original_text_hash} */` comment to each executed query so AtScale's query log carries correlation fields. Set to `"false"` to send queries unmodified. |
 
-**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `inbound_text_hash`
+**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `run_query_id`, `original_atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `original_text_hash`
+
+- **`run_query_id`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `annotate-queries: "true"`)
+- **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
+
+---
+
+### `generate-enhanced-query-results`
+
+Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale `query_id`, outbound SQL, and optionally the execution plan from the target data source. Connects to the AtScale internal Postgres backend, searches the `queries` and `subqueries` tables for the annotation comment injected by the harness, and joins the result back. When `target-connection-name` is provided the operation additionally runs `EXPLAIN` against the target database for each outbound query.
+
+**Requires:** `CONNECTIONS_FILE` secret. `annotate-queries` must have been `true` (the default) during the harness run.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-enhanced-query-results
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    results-file: run_results/2026-04-21-ABC123_ats_connection.csv
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of `connections.yaml` (pass via secret) |
+| `connection-name` | Yes | | Connection name; uses `metadata:` block if present, otherwise `sql:` block |
+| `results-file` | Yes | | Path to the CSV from `execute-atscale-query-harness` |
+| `output-file` | No | `{stem}_enhanced.csv` | Output file path |
+| `db-schema` | No | auto | Postgres schema for AtScale backend tables (`atscale` or `engine`) |
+| `days` | No | `7` | Look-back window when searching the AtScale query log |
+| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`. |
+
+**Output:** Input CSV extended with the following columns inserted after `run_query_id`. Rows with no match have empty values.
+
+| Column | Populated | Description |
+|---|---|---|
+| `run_atscale_query_id` | Always | AtScale's internal `query_id` |
+| `outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
+| `used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
+| `elapsed_ms` | When matched | Total wall-clock time from planning start to last result row (ms). Computed as `query_results.finished − queries_planned.planning_started`. |
+| `parse_ms` | Best-effort | Planning/parse phase duration (ms). Computed as `queries_planned.<finish_col> − planning_started`. Empty when the backend does not expose a planning-finish timestamp. |
+| `execute_ms` | Best-effort | **WAIT phase** — total time AtScale spent waiting for the underlying database across all subqueries (ms). Computed as `SUM(subquery_fetch_started − subquery_started)`. Matches the "WAIT" metric in the AtScale query monitor. Empty when subquery submission timestamps are absent. |
+| `fetch_ms` | Best-effort | **FETCH phase** — total time to retrieve result rows from the underlying database across all subqueries (ms). Computed as `SUM(subquery_finished − subquery_fetch_started)`. Matches the "FETCH" metric in the AtScale query monitor. Empty when subquery-results phase timestamps are absent. |
+| `execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
 
 ---
 

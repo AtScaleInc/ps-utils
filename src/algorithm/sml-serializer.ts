@@ -1014,8 +1014,9 @@ function buildMetricFile(
   opts: SmlSerializerOptions,
 ): string {
   const prefix = opts.metricPrefix ?? "m_";
-  // measure.name is already "<Column Title Case> <Agg suffix>" per measure-inference.ts
-  const label = measure.name;
+  // measure.name is "<Column Title Case> <Agg suffix>" (e.g. "Primary Quantity Sum").
+  // With camelCaseMeasures, convert to lowerCamelCase (e.g. "primaryQuantitySum").
+  const label = opts.camelCaseMeasures ? toCamelCase(measure.name) : measure.name;
 
   // Format: #,##0 for columns that support SUM/COUNT; #,##0.00 for rate/ratio-only columns.
   const siblingsHaveSumOrCount = fact.measures

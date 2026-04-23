@@ -22,11 +22,11 @@ import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
-import { SqlService, type ConnectionConfig } from "../../services/SqlService.js";
+import { SqlService, type ConnectionConfig, type SqlConnection } from "../../services/SqlService.js";
 import { parsePropertiesFile, parseJdbcPostgresUrl } from "../extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import type { QueryRecord } from "../extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import axios from "axios";
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
 import { parse as parseYaml } from "yaml";
@@ -38,15 +38,16 @@ interface ResultRecord {
   taskName: string;
   model: string;
   queryName: string;
-  atscaleQueryId: string;
+  runQueryId: string;
+  originalAtscaleQueryId: string;
   protocol: string;
   status: "SUCCEEDED" | "FAILED";
   durationMs: number;
   rowCount: number;
   error: string;
   timestamp: number;
-  inboundTextAsHash: string;
-  inboundText: string;
+  originalTextHash: string;
+  originalText: string;
 }
 
 /** Minimal representation of one Gatling injection step from a task file. */
@@ -158,6 +159,15 @@ class ExecuteHarnessParameterSet extends ParameterSet {
       required = false;
       defaultValue = "0";
     })(),
+    new (class extends StringParameter {
+      name = "annotate-queries";
+      description =
+        "When true (default), prepend a /* {run_id, run_query_id, original_text_hash} */ " +
+        "comment to each executed query so AtScale's query log carries correlation fields. " +
+        "Set to false to send queries unmodified.";
+      required = false;
+      defaultValue = "true";
+    })(),
   ];
 }
 
@@ -174,6 +184,7 @@ type Params = {
   "output-dir": string;
   redact: string;
   "duration-minutes": string;
+  "annotate-queries": string;
 };
 
 // ── Small utilities ────────────────────────────────────────────────────────────
@@ -190,6 +201,20 @@ function generateRunId(): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Build the comment to prepend to every executed query.
+ * Both SQL (/* ... *\/) and MDX support block comments, so the same format is
+ * used for both protocols.  The hash is computed from the original query text
+ * before this annotation is added so it remains a stable fingerprint.
+ *
+ * Field order is intentional: run_id first so generate-enhanced-query-results
+ * can filter the AtScale query log with a left-anchored LIKE on run_id without
+ * scanning all annotated queries across every run.
+ */
+function buildQueryAnnotation(runId: string, runQueryId: string, originalTextHash: string): string {
+  return `/* ${JSON.stringify({ run_id: runId, run_query_id: runQueryId, original_text_hash: originalTextHash })} */\n`;
 }
 
 /** Escape XML special characters in MDX query text. */
@@ -214,22 +239,22 @@ function csvField(value: string | number | null | undefined): string {
 /** Convert an array of ResultRecords to a CSV string. */
 function toCsv(records: ResultRecord[], redact: boolean): string {
   const baseColumns = [
-    "run_id", "task_name", "model", "query_name", "atscale_query_id",
-    "protocol", "status", "duration_ms", "row_count", "error",
-    "timestamp", "inbound_text_hash",
+    "run_id", "task_name", "model", "query_name", "run_query_id",
+    "original_atscale_query_id", "protocol", "status", "duration_ms",
+    "row_count", "error", "timestamp", "original_text_hash",
   ];
   const header = redact
     ? baseColumns.join(",")
-    : [...baseColumns, "inbound_text"].join(",");
+    : [...baseColumns, "original_text"].join(",");
 
   const rows = records.map((r) => {
     const base = [
       r.runId, r.taskName, r.model, r.queryName,
-      r.atscaleQueryId, r.protocol, r.status,
+      r.runQueryId, r.originalAtscaleQueryId, r.protocol, r.status,
       r.durationMs, r.rowCount, r.error, r.timestamp,
-      r.inboundTextAsHash,
+      r.originalTextHash,
     ];
-    return (redact ? base : [...base, r.inboundText]).map(csvField).join(",");
+    return (redact ? base : [...base, r.originalText]).map(csvField).join(",");
   });
 
   return [header, ...rows].join("\n") + "\n";
@@ -312,12 +337,12 @@ function loadQueriesFromCsv(filePath: string, hasHeader: boolean): QueryRecord[]
       const queryName = row[0];
       const isTwoColumn = row.length === 2;
       const atscaleQueryId = isTwoColumn ? "" : row[1];
-      const inboundText = isTwoColumn ? row[1] : row[2];
+      const originalText = isTwoColumn ? row[1] : row[2];
       return {
         queryName,
         queryLanguage: "",
-        inboundText,
-        inboundTextAsHash: sha256hex(inboundText),
+        originalText,
+        originalTextHash: sha256hex(originalText),
         outboundText: null,
         cubeName: "",
         projectId: "",
@@ -446,6 +471,29 @@ function xmlaConfigFromYaml(
 }
 
 /**
+ * Determine SQL connection config from a connections.yaml connection entry.
+ * Always uses the sql: block directly — no derivation from mdx: or metadata:.
+ */
+function sqlConfigFromYaml(
+  connectionFile: Record<string, any>,
+  connectionName: string,
+): SqlConfig {
+  const connection = connectionFile.connections?.[connectionName];
+  if (!connection) {
+    throw new Error(`Connection '${connectionName}' not found in connections.yaml`);
+  }
+  if (!connection.sql) {
+    throw new Error(
+      `Connection '${connectionName}' is missing a sql: block required for SQL query execution.`,
+    );
+  }
+  return {
+    connectionConfig: connectionFile as ConnectionConfig,
+    connectionName,
+  };
+}
+
+/**
  * Determine SQL connection config from systems.properties for a given model name.
  */
 function sqlConfigFromProperties(
@@ -541,7 +589,7 @@ async function executeXmlaQuery(
   cfg: XmlaConfig,
   token: string,
 ): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; error: string }> {
-  const envelope = buildSoapEnvelope(query.inboundText, cfg);
+  const envelope = buildSoapEnvelope(query.originalText, cfg);
   const headers: Record<string, string> = {
     "Content-Type": "text/xml; charset=UTF-8",
     Accept: "text/xml",
@@ -584,130 +632,142 @@ async function executeXmlaQuery(
 
 // ── SQL execution ──────────────────────────────────────────────────────────────
 
-async function executeSqlQuery(
+/**
+ * Execute one SQL query on an already-open connection.
+ * The caller is responsible for connection lifecycle (open / close).
+ */
+async function executeSqlQueryOnConn(
   query: QueryRecord,
   sqlSvc: SqlService,
-  connCfg: ConnectionConfig,
-  connName: string,
+  conn: SqlConnection,
 ): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; error: string }> {
   const start = Date.now();
-  let conn: any;
   try {
-    conn = await sqlSvc.connect(connCfg, connName);
-    const rows = await sqlSvc.query(conn, query.inboundText);
-    const durationMs = Date.now() - start;
-    return {
-      status: "SUCCEEDED",
-      durationMs,
-      rowCount: rows.length,
-      error: "",
-    };
+    const rows = await sqlSvc.query(conn, query.originalText);
+    return { status: "SUCCEEDED", durationMs: Date.now() - start, rowCount: rows.length, error: "" };
   } catch (err) {
-    const durationMs = Date.now() - start;
     const msg = err instanceof Error ? err.message : String(err);
-    return { status: "FAILED", durationMs, rowCount: 0, error: msg };
-  } finally {
-    if (conn) {
-      try { await sqlSvc.close(conn); } catch { /* ignore */ }
-    }
+    return { status: "FAILED", durationMs: Date.now() - start, rowCount: 0, error: msg };
   }
 }
 
 // ── Worker pool ────────────────────────────────────────────────────────────────
 
+type ExecuteFn = (q: QueryRecord) => Promise<{
+  status: "SUCCEEDED" | "FAILED";
+  durationMs: number;
+  rowCount: number;
+  error: string;
+}>;
+
 /**
- * Run all queries exactly once, with `concurrency` workers executing in
- * parallel.  Each worker pulls from a shared queue until it is empty.
+ * Run all queries exactly once.  Each entry in `executePerWorker` becomes one
+ * concurrent worker; the array length is the concurrency.  Workers pull from a
+ * shared queue until empty.
+ *
+ * Passing a separate execute function per worker (rather than a single shared
+ * callback) ensures that SQL workers each hold a dedicated connection and can
+ * never issue simultaneous requests on the same PgClient.
  */
 async function runQueriesOnce(
   queries: QueryRecord[],
-  concurrency: number,
+  executePerWorker: ExecuteFn[],
   throttleMs: number,
-  execute: (q: QueryRecord) => Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; error: string }>,
+  annotate: boolean,
   runId: string,
   taskName: string,
   model: string,
   protocol: string,
-  redact: boolean,
   logger: Logger,
 ): Promise<ResultRecord[]> {
   const results: ResultRecord[] = [];
   const queue = [...queries];
 
-  async function worker(): Promise<void> {
+  const workers = executePerWorker.map((execute) => async () => {
     while (queue.length > 0) {
-      // queue.shift() is safe here: Node.js event loop is single-threaded;
-      // two workers cannot both observe the same non-empty queue at the
-      // same await boundary.
+      // queue.shift() is safe: Node.js is single-threaded; two workers cannot
+      // both observe the same non-empty queue at the same await boundary.
       const q = queue.shift()!;
-      const r = await execute(q);
+      const runQueryId = randomUUID();
+      // Prepend a comment carrying run_query_id and hash so AtScale's query log
+      // carries correlation fields. Hash is from the original text; annotation
+      // is only added to the executed copy, not stored in the output CSV.
+      const annotated: typeof q = annotate ? {
+        ...q,
+        originalText: buildQueryAnnotation(runId, runQueryId, q.originalTextHash) + q.originalText,
+      } : q;
+      const r = await execute(annotated);
       const record: ResultRecord = {
-        runId,
-        taskName,
-        model,
+        runId, taskName, model,
         queryName: q.queryName,
-        atscaleQueryId: q.atscaleQueryId,
+        runQueryId,
+        originalAtscaleQueryId: q.atscaleQueryId,
         protocol,
         status: r.status,
         durationMs: r.durationMs,
         rowCount: r.rowCount,
         error: r.error,
         timestamp: Date.now(),
-        inboundTextAsHash: q.inboundTextAsHash,
-        inboundText: q.inboundText,
+        originalTextHash: q.originalTextHash,
+        originalText: q.originalText,
       };
       results.push(record);
+      // logger.log(JSON.stringify(q));
       logger.log(
         `  ${r.status.padEnd(9)} ${q.queryName.padEnd(16)} ${r.durationMs}ms  rows=${r.rowCount}` +
         (r.error ? `  ERROR: ${r.error.slice(0, 100)}` : ""),
       );
       if (throttleMs > 0) await sleep(throttleMs);
     }
-  }
+  });
 
-  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  await Promise.all(workers.map((w) => w()));
   return results;
 }
 
 /**
  * Run queries in a loop for `durationMs` milliseconds, cycling through the
  * list indefinitely.  Mirrors the Gatling closed injection step behaviour.
+ * `executePerWorker` length determines concurrency; each worker owns its entry.
  */
 async function runQueriesForDuration(
   queries: QueryRecord[],
-  concurrency: number,
+  executePerWorker: ExecuteFn[],
   throttleMs: number,
   durationMs: number,
-  execute: (q: QueryRecord) => Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; error: string }>,
+  annotate: boolean,
   runId: string,
   taskName: string,
   model: string,
   protocol: string,
-  redact: boolean,
   logger: Logger,
 ): Promise<ResultRecord[]> {
   const results: ResultRecord[] = [];
   const startTime = Date.now();
   let idx = 0;
 
-  async function worker(): Promise<void> {
+  const workers = executePerWorker.map((execute) => async () => {
     while (Date.now() - startTime < durationMs) {
       const q = queries[idx++ % queries.length];
-      const r = await execute(q);
+      const runQueryId = randomUUID();
+      const annotated: typeof q = annotate ? {
+        ...q,
+        originalText: buildQueryAnnotation(runId, runQueryId, q.originalTextHash) + q.originalText,
+      } : q;
+      const r = await execute(annotated);
       const record: ResultRecord = {
-        runId,
-        taskName,
-        model,
+        runId, taskName, model,
         queryName: q.queryName,
-        atscaleQueryId: q.atscaleQueryId,
+        runQueryId,
+        originalAtscaleQueryId: q.atscaleQueryId,
         protocol,
         status: r.status,
         durationMs: r.durationMs,
         rowCount: r.rowCount,
         error: r.error,
         timestamp: Date.now(),
-        inboundTextAsHash: q.inboundTextAsHash,
-        inboundText: q.inboundText,
+        originalTextHash: q.originalTextHash,
+        originalText: q.originalText,
       };
       results.push(record);
       logger.log(
@@ -716,9 +776,9 @@ async function runQueriesForDuration(
       );
       if (throttleMs > 0) await sleep(throttleMs);
     }
-  }
+  });
 
-  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  await Promise.all(workers.map((w) => w()));
   return results;
 }
 
@@ -820,6 +880,7 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
     fs.mkdirSync(outputDir, { recursive: true });
 
     const redact = params.redact.toLowerCase() === "true";
+    const annotate = params["annotate-queries"].toLowerCase() !== "false";
     const globalRunId = params["run-id"] ?? generateRunId();
     const globalThrottleMs = Math.max(0, parseInt(params["throttle-ms"], 10) || 5);
     const globalConcurrency = Math.max(1, parseInt(params["concurrent-users"], 10) || 1);
@@ -935,73 +996,98 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
         `workers=${concurrency}  queries=${queries.length}  run-id=${runId}`,
       );
 
-      // Build the executor for this protocol / config mode
-      let execute: (q: QueryRecord) => Promise<{
-        status: "SUCCEEDED" | "FAILED";
-        durationMs: number;
-        rowCount: number;
-        error: string;
-      }>;
+      // Build per-worker execute functions for this protocol / config mode.
+      // SQL workers each hold a dedicated open connection (reused for all queries
+      // in that worker's lifetime) so there is no per-query connection overhead
+      // and no concurrent use of the same PgClient across workers.
+      let executePerWorker: ExecuteFn[];
+      let sqlConns: SqlConnection[] = [];  // tracked for cleanup in finally
 
-      if (protocol === "xmla") {
-        const cfg = isProperties
-          ? xmlaConfigFromProperties(props, model)
-          : xmlaConfigFromYaml(yamlConfig, params["connection-name"], model);
+      try {
+        if (protocol === "xmla") {
+          const cfg = isProperties
+            ? xmlaConfigFromProperties(props, model)
+            : xmlaConfigFromYaml(yamlConfig, params["connection-name"], model);
 
-        this.logger.info(`  XMLA URL: ${cfg.url}`);
-        const token = cfg.isContainer
-          ? ""
-          : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, false);
+          this.logger.info(`  XMLA URL: ${cfg.url}`);
+          const token = cfg.isContainer
+            ? ""
+            : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, false);
 
-        execute = (q) => executeXmlaQuery(q, cfg, token);
-      } else {
-        const { connectionConfig, connectionName } = isProperties
-          ? sqlConfigFromProperties(props, model)
-          : {
-              connectionConfig: yamlConfig as ConnectionConfig,
-              connectionName: params["connection-name"],
-            };
+          // All XMLA workers share the same stateless HTTP execute function.
+          executePerWorker = Array.from({ length: concurrency }, () =>
+            (q: QueryRecord) => executeXmlaQuery(q, cfg, token),
+          );
+        } else {
+          const { connectionConfig, connectionName } = isProperties
+            ? sqlConfigFromProperties(props, model)
+            : sqlConfigFromYaml(yamlConfig, params["connection-name"]);
 
-        execute = (q) => executeSqlQuery(q, sqlSvc, connectionConfig, connectionName);
-      }
+          // Log the sql: block config before connecting.
+          const sqlBlock = (connectionConfig as any).connections?.[connectionName]?.sql ?? {};
+          this.logger.verbose(
+            `[SQL] Connecting via sql: block — ` +
+            `${sqlBlock.server}:${sqlBlock.port ?? 5432}/${sqlBlock.database ?? "(none)"}` +
+            `  schema=${sqlBlock.schema ?? "(none)"}` +
+            `  ssl=${sqlBlock.ssl === false ? "disabled" : "negotiated (server default)"}` +
+            `  user=${sqlBlock.username ?? `(resolved from user: ${sqlBlock.user ?? "(none)"})`}`,
+          );
 
-      // Run the queries
-      let results: ResultRecord[];
-      if (durationMs > 0) {
+          // Open one dedicated connection per worker.
+          this.logger.info(`  Opening ${concurrency} SQL connection(s)…`);
+          sqlConns = await Promise.all(
+            Array.from({ length: concurrency }, () =>
+              sqlSvc.connect(connectionConfig, connectionName),
+            ),
+          );
+          executePerWorker = sqlConns.map((conn) =>
+            (q: QueryRecord) => executeSqlQueryOnConn(q, sqlSvc, conn),
+          );
+        }
+
+        // Run the queries
+        let results: ResultRecord[];
+        if (durationMs > 0) {
+          this.logger.info(
+            `  Running for ${durationMs / 60_000} minute(s) with ${concurrency} worker(s)…`,
+          );
+          results = await runQueriesForDuration(
+            queries, executePerWorker, globalThrottleMs, durationMs, annotate,
+            runId, taskDef.taskName, model, protocol, this.logger,
+          );
+        } else {
+          this.logger.info(
+            `  Running ${queries.length} query/queries with ${concurrency} worker(s)…`,
+          );
+          results = await runQueriesOnce(
+            queries, executePerWorker, globalThrottleMs, annotate,
+            runId, taskDef.taskName, model, protocol, this.logger,
+          );
+        }
+
+        // Write CSV
+        const safeName = (taskDef.runLogFileName
+          ? taskDef.runLogFileName.replace(/\.log$/, "")
+          : `${runId}_${model.replace(/[^a-zA-Z0-9_-]/g, "_")}`
+        );
+        const outFile = path.join(outputDir, `${safeName}.csv`);
+        fs.writeFileSync(outFile, toCsv(results, redact), "utf8");
+
+        const succeeded = results.filter((r) => r.status === "SUCCEEDED").length;
+        const failed = results.filter((r) => r.status === "FAILED").length;
+        const avgMs = results.length
+          ? Math.round(results.reduce((s, r) => s + r.durationMs, 0) / results.length)
+          : 0;
+
         this.logger.info(
-          `  Running for ${durationMs / 60_000} minute(s) with ${concurrency} worker(s)…`,
+          `  Done — ${succeeded} SUCCEEDED  ${failed} FAILED  avg=${avgMs}ms  → ${outFile}`,
         );
-        results = await runQueriesForDuration(
-          queries, concurrency, globalThrottleMs, durationMs,
-          execute, runId, taskDef.taskName, model, protocol, redact, this.logger,
-        );
-      } else {
-        this.logger.info(
-          `  Running ${queries.length} query/queries with ${concurrency} worker(s)…`,
-        );
-        results = await runQueriesOnce(
-          queries, concurrency, globalThrottleMs,
-          execute, runId, taskDef.taskName, model, protocol, redact, this.logger,
-        );
+      } finally {
+        // Close any SQL connections opened for this task.
+        if (sqlConns.length > 0) {
+          await Promise.all(sqlConns.map((c) => sqlSvc.close(c).catch(() => {})));
+        }
       }
-
-      // Write CSV
-      const safeName = (taskDef.runLogFileName
-        ? taskDef.runLogFileName.replace(/\.log$/, "")
-        : `${runId}_${model.replace(/[^a-zA-Z0-9_-]/g, "_")}`
-      );
-      const outFile = path.join(outputDir, `${safeName}.csv`);
-      fs.writeFileSync(outFile, toCsv(results, redact), "utf8");
-
-      const succeeded = results.filter((r) => r.status === "SUCCEEDED").length;
-      const failed = results.filter((r) => r.status === "FAILED").length;
-      const avgMs = results.length
-        ? Math.round(results.reduce((s, r) => s + r.durationMs, 0) / results.length)
-        : 0;
-
-      this.logger.info(
-        `  Done — ${succeeded} SUCCEEDED  ${failed} FAILED  avg=${avgMs}ms  → ${outFile}`,
-      );
     }
 
     this.logger.info("\nexecute-atscale-query-harness complete.");

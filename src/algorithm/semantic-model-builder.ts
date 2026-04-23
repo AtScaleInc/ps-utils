@@ -389,6 +389,20 @@ export interface ProposeOptions {
    * fact tables; all other tables are treated as dimensions.
    */
   factTables?: string[];
+
+  /**
+   * Minimum number of hierarchies a dimension must have to be included in the
+   * semantic model.  Dimensions with fewer hierarchies are silently dropped.
+   * Default: 1 (drops dimension tables with zero inferred hierarchies).
+   */
+  minHierarchiesPerDim?: number;
+
+  /**
+   * Maximum number of hierarchies to keep per dimension.  When more hierarchies
+   * are inferred the list is truncated to this length (highest-ranked first).
+   * Default: 4.
+   */
+  maxHierarchiesPerDim?: number;
 }
 
 // ----------------------------------------------------------
@@ -571,6 +585,18 @@ export async function proposeSemanticModel(
   // ==========================================================================
   // Phase 4: Build dimension datasets
   // ==========================================================================
+
+  // Build the set of tables that are FK targets (PK side of any FK relationship).
+  // These have high-confidence dimension classification — another table explicitly
+  // declares a join to them.  Used below to decide whether to synthesize a fallback
+  // PK hierarchy when no hierarchies can be inferred from column patterns.
+  const fkTargetTables = new Set<string>();
+  for (const fks of rawMetadata.foreignKeysByTable.values()) {
+    for (const fk of fks) {
+      fkTargetTables.add(fk.pkTableName);
+    }
+  }
+
   // --- Build dimensions ---
   const dimensions: SemanticDimension[] = [];
 
@@ -625,7 +651,39 @@ export async function proposeSemanticModel(
       warnings.push(`[${tableName}] ${w}`),
     );
 
-    const { hierarchies } = hierarchyResult;
+    let hierarchies = hierarchyResult.hierarchies;
+
+    // FK-confirmed fallback: when this dimension has zero inferred hierarchies
+    // but is the PK target of a FK from another table, we have high confidence
+    // it is a real dimension (the FK is explicit schema design, not inference).
+    // Rather than silently dropping it via min-hierarchies-per-dim, synthesize a
+    // minimal hierarchy whose single level is the primary key column, so the
+    // dimension is preserved and can participate in model relationships.
+    if (hierarchies.length === 0 && fkTargetTables.has(tableName) && primaryKeys.length > 0) {
+      const dimLabel = toTitleCase(
+        tableName.replace(/^dim_/i, "").replace(/_dimension$/i, ""),
+      );
+      hierarchies = [{
+        name: `${dimLabel} Hierarchy`,
+        levels: primaryKeys.map((pk) => ({ name: pk, sourceColumn: pk })),
+      }];
+      warnings.push(
+        `[${tableName}] No hierarchies inferred; generated a fallback PK hierarchy ` +
+        `("${dimLabel} Hierarchy") because this table is an FK target.`,
+      );
+    }
+
+    // Apply hierarchy count limits from ProposeOptions.
+    const maxH = opts.maxHierarchiesPerDim ?? 4;
+    const minH = opts.minHierarchiesPerDim ?? 1;
+    if (hierarchies.length > maxH) {
+      hierarchies = hierarchies.slice(0, maxH);
+    }
+    if (hierarchies.length < minH) {
+      // Dimension does not meet the minimum — skip it entirely.
+      continue;
+    }
+
     const hierarchyCols = hierarchyColumnSet(hierarchies);
 
     const excluded = new Set([

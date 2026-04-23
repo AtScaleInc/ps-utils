@@ -15,15 +15,17 @@
  *   <output-dir>/dimensions/<dimension>.yml
  *   <output-dir>/metrics/<metric>.yml
  *   <output-dir>/models/<modelName>.yml
+ *   <output-dir>/sml.style.yaml   (effective settings written after generation)
  */
 import fs from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter, BooleanParameter } from "../../Parameters.js";
+import { ParameterSet, StringParameter, BooleanParameter, NumberParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { DdlDatabaseMetaData } from "../../algorithm/ddl-reader.js";
 import { resolvePiiSeverity, runInferenceAndWrite } from "../generate-sml-shared.js";
+import { loadSmlStyleConfig, mergeSmlStyle } from "../sml-style-config.js";
 
 // ----------------------------------------------------------
 // Parameter declarations
@@ -53,15 +55,20 @@ class GenerateSMLFromDDLParams extends ParameterSet {
       defaultValue = "my_connection";
     })(),
     new (class extends StringParameter {
+      name        = "sml-config-file";
+      description = 'Path to the SML style configuration file (default: "sml.style.yaml"). Style file values are overridden by CLI flags. The effective settings are always written to <output-dir>/sml.style.yaml after generation.';
+      required    = false;
+      defaultValue = "sml.style.yaml";
+    })(),
+    new (class extends StringParameter {
       name        = "catalog-name";
-      description = "Display name for the generated catalog (defaults to model-name)";
+      description = "Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml.";
       required    = false;
     })(),
     new (class extends StringParameter {
       name        = "pii-severity";
-      description = 'Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none"';
+      description = 'Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml.';
       required    = false;
-      defaultValue = "MEDIUM";
     })(),
     new (class extends StringParameter {
       name        = "schema";
@@ -80,37 +87,48 @@ class GenerateSMLFromDDLParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "fact-tables";
-      description = "Comma-separated list of table names to treat as fact tables, overriding automatic classification";
+      description = "Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml.";
       required    = false;
     })(),
     new (class extends BooleanParameter {
-      name         = "camel-case-files";
-      description  = "When true, dataset and dimension filenames use camelCase of the source table name (default: false, raw table name)";
-      required     = false;
-      defaultValue = false;
+      name        = "camel-case-files";
+      description = "When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml.";
+      required    = false;
     })(),
     new (class extends BooleanParameter {
-      name         = "camel-case-measures";
-      description  = "When true, metric labels use camelCase of the source column name (default: false, raw column name)";
-      required     = false;
-      defaultValue = false;
+      name        = "camel-case-measures";
+      description = "When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends NumberParameter {
+      name        = "min-hierarchies-per-dim";
+      description = "Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends NumberParameter {
+      name        = "max-hierarchies-per-dim";
+      description = "Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml.";
+      required    = false;
     })(),
   ];
 }
 
 type Params = {
-  "ddl-file":            string;
-  "model-name"?:         string;
-  "output-dir":          string;
-  "connection-name":     string;
-  "catalog-name"?:       string;
-  "pii-severity":        string;
-  schema?:               string;
-  database?:             string;
-  dialect?:              string;
-  "fact-tables"?:        string;
-  "camel-case-files":    boolean;
-  "camel-case-measures": boolean;
+  "ddl-file":             string;
+  "model-name"?:          string;
+  "output-dir":           string;
+  "connection-name":      string;
+  "sml-config-file":      string;
+  "catalog-name"?:        string;
+  "pii-severity"?:        string;
+  schema?:                string;
+  database?:              string;
+  dialect?:               string;
+  "fact-tables"?:         string;
+  "camel-case-files"?:          boolean;
+  "camel-case-measures"?:       boolean;
+  "min-hierarchies-per-dim"?:   number;
+  "max-hierarchies-per-dim"?:   number;
 };
 
 // ----------------------------------------------------------
@@ -164,31 +182,59 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
       `[GenerateSMLFromDDL] Found ${tableNames.length} table(s) and ${viewNames.length} view(s)`,
     );
 
-    const factTablesOverride = params["fact-tables"]
-      ? params["fact-tables"].split(",").map((t) => t.trim()).filter(Boolean)
-      : undefined;
+    // ---- Merge CLI params + sml.style.yaml ----
+    const styleFileConfig = loadSmlStyleConfig(params["sml-config-file"]);
+    const cliFact = params["fact-tables"]?.split(",").map((t) => t.trim()).filter(Boolean);
+    const style = mergeSmlStyle(
+      {
+        "pii-severity":            params["pii-severity"],
+        "fact-tables":             cliFact,
+        "catalog-name":            params["catalog-name"],
+        "camel-case-files":        params["camel-case-files"],
+        "camel-case-measures":     params["camel-case-measures"],
+        "min-hierarchies-per-dim": params["min-hierarchies-per-dim"],
+        "max-hierarchies-per-dim": params["max-hierarchies-per-dim"],
+      },
+      styleFileConfig,
+    );
+
+    const catalogName      = style["catalog-name"] || modelName;
+    const factTablesEff    = style["fact-tables"].length > 0 ? style["fact-tables"] : undefined;
 
     await runInferenceAndWrite(
       db,
       modelName,
       {
-        schemaPattern:        params.schema,
-        piiExclusionSeverity: resolvePiiSeverity(params["pii-severity"]),
-        sampleSize:           0,  // DDL has no row data; disable sampling
-        factTables:           factTablesOverride,
+        schemaPattern:           params.schema,
+        piiExclusionSeverity:    resolvePiiSeverity(style["pii-severity"]),
+        sampleSize:              0,  // DDL has no row data; disable sampling
+        factTables:              factTablesEff,
+        minHierarchiesPerDim:    style["min-hierarchies-per-dim"],
+        maxHierarchiesPerDim:    style["max-hierarchies-per-dim"],
         sml: {
           connectionName:    params["connection-name"],
-          catalogName:       params["catalog-name"] ?? modelName,
+          catalogName,
           database:          params.database,
           schema:            params.schema,
           dialect:           params.dialect ?? detectDialectFromFilename(ddlFile),
-          camelCaseFiles:    params["camel-case-files"],
-          camelCaseMeasures: params["camel-case-measures"],
+          camelCaseFiles:    style["camel-case-files"],
+          camelCaseMeasures: style["camel-case-measures"],
         },
       },
       outputDir,
       this.logger,
       "GenerateSMLFromDDL",
+      // Effective settings written to <outputDir>/sml.style.yaml
+      {
+        "pii-severity":        style["pii-severity"],
+        "fact-tables":         style["fact-tables"],
+        "catalog-name":        catalogName,
+        "camel-case-files":          style["camel-case-files"],
+        "camel-case-measures":       style["camel-case-measures"],
+        "sample-size":               0,
+        "min-hierarchies-per-dim":   style["min-hierarchies-per-dim"],
+        "max-hierarchies-per-dim":   style["max-hierarchies-per-dim"],
+      },
     );
   }
 }

@@ -25,8 +25,8 @@ import { parse as parseYaml } from "yaml";
 export interface QueryRecord {
   queryName: string;
   queryLanguage: string;
-  inboundText: string;
-  inboundTextAsHash: string;
+  originalText: string;
+  originalTextHash: string;
   outboundText: string | null;
   cubeName: string;
   projectId: string;
@@ -173,7 +173,7 @@ function buildExtractionSql(
 SELECT
     q.service,
     q.query_language,
-    q.query_text                                                                  AS inbound_text,
+    q.query_text                                                                  AS original_text,
     MAX(q.query_id::text)                                                         AS atscale_query_id,
     MAX(s.subquery_text)                                                          AS outbound_text,
     p.cube_name,
@@ -200,15 +200,36 @@ ORDER  BY 3
 `.trim();
 }
 
-/** Map a result row (case-insensitive key access) to a QueryRecord. */
+/**
+ * Map an AtScale internal query_language value to a short display label.
+ *   "pgsql"    → "SQL"  (container / cloud SQL dialect)
+ *   "sql"      → "SQL"  (installer / Hive SQL dialect)
+ *   "analysis" → "XMLA" (MDX / XMLA)
+ */
+function langLabel(lang: string): "SQL" | "XMLA" {
+  return lang === "analysis" ? "XMLA" : "SQL";
+}
+
+/**
+ * Map a result row (case-insensitive key access) to a QueryRecord.
+ *
+ * queryName format: "{TYPE} Query {N} ({atscaleQueryId})"
+ *   TYPE          — "SQL" or "XMLA" derived from the query_language column.
+ *   N             — 1-based index within the current (model, language) result batch.
+ *   atscaleQueryId — UUID from the AtScale query log (MAX across duplicate inbound texts).
+ *
+ * Example: "SQL Query 3 (a3f8c21d-4b90-4e12-8c77-1f2e3d4a5b6c)"
+ */
 function rowToRecord(row: Record<string, any>, idx: number, fallbackLang: string, fallbackCube: string): QueryRecord {
   const get = (key: string): any => row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
-  const text: string = get("inbound_text") ?? "";
+  const text: string = get("original_text") ?? "";
+  const atscaleQueryId = String(get("atscale_query_id") ?? "");
+  const queryLang: string = get("query_language") ?? fallbackLang;
   return {
-    queryName: `Query ${idx + 1}`,
-    queryLanguage: get("query_language") ?? fallbackLang,
-    inboundText: text,
-    inboundTextAsHash: sha256hex(text),
+    queryName: `${langLabel(queryLang)} Query ${idx + 1} (${atscaleQueryId})`,
+    queryLanguage: queryLang,
+    originalText: text,
+    originalTextHash: sha256hex(text),
     outboundText: get("outbound_text") ?? null,
     cubeName: get("cube_name") ?? fallbackCube,
     projectId: String(get("project_id") ?? ""),
@@ -219,7 +240,7 @@ function rowToRecord(row: Record<string, any>, idx: number, fallbackLang: string
         ? Number(get("elapsed_time_in_seconds"))
         : null,
     avgResultSetSize: Number(get("avg_result_size") ?? 0),
-    atscaleQueryId: String(get("atscale_query_id") ?? ""),
+    atscaleQueryId,
   };
 }
 
@@ -299,14 +320,31 @@ export class ExtractQueriesFromAtScaleOperation extends Operation<Params> {
         );
       }
       models = params.models.split(",").map((m) => m.trim()).filter(Boolean);
+
+      // If the connection entry has a `metadata` block, use it as the Postgres
+      // connection for the AtScale internal backend.  Build a synthetic config
+      // so SqlService.connect() treats it as a plain postgres sql connection.
+      // Preserve `installer` so the schema fallback ("atscale" vs "engine") still works.
+      const entry = connConfig.connections?.[connName];
+      if (entry?.metadata) {
+        connConfig = {
+          connections: {
+            [connName]: {
+              installer: entry.installer,
+              sql: { dialect: "postgres", ...entry.metadata },
+            },
+          },
+          users: connConfig.users ?? {},
+        };
+      }
     }
 
     const days = Math.max(1, parseInt(params.days, 10) || 60);
     const minExec = Math.max(1, parseInt(params["min-executions"], 10) || 1);
     // Resolve the Postgres schema to query.  Priority:
     //   1. Explicit --db-schema CLI flag (user override)
-    //   2. schema field on the connection entry in the connection file
-    //   3. Hard-coded fallback "engine" (standard container deployment)
+    //   2. schema field on the connection entry (metadata.schema or sql.schema)
+    //   3. Hard-coded fallback: "atscale" (installer) or "engine" (container)
     const connEntry = connConfig.connections?.[connName];
     const connSchema = connEntry?.sql?.schema;
     const installerMode = !!(connEntry as any)?.installer;

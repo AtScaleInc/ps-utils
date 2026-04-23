@@ -11,3 +11,4 @@ resources/drivers/*
 example/tableau.twb
 example/model.yaml
 queries/*
+run_results/*

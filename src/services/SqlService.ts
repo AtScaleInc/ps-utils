@@ -8,6 +8,7 @@ import snowflake from "snowflake-sdk";
 import type { Connection as SnowflakeConnection } from "snowflake-sdk";
 import path from "path";
 import fs from "fs";
+import net from "net";
 import { createPrivateKey } from "crypto";
 import { ServiceProvider } from "./ServiceProvider.js";
 import type { Logger } from "../logging.js";
@@ -75,17 +76,266 @@ export class SqlService extends ServiceProvider {
       throw new Error(`${dialect} connection requires 'server' and 'database'.`);
     }
 
-    const clientConfig: Record<string, any> = { host: server, port, database, user: username, password };
-    if (sql.ssl === false) {
+    const timeoutMs = sql.connectionTimeoutMillis ?? 15_000;
+
+    // ssl parameter (postgres only):
+    //   false / "false" — disable SSL entirely
+    //   true  / "true"  — enable SSL; rejectUnauthorized: false (accepts self-signed certs)
+    //   "default" or omitted — let pg negotiate (tries SSL, falls back to plain)
+    // Redshift always requires SSL regardless of the ssl setting.
+    const rawSsl = sql.ssl;
+    const sslDisabled = rawSsl === false || rawSsl === "false";
+    const sslEnabled  = rawSsl === true  || rawSsl === "true";
+
+    const sslMode = sslDisabled
+      ? "disabled"
+      : sslEnabled
+        ? "enabled"
+        : dialect === "redshift"
+          ? "enabled (redshift)"
+          : "default (negotiated)";
+
+    this.logger?.verbose(
+      `[SqlService] Connecting to ${dialect}: ${server}:${port}/${database}` +
+      `  user=${username ?? "(none)"}  ssl=${sslMode}` +
+      `  timeout=${timeoutMs}ms`,
+    );
+
+    // TCP-level probe: verify the port is reachable before handing off to pg.
+    // This distinguishes a TCP timeout (network/firewall) from a Postgres
+    // handshake hang (protocol issue after the socket is established).
+    await this.probeTcp(server, port, timeoutMs).then(
+      (ms) => this.logger?.verbose(`[SqlService] TCP probe OK (${ms}ms): ${server}:${port}`),
+      (err) => {
+        this.logger?.verbose(`[SqlService] TCP probe FAILED: ${server}:${port} — ${err.message}`);
+        throw err;
+      },
+    );
+
+    // Raw Postgres startup probe: send a minimal startup message on a separate
+    // socket and read the first response byte. Diagnoses what the server speaks
+    // before handing control to pg, and detects the AtScale "SSL dance required"
+    // behaviour (server responds 'N' to a startup message).
+    const probeUser = username ?? "postgres";
+    let probeFirstByte: string | undefined;
+    await this.probePostgresStartup(server, port, probeUser, database, timeoutMs).then(
+      ({ byte, hex }) => {
+        probeFirstByte = byte;
+        // 'N' (0x4e) here is NOT a Postgres NoticeResponse. In this position it
+        // is the SSL-negotiation "No SSL" byte, meaning the server sent its
+        // SSLRequest rejection in response to our startup message. This happens
+        // when the server requires the SSL negotiation handshake to occur first,
+        // even when SSL is not actually used.
+        const meaning =
+          byte === "R" ? "AuthenticationRequest — server is Postgres, auth required" :
+          byte === "E" ? "ErrorResponse — server is Postgres, startup rejected" :
+          byte === "N" ? "SSL 'No' byte — server requires SSL negotiation before startup message" :
+          `0x${hex} — unexpected; server may not speak standard Postgres protocol`;
+        this.logger?.verbose(
+          `[SqlService] Startup probe: server responded '${byte}' (${hex}) — ${meaning}`,
+        );
+      },
+      (err) => {
+        this.logger?.verbose(`[SqlService] Startup probe FAILED: ${err.message}`);
+        // Don't throw — let pg attempt the connection and surface its own error.
+      },
+    );
+
+    const clientConfig: Record<string, any> = {
+      host: server, port, database, user: username, password,
+      connectionTimeoutMillis: timeoutMs,
+      // No-op type parser prevents pg from issuing pg_catalog.pg_type queries
+      // after connecting. AtScale's Postgres-compatible proxy may not support
+      // catalog access, which would cause the first query to hang.
+      types: {
+        getTypeParser: () => (val: string) => val,
+      },
+    };
+
+    if (sslDisabled) {
       clientConfig.ssl = false;
-    } else if (dialect === "redshift") {
+    } else if (sslEnabled || dialect === "redshift") {
       clientConfig.ssl = { rejectUnauthorized: false };
     }
 
-    this.logger?.verbose(`[SqlService] Connecting to ${dialect}: ${server}:${port}/${database}`);
+    // AtScale's SQL analytics port requires the SSL negotiation handshake to
+    // happen before it will accept a startup message — even when SSL is not
+    // actually used. We detect this by the 'N' response above and work around
+    // it by performing the SSLRequest/N exchange on a raw socket, then passing
+    // the pre-negotiated socket directly to pg so pg skips its own TCP+SSL
+    // setup and sends the startup message on the already-open socket.
+    if (probeFirstByte === "N" && sslDisabled) {
+      this.logger?.verbose(
+        `[SqlService] Server requires SSL negotiation before startup — pre-negotiating plain-text socket`,
+      );
+      let preSocket: net.Socket | undefined;
+      try {
+        preSocket = await this.preNegotiateSslPlaintext(server, port, timeoutMs);
+        this.logger?.verbose(`[SqlService] SSL pre-negotiation complete (plain-text mode)`);
+        // Pass the pre-negotiated socket as pg's transport. pg will skip its own
+        // TCP connect + SSLRequest phase and go straight to the startup message.
+        (clientConfig as any).stream = preSocket;
+        // ssl must be false so pg does not attempt another SSL handshake on the stream.
+        clientConfig.ssl = false;
+      } catch (preErr) {
+        const msg = preErr instanceof Error ? preErr.message : String(preErr);
+        this.logger?.verbose(`[SqlService] SSL pre-negotiation failed: ${msg} — falling back to direct connection`);
+        preSocket?.destroy();
+        delete (clientConfig as any).stream;
+      }
+    }
+
+    this.logger?.verbose(`[SqlService] Starting Postgres handshake: ${server}:${port}/${database}`);
     const client = new PgClient(clientConfig);
-    await client.connect();
+    try {
+      await client.connect();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger?.verbose(`[SqlService] Postgres handshake failed: ${msg}`);
+      throw err;
+    }
+    this.logger?.verbose(`[SqlService] Postgres handshake complete: ${server}:${port}/${database}`);
     return { dialect, client };
+  }
+
+  /**
+   * Opens a TCP connection, sends a Postgres SSLRequest, waits for the server's
+   * single-byte response ('N' = no SSL accepted), and returns the raw socket
+   * ready for plain-text Postgres protocol.
+   *
+   * This is needed for servers (like AtScale's SQL analytics port) that require
+   * the SSL negotiation handshake before they will accept a startup message,
+   * even when SSL is not actually used.
+   */
+  private preNegotiateSslPlaintext(
+    host: string,
+    port: number,
+    timeoutMs: number,
+  ): Promise<net.Socket> {
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      let settled = false;
+      const fail = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        reject(err);
+      };
+      socket.setTimeout(timeoutMs);
+      socket.once("timeout", () => fail(new Error(`SSL pre-negotiation timed out after ${timeoutMs}ms`)));
+      socket.once("error", fail);
+      socket.once("connect", () => {
+        // SSLRequest: length=8, then the SSL magic number 80877103.
+        const req = Buffer.allocUnsafe(8);
+        req.writeInt32BE(8, 0);
+        req.writeInt32BE(80877103, 4);
+        socket.write(req);
+        socket.once("data", (chunk) => {
+          if (settled) return;
+          const byte = chunk.length > 0 ? (chunk[0] as number) : -1;
+          if (byte === 78) { // 'N' — no SSL, socket is now ready for plain Postgres
+            settled = true;
+            socket.removeAllListeners("timeout");
+            socket.removeAllListeners("error");
+            resolve(socket);
+          } else if (byte === 83) { // 'S' — server wants to upgrade to TLS
+            fail(new Error(`Server at ${host}:${port} requires TLS; set ssl:true in the connection config`));
+          } else {
+            fail(new Error(
+              `Unexpected SSL negotiation response from ${host}:${port}: ` +
+              `0x${byte >= 0 ? byte.toString(16).padStart(2, "0") : "??"}`,
+            ));
+          }
+        });
+      });
+      socket.connect(port, host);
+    });
+  }
+
+  /**
+   * Opens a raw TCP socket to host:port and resolves with the elapsed
+   * milliseconds, or rejects with an error if the connection cannot be
+   * established within timeoutMs.
+   */
+  private probeTcp(host: string, port: number, timeoutMs: number): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      const socket = new net.Socket();
+      const cleanup = (err?: Error) => {
+        socket.destroy();
+        if (err) reject(err);
+        else resolve(Date.now() - start);
+      };
+      socket.setTimeout(timeoutMs);
+      socket.once("connect", () => cleanup());
+      socket.once("timeout", () => cleanup(new Error(`TCP connect timed out after ${timeoutMs}ms`)));
+      socket.once("error", (err) => cleanup(err));
+      socket.connect(port, host);
+    });
+  }
+
+  /**
+   * Sends a minimal Postgres startup message over a raw socket and reads the
+   * first response byte. Used to diagnose whether the server speaks Postgres
+   * at all, before handing the connection to the pg library.
+   *
+   * Response byte meanings:
+   *   'R' (0x52) — AuthenticationRequest — server is Postgres, expects auth
+   *   'E' (0x45) — ErrorResponse         — server is Postgres, rejected startup
+   *   'N' (0x4E) — NoticeResponse        — server is Postgres, sent a notice
+   *   other / none                       — server is NOT speaking Postgres protocol
+   */
+  private probePostgresStartup(
+    host: string,
+    port: number,
+    username: string,
+    database: string,
+    timeoutMs: number,
+  ): Promise<{ byte: string; hex: string }> {
+    return new Promise((resolve, reject) => {
+      const socket = new net.Socket();
+      let resolved = false;
+
+      const done = (result?: { byte: string; hex: string }, err?: Error) => {
+        if (resolved) return;
+        resolved = true;
+        socket.destroy();
+        if (err) reject(err);
+        else resolve(result!);
+      };
+
+      socket.setTimeout(timeoutMs);
+      socket.once("timeout", () => done(undefined, new Error(`startup probe timed out after ${timeoutMs}ms (server not responding to Postgres startup message)`)));
+      socket.once("error", (err) => done(undefined, err));
+
+      socket.once("connect", () => {
+        // Build a minimal Postgres v3.0 startup message.
+        const params = [
+          "user", username,
+          "database", database,
+          "application_name", "atscale-probe",
+        ];
+        const body = Buffer.from(
+          params.map((s) => s + "\0").join("") + "\0",
+          "binary",
+        );
+        // protocol version 3.0 = 196608 = 0x00030000
+        const msg = Buffer.allocUnsafe(8 + body.length);
+        msg.writeInt32BE(8 + body.length, 0); // total length
+        msg.writeInt32BE(196608, 4);           // protocol 3.0
+        body.copy(msg, 8);
+        socket.write(msg);
+
+        socket.once("data", (chunk) => {
+          const val  = chunk.length > 0 ? (chunk[0] as number) : -1;
+          const byte = val >= 0 ? String.fromCharCode(val) : "?";
+          const hex  = val >= 0 ? `0x${val.toString(16).padStart(2, "0")}` : "0x??";
+          done({ byte, hex });
+        });
+      });
+
+      socket.connect(port, host);
+    });
   }
 
   private async connectSnowflake(
@@ -186,7 +436,18 @@ export class SqlService extends ServiceProvider {
 
   async close(connection: SqlConnection): Promise<void> {
     if (connection.dialect === "postgres" || connection.dialect === "redshift") {
-      await connection.client.end();
+      // client.end() sends the Postgres Terminate message, but the server may
+      // never send the corresponding close (especially AtScale's SQL proxy).
+      // Race it against a short timeout so we never hang here, then
+      // unconditionally destroy the underlying socket.
+      await Promise.race([
+        connection.client.end().catch(() => {}),
+        new Promise<void>((resolve) => setTimeout(resolve, 1_000)),
+      ]);
+      const stream = (connection.client as any).connection?.stream;
+      if (stream && typeof stream.destroy === "function") {
+        stream.destroy();
+      }
       return;
     }
     await new Promise<void>((resolve, reject) => {

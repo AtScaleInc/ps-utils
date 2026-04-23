@@ -9,8 +9,10 @@
  *   text (default) — human-readable numbered list printed to stdout or a file
  *   yaml           — structured YAML suitable for downstream processing
  */
+import path from "path";
+import fs from "fs";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../../Parameters.js";
+import { ParameterSet, StringParameter, NumberParameter, BooleanParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
@@ -19,11 +21,11 @@ import {
   type AnalysisSuggestion,
 } from "../../algorithm/analysis-suggestions.js";
 import { stringify } from "yaml";
-import fs from "fs";
 import {
   reconstructSemanticModel,
   selectModel,
 } from "../model-yaml-reader.js";
+import { loadSmlStyleConfig, mergeSmlStyle, writeSmlStyleConfig } from "../sml-style-config.js";
 
 // ----------------------------------------------------------
 // Parameters
@@ -42,22 +44,25 @@ class GenerateMetricsFromModelParams extends ParameterSet {
       required    = false;
     })(),
     new (class extends StringParameter {
-      name         = "max-suggestions";
-      description  = "Maximum number of suggestions to generate (default: 25)";
-      required     = false;
-      defaultValue = "25";
+      name        = "sml-config-file";
+      description = 'Path to the SML style configuration file (default: "sml.style.yaml"). Style file values are overridden by CLI flags. The effective settings are written to sml.style.yaml in the output file\'s directory (or the working directory when writing to stdout).';
+      required    = false;
+      defaultValue = "sml.style.yaml";
     })(),
-    new (class extends StringParameter {
-      name         = "min-score";
-      description  = "Minimum relevance score [0-1] for a suggestion to be included (default: 0.5)";
-      required     = false;
-      defaultValue = "0.5";
+    new (class extends NumberParameter {
+      name        = "max-suggestions";
+      description = "Maximum number of suggestions to generate (default: 25). Can also be set in sml.style.yaml.";
+      required    = false;
     })(),
-    new (class extends StringParameter {
-      name         = "include-tuples";
-      description  = "Include multi-dimension suggestions (true/false, default: true)";
-      required     = false;
-      defaultValue = "true";
+    new (class extends NumberParameter {
+      name        = "min-score";
+      description = "Minimum relevance score [0-1] for a suggestion to be included (default: 0.5). Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends BooleanParameter {
+      name        = "include-tuples";
+      description = "Include multi-dimension suggestions (default: true). Can also be set in sml.style.yaml.";
+      required    = false;
     })(),
     new (class extends StringParameter {
       name        = "format";
@@ -76,9 +81,10 @@ class GenerateMetricsFromModelParams extends ParameterSet {
 type Params = {
   "model-file":       string;
   "model-name"?:      string;
-  "max-suggestions":  string;
-  "min-score":        string;
-  "include-tuples":   string;
+  "sml-config-file":  string;
+  "max-suggestions"?: number;
+  "min-score"?:       number;
+  "include-tuples"?:  boolean;
   "format":           string;
   "output-file"?:     string;
 };
@@ -184,11 +190,21 @@ export class GenerateMetricsFromModelOperation extends Operation<Params> {
       `${model.dimensions.length} dimension(s)`,
     );
 
-    // ---- Parse options ----
-    const maxSuggestions  = Math.max(1, parseInt(params["max-suggestions"] ?? "25", 10) || 25);
-    const minScore        = Math.min(1, Math.max(0, parseFloat(params["min-score"] ?? "0.5") || 0.5));
-    const includeTuples   = (params["include-tuples"] ?? "true").toLowerCase() !== "false";
-    const outputFormat    = (params["format"] ?? "text").toLowerCase();
+    // ---- Merge CLI params + sml.style.yaml ----
+    const styleFileConfig = loadSmlStyleConfig(params["sml-config-file"]);
+    const style = mergeSmlStyle(
+      {
+        "max-suggestions": params["max-suggestions"],
+        "min-score":       params["min-score"],
+        "include-tuples":  params["include-tuples"],
+      },
+      styleFileConfig,
+    );
+
+    const maxSuggestions = Math.max(1, style["max-suggestions"]);
+    const minScore       = Math.min(1, Math.max(0, style["min-score"]));
+    const includeTuples  = style["include-tuples"];
+    const outputFormat   = (params["format"] ?? "text").toLowerCase();
 
     // ---- Run analysis suggestions ----
     const suggestions = generateAnalysisSuggestions(model, {
@@ -205,11 +221,22 @@ export class GenerateMetricsFromModelOperation extends Operation<Params> {
       : formatText(suggestions, modelName);
 
     // ---- Write output ----
-    if (params["output-file"]?.trim()) {
-      fs.writeFileSync(params["output-file"], output, "utf8");
-      this.logger.info(`Wrote suggestions to ${params["output-file"]}`);
+    const outputFile = params["output-file"]?.trim() || undefined;
+    if (outputFile) {
+      fs.writeFileSync(outputFile, output, "utf8");
+      this.logger.info(`Wrote suggestions to ${outputFile}`);
     } else {
       this.logger.log(output);
     }
+
+    // ---- Write effective style config ----
+    const styleDir = outputFile ? path.dirname(path.resolve(outputFile)) : process.cwd();
+    const styleConfigPath = path.join(styleDir, "sml.style.yaml");
+    writeSmlStyleConfig(styleConfigPath, {
+      "max-suggestions": maxSuggestions,
+      "min-score":       minScore,
+      "include-tuples":  includeTuples,
+    });
+    this.logger.info(`Wrote style config to ${styleConfigPath}`);
   }
 }

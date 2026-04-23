@@ -14,7 +14,8 @@ import type { DatabaseMetaData } from "../algorithm/types.js";
 import type { ProposeOptions } from "../algorithm/semantic-model-builder.js";
 import { proposeSemanticModel } from "../algorithm/semantic-model-builder.js";
 import { createDefaultEngine } from "../algorithm/inference/index.js";
-import { generateReport, copyStyleGuide, type ReportOptions } from "../algorithm/report-generator.js";
+import { generateReport, generateStyleGuide, type ReportOptions, type StyleGuideOptions } from "../algorithm/report-generator.js";
+import { type SmlStyleConfig, writeSmlStyleConfig } from "./sml-style-config.js";
 
 // ----------------------------------------------------------
 // PII severity resolver
@@ -59,9 +60,12 @@ export type InferenceOptions = Omit<ProposeOptions, "inferenceEngine" | "suggest
 
 /**
  * Run semantic model inference on `db`, write the resulting SML files to
- * `outputDir`, write REPORT.md, and log warnings + a summary.
+ * `outputDir`, write REPORT.md, STYLE.md, and sml.style.yaml, and log
+ * warnings + a summary.
  *
- * @param tag  Short identifier used in log prefixes, e.g. "GenerateSMLFromDDL".
+ * @param tag         Short identifier used in log prefixes, e.g. "GenerateSMLFromDDL".
+ * @param styleConfig When provided, the fully-resolved style settings are written
+ *                    to `<outputDir>/sml.style.yaml` alongside STYLE.md.
  */
 export async function runInferenceAndWrite(
   db: DatabaseMetaData,
@@ -70,6 +74,7 @@ export async function runInferenceAndWrite(
   outputDir: string,
   logger: Logger,
   tag: string,
+  styleConfig?: SmlStyleConfig,
 ): Promise<void> {
   logger.log(`[${tag}] Running inference on "${modelName}"…`);
 
@@ -107,8 +112,22 @@ export async function runInferenceAndWrite(
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(reportPath, reportContent, "utf8");
   logger.log(`  → REPORT.md`);
-  if (copyStyleGuide(outputDir)) {
-    logger.log(`  → STYLE.md`);
+  if (styleConfig) {
+    const styleGuideOpts: StyleGuideOptions = {
+      catalogName:          smlOpts?.catalogName ?? model.name,
+      piiSeverity:          styleConfig["pii-severity"] ?? "MEDIUM",
+      camelCaseFiles:       styleConfig["camel-case-files"] ?? false,
+      camelCaseMeasures:    styleConfig["camel-case-measures"] ?? false,
+      factTables:           styleConfig["fact-tables"] ?? [],
+      sampleSize:           styleConfig["sample-size"] ?? 0,
+      minHierarchiesPerDim: styleConfig["min-hierarchies-per-dim"] ?? 1,
+      maxHierarchiesPerDim: styleConfig["max-hierarchies-per-dim"] ?? 4,
+    };
+    if (generateStyleGuide(outputDir, styleGuideOpts)) {
+      logger.log(`  → STYLE.md`);
+    }
+    writeSmlStyleConfig(path.join(outputDir, "sml.style.yaml"), styleConfig);
+    logger.log(`  → sml.style.yaml`);
   }
 
   logger.log(

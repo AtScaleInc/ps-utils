@@ -59,6 +59,8 @@ flowchart TD
     ATSDB -->|extract-queries-from-atscale| QJSON["Query JSON<br/>(queries/*.json)"]
     QJSON -->|execute-atscale-query-harness| RCSV["Results CSV<br/>(run_results/*.csv)"]
     ATS   -->|execute-atscale-query-harness| RCSV
+    RCSV  -->|generate-enhanced-query-results| ECSV["Enhanced CSV<br/>(*_enhanced.csv)"]
+    ATSDB -->|generate-enhanced-query-results| ECSV
     ATS   -->|extract-query-stats-from-atscale| STATSCSV["Stats CSV<br/>(occurrences.csv)"]
 
     HOSTNAME["Hostname"] -->|generate-atscale-install-yaml| VALUESYAML["values.yaml<br/>(Helm install)"]
@@ -72,6 +74,7 @@ flowchart TD
     click PBI href "#generate-powerbi-from-namespace" "generate-powerbi-from-namespace"
     click QJSON href "#extract-queries-from-atscale" "extract-queries-from-atscale"
     click RCSV href "#execute-atscale-query-harness" "execute-atscale-query-harness"
+    click ECSV href "#generate-enhanced-query-results" "generate-enhanced-query-results"
     click STATSCSV href "#extract-query-stats-from-atscale" "extract-query-stats-from-atscale"
     click VALUESYAML href "#generate-atscale-install-yaml" "generate-atscale-install-yaml"
     click METRICS href "#generate-metrics-from-model" "generate-metrics-from-model"
@@ -108,6 +111,7 @@ flowchart TD
     - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
     - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
     - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+    - [`generate-enhanced-query-results`](#generate-enhanced-query-results)
   - AtScale Config
     - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
     - [`atscale-list-data-sources`](#atscale-list-data-sources)
@@ -752,7 +756,7 @@ Supports two config formats:
 - `{model}_sql_installer_queries.json` — installer SQL queries (`sql`/Hive language)
 - `{model}_xmla_queries.json` — XMLA/MDX queries (`analysis` language)
 
-Each file is a JSON array of query records with fields: `queryName`, `queryLanguage`, `inboundText`, `inboundTextAsHash` (SHA-256), `outboundText`, `cubeName`, `projectId`, `aggregateUsed`, `numTimes`, `elapsedTimeInSeconds`, `avgResultSetSize`, `atscaleQueryId`.
+Each file is a JSON array of query records with fields: `queryName`, `queryLanguage`, `originalText`, `originalTextHash` (SHA-256), `outboundText`, `cubeName`, `projectId`, `aggregateUsed`, `numTimes`, `elapsedTimeInSeconds`, `avgResultSetSize`, `atscaleQueryId`.
 
 The `connections.yaml` entry must have a `sql:` block with `dialect: postgres` pointing at the AtScale Postgres backend (typically port `25432`, database `atscale`).
 
@@ -818,10 +822,14 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 | `--throttle-ms` | No | `5` | Minimum milliseconds between query dispatches per worker |
 | `--run-id` | No | | Label embedded in every output row; auto-generated if omitted |
 | `--output-dir` | No | `run_results` | Directory to write the output CSV file |
-| `--redact` | No | `false` | When `true`, omits `inbound_text` from log output |
+| `--redact` | No | `false` | When `true`, omits `original_text` from log output |
 | `--duration-minutes` | No | `0` | Run for this many minutes cycling the query list (0 = one pass) |
+| `--annotate-queries` | No | `true` | When `true`, prepends a `/* {run_query_id, original_text_hash} */` comment to each executed query so AtScale's query log carries correlation fields. Set to `false` to send queries unmodified. |
 
-**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `inbound_text_hash`
+**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `run_query_id`, `original_atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `original_text_hash`
+
+- **`run_query_id`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `--annotate-queries true`)
+- **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
 
 **Output filename:**
 - Task-file mode: derived from `runLogFileName` in the task definition (`.log` → `.csv`)
@@ -833,6 +841,60 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 |---|---|
 | `AtOnceUsers`, `RampUsers`, `ConstantUsersPerSec`, `RampUsersPerSec` | One-pass — runs each query once with the specified concurrency |
 | `ConstantConcurrentUsers`, `RampConcurrentUsers` | Timed loop — cycles the query list for `durationMinutes` |
+
+---
+
+### `generate-enhanced-query-results`
+
+[↑ Table of Contents](#table-of-contents)
+
+Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale `query_id`, outbound SQL, and optionally the execution plan from the target data source. The correlation relies on the annotation comment that `execute-atscale-query-harness` prepends to every query:
+
+```
+/* {"run_id":"<run_id>","run_query_id":"<uuid>","original_text_hash":"<sha256>"} */
+```
+
+The operation connects to the AtScale internal Postgres backend, searches the `queries`, `subqueries`, `queries_planned`, and `query_results` tables for rows whose `query_text` starts with that comment, extracts the `run_query_id`, and joins enriched data back to the CSV. When `--target-connection-name` is provided the operation also connects to the target database and runs `EXPLAIN` on each outbound query. Identical outbound queries are cached so each unique SQL is explained only once.
+
+**Requirements:** `--annotate-queries` must have been `true` (the default) when the harness run was executed.
+
+```bash
+./atscale-utils generate-enhanced-query-results \
+  --results-file "./run_results/2026-04-21-ABC123_ats_connection.csv" \
+  --connection-file "./connections.yaml" \
+  --connection-name "ats_connection"
+
+# Custom output path and wider look-back window
+./atscale-utils generate-enhanced-query-results \
+  --results-file "./run_results/2026-04-21-ABC123_ats_connection.csv" \
+  --connection-file "./connections.yaml" \
+  --connection-name "ats_connection" \
+  --output-file "./run_results/enhanced.csv" \
+  --days 14
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--results-file` | Yes | | Path to the CSV from `execute-atscale-query-harness` |
+| `--connection-file` | Yes | | Path to `connections.yaml` |
+| `--connection-name` | Yes | | Connection name; uses `metadata:` block if present, otherwise `sql:` block |
+| `--output-file` | No | `{stem}_enhanced.csv` | Output file path |
+| `--db-schema` | No | auto | Postgres schema for AtScale backend tables (`atscale` or `engine`) |
+| `--days` | No | `7` | Look-back window when searching the AtScale query log |
+| `--target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan for each outbound query via `EXPLAIN` and stores it in `execution_plan`. Supports `snowflake`, `postgres`, `redshift`. |
+
+**Output:** The input CSV with the following columns inserted after `run_query_id`. Rows with no AtScale match have empty values.
+
+| Column | Populated | Description |
+|---|---|---|
+| `run_atscale_query_id` | Always | AtScale's internal `query_id` |
+| `outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
+| `used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
+| `elapsed_ms` | When matched | Total wall-clock time from planning start to last result row (ms). Computed as `query_results.finished − queries_planned.planning_started`. |
+| `parse_ms` | Best-effort | Planning/parse phase duration (ms). Computed as `queries_planned.<finish_col> − planning_started`. Empty when the backend does not expose a planning-finish timestamp. |
+| `execute_ms` | Best-effort | **WAIT phase** — total time AtScale spent waiting for the underlying database across all subqueries (ms). Computed as `SUM(subquery_fetch_started − subquery_started)`. Matches the "WAIT" metric in the AtScale query monitor. Empty when subquery submission timestamps are absent. |
+| `fetch_ms` | Best-effort | **FETCH phase** — total time to retrieve result rows from the underlying database across all subqueries (ms). Computed as `SUM(subquery_finished − subquery_fetch_started)`. Matches the "FETCH" metric in the AtScale query monitor. Empty when subquery-results phase timestamps are absent. |
+| `execution_plan` | When `--target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
 
 ---
 
