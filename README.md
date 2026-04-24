@@ -1353,10 +1353,11 @@ With a scale factor and reproducible seed:
 | `--output-dir` | No | `data` | Directory where CSV files are written |
 | `--scale-factor` | No | `1.0` | Scale row and member counts (e.g. `0.01` = 1% of real size) |
 | `--seed` | No | — | Integer random seed for reproducible output |
+| `--reports-dir` | No | `<output-dir>/_reports` | Directory where security audit artifacts are written |
 
-**Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
+**Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`. A `_reports/` subdirectory additionally receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist.
 
-See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm and [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls) for the hardening contract enforced by this operation.
 
 ---
 
@@ -1401,8 +1402,11 @@ With scale factor and batch tuning:
 | `--dialect` | No | `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
 | `--batch-size` | No | `500` | Rows per `INSERT` statement |
 | `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `--reports-dir` | No | `_reports` | Directory where security audit artifacts are written |
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order respects FK constraints throughout.
+
+**Security artifacts:** a `_reports/` directory (relative to the working directory unless `--reports-dir` is supplied) receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. See [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls).
 
 See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
 

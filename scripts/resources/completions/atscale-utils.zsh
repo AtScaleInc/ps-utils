@@ -101,10 +101,10 @@ case $state in
     _values 'params' --logfile --output --verbose --input-file --output-file --dialect
     ;;
   generate-data-from-data-shape)
-    _values 'params' --logfile --output --verbose --input-file --output-dir --scale-factor --seed
+    _values 'params' --logfile --output --verbose --input-file --output-dir --scale-factor --seed --reports-dir
     ;;
   generate-data-from-data-shape-to-connection)
-    _values 'params' --logfile --output --verbose --input-file --connection-file --connection-name --scale-factor --seed --create-tables --drop-if-exists --dialect --batch-size --schema
+    _values 'params' --logfile --output --verbose --input-file --connection-file --connection-name --scale-factor --seed --create-tables --drop-if-exists --dialect --batch-size --schema --reports-dir
     ;;
   generate-enhanced-query-results)
     _values 'params' --logfile --output --verbose --results-file --connection-file --connection-name --output-file --db-schema --days --target-connection-name

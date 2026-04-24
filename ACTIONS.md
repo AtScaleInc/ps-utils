@@ -479,8 +479,9 @@ With scale factor and seed:
 | `output-dir` | No | `data` | Directory where CSV files are written |
 | `scale-factor` | No | `1.0` | Scale row and member counts |
 | `seed` | No | — | Integer seed for reproducible output |
+| `reports-dir` | No | `<output-dir>/_reports` | Directory for security audit artifacts |
 
-**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …).
+**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls)).
 
 ---
 
@@ -539,8 +540,11 @@ Full pipeline — extract shape, generate DDL, populate:
 | `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
 | `batch-size` | No | `500` | Rows per `INSERT` statement |
 | `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `reports-dir` | No | `_reports` | Directory for security audit artifacts |
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order ensures FK constraints are respected throughout.
+
+**Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls) for the full list.
 
 ---
 

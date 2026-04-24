@@ -42,6 +42,11 @@ import type {
   DistributionShape,
   PercentileSet,
 } from "./types.js";
+import {
+  assertGeneratedKeyShape,
+  assertFkClosure,
+  type FkClosureReport,
+} from "./security.js";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -68,6 +73,12 @@ export interface GeneratedData {
   dimensions: GeneratedTable[];
   /** Fact tables. */
   facts:      GeneratedTable[];
+  /**
+   * Referential-integrity report produced after all tables are generated.
+   * Always present; every fact FK is verified to resolve to a dim leaf key.
+   * (review/05 §Referential Integrity)
+   */
+  fkClosure:  FkClosureReport;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -100,7 +111,18 @@ export function generateData(
     facts.push(generateFactTable(fact, dimLeaves, fp, scale, rand));
   }
 
-  return { dimensions, facts };
+  // ── Security: generated-key shape + FK closure (review/01 R-15, review/05) ──
+  for (const t of dimensions) assertGeneratedKeyShape(t.tableName, t.columns, t.rows);
+  for (const t of facts)      assertGeneratedKeyShape(t.tableName, t.columns, t.rows);
+
+  const dimLeafKeySets = new Map<string, Set<number>>();
+  for (const dim of fp.dimensions) {
+    const tableName = dimIdToTable(dim.id);
+    dimLeafKeySets.set(tableName, new Set(dimLeaves.get(dim.id) ?? []));
+  }
+  const fkClosure = assertFkClosure(facts, dimLeafKeySets);
+
+  return { dimensions, facts, fkClosure };
 }
 
 /**

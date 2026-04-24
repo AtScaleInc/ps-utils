@@ -5,6 +5,19 @@ multidimensional database — sufficient to reconstruct plausible DDL and genera
 synthetic data that is statistically indistinguishable from the original at an
 aggregate level, without divulging any actual data values.
 
+> **Security hardening:** every fingerprint produced by `extract-data-shape-from-connection`
+> and every dataset produced by `generate-data-from-data-shape[-to-connection]` is passed
+> through the controls centralized in [`src/statistics/security.ts`](src/statistics/security.ts).
+> The controls are derived from the review artifacts under [`review/`](review/) — notably the
+> risk register, obfuscation strategy, and cube promotion checklist — and are **strictly
+> additive**: existing fields and behavior are preserved, and additional metadata
+> (`coldMemberBucket`, `overlapBucket`, `sensitivity`, `isNearFunctional`, `security`)
+> is attached for downstream auditors. A `_reports/` directory alongside each output
+> carries three audit artifacts — `pipeline_isolation_report.json`,
+> `generation_manifest.json`, and `integrity_report.json` — that together satisfy
+> the promotion-gate checklist in [`review/05_cube_security_checklist.md`](review/05_cube_security_checklist.md).
+> See [§Security & Compliance Controls](#security--compliance-controls) below for the full list.
+
 The algorithm is specific to semantic layers and OLAP models. It requires an SML
 model as input and is organized around the model's structure, not raw database tables.
 
@@ -622,3 +635,73 @@ tables, and provide diminishing returns beyond these three.
 declared FK constraints. When this happens, the FK topology must be inferred from
 naming conventions and cardinality analysis — the same inference engine used during SML
 generation — before hierarchy-aware profiling can begin.
+
+---
+
+## Security & Compliance Controls
+
+The fingerprint algorithm is designed to produce a publishable artifact: the output
+files may be checked into source control, shared with partner teams, or used as the
+seed for external synthetic-data environments. To make that publication safe, every
+fingerprint passes through a hardening stage implemented in
+[`src/statistics/security.ts`](src/statistics/security.ts). The controls below map
+1:1 to findings in [`review/01_risk_register.md`](review/01_risk_register.md) and
+layers in [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md).
+
+### Controls enforced automatically
+
+| Review ref | Control | Enforcement point |
+|---|---|---|
+| R-4  | `coldMemberFraction` bucketed into `0-10%` / `10-30%` / `30-60%` / `60-100%` | `hardenFingerprint()` — attaches `coldMemberBucket` |
+| R-7  | Pearson `r` rounded to 2 decimal places | `hardenFingerprint()` — mutates `measureCorrelations[].pearsonR` |
+| R-9  | Absolute ISO-8601 date strings rejected in fingerprint data | `validateFingerprint()` — throws on read/write |
+| R-10 | Conformed-dimension `overlapFraction` bucketed into `0-20%` / `20-50%` / `50-80%` / `80-100%` | `hardenFingerprint()` — attaches `overlapBucket` |
+| R-11 | `fkAssociation` scores ≥ 0.90 flagged with `isNearFunctional: true` | `hardenFingerprint()` |
+| R-15 | Every generated `*_key` value must be a positive integer allocated in-process (no real-data key ever reaches the generator) | `assertGeneratedKeyShape()` — runs after every table is built |
+| R-21 | Small-table warning (< 5,000 rows) emitted for any dim or fact that would require DP noise before external distribution | `smallTableWarnings()` — surfaced through `onProgress` |
+| Phase 6 / review §04 | Sensitivity classification (`Public` / `Internal` / `Confidential` / `Restricted`) attached to every level and measure | `hardenFingerprint()` — via `sensitivityFor()` |
+| review/03 §Layer 7 | Pipeline-isolation report emitted alongside every output batch | `writePipelineIsolationReport()` |
+| review/03 §Layer 6 (simplified) | Run manifest (`fingerprint SHA-256`, seed, scale, row counts, output digest) | `writeRunManifest()` |
+| review/05 §Referential Integrity | Every fact-FK value verified to resolve to a dim leaf key | `assertFkClosure()` — throws on orphans |
+
+Each generator output directory therefore contains a `_reports/` subdirectory with three JSON artifacts:
+
+```
+data/
+├── dim_1.csv
+├── fact_1.csv
+└── _reports/
+    ├── pipeline_isolation_report.json
+    ├── generation_manifest.json
+    └── integrity_report.json
+```
+
+For the `generate-data-from-data-shape-to-connection` operation the reports are
+written to `./_reports/` (configurable via `--reports-dir`) since the data output
+destination is a database rather than a filesystem location.
+
+### Controls deliberately deferred
+
+The following controls from the review program require infrastructure not present in
+this repository today. They are exposed as explicit stubs on `deferredControls` in
+`security.ts` so a future implementer cannot miss them:
+
+| Control | Deferred because | Spec reference |
+|---|---|---|
+| ε-differential-privacy noise on aggregate queries | Requires an ε-budget ledger and a SQL-noise injection layer | [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md) §Layer 4 |
+| Ed25519 fingerprint signing | Requires a key-management service and rotation policy | [`review/01_risk_register.md`](review/01_risk_register.md) R-25 |
+| Append-only WORM audit log | Requires object-lock storage integration | [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md) §Layer 6 |
+| Dynamic RBAC / column masking | Runtime concern of the semantic layer, not the fingerprint | [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md) §Layer 3 |
+
+Each stub throws a descriptive error that names the review document section an
+implementer must read before wiring the control in, so the controls cannot silently
+no-op after a future refactor.
+
+### Validation contract
+
+`readFingerprintFile()` and `writeFingerprintFile()` both pass the fingerprint through
+`validateFingerprint()`. **Errors** (currently: absolute ISO-date strings in data
+fields) halt processing. **Warnings** (small-table rows, unrounded `pearsonR`,
+unbucketed fractions — signs the fingerprint was produced by an earlier unhardened
+version of the code) are logged to stderr and do not halt processing, so older
+fingerprints remain readable while surfacing remediation signals.

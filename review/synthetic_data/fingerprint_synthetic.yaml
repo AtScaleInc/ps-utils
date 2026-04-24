@@ -1,0 +1,146 @@
+fingerprint_version: "2.0"
+model_role: "semantic_layer"
+generator:
+  tool: "review-phase-2-handwritten"
+  seed: 1742832000
+  created_at_utc_span_days: 0
+  signing_key_id: "review-ed25519-placeholder"
+  classification: "Public"          # handwritten example, no real data touched
+
+dimensions:
+  - id: D1
+    row_count: 42000
+    hierarchies:
+      - id: H1
+        levels:
+          - id: L0
+            role: root
+            member_count: 5
+            null_key_fraction: 0.0
+          - id: L1
+            member_count: 52
+            null_key_fraction: 0.0
+            rollup_from_parent:
+              avg_ratio: 10.4
+              stddev_ratio: 3.1
+              shape: uniform
+              p50: 10
+              p95: 17
+          - id: L2
+            member_count: 28000
+            null_key_fraction: 0.003
+            rollup_from_parent:
+              avg_ratio: 538.0
+              stddev_ratio: 612.0
+              shape: power_law
+              p50: 220
+              p95: 1800
+              tiers:
+                q1_avg_children: 12
+                q2_avg_children: 85
+                q3_avg_children: 310
+                q4_avg_children: 1740
+                q4_child_fraction: 0.81
+          - id: L3
+            role: leaf
+            member_count: 42000
+            cold_member_fraction: 0.08
+            null_key_fraction: 0.0
+
+  - id: D2
+    row_count: 1200
+    hierarchies:
+      - id: H1
+        levels:
+          - id: L0
+            role: root
+            member_count: 6
+          - id: L1
+            member_count: 48
+            rollup_from_parent: { avg_ratio: 8.0, stddev_ratio: 2.1, shape: uniform, p50: 8, p95: 11 }
+          - id: L2
+            role: leaf
+            member_count: 1200
+            rollup_from_parent: { avg_ratio: 25.0, stddev_ratio: 6.4, shape: uniform, p50: 25, p95: 34 }
+
+  - id: D3
+    row_count: 1826
+    hierarchies:
+      - id: H1
+        levels:
+          - id: L0
+            role: root
+            member_count: 5                 # 5 years
+          - id: L1
+            member_count: 60                # 60 months
+            rollup_from_parent: { avg_ratio: 12.0, shape: uniform }
+          - id: L2
+            role: leaf
+            member_count: 1826              # days
+            rollup_from_parent: { avg_ratio: 30.4, shape: uniform }
+
+facts:
+  - id: F1
+    row_count: 3200000
+    joins:
+      - to_dimension: D1
+        to_leaf: D1.H1.L3
+        null_fk_fraction: 0.001
+        coverage_fraction: 0.92
+        density:
+          avg: 76.2
+          stddev: 149.4
+          shape: power_law
+          p50: 28
+          p90: 198
+          p99: 980
+          max: 14200
+      - to_dimension: D2
+        to_leaf: D2.H1.L2
+        null_fk_fraction: 0.000
+        coverage_fraction: 0.99
+        density:
+          avg: 2666.0
+          stddev: 4102.0
+          shape: power_law
+          p50: 1200
+          p90: 6800
+          p99: 18400
+      - to_dimension: D3
+        to_leaf: D3.H1.L2
+        null_fk_fraction: 0.000
+        coverage_fraction: 0.88
+        density:
+          avg: 1750.0
+          stddev: 310.0
+          shape: uniform
+          p50: 1740
+          p90: 2200
+    measures:
+      - id: M1
+        aggregation: SUM
+        type: decimal
+        additivity: additive
+        distribution:
+          shape: log_normal
+          percentiles: { p5: 8.2, p25: 42.1, p50: 142.5, p75: 390.0, p95: 1820.0 }
+      - id: M2
+        aggregation: SUM
+        type: integer
+        additivity: additive
+        distribution:
+          shape: log_normal
+          percentiles: { p5: 1, p25: 2, p50: 4, p75: 9, p95: 22 }
+    measure_correlations:
+      - measure_id_1: F1.M1
+        measure_id_2: F1.M2
+        pearson_r: 0.84
+    fk_associations:
+      - dimension_id_1: D1
+        dimension_id_2: D2
+        association_score: 0.31
+
+conformed_dimensions:
+  - dimension: D3
+    facts: [F1]
+    overlap_fraction: 0.88

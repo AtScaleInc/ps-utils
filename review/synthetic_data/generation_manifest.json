@@ -1,0 +1,28 @@
+{
+  "manifest_version": "1.0",
+  "generator": {
+    "tool": "review-phase-2-handwritten",
+    "toolchain_notes": "Illustrative fixture for review; not produced by a running generator. Replaced at implementation time by generate-synthetic-data-from-sml / generate-synthetic-data-from-connection output."
+  },
+  "fingerprint_source": "review/synthetic_data/fingerprint_synthetic.yaml",
+  "fingerprint_sha256": "PLACEHOLDER_sha256_of_fingerprint",
+  "prng": "mulberry32",
+  "seed": 1742832000,
+  "anchor_date_mode": "today_minus_span_half",
+  "outputs": [
+    { "path": "review/synthetic_data/schema_synthetic.sql", "sha256": "PLACEHOLDER" },
+    { "path": "review/synthetic_data/dim_1_synthetic.csv",  "sha256": "PLACEHOLDER" },
+    { "path": "review/synthetic_data/dim_2_synthetic.csv",  "sha256": "PLACEHOLDER" },
+    { "path": "review/synthetic_data/dim_3_synthetic.csv",  "sha256": "PLACEHOLDER" },
+    { "path": "review/synthetic_data/fact_1_synthetic.csv", "sha256": "PLACEHOLDER" }
+  ],
+  "invariants_asserted": {
+    "synthetic_key_regex": "^syn_[0-9a-f]{8}$",
+    "min_category_count_k": 5,
+    "fk_orphan_tolerance": 0,
+    "no_real_pii": true,
+    "no_absolute_real_dates": true
+  },
+  "classification": "Public",
+  "notes": "Review-scope fixture only. No real data was touched to produce this file."
+}
