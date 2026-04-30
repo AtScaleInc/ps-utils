@@ -83,10 +83,14 @@ flowchart TD
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
   - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
   - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+  - [`generate-queries-from-sml`](#generate-queries-from-sml)
+  - [`generate-queries-from-model`](#generate-queries-from-model)
   - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
   - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
   - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+  - [`execute-query-on-connection`](#execute-query-on-connection)
   - [`generate-enhanced-query-results`](#generate-enhanced-query-results)
+  - [`execute-run-analysis`](#execute-run-analysis)
   - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
   - [`atscale-list-data-sources`](#atscale-list-data-sources)
   - [`atscale-create-data-source`](#atscale-create-data-source)
@@ -843,12 +847,63 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 | `output-dir` | No | `run_results` | Directory to write the output CSV |
 | `redact` | No | `false` | When `"true"`, omits inbound query text from log output |
 | `duration-minutes` | No | `0` | Run for this many minutes cycling the query list (0 = one pass) |
-| `annotate-queries` | No | `true` | When `"true"`, prepends a `/* {run_query_id, original_text_hash} */` comment to each executed query so AtScale's query log carries correlation fields. Set to `"false"` to send queries unmodified. |
+| `annotate-queries` | No | `true` | When `"true"`, prepends a `/* {run_query_uuid, original_text_hash} */` comment to each executed query so AtScale's query log carries correlation fields. Set to `"false"` to send queries unmodified. |
 
-**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `run_query_id`, `original_atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `original_text_hash`
+**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `run_query_uuid`, `original_atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `checksum`, `error`, `timestamp`, `original_text_hash`
 
-- **`run_query_id`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `annotate-queries: "true"`)
+- **`run_query_uuid`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `annotate-queries: "true"`)
 - **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
+- **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). `0` when no data is returned or on error.
+- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the SOAP `<Body>` content only (the `<Header>` is excluded because it contains per-request session IDs and timestamps). Empty when `row_count = 0` or when the query fails.
+
+---
+
+### `execute-query-on-connection`
+
+Executes one or more queries from a query file against a live connection and writes the results to output file(s). Useful for ad-hoc inspection and debugging without the overhead of a full harness run.
+
+`query-name` supports shell-style wildcards: `*` matches any sequence of characters, `?` matches exactly one character. When the pattern matches a single query, results are written to `output-file` directly. When it matches multiple queries, each result is written to `{dir(output-file)}/{query_name}{ext(output-file)}`.
+
+Accepts the same query file formats as `execute-atscale-query-harness`:
+- **JSON** — array of `QueryRecord` objects produced by `extract-queries-from-atscale`
+- **CSV** — Gatling ingest format (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`)
+
+Output format depends on protocol: **SQL** → CSV with column headers and data rows; **XMLA** → raw SOAP XML response body.
+
+#### Using the composite action
+
+```yaml
+# Execute one query by exact name
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: execute-query-on-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    query-file: queries/SalesModel_xmla_queries.json
+    protocol: xmla
+    query-name: "Total Revenue by Region"
+    output-file: output/revenue_by_region.xml
+
+# Execute all queries whose names start with "sales_" — writes one file per query
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: execute-query-on-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: ats_connection
+    query-file: queries/SalesModel_sql_queries.json
+    protocol: sql
+    query-name: "sales_*"
+    output-file: output/placeholder.csv
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of `connections.yaml` or `systems.properties` (pass via secret) |
+| `connection-name` | Yes | | Connection name (YAML mode) or model name (`.properties` mode) |
+| `query-file` | Yes | | JSON file from `extract-queries-from-atscale` or a Gatling ingest CSV |
+| `protocol` | No | `xmla` | Query protocol: `xmla` or `sql` |
+| `query-name` | Yes | | Name or wildcard pattern (`*`, `?`) to select queries from the file |
+| `output-file` | Yes | | Output path for a single match; used as dir+extension template for multiple matches |
 
 ---
 
@@ -879,18 +934,106 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `days` | No | `7` | Look-back window when searching the AtScale query log |
 | `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`. |
 
-**Output:** Input CSV extended with the following columns inserted after `run_query_id`. Rows with no match have empty values.
+**Output:** Input CSV with the following columns appended on the right. Rows with no match have empty values.
 
 | Column | Populated | Description |
 |---|---|---|
-| `run_atscale_query_id` | Always | AtScale's internal `query_id` |
-| `outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
-| `used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
-| `elapsed_ms` | When matched | Total wall-clock time from planning start to last result row (ms). Computed as `query_results.finished − queries_planned.planning_started`. |
-| `parse_ms` | Best-effort | Planning/parse phase duration (ms). Computed as `queries_planned.<finish_col> − planning_started`. Empty when the backend does not expose a planning-finish timestamp. |
-| `execute_ms` | Best-effort | **WAIT phase** — total time AtScale spent waiting for the underlying database across all subqueries (ms). Computed as `SUM(subquery_fetch_started − subquery_started)`. Matches the "WAIT" metric in the AtScale query monitor. Empty when subquery submission timestamps are absent. |
-| `fetch_ms` | Best-effort | **FETCH phase** — total time to retrieve result rows from the underlying database across all subqueries (ms). Computed as `SUM(subquery_finished − subquery_fetch_started)`. Matches the "FETCH" metric in the AtScale query monitor. Empty when subquery-results phase timestamps are absent. |
-| `execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_atscale_query_id` | Always | AtScale's internal `query_id` for the inbound query |
+| `run_inbound_query_id` | Always | AtScale's `query_id` for the inbound annotated query (same source as `run_atscale_query_id`) |
+| `run_outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
+| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
+| `run_duration_ms` | When matched | Total wall-clock time from query receipt to last result row (ms). Computed as `query_results.finished − queries.received`. Falls back to `finished − planning_started` if `received` is unavailable. |
+| `run_inbound_ms` | Best-effort | **INBOUND phase** — time from query receipt to start of planning (ms). Computed as `queries_planned.planning_started − queries.received`. Matches the "INBOUND" metric in the AtScale query monitor. |
+| `run_query_planning_ms` | Best-effort | **QUERY PLANNING phase** — time AtScale spent planning the query (ms). Computed as `queries_planned.<finish_col> − planning_started`. Matches the "QUERY PLANNING" metric in the AtScale query monitor. |
+| `run_outbound_ms` | Best-effort | **OUTBOUND total** — time from planning completion to last subquery result (ms). Computed as `MAX(subquery_finished) − planning_completed`. Matches the "OUTBOUND SUMMARY" metric in the AtScale query monitor. |
+| `run_wait_ms` | Best-effort | **WAIT phase** — time from planning completion to first subquery execution start (ms). Computed as `MIN(subquery_started) − planning_completed`. Matches the "WAIT" metric in the AtScale query monitor. |
+| `run_execute` | Best-effort | **EXECUTE phase** — total DB execution time across all subqueries (ms). Computed as `SUM(subquery_fetch_started − subquery_started)`. Matches the "EXECUTE" metric in the AtScale query monitor. |
+| `run_fetch_ms` | Best-effort | **FETCH phase** — total time to retrieve result rows across all subqueries (ms). Computed as `SUM(subquery_finished − subquery_fetch_started)`. Matches the "FETCH" metric in the AtScale query monitor. |
+
+---
+
+### `execute-run-analysis`
+
+Compares two run logs from `execute-atscale-query-harness`, or two enhanced CSVs from `generate-enhanced-query-results`, on a query-by-query basis. Queries are matched by a configurable join key. Writes a plain-text summary report and a row-by-row comparison CSV.
+
+When the same join-key value appears multiple times in a file, rows are sorted by timestamp and paired positionally; extra occurrences that cannot be paired are reported as unmatched.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: execute-run-analysis
+    file-a: run_results/2026-04-21-ABC123_model.csv
+    file-b: run_results/2026-04-22-DEF456_model.csv
+    duration-variance-pct: "20"
+    summary-file: analysis/summary.txt
+    comparison-file: analysis/comparison.csv
+    outliers-file: analysis/outliers.csv
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `file-a` | Yes | | First run log or enhanced output CSV |
+| `file-b` | Yes | | Second run log or enhanced output CSV |
+| `join-key` | No | `original_text_hash` | Column to join on: `original_text_hash` or `original_atscale_query_id` |
+| `duration-variance-pct` | No | `20` | Flag pairs where `|(b−a)/a| × 100` exceeds this percentage |
+| `summary-file` | Yes | | Path to write the plain-text summary report |
+| `comparison-file` | Yes | | Path to write the row-by-row comparison CSV |
+| `outliers-file` | Yes | | Path to write the filtered outliers CSV (row-count and duration mismatches only) |
+
+**Comparison / Outliers CSV columns:** `join_key_value`, `query_name`, `occurrence`, `row_count_mismatch`, `duration_outside_variance`, `error_mismatch`, `a_status`, `b_status`, `a_duration_ms`, `b_duration_ms`, `duration_delta_ms`, `duration_delta_pct`, `a_row_count`, `b_row_count`, `a_checksum`, `b_checksum`, `a_error`, `b_error`, `a_timestamp`, `b_timestamp`, plus `a_`/`b_` prefixed enhanced timing columns when present in either input.
+
+---
+
+### `generate-queries-from-sml`
+
+Reads an SML directory and generates XMLA (MDX) and SQL query JSON files, both compatible with `execute-atscale-query-harness`. Each file covers every metric as a grand-total query and every hierarchy level as a per-level breakdown query selecting all model metrics.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-queries-from-sml
+    sml-dir: sml
+    xmla-output-file: queries/model_xmla.json
+    sql-output-file: queries/model_sql.json
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML directory |
+| `model-name` | No | First model found | Model `label` or `unique_name` to use |
+| `cube-name` | No | Model label | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
+| `sql-output-file` | Yes | | Path to write the SQL query JSON |
+
+---
+
+### `generate-queries-from-model`
+
+Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-model-from-sml`) and generates the same XMLA and SQL query JSON files as `generate-queries-from-sml`. Use this when a `model.yaml` is already available instead of a raw SML directory.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-queries-from-model
+    model-file: model.yaml
+    xmla-output-file: queries/model_xmla.json
+    sql-output-file: queries/model_sql.json
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `model-file` | Yes | | Path to the `model.yaml` file |
+| `model-name` | No | First model found | Top-level model key when the file contains multiple models |
+| `cube-name` | No | Model name | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
+| `sql-output-file` | Yes | | Path to write the SQL query JSON |
 
 ---
 

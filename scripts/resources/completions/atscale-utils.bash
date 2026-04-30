@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results" -- "$cur") )
+    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model" -- "$cur") )
     return 0
   fi
 
@@ -41,6 +41,9 @@ _atscale_utils_complete() {
     generate-sml-from-ddl)
       params="--logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --sml-config-file --catalog-name --pii-severity --schema --database --dialect --fact-tables --camel-case-files --camel-case-measures --min-hierarchies-per-dim --max-hierarchies-per-dim"
       ;;
+    generate-sml-from-xml)
+      params="--logfile --output --verbose --xml-file --output-dir --connection-name --connection-type --catalog-name"
+      ;;
     extract-model-from-sml)
       params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"
       ;;
@@ -67,6 +70,9 @@ _atscale_utils_complete() {
       ;;
     execute-atscale-query-harness)
       params="--logfile --output --verbose --connection-file --connection-name --query-file --ingest-file --task-file --protocol --concurrent-users --throttle-ms --run-id --output-dir --redact --duration-minutes --annotate-queries"
+      ;;
+    execute-query-on-connection)
+      params="--logfile --output --verbose --connection-file --connection-name --query-file --protocol --query-name --output-file"
       ;;
     generate-atscale-install-yaml)
       params="--logfile --output --verbose --hostname --cert-file --key-file --license-key --output-file --enable-mcp --minimal"
@@ -109,6 +115,15 @@ _atscale_utils_complete() {
       ;;
     generate-enhanced-query-results)
       params="--logfile --output --verbose --results-file --connection-file --connection-name --output-file --db-schema --days --target-connection-name"
+      ;;
+    execute-run-analysis)
+      params="--logfile --output --verbose --file-a --file-b --join-key --duration-variance-pct --summary-file --comparison-file --outliers-file"
+      ;;
+    generate-queries-from-sml)
+      params="--logfile --output --verbose --sml-dir --model-name --cube-name --xmla-output-file --sql-output-file"
+      ;;
+    generate-queries-from-model)
+      params="--logfile --output --verbose --model-file --model-name --cube-name --xmla-output-file --sql-output-file"
       ;;
     *)
       params="--logfile --output --verbose"
