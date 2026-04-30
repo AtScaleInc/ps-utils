@@ -128,12 +128,12 @@ For each `<data-set>`:
 ### Physical table datasets
 
 ```xml
-<data-set name="SAMPLE_CUBE">
+<data-set name="FACT_DATASET">
   <physical>
     <table>
       <database>LAKE</database>
       <schema>ONESEARCH</schema>
-      <name>SAMPLE_CUBE</name>
+      <name>FACT_DATASET</name>
     </table>
   </physical>
 </data-set>
@@ -142,12 +142,12 @@ For each `<data-set>`:
 Emits:
 
 ```yaml
-unique_name: SAMPLE_CUBE
-label: Sample Cube
+unique_name: FACT_DATASET
+label: Fact Dataset
 table:
   db: LAKE
   schema: ONESEARCH
-  name: SAMPLE_CUBE
+  name: FACT_DATASET
 ```
 
 ### SQL query datasets
@@ -249,7 +249,7 @@ denormalised into the fact table. In SML this is modelled as a dimension
 referencing the fact dataset directly, with no relationship join needed.
 
 Examples in this model: Geography - Destination, Contracting Brand, Length of
-Stay, Tenure — all columns resolve to `SAMPLE_CUBE`.
+Stay, Tenure — all columns resolve to `FACT_DATASET`.
 
 ---
 
@@ -291,7 +291,7 @@ folder: Exact holiday start date
 aggregation: sum
 format: integer
 datasets:
-  - dataset: SAMPLE_CUBE
+  - dataset: FACT_DATASET
     column_name: UNIT_AVAILABILITY
 ```
 
@@ -325,13 +325,13 @@ The join columns are those listed under that UUID's `<key-ref>` entries.
   <column>HOLIDAY_START_DATE</column>
 </key-ref>
 
-<!-- In SAMPLE_CUBE logical (fact) -->
+<!-- In FACT_DATASET logical (fact) -->
 <key-ref id="b434d939-..." complete="false">
   <column>HOLIDAY_START_DATE</column>
 </key-ref>
 ```
 
-→ Join: `SAMPLE_CUBE.HOLIDAY_START_DATE =
+→ Join: `FACT_DATASET.HOLIDAY_START_DATE =
 Bookability_Date.HOLIDAY_START_DATE`
 
 ### Model output
@@ -342,7 +342,7 @@ label: Bookability
 relationships:
   - unique_name: Bookability_to_Bookability_Date
     from:
-      dataset: SAMPLE_CUBE
+      dataset: FACT_DATASET
       join_columns: [HOLIDAY_START_DATE]
     to:
       dimension: Holiday Start Date
@@ -350,7 +350,7 @@ relationships:
       join_columns: [HOLIDAY_START_DATE]
   - unique_name: Bookability_to_Arrival_Flexibility
     from:
-      dataset: SAMPLE_CUBE
+      dataset: FACT_DATASET
       join_columns: [PROPERTYCODE, PARENT_BRAND]
     to:
       dimension: Flex
@@ -514,7 +514,7 @@ format: percent:1
 
 ### MDX functions in scope
 
-The ExampleCustomer models use the following MDX functions in calculated member
+AtScale XML models commonly use the following MDX functions in calculated member
 expressions; the converter should preserve them verbatim:
 `IIF`, `CASE/WHEN/THEN/ELSE/END`, `PARALLELPERIOD`, `Aggregate`,
 `PeriodsToDate`, `Lag`, `Ancestor`, `Descendants`, `CurrentMember`,

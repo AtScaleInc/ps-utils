@@ -21,12 +21,16 @@ import type { Logger } from "../../logging.js";
 // ============================================================
 
 export interface XmlConversionOptions {
-  /** SML connection unique_name to embed in generated files. */
-  connectionName: string;
+  /** SML connection unique_name. If omitted, extracted from XML <physical><connection id="...">. */
+  connectionName?: string;
   /** Optional connection type (e.g. "snowflake"). Written as comment only. */
   connectionType?: string;
   /** Override the catalog label. Defaults to schema name. */
   catalogName?: string;
+  /** Database name to embed in the connection file (moves db out of individual datasets). */
+  connectionDb?: string;
+  /** Schema name to embed in the connection file (moves schema out of individual datasets). */
+  connectionSchema?: string;
 }
 
 /**
@@ -68,7 +72,6 @@ export async function convertXmlToSml(
 
   const schemaName = a(schemaEl, "name") ?? "Model";
   const catalogName = opts.catalogName ?? schemaName;
-  const connName = opts.connectionName;
   const output = new Map<string, string>();
 
   // ---------------------------------------------------------------
@@ -92,6 +95,15 @@ export async function convertXmlToSml(
     }
   }
 
+  // Resolve connection name: use explicit option, else extract from XML <physical><connection id="...">, else fallback
+  let connName = opts.connectionName;
+  if (!connName) {
+    for (const phys of datasetNameToPhysical.values()) {
+      if (phys.connectionName) { connName = phys.connectionName; break; }
+    }
+    connName = connName ?? "connection";
+  }
+
   // keyMap: UUID → KeyRefEntry[]
   const keyMap = new Map<string, KeyRefEntry[]>();
   // attrMap: UUID → AttrRefEntry
@@ -102,10 +114,21 @@ export async function convertXmlToSml(
       const id = a(kr, "id");
       if (!id) continue;
       const complete = a(kr, "complete") ?? "true";
+      const unique = a(kr, "unique") === "true";
       const columns = extractColumns(arr(kr.column));
+      // Extract role_play from <ref-path><new-ref><ref-naming>Date Created.{0}</ref-naming>
+      let rolePlay: string | undefined;
+      const refPathEl = first(arr(kr["ref-path"])) as Record<string, unknown> | undefined;
+      if (refPathEl) {
+        const newRefEl = first(arr(refPathEl["new-ref"])) as Record<string, unknown> | undefined;
+        if (newRefEl) {
+          const refNaming = s(first(arr(newRefEl["ref-naming"])));
+          if (refNaming) rolePlay = refNaming;
+        }
+      }
       if (columns.length > 0) {
         const entries = keyMap.get(id) ?? [];
-        entries.push({ datasetName, columns, complete });
+        entries.push({ datasetName, columns, complete, unique, rolePlay });
         keyMap.set(id, entries);
       }
     }
@@ -147,7 +170,17 @@ export async function convertXmlToSml(
       const fmtEl = props ? first(arr(props.formatting)) as Record<string, unknown> | undefined : undefined;
       const formatString = fmtEl ? s(first(arr(fmtEl["format-string"]))) : undefined;
       const namedFormat = fmtEl ? s(first(arr(fmtEl["named-format"]))) : undefined;
-      attrDef.set(id, { name, caption, keyUuid, formatString, namedFormat, folder, visible });
+      const description = props ? s(first(arr(props.description))) : undefined;
+      const allowedCalcTypesEl = props
+        ? (first(arr(props["allowed-calculation-types"])) as Record<string, unknown> | undefined)
+        : undefined;
+      const allowedCalcTypes = allowedCalcTypesEl
+        ? arr(allowedCalcTypesEl["calculation-type"]).map(s).filter((t): t is string => Boolean(t))
+        : undefined;
+      attrDef.set(id, {
+        name, caption, keyUuid, formatString, namedFormat, folder, visible, description,
+        allowedCalcTypes: allowedCalcTypes?.length ? allowedCalcTypes : undefined,
+      });
     }
   }
 
@@ -161,6 +194,21 @@ export async function convertXmlToSml(
   for (const cubesSec of arr(schemaEl.cubes)) {
     for (const cube of arr(cubesSec.cube)) {
       cubeEls.push(cube as Record<string, unknown>);
+    }
+  }
+
+  // Collect fact dataset names (first data-set-ref per cube) for degenerate dim detection
+  const factDatasetNames = new Set<string>();
+  for (const cube of cubeEls) {
+    outer: for (const dsSec of arr(cube["data-sets"])) {
+      for (const dsRef of arr(dsSec["data-set-ref"])) {
+        const refId = a(dsRef, "id");
+        if (refId) {
+          const dsName = datasetIdToName.get(refId);
+          if (dsName) factDatasetNames.add(dsName);
+        }
+        break outer; // only the first data-set-ref is the fact table
+      }
     }
   }
 
@@ -189,7 +237,10 @@ export async function convertXmlToSml(
     for (const ds of arr(dsSec["data-set"])) {
       const dsName = a(ds, "name");
       if (!dsName) continue;
-      const dsYaml = buildDatasetYaml(ds as Record<string, unknown>, dsName, connName);
+      const dsYaml = buildDatasetYaml(
+        ds as Record<string, unknown>, dsName, connName,
+        Boolean(opts.connectionDb || opts.connectionSchema),
+      );
       const fname = safeFilename(dsName);
       output.set(`datasets/${fname}.yml`, dsYaml);
       logger.log(`  → datasets/${fname}.yml`);
@@ -258,7 +309,16 @@ export async function convertXmlToSml(
       if (factDatasetName) break;
     }
 
-    const metricNames: string[] = [];
+    // Extract include_default_drillthrough from <actions><properties><include-default-drill-through>
+    const actionsEl = first(arr(cube.actions)) as Record<string, unknown> | undefined;
+    const actionPropsEl = actionsEl
+      ? (first(arr(actionsEl.properties)) as Record<string, unknown> | undefined)
+      : undefined;
+    const includeDefaultDrillthrough = actionPropsEl
+      ? s(first(arr(actionPropsEl["include-default-drill-through"]))) === "true"
+      : false;
+
+    const metricNames: Array<{ uniqueName: string; folder?: string }> = [];
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -283,6 +343,7 @@ export async function convertXmlToSml(
 
         const caption = s(first(arr(props.caption)));
         const folder = s(first(arr(props.folder)));
+        const description = s(first(arr(props.description)));
         const visibleStr = s(first(arr(props.visible)));
         const visible = visibleStr !== "false";
         const fmtEl = first(arr(props.formatting)) as Record<string, unknown> | undefined;
@@ -305,25 +366,25 @@ export async function convertXmlToSml(
           if (!column || !factDatasetName) continue;
 
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = `${safeName(cubeName)}_${safeName(attrNameRaw)}`.toLowerCase();
+          const uniqueName = safeName(attrNameRaw).toLowerCase();
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
-            buildMetricYaml(uniqueName, label, aggregation, factDatasetName, column, format, folder, visible),
+            buildMetricYaml(uniqueName, label, aggregation, factDatasetName, column, format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
-          metricNames.push(uniqueName);
+          metricNames.push({ uniqueName, folder: folder || undefined });
         } else if (exprEl) {
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = `${safeName(cubeName)}_${safeName(attrNameRaw)}`.toLowerCase();
+          const uniqueName = safeName(attrNameRaw).toLowerCase();
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
-            buildCalcMetricYaml(uniqueName, label, unescapeHtml(exprEl), format, folder, visible),
+            buildCalcMetricYaml(uniqueName, label, unescapeHtml(exprEl), format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
-          metricNames.push(uniqueName);
+          metricNames.push({ uniqueName, folder: folder || undefined });
         }
       }
     }
@@ -336,15 +397,15 @@ export async function convertXmlToSml(
         if (!def) continue;
         if (!def.visible) continue;
         const label = def.caption ?? def.name;
-        const uniqueName = `${safeName(cubeName)}_${safeName(def.name)}`.toLowerCase();
+        const uniqueName = safeName(def.name).toLowerCase();
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
-          `metrics/${fname}.yml`,
-          buildCalcMetricYaml(uniqueName, label, def.expression, format, def.folder, def.visible),
+          `calculations/${fname}.yml`,
+          buildCalcMemberYaml(uniqueName, label, def.expression, format, def.folder, def.visible, def.description),
         );
-        logger.log(`  → metrics/${fname}.yml`);
-        metricNames.push(uniqueName);
+        logger.log(`  → calculations/${fname}.yml`);
+        metricNames.push({ uniqueName, folder: def.folder || undefined });
       }
     }
 
@@ -390,7 +451,7 @@ export async function convertXmlToSml(
     const cubeVisible = cubeProps ? s(first(arr(cubeProps.visible))) !== "false" : true;
 
     // Emit model file
-    const modelYaml = buildModelYaml(cubeName, relationships, cubeDimNames, metricNames, !cubeVisible);
+    const modelYaml = buildModelYaml(cubeName, relationships, cubeDimNames, metricNames, !cubeVisible, includeDefaultDrillthrough);
     const fname = safeFilename(cubeName);
     output.set(`models/${fname}.yml`, modelYaml);
     logger.log(`  → models/${fname}.yml`);
@@ -403,7 +464,7 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
-    const dimYaml = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap);
+    const dimYaml = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, factDatasetNames);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -413,8 +474,11 @@ export async function convertXmlToSml(
   // Phase 6: Catalog and connection
   // ---------------------------------------------------------------
 
-  output.set("catalog.yml", buildCatalogYaml(catalogName, connName));
-  output.set(`connections/${safeFilename(connName)}.yml`, buildConnectionYaml(connName, opts.connectionType));
+  output.set("catalog.yml", buildCatalogYaml(catalogName));
+  output.set(
+    `connections/${safeFilename(connName)}.yml`,
+    buildConnectionYaml(connName, opts.connectionType, opts.connectionDb, opts.connectionSchema),
+  );
   logger.log(`  → catalog.yml`);
   logger.log(`  → connections/${safeFilename(connName)}.yml`);
 
@@ -429,6 +493,8 @@ interface KeyRefEntry {
   datasetName: string;
   columns: string[];
   complete: string; // "true" | "false" | "partial"
+  unique?: boolean;
+  rolePlay?: string;
 }
 
 interface AttrRefEntry {
@@ -444,6 +510,8 @@ interface AttrDefEntry {
   namedFormat?: string;
   folder?: string;
   visible: boolean;
+  description?: string;
+  allowedCalcTypes?: string[];
 }
 
 interface CalcMemberDef {
@@ -454,6 +522,7 @@ interface CalcMemberDef {
   formatString?: string;
   namedFormat?: string;
   expression: string;
+  description?: string;
 }
 
 interface DatasetPhysical {
@@ -461,6 +530,9 @@ interface DatasetPhysical {
   schema?: string;
   tableName?: string;
   sql?: string;
+  connectionName?: string;
+  columns?: Array<{ name: string; dataType: string }>;
+  immutable?: boolean;
 }
 
 interface RelationshipDef {
@@ -469,6 +541,7 @@ interface RelationshipDef {
   fromColumns: string[];
   toDimension: string;
   toLevel: string;
+  rolePlay?: string;
 }
 
 // ============================================================
@@ -597,6 +670,7 @@ function resolveFormat(formatString?: string, namedFormat?: string): string | un
       case "percent":  return "percent:1";
       case "standard": return "decimal:2";
       case "currency": return "currency:0";
+      default:         return namedFormat.toLowerCase(); // pass through (e.g. "short date")
     }
   }
   if (formatString) {
@@ -641,9 +715,47 @@ function mapLevelType(xmlLevelType: string | undefined): string | undefined {
 // Dataset physical section parser
 // ============================================================
 
+/** Map XML column type strings to SML data_type values. */
+function mapDataType(xmlType: string | undefined): string {
+  if (!xmlType) return "string";
+  switch (xmlType.toLowerCase()) {
+    case "string":    return "string";
+    case "integer":
+    case "int":
+    case "long":      return "integer";
+    case "float":
+    case "double":
+    case "decimal":
+    case "numeric":   return "decimal";
+    case "date":      return "date";
+    case "timestamp":
+    case "datetime":  return "timestamp";
+    case "boolean":
+    case "bool":      return "boolean";
+    default:          return xmlType.toLowerCase();
+  }
+}
+
 function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | undefined {
   const physSec = first(arr(dsEl.physical)) as Record<string, unknown> | undefined;
   if (!physSec) return undefined;
+
+  // Connection name from <connection id="...">
+  const connEl = first(arr(physSec.connection)) as Record<string, unknown> | undefined;
+  const connectionName = connEl ? a(connEl, "id") : undefined;
+
+  // Immutable flag from <immutable>true</immutable>
+  const immutableStr = s(first(arr(physSec.immutable)));
+  const immutable = immutableStr === "true" ? true : undefined;
+
+  // Column definitions from <column><name>...</name><type>...</type></column>
+  const columns: Array<{ name: string; dataType: string }> = [];
+  for (const col of arr(physSec.column)) {
+    const colName = s(first(arr((col as Record<string, unknown>).name)));
+    const colType = s(first(arr((col as Record<string, unknown>).type)));
+    if (colName) columns.push({ name: colName, dataType: mapDataType(colType) });
+  }
+  const colsResult = columns.length ? columns : undefined;
 
   const tableEl = first(arr(physSec.table)) as Record<string, unknown> | undefined;
   const queryEl = first(arr(physSec.query)) as Record<string, unknown> | undefined;
@@ -652,18 +764,18 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     const db = s(first(arr(tableEl.database)));
     const schema = s(first(arr(tableEl.schema)));
     const tableName = s(first(arr(tableEl.name)));
-    return { db, schema, tableName };
+    return { db, schema, tableName, connectionName, columns: colsResult, immutable };
   }
 
   if (queryEl) {
     const rawSql = s(first(arr(queryEl.sql)));
     if (rawSql) {
       // Replace tabs with spaces so js-yaml can use block literal (| style) rather than quoted
-      return { sql: unescapeHtml(rawSql).replace(/\t/g, "  ") };
+      return { sql: unescapeHtml(rawSql).replace(/\t/g, "  "), connectionName, columns: colsResult, immutable };
     }
   }
 
-  return undefined;
+  return { connectionName, columns: colsResult, immutable };
 }
 
 // ============================================================
@@ -674,29 +786,36 @@ function buildDatasetYaml(
   dsEl: Record<string, unknown>,
   dsName: string,
   connName: string,
+  /** When true, db/schema live in the connection file — use a plain table name string. */
+  connectionHasDbSchema: boolean,
 ): string {
   const phys = parseDatasetPhysical(dsEl) ?? {};
 
   const obj: Record<string, unknown> = {
     unique_name: `${dsName}.dataset`,
     object_type: "dataset",
-    label: toTitleCase(dsName),
+    label: dsName,          // preserve original casing; do not title-case
     connection_id: connName,
   };
 
+  if (phys.immutable) obj.immutable = true;
+
   if (phys.sql) {
     obj.sql = phys.sql;
+  } else if (connectionHasDbSchema || (!phys.db && !phys.schema)) {
+    // db/schema are in the connection file (or absent): use a simple table name string
+    obj.table = phys.tableName ?? dsName;
   } else {
-    // Prefer structured table reference when db/schema are available
-    if (phys.db || phys.schema) {
-      obj.table = {
-        ...(phys.db ? { db: phys.db } : {}),
-        ...(phys.schema ? { schema: phys.schema } : {}),
-        name: phys.tableName ?? dsName,
-      };
-    } else {
-      obj.table = phys.tableName ?? dsName;
-    }
+    // db/schema are dataset-specific: use structured table object
+    obj.table = {
+      ...(phys.db ? { db: phys.db } : {}),
+      ...(phys.schema ? { schema: phys.schema } : {}),
+      name: phys.tableName ?? dsName,
+    };
+  }
+
+  if (phys.columns?.length) {
+    obj.columns = phys.columns.map((c) => ({ name: c.name, data_type: c.dataType }));
   }
 
   return toYaml(obj);
@@ -706,15 +825,29 @@ function buildDatasetYaml(
 // Phase 3: Dimension YAML
 // ============================================================
 
+interface SecondaryAttrDef {
+  uniqueName: string;
+  label: string;
+  dataset: string;
+  keyColumns: string[];
+  nameColumn: string;
+  sortColumn: string;
+  allowedCalcsForDma?: string[];
+  format?: string;
+}
+
 interface LevelAttrDef {
   uniqueName: string;
   label: string;
   dataset: string;
   keyColumns: string[];
   nameColumn: string;
+  sortColumn?: string;
   timeUnit?: string;
   isHiddenFromUi?: boolean;
+  isUniqueKey?: boolean;
   folder?: string;
+  description?: string;
 }
 
 function buildDimensionYaml(
@@ -723,47 +856,71 @@ function buildDimensionYaml(
   attrDef: Map<string, AttrDefEntry>,
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
+  factDatasetNames: Set<string>,
 ): string {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
   const isTime = dimTypeRaw === "Time";
-  const label = props
-    ? (s(first(arr(props.caption))) ?? dimName)
-    : dimName;
+  const label = props ? (s(first(arr(props.caption))) ?? dimName) : dimName;
+  const dimDescription = props ? s(first(arr(props.description))) : undefined;
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
 
-  // hierarchy structures: { uniqueName, label, filterEmpty?, levels: uniqueName[] }
   const hierarchies: Array<{
     uniqueName: string;
     label: string;
     filterEmpty?: string;
-    defaultMember?: string;
-    levels: Array<{ uniqueName: string; timeUnit?: string; isHidden?: boolean }>;
+    folder?: string;
+    description?: string;
+    defaultMember?: { literal_value: string; apply_in_query?: boolean };
+    levels: Array<{
+      uniqueName: string;
+      timeUnit?: string;
+      isHidden?: boolean;
+      secondaryAttributes?: SecondaryAttrDef[];
+    }>;
   }> = [];
 
   for (const hierEl of arr(dimEl.hierarchy)) {
     const hierName = a(hierEl, "name") ?? "Hierarchy";
     const hierProps = first(arr(hierEl.properties)) as Record<string, unknown> | undefined;
     const hierCaption = hierProps ? s(first(arr(hierProps.caption))) : undefined;
-    const filterEmptyRaw = hierProps ? s(first(arr(hierProps["filter-empty"]))) : undefined;
-    const filterEmpty = filterEmptyRaw
-      ? filterEmptyRaw.toLowerCase() === "always"
-        ? "always"
-        : "yes"
-      : undefined;
+    const hierFolder = hierProps ? s(first(arr(hierProps.folder))) : undefined;
+    const hierDescription = hierProps ? s(first(arr(hierProps.description))) : undefined;
 
-    // Default member
+    // filter_empty: only store when NOT "always" ("always" is the SML default)
+    const filterEmptyRaw = hierProps ? s(first(arr(hierProps["filter-empty"]))) : undefined;
+    const filterEmpty =
+      filterEmptyRaw && filterEmptyRaw.toLowerCase() !== "always"
+        ? filterEmptyRaw.toLowerCase()
+        : undefined;
+
+    // Default member — structured object with literal_value (and apply_in_query only when true)
     const defaultMemberEl = hierProps
       ? (first(arr(hierProps["default-member"])) as Record<string, unknown> | undefined)
       : undefined;
     const literalMember = defaultMemberEl
       ? s(first(arr(defaultMemberEl["literal-member"])))
       : undefined;
-    const defaultMember = literalMember ? unescapeHtml(literalMember) : undefined;
+    let defaultMember: { literal_value: string; apply_in_query?: boolean } | undefined;
+    if (literalMember) {
+      const applyRaw =
+        a(defaultMemberEl!, "applyInQuery") ??
+        s(first(arr((defaultMemberEl as Record<string, unknown>).applyInQuery)));
+      const applyInQuery = applyRaw === "true";
+      defaultMember = {
+        literal_value: unescapeHtml(literalMember),
+        ...(applyInQuery ? { apply_in_query: true } : {}),
+      };
+    }
 
-    const hierLevels: Array<{ uniqueName: string; timeUnit?: string; isHidden?: boolean }> = [];
+    const hierLevels: Array<{
+      uniqueName: string;
+      timeUnit?: string;
+      isHidden?: boolean;
+      secondaryAttributes?: SecondaryAttrDef[];
+    }> = [];
 
     for (const levelEl of arr(hierEl.level)) {
       const primaryAttrUuid = a(levelEl, "primary-attribute");
@@ -775,34 +932,62 @@ function buildDimensionYaml(
       const levelName = def.caption ?? def.name;
       const levelUniqueName = def.name;
 
-      // Resolve key columns
+      // Resolve key columns for the primary level attribute
       const keyEntries = keyMap.get(def.keyUuid) ?? [];
-      const authEntry =
-        keyEntries.find((e) => e.complete === "true") ?? keyEntries[0];
+      const authEntry = keyEntries.find((e) => e.complete === "true") ?? keyEntries[0];
       if (!authEntry) continue;
 
       const keyColumns = authEntry.columns;
       const datasetRef = `${authEntry.datasetName}.dataset`;
+      const isUniqueKey = authEntry.unique ?? false;
 
-      // Resolve name column from secondary keyed-attribute-refs
+      // Process keyed-attribute-refs:
+      //   role="name"|"label"  → overrides name_column for the primary level attribute
+      //   role="sort"          → sets sort_column for the primary level attribute
+      //   no role / ref-id set → secondary attribute (or cross-dim ref, skipped if ref-id present)
       let nameColumn = keyColumns[0];
+      let sortColumn: string | undefined;
+      const secondaryAttrs: SecondaryAttrDef[] = [];
+
       for (const kref of arr(levelEl["keyed-attribute-ref"])) {
         const attrId = a(kref, "attribute-id");
-        if (!attrId) continue;
-        const ref = attrMap.get(attrId);
-        if (ref) {
-          nameColumn = ref.column;
-          break;
+        const role = a(kref, "role");
+        const refId = a(kref, "ref-id"); // cross-dimension embedded relationship — skip
+        if (!attrId || refId) continue;
+
+        // Resolve the display column for this attribute reference
+        let resolvedCol: string | undefined;
+        const attrRefEntry = attrMap.get(attrId);
+        if (attrRefEntry) {
+          resolvedCol = attrRefEntry.column;
         }
-        // Also check if attribute-id refers to a keyed-attribute definition
-        const kaDef = attrDef.get(attrId);
-        if (kaDef) {
+
+        if (role === "sort") {
+          // Explicit sort role → sets sort_column on the primary level attr
+          if (resolvedCol) sortColumn = resolvedCol;
+        } else if (role === "name" || role === "label") {
+          // Explicit name/label role → overrides name_column on the primary level attr
+          if (resolvedCol) nameColumn = resolvedCol;
+        } else {
+          // No role (or unrecognised role) → secondary attribute
+          const kaDef = attrDef.get(attrId);
+          if (!kaDef) continue;
           const kaKeyEntries = keyMap.get(kaDef.keyUuid) ?? [];
-          const kaEntry = kaKeyEntries.find((e) => e.complete === "true") ?? kaKeyEntries[0];
-          if (kaEntry?.columns[0]) {
-            nameColumn = kaEntry.columns[0];
-            break;
-          }
+          const kaAuthEntry = kaKeyEntries.find((e) => e.complete === "true") ?? kaKeyEntries[0];
+          if (!kaAuthEntry) continue;
+          const saKeyColumns = kaAuthEntry.columns;
+          const saDataset = `${kaAuthEntry.datasetName}.dataset`;
+          const saNameCol = resolvedCol ?? saKeyColumns[0];
+          secondaryAttrs.push({
+            uniqueName: kaDef.name,
+            label: kaDef.caption ?? kaDef.name,
+            dataset: saDataset,
+            keyColumns: saKeyColumns,
+            nameColumn: saNameCol,
+            sortColumn: saNameCol, // reference converter defaults sort_column to name_column
+            allowedCalcsForDma: kaDef.allowedCalcTypes,
+            format: resolveFormat(kaDef.formatString, kaDef.namedFormat),
+          });
         }
       }
 
@@ -818,7 +1003,7 @@ function buildDimensionYaml(
       })();
       const timeUnit = mapLevelType(levelTypeRaw);
 
-      // Build or merge level attribute
+      // Build or merge the level attribute entry (de-duplicated by unique name)
       if (!levelAttrMap.has(levelUniqueName)) {
         levelAttrMap.set(levelUniqueName, {
           uniqueName: levelUniqueName,
@@ -826,13 +1011,21 @@ function buildDimensionYaml(
           dataset: datasetRef,
           keyColumns,
           nameColumn,
+          sortColumn,
           timeUnit,
           isHiddenFromUi: isHidden || undefined,
+          isUniqueKey: isUniqueKey || undefined,
           folder: def.folder,
+          description: def.description,
         });
       }
 
-      hierLevels.push({ uniqueName: levelUniqueName, timeUnit, isHidden: isHidden || undefined });
+      hierLevels.push({
+        uniqueName: levelUniqueName,
+        timeUnit,
+        isHidden: isHidden || undefined,
+        secondaryAttributes: secondaryAttrs.length ? secondaryAttrs : undefined,
+      });
     }
 
     if (hierLevels.length > 0) {
@@ -840,11 +1033,20 @@ function buildDimensionYaml(
         uniqueName: hierName,
         label: hierCaption ?? hierName,
         filterEmpty,
+        folder: hierFolder,
+        description: hierDescription,
         defaultMember,
         levels: hierLevels,
       });
     }
   }
+
+  // Detect degenerate: all resolved level attributes reference a fact-table dataset
+  const isDegenerate =
+    levelAttrMap.size > 0 &&
+    Array.from(levelAttrMap.values()).every((la) =>
+      factDatasetNames.has(la.dataset.replace(/\.dataset$/, "")),
+    );
 
   // Build YAML structure
   const obj: Record<string, unknown> = {
@@ -853,7 +1055,14 @@ function buildDimensionYaml(
     label,
   };
 
-  if (isTime) obj.type = "time";
+  if (dimDescription) obj.description = dimDescription;
+  if (isDegenerate) {
+    obj.is_degenerate = true;
+  } else if (isTime) {
+    obj.type = "time";
+  } else {
+    obj.type = "standard";
+  }
 
   if (hierarchies.length > 0) {
     obj.hierarchies = hierarchies.map((h) => {
@@ -861,11 +1070,30 @@ function buildDimensionYaml(
         unique_name: h.uniqueName,
         label: h.label,
       };
+      if (h.description) hierObj.description = h.description;
       if (h.filterEmpty) hierObj.filter_empty = h.filterEmpty;
+      if (h.folder) hierObj.folder = h.folder;
       if (h.defaultMember) hierObj.default_member = h.defaultMember;
       hierObj.levels = h.levels.map((l) => {
         const lObj: Record<string, unknown> = { unique_name: l.uniqueName };
         if (l.isHidden) lObj.is_hidden_from_ui = true;
+        if (l.secondaryAttributes?.length) {
+          lObj.secondary_attributes = l.secondaryAttributes.map((sa) => {
+            const saObj: Record<string, unknown> = {
+              unique_name: sa.uniqueName,
+              label: sa.label,
+              dataset: sa.dataset,
+              key_columns: sa.keyColumns,
+              name_column: sa.nameColumn,
+              sort_column: sa.sortColumn,
+            };
+            if (sa.format) saObj.format = sa.format;
+            if (sa.allowedCalcsForDma?.length) {
+              saObj.allowed_calcs_for_dma = sa.allowedCalcsForDma;
+            }
+            return saObj;
+          });
+        }
         return lObj;
       });
       return hierObj;
@@ -881,7 +1109,10 @@ function buildDimensionYaml(
         name_column: la.nameColumn,
         key_columns: la.keyColumns,
       };
+      if (la.description) laObj.description = la.description;
+      if (la.sortColumn && la.sortColumn !== la.nameColumn) laObj.sort_column = la.sortColumn;
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
+      if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
       if (la.isHiddenFromUi) laObj.is_hidden_from_ui = true;
       return laObj;
@@ -904,6 +1135,7 @@ function buildMetricYaml(
   format?: string,
   folder?: string,
   visible = true,
+  description?: string,
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
@@ -913,6 +1145,7 @@ function buildMetricYaml(
     dataset: `${factDatasetName}.dataset`,
     column,
   };
+  if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
   if (!visible) obj.is_hidden_from_ui = true;
@@ -926,6 +1159,7 @@ function buildCalcMetricYaml(
   format?: string,
   folder?: string,
   visible = true,
+  description?: string,
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
@@ -933,6 +1167,33 @@ function buildCalcMetricYaml(
     label,
     formula,
   };
+  if (description) obj.description = description;
+  if (format) obj.format = format;
+  if (folder) obj.folder = folder;
+  if (!visible) obj.is_hidden_from_ui = true;
+  return toYaml(obj);
+}
+
+/**
+ * Emit a schema-level calculated member as a `metric_calc` YAML object.
+ * These live in /calculations/ and use `expression:` rather than `formula:`.
+ */
+function buildCalcMemberYaml(
+  uniqueName: string,
+  label: string,
+  expression: string,
+  format?: string,
+  folder?: string,
+  visible = true,
+  description?: string,
+): string {
+  const obj: Record<string, unknown> = {
+    unique_name: uniqueName,
+    object_type: "metric_calc",
+    label,
+    expression,
+  };
+  if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
   if (!visible) obj.is_hidden_from_ui = true;
@@ -949,6 +1210,7 @@ function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined
   const props = first(arr(cm.properties)) as Record<string, unknown> | undefined;
   const caption = props ? s(first(arr(props.caption))) : undefined;
   const folder = props ? s(first(arr(props.folder))) : undefined;
+  const description = props ? s(first(arr(props.description))) : undefined;
   const visibleStr = props ? s(first(arr(props.visible))) : undefined;
   const visible = visibleStr !== "false";
   const fmtEl = props ? (first(arr(props.formatting)) as Record<string, unknown> | undefined) : undefined;
@@ -960,6 +1222,7 @@ function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined
     name,
     caption,
     folder,
+    description,
     visible,
     formatString,
     namedFormat,
@@ -1011,6 +1274,7 @@ function inferRelationships(
   // mapped to the fact-table columns that hold that key.
   // We prefer complete="false" entries (explicit FK) but also accept complete="true" (degenerate).
   const cubeKeyCols = new Map<string, string[]>(); // keyUuid → fact columns
+  const cubeKeyRolePlays = new Map<string, string>(); // keyUuid → role_play name
   for (const dsSec of arr(cubeEl["data-sets"])) {
     for (const dsRef of arr(dsSec["data-set-ref"])) {
       for (const logSec of arr(dsRef.logical)) {
@@ -1023,6 +1287,15 @@ function inferRelationships(
           const complete = a(kr, "complete") ?? "true";
           if (!cubeKeyCols.has(id) || complete === "false") {
             cubeKeyCols.set(id, cols);
+            // Extract role_play from <ref-path><new-ref><ref-naming>
+            const refPathEl = first(arr(kr["ref-path"])) as Record<string, unknown> | undefined;
+            if (refPathEl) {
+              const newRefEl = first(arr(refPathEl["new-ref"])) as Record<string, unknown> | undefined;
+              if (newRefEl) {
+                const refNaming = s(first(arr(newRefEl["ref-naming"])));
+                if (refNaming) cubeKeyRolePlays.set(id, refNaming);
+              }
+            }
           }
         }
       }
@@ -1054,36 +1327,18 @@ function inferRelationships(
       fromColumns,
       toDimension: dimName,
       toLevel,
+      rolePlay: cubeKeyRolePlays.get(keyUuid),
     });
   }
 
   return relationships;
 }
 
-/**
- * Find the unique_name of the first level attribute in a dimension.
- * Used as the relationship target level.
- */
-function findFirstLevelName(
-  dimEl: Record<string, unknown>,
-  attrDef: Map<string, AttrDefEntry>,
-): string | undefined {
-  for (const hierEl of arr(dimEl.hierarchy)) {
-    for (const levelEl of arr(hierEl.level)) {
-      const pa = a(levelEl, "primary-attribute");
-      if (!pa) continue;
-      const def = attrDef.get(pa);
-      if (def) return def.name;
-    }
-  }
-  return undefined;
-}
-
 // ============================================================
 // Phase 6: Catalog, connection, model YAML
 // ============================================================
 
-function buildCatalogYaml(catalogName: string, connName: string): string {
+function buildCatalogYaml(catalogName: string): string {
   return toYaml({
     unique_name: `${catalogName}.catalog`,
     object_type: "catalog",
@@ -1091,11 +1346,10 @@ function buildCatalogYaml(catalogName: string, connName: string): string {
     version: 1.5,
     aggressive_agg_promotion: false,
     build_speculative_aggs: false,
-    default_data_source: connName,
   });
 }
 
-function buildConnectionYaml(connName: string, connType?: string): string {
+function buildConnectionYaml(connName: string, connType?: string, db?: string, schema?: string): string {
   const obj: Record<string, unknown> = {
     unique_name: connName,
     object_type: "connection",
@@ -1103,6 +1357,8 @@ function buildConnectionYaml(connName: string, connType?: string): string {
     as_connection: connName,
   };
   if (connType) obj.connection_type = connType;
+  if (db) obj.database = db;
+  if (schema) obj.schema = schema;
   return toYaml(obj);
 }
 
@@ -1110,8 +1366,9 @@ function buildModelYaml(
   modelName: string,
   relationships: RelationshipDef[],
   dimNames: string[],
-  metricNames: string[],
+  metricNames: Array<{ uniqueName: string; folder?: string }>,
   isHidden = false,
+  includeDefaultDrillthrough = false,
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: modelName,
@@ -1120,25 +1377,34 @@ function buildModelYaml(
   };
 
   if (isHidden) obj.is_hidden_from_ui = true;
+  if (includeDefaultDrillthrough) obj.include_default_drillthrough = true;
 
-  obj.relationships = relationships.map((r) => ({
-    unique_name: r.uniqueName,
-    from: {
-      dataset: `${r.fromDataset}.dataset`,
-      join_columns: r.fromColumns,
-    },
-    to: {
-      dimension: r.toDimension,
-      level: r.toLevel,
-    },
-  }));
+  obj.relationships = relationships.map((r) => {
+    const relObj: Record<string, unknown> = {
+      unique_name: r.uniqueName,
+      from: {
+        dataset: `${r.fromDataset}.dataset`,
+        join_columns: r.fromColumns,
+      },
+      to: {
+        dimension: r.toDimension,
+        level: r.toLevel,
+      },
+    };
+    if (r.rolePlay) relObj.role_play = r.rolePlay;
+    return relObj;
+  });
 
   if (dimNames.length > 0) {
     obj.dimensions = dimNames.map((n) => ({ unique_name: n }));
   }
 
   if (metricNames.length > 0) {
-    obj.metrics = metricNames.map((n) => ({ unique_name: n }));
+    obj.metrics = metricNames.map((m) => {
+      const mObj: Record<string, unknown> = { unique_name: m.uniqueName };
+      if (m.folder) mObj.folder = m.folder;
+      return mObj;
+    });
   }
 
   return toYaml(obj);

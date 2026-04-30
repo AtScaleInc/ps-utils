@@ -41,9 +41,8 @@ class GenerateSMLFromXMLParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "connection-name";
-      description = "SML connection unique_name to embed in generated files";
+      description = "SML connection unique_name to embed in generated files (auto-detected from XML if omitted)";
       required    = false;
-      defaultValue = "my_connection";
     })(),
     new (class extends StringParameter {
       name        = "connection-type";
@@ -55,15 +54,27 @@ class GenerateSMLFromXMLParams extends ParameterSet {
       description = "Override the catalog label (defaults to the XML schema name)";
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "connection-db";
+      description = "Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "connection-schema";
+      description = "Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object";
+      required    = false;
+    })(),
   ];
 }
 
 type Params = {
-  "xml-file":         string;
-  "output-dir":       string;
-  "connection-name":  string;
-  "connection-type"?: string;
-  "catalog-name"?:    string;
+  "xml-file":           string;
+  "output-dir":         string;
+  "connection-name"?:   string;
+  "connection-type"?:   string;
+  "catalog-name"?:      string;
+  "connection-db"?:     string;
+  "connection-schema"?: string;
 };
 
 // ----------------------------------------------------------
@@ -93,9 +104,11 @@ export class GenerateSMLFromXMLOperation extends Operation<Params> {
     const sml = await convertXmlToSml(
       xmlContent,
       {
-        connectionName: params["connection-name"],
-        connectionType: params["connection-type"],
-        catalogName:    params["catalog-name"],
+        connectionName:   params["connection-name"],
+        connectionType:   params["connection-type"],
+        catalogName:      params["catalog-name"],
+        connectionDb:     params["connection-db"],
+        connectionSchema: params["connection-schema"],
       },
       this.logger,
     );
@@ -106,12 +119,13 @@ export class GenerateSMLFromXMLOperation extends Operation<Params> {
     const datasetCount   = [...sml.keys()].filter((k) => k.startsWith("datasets/")).length;
     const dimCount       = [...sml.keys()].filter((k) => k.startsWith("dimensions/")).length;
     const metricCount    = [...sml.keys()].filter((k) => k.startsWith("metrics/")).length;
+    const calcCount      = [...sml.keys()].filter((k) => k.startsWith("calculations/")).length;
     const modelCount     = [...sml.keys()].filter((k) => k.startsWith("models/")).length;
 
     this.logger.log(
       `[GenerateSMLFromXML] Done — ` +
       `${datasetCount} dataset(s), ${dimCount} dimension(s), ` +
-      `${metricCount} metric(s), ${modelCount} model(s)`,
+      `${metricCount} metric(s)${calcCount ? `, ${calcCount} calculation(s)` : ""}, ${modelCount} model(s)`,
     );
   }
 }

@@ -40,6 +40,8 @@ inputs:
         execute-run-analysis
         generate-queries-from-sml
         generate-queries-from-model
+        extract-query-stats-from-atscale
+        generate-sml-from-xml
         deploy-atscale-microk8s
     required: true
 
@@ -148,6 +150,15 @@ inputs:
     required: false
     default: "4"
 
+  # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
+  sml-config-file:
+    description: >
+      Path to an SML style config file (sml.style.yaml) to read settings from.
+      CLI inputs take priority over the file. Effective settings are always written
+      to <output-dir>/sml.style.yaml after generation.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+
   # ── generate-sml-from-ddl ────────────────────────────────────────────────
   ddl-file:
     description: Path to the DDL SQL file to parse for SML generation.
@@ -159,16 +170,28 @@ inputs:
     required: false
   connection-type:
     description: >
-      Database dialect for the connection file (e.g. "snowflake", "postgresql").
+      Database dialect for the connection file (e.g. "snowflake", "bigquery").
+      Used by: generate-sml-from-xml.
+    required: false
+  connection-db:
+    description: >
+      Database or project name written into the connection file. When set, individual
+      datasets use a plain table name instead of a nested db/schema/name object.
+      Used by: generate-sml-from-xml.
+    required: false
+  connection-schema:
+    description: >
+      Schema or dataset name written into the connection file. When set, individual
+      datasets use a plain table name instead of a nested db/schema/name object.
       Used by: generate-sml-from-xml.
     required: false
 
-  # ── generate-namespace-from-model / generate-metrics-from-model ──────────
+  # ── generate-namespace-from-model / generate-metrics-from-model / generate-queries-from-model ──
   model-file:
     description: >
-      Path to the model YAML file.
+      Path to the model YAML file (output of extract-model-from-atscale or extract-model-from-sml).
       Used by: generate-namespace-from-model, generate-metrics-from-model,
-               generate-tableau-from-namespace.
+               generate-tableau-from-namespace, generate-queries-from-model.
     required: false
   title:
     description: Title for the generated namespace / Tableau workbook.
@@ -227,8 +250,12 @@ inputs:
     required: false
   dialect:
     description: >
-      Database dialect (e.g. snowflake, postgresql). When snowflake, dataset
-      table names are uppercased. Auto-detected from the DDL filename if omitted.
+      Database dialect.
+      For generate-sml-from-ddl: e.g. snowflake, postgresql — auto-detected from filename if omitted;
+      when snowflake, dataset table names are uppercased.
+      For generate-ddl-from-data-shape / generate-data-from-data-shape-to-connection:
+      ansi (default), postgresql, snowflake, mysql, or bigquery.
+      BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
     required: false
 
   # ── execute-sql-on-connection ────────────────────────────────────────────
@@ -277,13 +304,6 @@ inputs:
                generate-data-from-data-shape-to-connection.
     required: false
     default: "data-shape.yaml"
-  dialect:
-    description: >
-      SQL dialect for DDL generation: ansi (default), postgresql, snowflake, mysql, bigquery.
-      BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
-      Used by: generate-ddl-from-data-shape, generate-data-from-data-shape-to-connection.
-    required: false
-    default: "ansi"
   scale-factor:
     description: >
       Scale row and member counts by this factor (default: 1.0; use < 1 for smaller datasets).
@@ -379,7 +399,46 @@ inputs:
     required: false
     default: "true"
 
+  # ── extract-query-stats-from-atscale ─────────────────────────────────────
+  window-days:
+    description: >
+      Number of days to look back in AtScale query history (default: 7).
+      Used by: extract-query-stats-from-atscale.
+    required: false
+    default: "7"
+  start-date:
+    description: >
+      Explicit window start in ISO-8601 format (e.g. 2025-01-01T00:00:00Z). Overrides window-days.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+  end-date:
+    description: >
+      Explicit window end in ISO-8601 format. Defaults to now when start-date is set.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+  monthly:
+    description: >
+      When "true", also generates a month-by-month breakdown CSV.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+    default: "false"
+  monthly-year:
+    description: >
+      Calendar year for the monthly breakdown (e.g. 2025). Defaults to current year.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+  limit:
+    description: >
+      Page size for the AtScale query history API.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+
   # ── generate-enhanced-query-results ──────────────────────────────────────
+  db-schema:
+    description: >
+      Database schema used when fetching execution plans from the target data source.
+      Used by: generate-enhanced-query-results.
+    required: false
   results-file:
     description: >
       Path to the run-results CSV produced by execute-atscale-query-harness.
@@ -444,14 +503,6 @@ inputs:
       a row-count mismatch or a duration outside the variance threshold.
       Same schema as comparison-file.
       Used by: execute-run-analysis.
-    required: false
-
-  # ── generate-queries-from-model ──────────────────────────────────────────
-  model-file:
-    description: >
-      Path to the model.yaml file (output of extract-model-from-atscale or
-      extract-model-from-sml).
-      Used by: generate-queries-from-model.
     required: false
 
   # ── generate-queries-from-sml / generate-queries-from-model ──────────────
@@ -695,6 +746,7 @@ runs:
          inputs.operation == 'generate-ddl-from-atscale' ||
          inputs.operation == 'extract-data-shape-from-connection' ||
          inputs.operation == 'generate-data-from-data-shape-to-connection' ||
+         inputs.operation == 'extract-query-stats-from-atscale' ||
          inputs.operation == 'extract-queries-from-atscale' ||
          inputs.operation == 'execute-atscale-query-harness' ||
          inputs.operation == 'execute-query-on-connection' ||
@@ -742,8 +794,9 @@ runs:
         [[ -n "${{ inputs.schema }}" ]]        && ARGS+=(--schema        "${{ inputs.schema }}")
         [[ -n "${{ inputs.catalog-name }}" ]]  && ARGS+=(--catalog-name  "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.pii-severity }}" ]]  && ARGS+=(--pii-severity  "${{ inputs.pii-severity }}")
-        [[ -n "${{ inputs.sample-size }}" ]]   && ARGS+=(--sample-size   "${{ inputs.sample-size }}")
-        [[ -n "${{ inputs.fact-tables }}" ]]   && ARGS+=(--fact-tables   "${{ inputs.fact-tables }}")
+        [[ -n "${{ inputs.sample-size }}" ]]     && ARGS+=(--sample-size     "${{ inputs.sample-size }}")
+        [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
+        [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
         [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
         [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
@@ -768,6 +821,7 @@ runs:
         [[ -n "${{ inputs.dialect }}" ]]         && ARGS+=(--dialect         "${{ inputs.dialect }}")
         [[ -n "${{ inputs.pii-severity }}" ]]    && ARGS+=(--pii-severity    "${{ inputs.pii-severity }}")
         [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
+        [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
         [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
         [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
@@ -784,9 +838,11 @@ runs:
           --output-dir "${{ inputs.output-dir }}"
           --verbose true
         )
-        [[ -n "${{ inputs.connection-name }}" ]] && ARGS+=(--connection-name "${{ inputs.connection-name }}")
-        [[ -n "${{ inputs.connection-type }}" ]] && ARGS+=(--connection-type "${{ inputs.connection-type }}")
-        [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.connection-name }}"   ]] && ARGS+=(--connection-name   "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}"   ]] && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]] && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
       shell: bash
 
@@ -1103,6 +1159,26 @@ runs:
         [[ "${{ inputs.drop-if-exists }}" == "true"  ]] && ARGS+=(--drop-if-exists true)
         [[ "${{ inputs.create-tables }}"  == "true"  ]] && ARGS+=(--create-tables  true)
         node "${{ github.action_path }}/dist/cli.js" generate-data-from-data-shape-to-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── extract-query-stats-from-atscale ────────────────────────────────────
+    - name: Extract query stats from AtScale
+      if: inputs.operation == 'extract-query-stats-from-atscale'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --model           "${{ inputs.model }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
+        [[ -n "${{ inputs.window-days }}"   ]] && ARGS+=(--window-days   "${{ inputs.window-days }}")
+        [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")
+        [[ -n "${{ inputs.end-date }}"      ]] && ARGS+=(--end-date      "${{ inputs.end-date }}")
+        [[ -n "${{ inputs.limit }}"         ]] && ARGS+=(--limit         "${{ inputs.limit }}")
+        [[ "${{ inputs.monthly }}" == "true" ]] && ARGS+=(--monthly true)
+        [[ -n "${{ inputs.monthly-year }}"  ]] && ARGS+=(--monthly-year  "${{ inputs.monthly-year }}")
+        node "${{ github.action_path }}/dist/cli.js" extract-query-stats-from-atscale "${ARGS[@]}"
       shell: bash
 
     # ── extract-queries-from-atscale ─────────────────────────────────────────

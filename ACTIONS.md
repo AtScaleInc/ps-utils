@@ -68,39 +68,45 @@ flowchart TD
   - [Required secrets](#required-secrets)
   - [Using the composite action](#using-the-composite-action)
 - [Operations](#operations)
-  - [`execute-sql-on-connection`](#execute-sql-on-connection)
-  - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
-  - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
-  - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
-  - [`generate-data-from-data-shape`](#generate-data-from-data-shape)
-  - [`generate-data-from-data-shape-to-connection`](#generate-data-from-data-shape-to-connection)
-  - [`extract-model-from-atscale`](#extract-model-from-atscale)
-  - [`extract-model-from-sml`](#extract-model-from-sml)
-  - [`generate-metrics-from-model`](#generate-metrics-from-model)
-  - [`generate-namespace-from-model`](#generate-namespace-from-model)
-  - [`generate-sml-from-connection`](#generate-sml-from-connection)
-  - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
-  - [`generate-sml-from-xml`](#generate-sml-from-xml)
-  - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
-  - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
-  - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
-  - [`generate-queries-from-sml`](#generate-queries-from-sml)
-  - [`generate-queries-from-model`](#generate-queries-from-model)
-  - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
-  - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
-  - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
-  - [`execute-query-on-connection`](#execute-query-on-connection)
-  - [`generate-enhanced-query-results`](#generate-enhanced-query-results)
-  - [`execute-run-analysis`](#execute-run-analysis)
-  - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
-  - [`atscale-list-data-sources`](#atscale-list-data-sources)
-  - [`atscale-create-data-source`](#atscale-create-data-source)
-  - [`atscale-list-repos`](#atscale-list-repos)
-  - [`atscale-create-repo`](#atscale-create-repo)
-  - [`atscale-list-deployments`](#atscale-list-deployments)
-  - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
-  - [`atscale-list-model-errors`](#atscale-list-model-errors)
-  - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
+  - Model Extraction
+    - [`extract-model-from-atscale`](#extract-model-from-atscale)
+    - [`extract-model-from-sml`](#extract-model-from-sml)
+  - SML Creation and Manipulation
+    - [`execute-sql-on-connection`](#execute-sql-on-connection)
+    - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
+    - [`generate-sml-from-connection`](#generate-sml-from-connection)
+    - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+    - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-metrics-from-model`](#generate-metrics-from-model)
+  - Synthetic Data Generation
+    - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
+    - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
+    - [`generate-data-from-data-shape`](#generate-data-from-data-shape)
+    - [`generate-data-from-data-shape-to-connection`](#generate-data-from-data-shape-to-connection)
+  - Visualization and Namespace Processing
+    - [`generate-namespace-from-model`](#generate-namespace-from-model)
+    - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
+    - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
+    - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+  - Testing / Query Processing
+    - [`generate-queries-from-sml`](#generate-queries-from-sml)
+    - [`generate-queries-from-model`](#generate-queries-from-model)
+    - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
+    - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
+    - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+    - [`execute-query-on-connection`](#execute-query-on-connection)
+    - [`generate-enhanced-query-results`](#generate-enhanced-query-results)
+    - [`execute-run-analysis`](#execute-run-analysis)
+  - AtScale Config
+    - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
+    - [`atscale-list-data-sources`](#atscale-list-data-sources)
+    - [`atscale-create-data-source`](#atscale-create-data-source)
+    - [`atscale-list-repos`](#atscale-list-repos)
+    - [`atscale-create-repo`](#atscale-create-repo)
+    - [`atscale-list-deployments`](#atscale-list-deployments)
+    - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
+    - [`atscale-list-model-errors`](#atscale-list-model-errors)
+    - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
   - [Database → Tableau](#database--tableau)
@@ -634,8 +640,10 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
     operation: generate-sml-from-xml
     xml-file: MyModel.xml
     output-dir: sml-output
-    connection-name: my_connection    # optional — embedded in SML files
-    connection-type: snowflake        # optional — written to connection file
+    connection-name: my_bq_conn       # optional — auto-detected from XML if omitted
+    connection-type: bigquery         # optional — written to connection file
+    connection-db: my-project-id      # optional — database/project in connection file
+    connection-schema: my_dataset     # optional — schema/dataset in connection file
     catalog-name: "My Catalog"        # optional — overrides the XML schema name
 ```
 
@@ -643,8 +651,10 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
 |---|---|---|---|
 | `xml-file` | Yes | | Path to the AtScale XML project file |
 | `output-dir` | Yes | | Directory to write SML files |
-| `connection-name` | No | `my_connection` | Connection `unique_name` to embed in generated files |
-| `connection-type` | No | | Database dialect for the connection file (e.g. `snowflake`) |
+| `connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
+| `connection-type` | No | | Database dialect for the connection file (e.g. `snowflake`, `bigquery`) |
+| `connection-db` | No | | Database/project name written to the connection file; when set, datasets use a plain table name |
+| `connection-schema` | No | | Schema/dataset name written to the connection file; when set, datasets use a plain table name |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 
 ---

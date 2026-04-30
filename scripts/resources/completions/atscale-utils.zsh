@@ -41,7 +41,7 @@ case $state in
     _values 'params' --logfile --output --verbose --ddl-file --model-name --output-dir --connection-name --sml-config-file --catalog-name --pii-severity --schema --database --dialect --fact-tables --camel-case-files --camel-case-measures --min-hierarchies-per-dim --max-hierarchies-per-dim
     ;;
   generate-sml-from-xml)
-    _values 'params' --logfile --output --verbose --xml-file --output-dir --connection-name --connection-type --catalog-name
+    _values 'params' --logfile --output --verbose --xml-file --output-dir --connection-name --connection-type --catalog-name --connection-db --connection-schema
     ;;
   extract-model-from-sml)
     _values 'params' --logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file

@@ -459,7 +459,7 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 
 Reads an AtScale XML project file (schema version `project_2_0`) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the XML model definition.
 
-Dimensions, metrics, datasets, catalog, connection, and model files are all emitted based on the XML structure. Relationships are inferred from the cube's key-ref logical sections: cross-table FKs (`complete="false"`) are mapped to separate dimension datasets, and degenerate dimensions (`complete="true"`) are mapped as self-joins within the fact table. Schema-level dimensions that have no join path to the cube are omitted.
+Dimensions, metrics, datasets, catalog, connection, and model files are all emitted based on the XML structure. Relationships are inferred from the cube's key-ref logical sections: cross-table FKs (`complete="false"`) are mapped to separate dimension datasets, and degenerate dimensions (`complete="true"`) are mapped as self-joins within the fact table. Role-played dimensions (`role_play`), `include_default_drillthrough`, metric folders, dataset column definitions, and the `immutable` flag are all extracted from the XML when present. The connection name is auto-detected from `<physical><connection id="...">` if `--connection-name` is not supplied. Schema-level dimensions that have no join path to the cube are omitted.
 
 ```bash
 ./atscale-utils generate-sml-from-xml \
@@ -473,8 +473,10 @@ With optional overrides:
 ./atscale-utils generate-sml-from-xml \
   --xml-file "./MyModel.xml" \
   --output-dir "./sml-output" \
-  --connection-name "my_snowflake" \
-  --connection-type "snowflake" \
+  --connection-name "my_bq_conn" \
+  --connection-type "bigquery" \
+  --connection-db "my-project-id" \
+  --connection-schema "my_dataset" \
   --catalog-name "My Catalog"
 ```
 
@@ -482,8 +484,10 @@ With optional overrides:
 |---|---|---|---|
 | `--xml-file` | Yes | | Path to the AtScale XML project file (`project_2_0` format) |
 | `--output-dir` | Yes | | Directory to write SML files |
-| `--connection-name` | No | `my_connection` | Connection `unique_name` to embed in generated files |
-| `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `postgresql`) |
+| `--connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
+| `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `bigquery`) |
+| `--connection-db` | No | | Database/project name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
+| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
 | `--catalog-name` | No | XML schema name | Override the catalog label |
 
 **Output layout:**
@@ -491,10 +495,11 @@ With optional overrides:
 <output-dir>/
   catalog.yml
   connections/<connection-name>.yml
-  datasets/<dataset-name>.yml   (one per XML <data-set>)
-  dimensions/<dim-name>.yml     (one per referenced dimension)
-  metrics/<metric-name>.yml     (one per measure / calculated member)
-  models/<cube-name>.yml        (one per XML <cube>)
+  datasets/<dataset-name>.yml      (one per XML <data-set>)
+  dimensions/<dim-name>.yml        (one per referenced dimension)
+  metrics/<metric-name>.yml        (one per measure or inline expression)
+  calculations/<calc-name>.yml     (one per schema-level calculated member)
+  models/<cube-name>.yml           (one per XML <cube>)
 ```
 
 ---
