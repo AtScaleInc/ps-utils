@@ -9,109 +9,160 @@ Upcoming features:
 - SSO
 
 
+### Model Extraction
+
+Connect to a live AtScale instance or read local SML files to produce a portable model.yaml capturing all metrics and dimension hierarchies.
+
+```mermaid
+flowchart LR
+    ATS["AtScale Instance"] --> A["extract-model-from-atscale"] --> MODEL["model.yaml"]
+    SML["SML Files"] --> B["extract-model-from-sml"] --> MODEL
+    click A href "#extract-model-from-atscale"
+    click B href "#extract-model-from-sml"
+```
+
+### SML Creation and Manipulation
+
+Generate a complete AtScale SML semantic model from a live database connection or a DDL file, extract existing schema DDL for inspection, or run ad-hoc SQL against any registered connection, or run the analysis-suggestions engine against an extracted model to surface the highest-value metric combinations.
+
+```mermaid
+flowchart LR
+    DB[("Database")] --> A["extract-ddl-from-connection"] --> DDL["DDL (.sql)"]
+    ATS["AtScale Instance"] --> B["generate-ddl-from-atscale"] --> DDL
+    DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
+    DB --> D["generate-sml-from-connection"] --> SML
+    DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
+    MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
+    click A href "#extract-ddl-from-connection"
+    click B href "#generate-ddl-from-atscale"
+    click C href "#generate-sml-from-ddl"
+    click D href "#generate-sml-from-connection"
+    click E href "#execute-sql-on-connection"
+    click F href "#generate-metrics-from-model"
+```
+
+### Synthetic Data Generation
+
+Profile an existing database's schema and value distributions, then generate matching synthetic DDL and CSV data — either written to local files or loaded directly into a target database.
+
+```mermaid
+flowchart LR
+    DB[("Source Database")] --> A["extract-data-shape-from-connection"] --> SHAPE["data-shape.json"]
+    SHAPE --> B["generate-ddl-from-data-shape"] --> DDL["DDL (.sql)"]
+    SHAPE --> C["generate-data-from-data-shape"] --> CSV["Synthetic CSVs"]
+    SHAPE --> D["generate-data-from-data-shape-to-connection"] --> TARGET[("Target Database")]
+    click A href "#extract-data-shape-from-connection"
+    click B href "#generate-ddl-from-data-shape"
+    click C href "#generate-data-from-data-shape"
+    click D href "#generate-data-from-data-shape-to-connection"
+```
+
+### Visualization and Namespace Processing
+
+Generate a namespace definition from a model, then produce ready-to-open Tableau, Excel, and Power BI workbooks with optional field-label aliases.
+
+```mermaid
+flowchart LR
+    MODEL["model.yaml"] --> A["generate-namespace-from-model"] --> NS["namespace.yaml"]
+    NS --> B["generate-tableau-from-namespace"] --> TWB["tableau.twb"]
+    NS --> C["generate-excel-from-namespace"] --> XLSX["workbook.xlsx"]
+    NS --> D["generate-powerbi-from-namespace"] --> PBI["output/powerbi/"]
+    CONN["connections.yaml"] --> B & C & D
+    ALIASES["aliases.yaml (opt.)"] -.-> B & C & D
+    click A href "#generate-namespace-from-model"
+    click B href "#generate-tableau-from-namespace"
+    click C href "#generate-excel-from-namespace"
+    click D href "#generate-powerbi-from-namespace"
+```
+
+### Testing / Query Processing
+
+Capture queries from AtScale's Postgres backend, replay them through a load harness, enrich results with execution metadata, and compare two runs side-by-side to detect regressions in row counts, duration, or error behavior.
+
 ```mermaid
 flowchart TD
-    DDL["DDL File<br/>(.sql)"]
-    DB[("Database<br/>(Postgres / Snowflake)")]
-    ATS["AtScale<br/>Instance"]
-    ATSDB[("AtScale<br/>Postgres Backend")]
-    NS["Namespace YAML<br/>(namespace.yaml)"]
-    CONN["Connections YAML<br/>(connections.yaml)"]
-    ALIASES["Aliases YAML<br/>(aliases.yaml)<br/>[optional]"]
+    SML["SML Files"] --> G["generate-queries-from-sml"] --> QJSON["queries/*.json"]
+    MODEL["model.yaml"] --> H["generate-queries-from-model"] --> QJSON
+    ATSDB[("AtScale Postgres")] --> A["extract-query-stats-from-atscale"] --> STATS["occurrences.csv"]
+    ATSDB --> B["extract-queries-from-atscale"] --> QJSON
+    QJSON --> C["execute-atscale-query-harness"] --> RUN["run_results/*.csv"]
+    ATS["AtScale Instance"] --> C
+    CONN["connections.yaml"] --> D["execute-query-on-connection"] --> QOUT["Query Output"]
+    RUN --> E["generate-enhanced-query-results"] --> ECSV["*_enhanced.csv"]
+    ATSDB --> E
+    RUN --> F["execute-run-analysis"]
+    ECSV --> F
+    F --> SUMMARY["summary.txt"]
+    F --> COMPARISON["comparison.csv"]
+    F --> OUTLIERS["outliers.csv"]
+    click G href "#generate-queries-from-sml"
+    click H href "#generate-queries-from-model"
+    click A href "#extract-query-stats-from-atscale"
+    click B href "#extract-queries-from-atscale"
+    click C href "#execute-atscale-query-harness"
+    click D href "#execute-query-on-connection"
+    click E href "#generate-enhanced-query-results"
+    click F href "#execute-run-analysis"
+```
 
-    DB  -->|extract-ddl-from-connection| DDL
-    ATS -->|generate-ddl-from-atscale| DDL
-    DDL -->|generate-sml-from-ddl| SML
-    DB  -->|generate-sml-from-connection| SML
-    DB  -->|execute-sql-on-connection| SQLOUT["SQL Results<br/>(stdout)"]
+### AtScale Config
 
-    subgraph SML["SML Output"]
-        direction TB
-        catalog["catalog.yml"]
-        datasets["datasets/"]
-        dims["dimensions/"]
-        metrics["metrics/"]
-        models["models/"]
-    end
+Bootstrap and manage an AtScale instance — generate Helm install values, register data sources and SML repositories, deploy catalogs, and inspect live configuration state.
 
-    SML -->|atscale-deploy-catalog| ATS
-    ATS -->|extract-model-from-atscale| MODEL["model.yaml"]
-    SML -->|extract-model-from-sml| MODEL
-
-    MODEL -->|generate-namespace-from-model| NS
-    MODEL -->|generate-metrics-from-model| METRICS["Metrics YAML<br/>(metrics/*.yml)"]
-    MODEL --> TWB
-    MODEL --> XLSX
-    NS    --> TWB
-    NS    --> XLSX
-    CONN  --> TWB
-    CONN  --> XLSX
-    ALIASES -.->|optional| TWB
-    ALIASES -.->|optional| XLSX
-    ALIASES -.->|optional| PBI
-    MODEL --> PBI
-    NS    --> PBI
-    CONN  --> PBI
-    TWB["generate-tableau-from-namespace<br/>→ tableau.twb"]
-    XLSX["generate-excel-from-namespace<br/>→ workbook.xlsx"]
-    PBI["generate-powerbi-from-namespace<br/>→ output/powerbi/"]
-
-    ATSDB -->|extract-queries-from-atscale| QJSON["Query JSON<br/>(queries/*.json)"]
-    QJSON -->|execute-atscale-query-harness| RCSV["Results CSV<br/>(run_results/*.csv)"]
-    ATS   -->|execute-atscale-query-harness| RCSV
-    RCSV  -->|generate-enhanced-query-results| ECSV["Enhanced CSV<br/>(*_enhanced.csv)"]
-    ATSDB -->|generate-enhanced-query-results| ECSV
-    ATS   -->|extract-query-stats-from-atscale| STATSCSV["Stats CSV<br/>(occurrences.csv)"]
-
-    HOSTNAME["Hostname"] -->|generate-atscale-install-yaml| VALUESYAML["values.yaml<br/>(Helm install)"]
-
-    ATS -->|"atscale-list-data-sources<br/>atscale-list-repos<br/>atscale-list-deployments<br/>atscale-list-model-errors"| ATSLISTING["AtScale Info<br/>(stdout)"]
-    CONN -->|"atscale-create-data-source<br/>atscale-create-repo"| ATS
-
-    click MODEL href "#extract-model-from-atscale" "extract-model-from-atscale"
-    click TWB href "#generate-tableau-from-namespace" "generate-tableau-from-namespace"
-    click XLSX href "#generate-excel-from-namespace" "generate-excel-from-namespace"
-    click PBI href "#generate-powerbi-from-namespace" "generate-powerbi-from-namespace"
-    click QJSON href "#extract-queries-from-atscale" "extract-queries-from-atscale"
-    click RCSV href "#execute-atscale-query-harness" "execute-atscale-query-harness"
-    click ECSV href "#generate-enhanced-query-results" "generate-enhanced-query-results"
-    click STATSCSV href "#extract-query-stats-from-atscale" "extract-query-stats-from-atscale"
-    click VALUESYAML href "#generate-atscale-install-yaml" "generate-atscale-install-yaml"
-    click METRICS href "#generate-metrics-from-model" "generate-metrics-from-model"
-    click SQLOUT href "#execute-sql-on-connection" "execute-sql-on-connection"
-    click DDL href "#extract-ddl-from-connection" "extract-ddl-from-connection"
-    click ATSLISTING href "#atscale-list-data-sources" "atscale-list-data-sources"
+```mermaid
+flowchart LR
+    HOSTNAME["Hostname"] --> A["generate-atscale-install-yaml"] --> VALUES["values.yaml (Helm)"]
+    CONN["connections.yaml"] --> B["atscale-create-data-source"] --> ATS["AtScale Instance"]
+    CONN --> C["atscale-create-repo"] --> ATS
+    CONN --> D["atscale-deploy-catalog"] --> ATS
+    ATS --> E["atscale-list-data-sources"] --> INFO["AtScale Info (stdout)"]
+    ATS --> F["atscale-list-repos"] --> INFO
+    ATS --> G["atscale-list-deployments"] --> INFO
+    ATS --> H["atscale-list-model-errors"] --> INFO
+    click A href "#generate-atscale-install-yaml"
+    click B href "#atscale-create-data-source"
+    click C href "#atscale-create-repo"
+    click D href "#atscale-deploy-catalog"
+    click E href "#atscale-list-data-sources"
+    click F href "#atscale-list-repos"
+    click G href "#atscale-list-deployments"
+    click H href "#atscale-list-model-errors"
 ```
 
 ## Table of Contents
 
 - [Setup](#setup)
 - [Operations](#operations)
-  - Namespace Processing
-    - [`generate-metrics-from-model`](#generate-metrics-from-model)
-    - [`generate-namespace-from-model`](#generate-namespace-from-model)
+  - Model Extraction
     - [`extract-model-from-atscale`](#extract-model-from-atscale)
     - [`extract-model-from-sml`](#extract-model-from-sml)
-  - SML Processing
+  - SML Creation and Manipulation
     - [`execute-sql-on-connection`](#execute-sql-on-connection)
     - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
+    - [`generate-metrics-from-model`](#generate-metrics-from-model)
+  - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
     - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
     - [`generate-data-from-data-shape`](#generate-data-from-data-shape)
     - [`generate-data-from-data-shape-to-connection`](#generate-data-from-data-shape-to-connection)
-  - BI Tool Integration
+  - Visualization and Namespace Processing
     - [BI Tool Feature Comparison](#bi-tool-feature-comparison)
+    - [`generate-namespace-from-model`](#generate-namespace-from-model)
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
-  - Query Processing
+  - Testing / Query Processing
+    - [`generate-queries-from-sml`](#generate-queries-from-sml)
+    - [`generate-queries-from-model`](#generate-queries-from-model)
     - [`extract-query-stats-from-atscale`](#extract-query-stats-from-atscale)
     - [`extract-queries-from-atscale`](#extract-queries-from-atscale)
     - [`execute-atscale-query-harness`](#execute-atscale-query-harness)
+    - [`execute-query-on-connection`](#execute-query-on-connection)
     - [`generate-enhanced-query-results`](#generate-enhanced-query-results)
+    - [`execute-run-analysis`](#execute-run-analysis)
   - AtScale Config
     - [`generate-atscale-install-yaml`](#generate-atscale-install-yaml)
     - [`atscale-list-data-sources`](#atscale-list-data-sources)
@@ -192,6 +243,82 @@ With optional overrides:
 | `--model-name` | No | First model found | Model label or `unique_name` to extract |
 | `--connection-name` | No | From connections file | Override the `data_source` in the output |
 | `--output-model-file` | No | stdout | Output path for the model YAML |
+
+---
+
+### `execute-sql-on-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a SQL file, splits it into individual statements, and executes each one against a named database connection. Works with DDL (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE`, `CREATE VIEW`), DML (`INSERT`, `UPDATE`, `DELETE`), and mixed files.
+
+```bash
+./atscale-utils execute-sql-on-connection \
+  --sql-file "./schema/migrations/001_init.sql" \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo"
+```
+
+Preview statements without running them:
+
+```bash
+./atscale-utils execute-sql-on-connection \
+  --sql-file "./schema.sql" \
+  --connection-name "snow_demo" \
+  --dry-run true
+```
+
+Skip failed statements and continue:
+
+```bash
+./atscale-utils execute-sql-on-connection \
+  --sql-file "./schema.sql" \
+  --connection-name "snow_demo" \
+  --on-error continue
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sql-file` | Yes | | Path to the SQL file to execute |
+| `--connection-file` | No | `connections.yaml` | Path to connections file |
+| `--connection-name` | Yes | | Connection name in the file |
+| `--on-error` | No | `stop` | `stop` halts on first failure; `continue` logs errors and proceeds |
+| `--dry-run` | No | | Pass `true` to print statements without executing them |
+
+---
+
+### `extract-ddl-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Connects to a live database, reads schema metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file (or stdout). Useful for capturing schema snapshots, seeding DDL files for `generate-sml-from-ddl`, or comparing schema drift.
+
+```bash
+./atscale-utils extract-ddl-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --schema "PUBLIC" \
+  --output-file "./schema.ddl"
+```
+
+Extract only specific tables or wildcard patterns:
+
+```bash
+./atscale-utils extract-ddl-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --schema "PUBLIC" \
+  --tables "Dim*,FactInternetSales" \
+  --output-file "./schema.ddl"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Connection name in the file |
+| `--schema` | Yes | | Database schema to introspect |
+| `--connection-file` | No | `connections.yaml` | Path to connections file |
+| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-insensitive. |
+| `--output-file` | No | stdout | Output path for the DDL |
 
 ---
 
@@ -323,6 +450,51 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 
 ---
 
+### `generate-ddl-from-atscale`
+
+[↑ Table of Contents](#table-of-contents)
+
+Generates DDL (`CREATE TABLE` statements) by reading table and column metadata from an AtScale data source via the REST API. No direct database connection is required — AtScale acts as the metadata broker.
+
+```bash
+./atscale-utils generate-ddl-from-atscale \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --data-source-name "snowflake_prod" \
+  --database "MY_DATABASE" \
+  --schema "PUBLIC"
+```
+
+With optional filters and output file:
+
+```bash
+./atscale-utils generate-ddl-from-atscale \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --data-source-name "snowflake_prod" \
+  --database "MY_DATABASE" \
+  --schema "PUBLIC" \
+  --tables "fact_*,dim_*" \
+  --output-file "./schema.ddl"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--data-source-name` | Yes | | Name of the data source as registered in AtScale (display name or `connectionId`) |
+| `--database` | Yes | | Database (catalog) name |
+| `--schema` | Yes | | Schema name |
+| `--tables` | No | all tables | Comma-separated table names or glob patterns (`*`, `?`) — e.g. `"fact_*,dim_*"` |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--output-file` | No | stdout | Output file path for the generated DDL |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** One `CREATE TABLE` statement per matched table. Output includes a header comment with data source name, database, schema, and timestamp.
+
+**Foreign keys:** The AtScale metadata API does not expose FK relationships. FK constraints are not included in the output; a header comment documents this. Use `extract-ddl-from-connection` if FK constraints are required.
+
+---
+
 ### `generate-metrics-from-model`
 
 [↑ Table of Contents](#table-of-contents)
@@ -359,6 +531,201 @@ The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include
 | `--include-tuples` | No | `true` | Include multi-dimension suggestions |
 | `--format` | No | `text` | Output format: `text` or `yaml` |
 | `--output-file` | No | stdout | File to write output to |
+
+---
+
+### `extract-data-shape-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
+
+No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
+
+Large fact tables are automatically sampled via `TABLESAMPLE SYSTEM` or a `LIMIT`-based fallback (see `--target-fact-rows` and `--no-tablesample`). Sample sizes are computed using the Cochran formula (z² × 0.25 / e²) with finite-population correction, guaranteeing statistical significance without reading the entire table.
+
+```bash
+./atscale-utils extract-data-shape-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --sml-path        "./sml-output" \
+  --output-file     "./data-shape.yaml"
+```
+
+With sampling tuning:
+
+```bash
+./atscale-utils extract-data-shape-from-connection \
+  --connection-file    "./connections.yaml" \
+  --connection-name    "snow_demo" \
+  --sml-path           "./sml-output" \
+  --target-fact-rows   50000 \
+  --target-column-rows 5000 \
+  --no-tablesample          # use for MySQL / MariaDB
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Connection name in the file |
+| `--sml-path` | Yes | | Path to the SML output directory or a model.yml file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--output-file` | No | `data-shape.yaml` | Output path for the fingerprint YAML |
+| `--target-fact-rows` | No | `100000` | Target row count when sampling large fact tables (0 = no sampling) |
+| `--target-column-rows` | No | `10000` | Target row count for measure column distribution sampling (0 = no sampling) |
+| `--tablesample` / `--no-tablesample` | No | `true` | Use `TABLESAMPLE SYSTEM` for fact sampling. Set `--no-tablesample` for databases that do not support it (e.g. MySQL) |
+
+**Output:** A `data-shape.yaml` fingerprint file containing:
+- Dimension hierarchy level cardinalities, null key fractions, and rollup ratios (P50/P95/shape)
+- Leaf-level fact densities (avg/stddev/P50/P90/P99), coverage fraction, and cold-member fraction
+- Measure distributions (null fraction, min/max/mean, percentiles, additivity classification)
+- Pairwise conformed dimension overlap across facts (intersection/union fraction)
+
+All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`). The mapping from original names to IDs is discarded at the end of each run.
+
+See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
+
+---
+
+### `generate-ddl-from-data-shape`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `data-shape.yaml` fingerprint file produced by `extract-data-shape-from-connection` and emits `CREATE TABLE` DDL statements. No database connection is required.
+
+Table and column names are synthetic — the original names are not stored in the fingerprint. The same fingerprint always produces identical DDL regardless of when it is run.
+
+```bash
+./atscale-utils generate-ddl-from-data-shape \
+  --input-file "./data-shape.yaml" \
+  --output-file "./schema.sql"
+```
+
+With dialect selection:
+
+```bash
+./atscale-utils generate-ddl-from-data-shape \
+  --input-file  "./data-shape.yaml" \
+  --dialect     snowflake \
+  --output-file "./schema.sql"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `--output-file` | No | stdout | Output path for the generated DDL |
+| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+
+**Output:** One `CREATE TABLE` statement per dimension and fact. Dimension tables are emitted first so `FOREIGN KEY` references resolve correctly.
+
+**Dialect notes:**
+- `bigquery` — `PRIMARY KEY` and `FOREIGN KEY` constraints are omitted (not supported)
+- `snowflake` — integer types are mapped to `NUMBER(n,0)`, decimals to `NUMBER(18,4)`
+- All other dialects — standard ANSI SQL types (`SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL(18,4)`, `VARCHAR(200)`)
+
+See [STATISTICS.md](STATISTICS.md) §Phase 7 for the reconstruction algorithm.
+
+---
+
+### `generate-data-from-data-shape`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `data-shape.yaml` fingerprint file and generates statistically equivalent synthetic data, writing one CSV file per table to an output directory. No database connection is required.
+
+```bash
+./atscale-utils generate-data-from-data-shape \
+  --input-file "./data-shape.yaml" \
+  --output-dir "./data"
+```
+
+With a scale factor and reproducible seed:
+
+```bash
+./atscale-utils generate-data-from-data-shape \
+  --input-file    "./data-shape.yaml" \
+  --output-dir    "./data" \
+  --scale-factor  0.01 \
+  --seed          42
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `--output-dir` | No | `data` | Directory where CSV files are written |
+| `--scale-factor` | No | `1.0` | Scale row and member counts (e.g. `0.01` = 1% of real size) |
+| `--seed` | No | — | Integer random seed for reproducible output |
+
+**Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
+
+See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
+
+---
+
+### `generate-data-from-data-shape-to-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+End-to-end pipeline: reads a `data-shape.yaml` fingerprint, generates synthetic data in memory, and loads it directly into a live database. Combines `generate-data-from-data-shape` and `generate-ddl-from-data-shape` into a single step.
+
+```bash
+./atscale-utils generate-data-from-data-shape-to-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --input-file      "./data-shape.yaml" \
+  --drop-if-exists  true \
+  --create-tables   true \
+  --dialect         snowflake
+```
+
+With scale factor and batch tuning:
+
+```bash
+./atscale-utils generate-data-from-data-shape-to-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "pg_sandbox" \
+  --input-file      "./data-shape.yaml" \
+  --scale-factor    0.1 \
+  --seed            42 \
+  --schema          PUBLIC \
+  --batch-size      1000
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-file` | No | `connections.yaml` | Path to the connections YAML file |
+| `--connection-name` | Yes | — | Name of the connection to use |
+| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
+| `--scale-factor` | No | `1.0` | Scale row and member counts |
+| `--seed` | No | — | Integer random seed for reproducible output |
+| `--create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
+| `--drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `--create-tables` |
+| `--dialect` | No | `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `--batch-size` | No | `500` | Rows per `INSERT` statement |
+| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+
+**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order respects FK constraints throughout.
+
+See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
+
+---
+
+### BI Tool Feature Comparison
+
+| Feature | Tableau Desktop | Power BI Desktop | Excel | Jupyter | Sheets |
+|---|---|---|---|---|---|
+| Text Output | Yes | Yes | Yes | — | — |
+| Bar Chart | Yes | Yes | — | — | — |
+| &nbsp;&nbsp; Ticks as color | Yes | | — | — | — |
+| &nbsp;&nbsp; Filter Nulls | Yes | | — | — | — |
+| &nbsp;&nbsp; Sort Categories | Yes | | — | — | — |
+| Line Chart | Yes | Yes | Yes | — | — |
+| &nbsp;&nbsp; Ticks as color | Yes | | — | — | — |
+| Text / KPI | Yes | Yes | Yes | — | — |
+| &nbsp;&nbsp; Format Options | — | — | Yes | — | — |
+| &nbsp;&nbsp; Number Format | — | — | Yes | — | — |
+| OLAP Pivot Table | — | — | Yes | — | — |
+| xAxisGranularity | — | — | Yes | — | — |
+| Column Chart | — | Yes | — | — | — |
 
 ---
 
@@ -402,102 +769,6 @@ With optional overrides:
 | `--max-suggestions` | No | `25` | Maximum number of analysis suggestions to generate |
 | `--min-score` | No | `0.5` | Minimum relevance score `[0–1]` for a suggestion to be included |
 | `--output-file` | No | stdout | Output path for the namespace YAML |
-
----
-
-### `execute-sql-on-connection`
-
-[↑ Table of Contents](#table-of-contents)
-
-Reads a SQL file, splits it into individual statements, and executes each one against a named database connection. Works with DDL (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE`, `CREATE VIEW`), DML (`INSERT`, `UPDATE`, `DELETE`), and mixed files.
-
-```bash
-./atscale-utils execute-sql-on-connection \
-  --sql-file "./schema/migrations/001_init.sql" \
-  --connection-file "./connections.yaml" \
-  --connection-name "snow_demo"
-```
-
-Preview statements without running them:
-
-```bash
-./atscale-utils execute-sql-on-connection \
-  --sql-file "./schema.sql" \
-  --connection-name "snow_demo" \
-  --dry-run true
-```
-
-Skip failed statements and continue:
-
-```bash
-./atscale-utils execute-sql-on-connection \
-  --sql-file "./schema.sql" \
-  --connection-name "snow_demo" \
-  --on-error continue
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--sql-file` | Yes | | Path to the SQL file to execute |
-| `--connection-file` | No | `connections.yaml` | Path to connections file |
-| `--connection-name` | Yes | | Connection name in the file |
-| `--on-error` | No | `stop` | `stop` halts on first failure; `continue` logs errors and proceeds |
-| `--dry-run` | No | | Pass `true` to print statements without executing them |
-
----
-
-### `extract-ddl-from-connection`
-
-[↑ Table of Contents](#table-of-contents)
-
-Connects to a live database, reads schema metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file (or stdout). Useful for capturing schema snapshots, seeding DDL files for `generate-sml-from-ddl`, or comparing schema drift.
-
-```bash
-./atscale-utils extract-ddl-from-connection \
-  --connection-file "./connections.yaml" \
-  --connection-name "snow_demo" \
-  --schema "PUBLIC" \
-  --output-file "./schema.ddl"
-```
-
-Extract only specific tables or wildcard patterns:
-
-```bash
-./atscale-utils extract-ddl-from-connection \
-  --connection-file "./connections.yaml" \
-  --connection-name "snow_demo" \
-  --schema "PUBLIC" \
-  --tables "Dim*,FactInternetSales" \
-  --output-file "./schema.ddl"
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--connection-name` | Yes | | Connection name in the file |
-| `--schema` | Yes | | Database schema to introspect |
-| `--connection-file` | No | `connections.yaml` | Path to connections file |
-| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-insensitive. |
-| `--output-file` | No | stdout | Output path for the DDL |
-
----
-
-### BI Tool Feature Comparison
-
-| Feature | Tableau Desktop | Power BI Desktop | Excel | Jupyter | Sheets |
-|---|---|---|---|---|---|
-| Text Output | Yes | Yes | Yes | — | — |
-| Bar Chart | Yes | Yes | — | — | — |
-| &nbsp;&nbsp; Ticks as color | Yes | | — | — | — |
-| &nbsp;&nbsp; Filter Nulls | Yes | | — | — | — |
-| &nbsp;&nbsp; Sort Categories | Yes | | — | — | — |
-| Line Chart | Yes | Yes | Yes | — | — |
-| &nbsp;&nbsp; Ticks as color | Yes | | — | — | — |
-| Text / KPI | Yes | Yes | Yes | — | — |
-| &nbsp;&nbsp; Format Options | — | — | Yes | — | — |
-| &nbsp;&nbsp; Number Format | — | — | Yes | — | — |
-| OLAP Pivot Table | — | — | Yes | — | — |
-| xAxisGranularity | — | — | Yes | — | — |
-| Column Chart | — | Yes | — | — | — |
 
 ---
 
@@ -663,6 +934,105 @@ connections:
 
 ---
 
+### `generate-queries-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates two query JSON files — one XMLA (MDX) and one SQL — both compatible with `execute-atscale-query-harness`. Each file provides complete coverage of the model:
+
+- **Metric totals** — one query per metric with no dimensional breakdown (verifies the measure computes without errors and returns a value)
+- **Level breakdowns** — one query per hierarchy level across all dimensions, selecting all model metrics broken down by that level (verifies dimensional slicing at every granularity)
+
+**XMLA query formats:**
+
+Metric total:
+```mdx
+SELECT {[Measures].[m_metric_name]} ON COLUMNS
+FROM [ModelName]
+```
+
+Level breakdown:
+```mdx
+SELECT {[Measures].[m1], [Measures].[m2], …} ON COLUMNS,
+  NON EMPTY [Dim Name].[Hierarchy Name].[Level Name].MEMBERS ON ROWS
+FROM [ModelName]
+```
+
+**SQL query formats:**
+
+Metric total:
+```sql
+SELECT "m_metric_name"
+FROM "ModelName"
+```
+
+Level breakdown:
+```sql
+SELECT "level_column", "m1", "m2", …
+FROM "ModelName"
+GROUP BY "level_column"
+ORDER BY "level_column"
+```
+
+```bash
+# Generate queries from an SML directory
+./atscale-utils generate-queries-from-sml \
+  --sml-dir "./sml" \
+  --xmla-output-file "./queries/model_xmla.json" \
+  --sql-output-file "./queries/model_sql.json"
+
+# Pass the output directly to the harness
+./atscale-utils execute-atscale-query-harness \
+  --connection-file "./connections.yaml" \
+  --connection-name "my_model" \
+  --query-file "./queries/model_xmla.json" \
+  --protocol xmla \
+  --output-dir "./run_results"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML directory (must contain `models/`, `metrics/`, `dimensions/` sub-directories) |
+| `--model-name` | No | First model found | Model `label` or `unique_name` to use |
+| `--cube-name` | No | Model label | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `--xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
+| `--sql-output-file` | Yes | | Path to write the SQL query JSON |
+
+---
+
+### `generate-queries-from-model`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-model-from-sml`) and generates the same XMLA and SQL query JSON files as `generate-queries-from-sml`. Use this operation when a model.yaml is already available instead of a raw SML directory.
+
+Coverage is identical: one grand-total query per metric and one per-level breakdown query per hierarchy level across all dimensions.
+
+```bash
+# Generate queries from a model.yaml
+./atscale-utils generate-queries-from-model \
+  --model-file "./model.yaml" \
+  --xmla-output-file "./queries/model_xmla.json" \
+  --sql-output-file "./queries/model_sql.json"
+
+# Multiple models in one file — select by name
+./atscale-utils generate-queries-from-model \
+  --model-file "./model.yaml" \
+  --model-name "Telemetry" \
+  --xmla-output-file "./queries/telemetry_xmla.json" \
+  --sql-output-file "./queries/telemetry_sql.json"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--model-file` | Yes | | Path to the `model.yaml` file |
+| `--model-name` | No | First model found | Top-level model key to use when the file contains multiple models |
+| `--cube-name` | No | Model name | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `--xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
+| `--sql-output-file` | Yes | | Path to write the SQL query JSON |
+
+---
+
 ### `extract-query-stats-from-atscale`
 
 [↑ Table of Contents](#table-of-contents)
@@ -824,12 +1194,14 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 | `--output-dir` | No | `run_results` | Directory to write the output CSV file |
 | `--redact` | No | `false` | When `true`, omits `original_text` from log output |
 | `--duration-minutes` | No | `0` | Run for this many minutes cycling the query list (0 = one pass) |
-| `--annotate-queries` | No | `true` | When `true`, prepends a `/* {run_query_id, original_text_hash} */` comment to each executed query so AtScale's query log carries correlation fields. Set to `false` to send queries unmodified. |
+| `--annotate-queries` | No | `true` | When `true`, prepends a `/* {run_query_uuid, original_text_hash} */` comment to each executed query so AtScale's query log carries correlation fields. Set to `false` to send queries unmodified. |
 
-**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `run_query_id`, `original_atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `error`, `timestamp`, `original_text_hash`
+**Output CSV columns:** `run_id`, `task_name`, `model`, `query_name`, `run_query_uuid`, `original_atscale_query_id`, `protocol`, `status`, `duration_ms`, `row_count`, `checksum`, `error`, `timestamp`, `original_text_hash`
 
-- **`run_query_id`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `--annotate-queries true`)
+- **`run_query_uuid`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `--annotate-queries true`)
 - **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
+- **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). `0` when no data is returned or on error.
+- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the SOAP `<Body>` content only (the `<Header>` is excluded because it contains per-request session IDs and timestamps). Empty when `row_count = 0` or when the query fails.
 
 **Output filename:**
 - Task-file mode: derived from `runLogFileName` in the task definition (`.log` → `.csv`)
@@ -844,6 +1216,67 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 
 ---
 
+### `execute-query-on-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Executes one or more queries from a query file against a live connection and writes the results to output file(s). Intended for ad-hoc inspection and debugging without the overhead of a full harness run.
+
+`--query-name` supports shell-style wildcards:
+- `*` — matches any sequence of characters
+- `?` — matches exactly one character
+
+When the pattern matches a single query, results are written to `--output-file` directly. When it matches multiple queries, each result is written to a separate file derived from `--output-file`: `{dir}/{query_name}{ext}`.
+
+Accepts the same query file formats as `execute-atscale-query-harness`:
+- **JSON** — array of `QueryRecord` objects produced by `extract-queries-from-atscale`
+- **CSV** — Gatling ingest format (`sampler_name,sql_text` or `sampler_name,atscale_query_id,sql_text`)
+
+Output format depends on protocol:
+- **SQL** — CSV with column headers and data rows
+- **XMLA** — raw SOAP XML response body
+
+```bash
+# Execute one query by exact name
+./atscale-utils execute-query-on-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "ats_connection" \
+  --query-file "./queries/SalesModel_xmla_queries.json" \
+  --protocol xmla \
+  --query-name "Total Revenue by Region" \
+  --output-file "./output/revenue_by_region.xml"
+
+# Execute all queries whose names start with "sales_" — writes one CSV per query
+# to ./output/sales_<query_name>.csv
+./atscale-utils execute-query-on-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "ats_connection" \
+  --query-file "./ingest/sales_queries.csv" \
+  --protocol sql \
+  --query-name "sales_*" \
+  --output-file "./output/placeholder.csv"
+
+# Execute all queries in the file
+./atscale-utils execute-query-on-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "ats_connection" \
+  --query-file "./queries/SalesModel_xmla_queries.json" \
+  --protocol xmla \
+  --query-name "*" \
+  --output-file "./output/placeholder.xml"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-file` | Yes | | Path to `connections.yaml` or a `systems.properties` file |
+| `--connection-name` | Yes | | Connection name (YAML mode) or model name (`.properties` mode) |
+| `--query-file` | Yes | | JSON file from `extract-queries-from-atscale` or a Gatling ingest CSV |
+| `--protocol` | No | `xmla` | Query protocol: `xmla` or `sql` |
+| `--query-name` | Yes | | Name or wildcard pattern (`*`, `?`) to select queries from the file |
+| `--output-file` | Yes | | Output path for a single match; used as a dir+extension template for multiple matches |
+
+---
+
 ### `generate-enhanced-query-results`
 
 [↑ Table of Contents](#table-of-contents)
@@ -851,10 +1284,10 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale `query_id`, outbound SQL, and optionally the execution plan from the target data source. The correlation relies on the annotation comment that `execute-atscale-query-harness` prepends to every query:
 
 ```
-/* {"run_id":"<run_id>","run_query_id":"<uuid>","original_text_hash":"<sha256>"} */
+/* {"run_id":"<run_id>","run_query_uuid":"<uuid>","original_text_hash":"<sha256>"} */
 ```
 
-The operation connects to the AtScale internal Postgres backend, searches the `queries`, `subqueries`, `queries_planned`, and `query_results` tables for rows whose `query_text` starts with that comment, extracts the `run_query_id`, and joins enriched data back to the CSV. When `--target-connection-name` is provided the operation also connects to the target database and runs `EXPLAIN` on each outbound query. Identical outbound queries are cached so each unique SQL is explained only once.
+The operation connects to the AtScale internal Postgres backend, searches the `queries`, `subqueries`, `queries_planned`, and `query_results` tables for rows whose `query_text` starts with that comment, extracts the `run_query_uuid`, and joins enriched data back to the CSV. When `--target-connection-name` is provided the operation also connects to the target database and runs `EXPLAIN` on each outbound query. Identical outbound queries are cached so each unique SQL is explained only once.
 
 **Requirements:** `--annotate-queries` must have been `true` (the default) when the harness run was executed.
 
@@ -883,18 +1316,89 @@ The operation connects to the AtScale internal Postgres backend, searches the `q
 | `--days` | No | `7` | Look-back window when searching the AtScale query log |
 | `--target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan for each outbound query via `EXPLAIN` and stores it in `execution_plan`. Supports `snowflake`, `postgres`, `redshift`. |
 
-**Output:** The input CSV with the following columns inserted after `run_query_id`. Rows with no AtScale match have empty values.
+**Output:** The input CSV with the following columns appended on the right. Rows with no AtScale match have empty values.
 
 | Column | Populated | Description |
 |---|---|---|
-| `run_atscale_query_id` | Always | AtScale's internal `query_id` |
-| `outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
-| `used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
-| `elapsed_ms` | When matched | Total wall-clock time from planning start to last result row (ms). Computed as `query_results.finished − queries_planned.planning_started`. |
-| `parse_ms` | Best-effort | Planning/parse phase duration (ms). Computed as `queries_planned.<finish_col> − planning_started`. Empty when the backend does not expose a planning-finish timestamp. |
-| `execute_ms` | Best-effort | **WAIT phase** — total time AtScale spent waiting for the underlying database across all subqueries (ms). Computed as `SUM(subquery_fetch_started − subquery_started)`. Matches the "WAIT" metric in the AtScale query monitor. Empty when subquery submission timestamps are absent. |
-| `fetch_ms` | Best-effort | **FETCH phase** — total time to retrieve result rows from the underlying database across all subqueries (ms). Computed as `SUM(subquery_finished − subquery_fetch_started)`. Matches the "FETCH" metric in the AtScale query monitor. Empty when subquery-results phase timestamps are absent. |
-| `execution_plan` | When `--target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_atscale_query_id` | Always | AtScale's internal `query_id` for the inbound query |
+| `run_inbound_query_id` | Always | AtScale's `query_id` for the inbound annotated query (same source as `run_atscale_query_id`) |
+| `run_outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
+| `run_outbound_execution_plan` | When `--target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
+| `run_duration_ms` | When matched | Total wall-clock time from query receipt to last result row (ms). Computed as `query_results.finished − queries.received`. Falls back to `finished − planning_started` if `received` is unavailable. |
+| `run_inbound_ms` | Best-effort | **INBOUND phase** — time from query receipt to start of planning (ms). Computed as `queries_planned.planning_started − queries.received`. Matches the "INBOUND" metric in the AtScale query monitor. |
+| `run_query_planning_ms` | Best-effort | **QUERY PLANNING phase** — time AtScale spent planning the query (ms). Computed as `queries_planned.<finish_col> − planning_started`. Matches the "QUERY PLANNING" metric in the AtScale query monitor. |
+| `run_outbound_ms` | Best-effort | **OUTBOUND total** — time from planning completion to last subquery result (ms). Computed as `MAX(subquery_finished) − planning_completed`. Matches the "OUTBOUND SUMMARY" metric in the AtScale query monitor. |
+| `run_wait_ms` | Best-effort | **WAIT phase** — time from planning completion to first subquery execution start (ms). Computed as `MIN(subquery_started) − planning_completed`. Matches the "WAIT" metric in the AtScale query monitor. |
+| `run_execute` | Best-effort | **EXECUTE phase** — total DB execution time across all subqueries (ms). Computed as `SUM(subquery_fetch_started − subquery_started)`. Matches the "EXECUTE" metric in the AtScale query monitor. |
+| `run_fetch_ms` | Best-effort | **FETCH phase** — total time to retrieve result rows across all subqueries (ms). Computed as `SUM(subquery_finished − subquery_fetch_started)`. Matches the "FETCH" metric in the AtScale query monitor. |
+
+---
+
+### `execute-run-analysis`
+
+[↑ Table of Contents](#table-of-contents)
+
+Compares two run logs from `execute-atscale-query-harness`, or two enhanced CSVs from `generate-enhanced-query-results`, on a query-by-query basis. Queries are matched by a configurable join key.
+
+When the same join-key value appears multiple times in a file (e.g. the same query was run several times), rows are sorted by timestamp and paired positionally. Extra occurrences that cannot be paired are reported as unmatched in the summary.
+
+**Output files:**
+
+- **`--summary-file`** — plain-text report containing:
+  - Input file metadata (paths, types, row counts, run IDs, unique join-key counts)
+  - Match statistics
+  - Queries only present in file A
+  - Queries only present in file B
+  - Row-count and duration mismatch counts (with a reference to `--outliers-file`)
+  - Queries with mismatched status or error messages
+
+- **`--comparison-file`** — CSV with one row per matched pair:
+  - `join_key_value`, `query_name`, `occurrence`
+  - Flag columns: `row_count_mismatch`, `duration_outside_variance`, `error_mismatch`
+  - Per-side columns: `a_status`, `b_status`, `a_duration_ms`, `b_duration_ms`, `a_row_count`, `b_row_count`, `a_checksum`, `b_checksum`, `a_error`, `b_error`, `a_timestamp`, `b_timestamp`
+  - Delta columns: `duration_delta_ms`, `duration_delta_pct`
+  - Enhanced timing columns (when present in either input): `a_run_duration_ms`, `b_run_duration_ms`, `a_run_inbound_ms`, `b_run_inbound_ms`, `a_run_query_planning_ms`, `b_run_query_planning_ms`, `a_run_outbound_ms`, `b_run_outbound_ms`, `a_run_wait_ms`, `b_run_wait_ms`, `a_run_execute`, `b_run_execute`, `a_run_fetch_ms`, `b_run_fetch_ms`
+
+- **`--outliers-file`** — filtered subset of `--comparison-file` containing only the pairs flagged for a row-count mismatch or a duration outside the variance threshold. Same CSV schema as `--comparison-file`.
+
+```bash
+# Compare two run logs using the default join key (original_text_hash)
+./atscale-utils execute-run-analysis \
+  --file-a "./run_results/2026-04-21-ABC123_model.csv" \
+  --file-b "./run_results/2026-04-22-DEF456_model.csv" \
+  --summary-file "./analysis/summary.txt" \
+  --comparison-file "./analysis/comparison.csv" \
+  --outliers-file "./analysis/outliers.csv"
+
+# Compare enhanced outputs with a 10% duration variance threshold
+./atscale-utils execute-run-analysis \
+  --file-a "./run_results/2026-04-21_enhanced.csv" \
+  --file-b "./run_results/2026-04-22_enhanced.csv" \
+  --duration-variance-pct 10 \
+  --summary-file "./analysis/summary.txt" \
+  --comparison-file "./analysis/comparison.csv" \
+  --outliers-file "./analysis/outliers.csv"
+
+# Join by original_atscale_query_id instead of text hash
+./atscale-utils execute-run-analysis \
+  --file-a "./run_results/run_a.csv" \
+  --file-b "./run_results/run_b.csv" \
+  --join-key original_atscale_query_id \
+  --summary-file "./analysis/summary.txt" \
+  --comparison-file "./analysis/comparison.csv" \
+  --outliers-file "./analysis/outliers.csv"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--file-a` | Yes | | First run log or enhanced output CSV |
+| `--file-b` | Yes | | Second run log or enhanced output CSV |
+| `--join-key` | No | `original_text_hash` | Column to join on: `original_text_hash` or `original_atscale_query_id` |
+| `--duration-variance-pct` | No | `20` | Flag pairs where `|(b−a)/a| × 100` exceeds this percentage |
+| `--summary-file` | Yes | | Path to write the plain-text summary report |
+| `--comparison-file` | Yes | | Path to write the row-by-row comparison CSV |
+| `--outliers-file` | Yes | | Path to write the filtered outliers CSV (row-count and duration mismatches only) |
 
 ---
 
@@ -1185,226 +1689,6 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 † Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
-
----
-
-### `generate-ddl-from-atscale`
-
-[↑ Table of Contents](#table-of-contents)
-
-Generates DDL (`CREATE TABLE` statements) by reading table and column metadata from an AtScale data source via the REST API. No direct database connection is required — AtScale acts as the metadata broker.
-
-```bash
-./atscale-utils generate-ddl-from-atscale \
-  --connection-file "./connections.yaml" \
-  --atscale-connection-name "my_atscale" \
-  --data-source-name "snowflake_prod" \
-  --database "MY_DATABASE" \
-  --schema "PUBLIC"
-```
-
-With optional filters and output file:
-
-```bash
-./atscale-utils generate-ddl-from-atscale \
-  --connection-file "./connections.yaml" \
-  --atscale-connection-name "my_atscale" \
-  --data-source-name "snowflake_prod" \
-  --database "MY_DATABASE" \
-  --schema "PUBLIC" \
-  --tables "fact_*,dim_*" \
-  --output-file "./schema.ddl"
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `--data-source-name` | Yes | | Name of the data source as registered in AtScale (display name or `connectionId`) |
-| `--database` | Yes | | Database (catalog) name |
-| `--schema` | Yes | | Schema name |
-| `--tables` | No | all tables | Comma-separated table names or glob patterns (`*`, `?`) — e.g. `"fact_*,dim_*"` |
-| `--connection-file` | No | `connections.yaml` | Path to the connections file |
-| `--output-file` | No | stdout | Output file path for the generated DDL |
-| `--insecure` | No | `true` | Skip TLS certificate verification |
-
-**Output:** One `CREATE TABLE` statement per matched table. Output includes a header comment with data source name, database, schema, and timestamp.
-
-**Foreign keys:** The AtScale metadata API does not expose FK relationships. FK constraints are not included in the output; a header comment documents this. Use `extract-ddl-from-connection` if FK constraints are required.
-
----
-
-### `extract-data-shape-from-connection`
-
-[↑ Table of Contents](#table-of-contents)
-
-Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
-
-No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
-
-Large fact tables are automatically sampled via `TABLESAMPLE SYSTEM` or a `LIMIT`-based fallback (see `--target-fact-rows` and `--no-tablesample`). Sample sizes are computed using the Cochran formula (z² × 0.25 / e²) with finite-population correction, guaranteeing statistical significance without reading the entire table.
-
-```bash
-./atscale-utils extract-data-shape-from-connection \
-  --connection-file "./connections.yaml" \
-  --connection-name "snow_demo" \
-  --sml-path        "./sml-output" \
-  --output-file     "./data-shape.yaml"
-```
-
-With sampling tuning:
-
-```bash
-./atscale-utils extract-data-shape-from-connection \
-  --connection-file    "./connections.yaml" \
-  --connection-name    "snow_demo" \
-  --sml-path           "./sml-output" \
-  --target-fact-rows   50000 \
-  --target-column-rows 5000 \
-  --no-tablesample          # use for MySQL / MariaDB
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--connection-name` | Yes | | Connection name in the file |
-| `--sml-path` | Yes | | Path to the SML output directory or a model.yml file |
-| `--connection-file` | No | `connections.yaml` | Path to the connections file |
-| `--output-file` | No | `data-shape.yaml` | Output path for the fingerprint YAML |
-| `--target-fact-rows` | No | `100000` | Target row count when sampling large fact tables (0 = no sampling) |
-| `--target-column-rows` | No | `10000` | Target row count for measure column distribution sampling (0 = no sampling) |
-| `--tablesample` / `--no-tablesample` | No | `true` | Use `TABLESAMPLE SYSTEM` for fact sampling. Set `--no-tablesample` for databases that do not support it (e.g. MySQL) |
-
-**Output:** A `data-shape.yaml` fingerprint file containing:
-- Dimension hierarchy level cardinalities, null key fractions, and rollup ratios (P50/P95/shape)
-- Leaf-level fact densities (avg/stddev/P50/P90/P99), coverage fraction, and cold-member fraction
-- Measure distributions (null fraction, min/max/mean, percentiles, additivity classification)
-- Pairwise conformed dimension overlap across facts (intersection/union fraction)
-
-All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`). The mapping from original names to IDs is discarded at the end of each run.
-
-See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
-
----
-
-### `generate-ddl-from-data-shape`
-
-[↑ Table of Contents](#table-of-contents)
-
-Reads a `data-shape.yaml` fingerprint file produced by `extract-data-shape-from-connection` and emits `CREATE TABLE` DDL statements. No database connection is required.
-
-Table and column names are synthetic — the original names are not stored in the fingerprint. The same fingerprint always produces identical DDL regardless of when it is run.
-
-```bash
-./atscale-utils generate-ddl-from-data-shape \
-  --input-file "./data-shape.yaml" \
-  --output-file "./schema.sql"
-```
-
-With dialect selection:
-
-```bash
-./atscale-utils generate-ddl-from-data-shape \
-  --input-file  "./data-shape.yaml" \
-  --dialect     snowflake \
-  --output-file "./schema.sql"
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
-| `--output-file` | No | stdout | Output path for the generated DDL |
-| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
-
-**Output:** One `CREATE TABLE` statement per dimension and fact. Dimension tables are emitted first so `FOREIGN KEY` references resolve correctly.
-
-**Dialect notes:**
-- `bigquery` — `PRIMARY KEY` and `FOREIGN KEY` constraints are omitted (not supported)
-- `snowflake` — integer types are mapped to `NUMBER(n,0)`, decimals to `NUMBER(18,4)`
-- All other dialects — standard ANSI SQL types (`SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL(18,4)`, `VARCHAR(200)`)
-
-See [STATISTICS.md](STATISTICS.md) §Phase 7 for the reconstruction algorithm.
-
----
-
-### `generate-data-from-data-shape`
-
-[↑ Table of Contents](#table-of-contents)
-
-Reads a `data-shape.yaml` fingerprint file and generates statistically equivalent synthetic data, writing one CSV file per table to an output directory. No database connection is required.
-
-```bash
-./atscale-utils generate-data-from-data-shape \
-  --input-file "./data-shape.yaml" \
-  --output-dir "./data"
-```
-
-With a scale factor and reproducible seed:
-
-```bash
-./atscale-utils generate-data-from-data-shape \
-  --input-file    "./data-shape.yaml" \
-  --output-dir    "./data" \
-  --scale-factor  0.01 \
-  --seed          42
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
-| `--output-dir` | No | `data` | Directory where CSV files are written |
-| `--scale-factor` | No | `1.0` | Scale row and member counts (e.g. `0.01` = 1% of real size) |
-| `--seed` | No | — | Integer random seed for reproducible output |
-
-**Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
-
-See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
-
----
-
-### `generate-data-from-data-shape-to-connection`
-
-[↑ Table of Contents](#table-of-contents)
-
-End-to-end pipeline: reads a `data-shape.yaml` fingerprint, generates synthetic data in memory, and loads it directly into a live database. Combines `generate-data-from-data-shape` and `generate-ddl-from-data-shape` into a single step.
-
-```bash
-./atscale-utils generate-data-from-data-shape-to-connection \
-  --connection-file "./connections.yaml" \
-  --connection-name "snow_demo" \
-  --input-file      "./data-shape.yaml" \
-  --drop-if-exists  true \
-  --create-tables   true \
-  --dialect         snowflake
-```
-
-With scale factor and batch tuning:
-
-```bash
-./atscale-utils generate-data-from-data-shape-to-connection \
-  --connection-file "./connections.yaml" \
-  --connection-name "pg_sandbox" \
-  --input-file      "./data-shape.yaml" \
-  --scale-factor    0.1 \
-  --seed            42 \
-  --schema          PUBLIC \
-  --batch-size      1000
-```
-
-| Parameter | Required | Default | Description |
-|---|---|---|---|
-| `--connection-file` | No | `connections.yaml` | Path to the connections YAML file |
-| `--connection-name` | Yes | — | Name of the connection to use |
-| `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
-| `--scale-factor` | No | `1.0` | Scale row and member counts |
-| `--seed` | No | — | Integer random seed for reproducible output |
-| `--create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
-| `--drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `--create-tables` |
-| `--dialect` | No | `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
-| `--batch-size` | No | `500` | Rows per `INSERT` statement |
-| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
-
-**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order respects FK constraints throughout.
-
-See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
