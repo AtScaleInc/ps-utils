@@ -80,6 +80,7 @@ flowchart TD
   - [`generate-namespace-from-model`](#generate-namespace-from-model)
   - [`generate-sml-from-connection`](#generate-sml-from-connection)
   - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+  - [`generate-sml-from-xml`](#generate-sml-from-xml)
   - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
   - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
   - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
@@ -483,8 +484,9 @@ With scale factor and seed:
 | `output-dir` | No | `data` | Directory where CSV files are written |
 | `scale-factor` | No | `1.0` | Scale row and member counts |
 | `seed` | No | — | Integer seed for reproducible output |
+| `reports-dir` | No | `<output-dir>/_reports` | Directory for security audit artifacts |
 
-**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …).
+**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls)).
 
 ---
 
@@ -543,8 +545,11 @@ Full pipeline — extract shape, generate DDL, populate:
 | `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
 | `batch-size` | No | `500` | Rows per `INSERT` statement |
 | `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `reports-dir` | No | `_reports` | Directory for security audit artifacts |
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order ensures FK constraints are respected throughout.
+
+**Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls) for the full list.
 
 ---
 
@@ -610,6 +615,37 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
     min-hierarchies-per-dim: "1"  # optional — drop dimensions with fewer hierarchies
     max-hierarchies-per-dim: "4"  # optional — cap hierarchies per dimension
 ```
+
+---
+
+### `generate-sml-from-xml`
+
+Reads an AtScale XML project file (`project_2_0` format) and converts it to AtScale SML YAML files. No database connection or secrets required — the conversion runs entirely from the XML model definition.
+
+**Requires:** No secrets — the XML file must be present in the repository.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-sml-from-xml
+    xml-file: MyModel.xml
+    output-dir: sml-output
+    connection-name: my_connection    # optional — embedded in SML files
+    connection-type: snowflake        # optional — written to connection file
+    catalog-name: "My Catalog"        # optional — overrides the XML schema name
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `xml-file` | Yes | | Path to the AtScale XML project file |
+| `output-dir` | Yes | | Directory to write SML files |
+| `connection-name` | No | `my_connection` | Connection `unique_name` to embed in generated files |
+| `connection-type` | No | | Database dialect for the connection file (e.g. `snowflake`) |
+| `catalog-name` | No | XML schema name | Override the catalog label |
 
 ---
 

@@ -32,6 +32,7 @@ import { profileFactJoins }         from "./profilers/density.js";
 import { profileMeasures }          from "./profilers/columns.js";
 import { profileConformedDimensions } from "./profilers/conformed.js";
 import { countRows }                from "./sql-helpers.js";
+import { hardenFingerprint, smallTableWarnings } from "./security.js";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ export async function extractFingerprint(
 
   // ── Step 6: Assemble fingerprint ─────────────────────────────────────────────
   log("Assembling fingerprint…");
-  return {
+  const assembled: SchemaFingerprint = {
     version:    "2.0",
     capturedAt: new Date().toISOString(),
     sampling: {
@@ -149,6 +150,12 @@ export async function extractFingerprint(
     facts:               factFingerprints,
     conformedDimensions: conformedFps,
   };
+
+  // ── Step 7: Security hardening (review/04 §Hardened Fingerprint Contract) ───
+  log("Applying security hardening…");
+  const hardened = hardenFingerprint(assembled);
+  for (const w of smallTableWarnings(hardened)) log(`  ⚠ ${w}`);
+  return hardened;
 }
 
 // ─── Cold-member annotation ───────────────────────────────────────────────────

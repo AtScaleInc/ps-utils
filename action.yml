@@ -35,7 +35,11 @@ inputs:
         generate-data-from-data-shape-to-connection
         extract-queries-from-atscale
         execute-atscale-query-harness
+        execute-query-on-connection
         generate-enhanced-query-results
+        execute-run-analysis
+        generate-queries-from-sml
+        generate-queries-from-model
         deploy-atscale-microk8s
     required: true
 
@@ -149,6 +153,16 @@ inputs:
     description: Path to the DDL SQL file to parse for SML generation.
     required: false
 
+  # ── generate-sml-from-xml ────────────────────────────────────────────────
+  xml-file:
+    description: Path to the AtScale XML project file (project_2_0 format) to convert.
+    required: false
+  connection-type:
+    description: >
+      Database dialect for the connection file (e.g. "snowflake", "postgresql").
+      Used by: generate-sml-from-xml.
+    required: false
+
   # ── generate-namespace-from-model / generate-metrics-from-model ──────────
   model-file:
     description: >
@@ -180,6 +194,7 @@ inputs:
       For generate-metrics-from-model: suggestions output (omit to print to stdout).
       For extract-ddl-from-connection: DDL output (omit to print to stdout).
       For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
+      For execute-query-on-connection: path to write query results (CSV for SQL, XML for XMLA).
     required: false
 
   # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
@@ -299,11 +314,11 @@ inputs:
     required: false
     default: "500"
 
-  # ── extract-queries-from-atscale / execute-atscale-query-harness ────────
+  # ── extract-queries-from-atscale / execute-atscale-query-harness / execute-query-on-connection ──
   query-file:
     description: >
-      JSON file produced by extract-queries-from-atscale.
-      Used by: execute-atscale-query-harness.
+      JSON file produced by extract-queries-from-atscale, or a Gatling ingest CSV.
+      Used by: execute-atscale-query-harness, execute-query-on-connection.
     required: false
   ingest-file:
     description: >
@@ -318,9 +333,14 @@ inputs:
   protocol:
     description: >
       Query protocol: xmla or sql (default: xmla). Ignored in task-file mode.
-      Used by: execute-atscale-query-harness.
+      Used by: execute-atscale-query-harness, execute-query-on-connection.
     required: false
     default: "xmla"
+  query-name:
+    description: >
+      Name of the specific query to execute from the query file (matches
+      queryName / sampler_name). Used by: execute-query-on-connection.
+    required: false
   concurrent-users:
     description: >
       Number of parallel query workers (default: 1). Ignored in task-file mode.
@@ -352,7 +372,7 @@ inputs:
     default: "false"
   annotate-queries:
     description: >
-      When "true" (default), prepends a /* {run_query_id, original_text_hash} */ comment
+      When "true" (default), prepends a /* {run_query_uuid, original_text_hash} */ comment
       to each executed query so AtScale's query log carries correlation fields.
       Set to "false" to send queries unmodified.
       Used by: execute-atscale-query-harness.
@@ -376,10 +396,80 @@ inputs:
       Connection name within the connections file for the target data source.
       When provided, generate-enhanced-query-results connects to the target
       database and fetches an execution plan (EXPLAIN) for each outbound query,
-      stored in the 'execution_plan' column.
+      stored in the 'run_outbound_execution_plan' column.
       Supported dialects: snowflake (SYSTEM$EXPLAIN_PLAN_JSON), postgres
       (EXPLAIN FORMAT JSON), redshift (EXPLAIN).
       Used by: generate-enhanced-query-results.
+    required: false
+
+  # ── execute-run-analysis ─────────────────────────────────────────────────
+  file-a:
+    description: >
+      Path to the first run log (execute-atscale-query-harness CSV) or enhanced
+      output (generate-enhanced-query-results CSV).
+      Used by: execute-run-analysis.
+    required: false
+  file-b:
+    description: >
+      Path to the second run log or enhanced output to compare against file-a.
+      Used by: execute-run-analysis.
+    required: false
+  join-key:
+    description: >
+      Column to join queries across the two files: 'original_text_hash' (default)
+      or 'original_atscale_query_id'.
+      Used by: execute-run-analysis.
+    required: false
+    default: "original_text_hash"
+  duration-variance-pct:
+    description: >
+      Percentage threshold for flagging duration differences. Pairs where
+      |(b−a)/a|×100 exceeds this value are flagged. Default: 20.
+      Used by: execute-run-analysis.
+    required: false
+    default: "20"
+  summary-file:
+    description: >
+      Path to write the plain-text summary report.
+      Used by: execute-run-analysis.
+    required: false
+  comparison-file:
+    description: >
+      Path to write the row-by-row comparison CSV.
+      Used by: execute-run-analysis.
+    required: false
+  outliers-file:
+    description: >
+      Path to write the filtered outliers CSV containing only pairs flagged for
+      a row-count mismatch or a duration outside the variance threshold.
+      Same schema as comparison-file.
+      Used by: execute-run-analysis.
+    required: false
+
+  # ── generate-queries-from-model ──────────────────────────────────────────
+  model-file:
+    description: >
+      Path to the model.yaml file (output of extract-model-from-atscale or
+      extract-model-from-sml).
+      Used by: generate-queries-from-model.
+    required: false
+
+  # ── generate-queries-from-sml / generate-queries-from-model ──────────────
+  xmla-output-file:
+    description: >
+      Path to write the generated XMLA (MDX) query JSON file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+  sql-output-file:
+    description: >
+      Path to write the generated SQL query JSON file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+  cube-name:
+    description: >
+      Override the cube name used in MDX FROM and SQL FROM clauses.
+      Defaults to the model label from the SML model file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
     required: false
 
   # ── extract-ddl-from-connection ───────────────────────────────────────────
@@ -607,6 +697,7 @@ runs:
          inputs.operation == 'generate-data-from-data-shape-to-connection' ||
          inputs.operation == 'extract-queries-from-atscale' ||
          inputs.operation == 'execute-atscale-query-harness' ||
+         inputs.operation == 'execute-query-on-connection' ||
          inputs.operation == 'generate-enhanced-query-results')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
@@ -682,6 +773,21 @@ runs:
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-xml ────────────────────────────────────────────────
+    - name: Generate SML from XML
+      if: inputs.operation == 'generate-sml-from-xml'
+      run: |
+        ARGS=(
+          --xml-file   "${{ inputs.xml-file }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.connection-name }}" ]] && ARGS+=(--connection-name "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}" ]] && ARGS+=(--connection-type "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
       shell: bash
 
     # ── generate-namespace-from-model ────────────────────────────────────────
@@ -1032,6 +1138,22 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" execute-atscale-query-harness "${ARGS[@]}"
       shell: bash
 
+    # ── execute-query-on-connection ───────────────────────────────────────────
+    - name: Execute query on connection
+      if: inputs.operation == 'execute-query-on-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --query-file      "${{ inputs.query-file }}"
+          --protocol        "${{ inputs.protocol }}"
+          --query-name      "${{ inputs.query-name }}"
+          --output-file     "${{ inputs.output-file }}"
+          --verbose true
+        )
+        node "${{ github.action_path }}/dist/cli.js" execute-query-on-connection "${ARGS[@]}"
+      shell: bash
+
     # ── generate-enhanced-query-results ──────────────────────────────────────
     - name: Generate enhanced query results
       if: inputs.operation == 'generate-enhanced-query-results'
@@ -1047,6 +1169,53 @@ runs:
         [[ -n "${{ inputs.db-schema }}"            ]] && ARGS+=(--db-schema            "${{ inputs.db-schema }}")
         [[ -n "${{ inputs.target-connection-name }}" ]] && ARGS+=(--target-connection-name "${{ inputs.target-connection-name }}")
         node "${{ github.action_path }}/dist/cli.js" generate-enhanced-query-results "${ARGS[@]}"
+      shell: bash
+
+    # ── execute-run-analysis ─────────────────────────────────────────────────
+    - name: Execute run analysis
+      if: inputs.operation == 'execute-run-analysis'
+      run: |
+        ARGS=(
+          --file-a                 "${{ inputs.file-a }}"
+          --file-b                 "${{ inputs.file-b }}"
+          --join-key               "${{ inputs.join-key }}"
+          --duration-variance-pct  "${{ inputs.duration-variance-pct }}"
+          --summary-file           "${{ inputs.summary-file }}"
+          --comparison-file        "${{ inputs.comparison-file }}"
+          --outliers-file          "${{ inputs.outliers-file }}"
+          --verbose true
+        )
+        node "${{ github.action_path }}/dist/cli.js" execute-run-analysis "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-queries-from-sml ────────────────────────────────────────────
+    - name: Generate queries from SML
+      if: inputs.operation == 'generate-queries-from-sml'
+      run: |
+        ARGS=(
+          --sml-dir              "${{ inputs.sml-dir }}"
+          --xmla-output-file     "${{ inputs.xmla-output-file }}"
+          --sql-output-file      "${{ inputs.sql-output-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-queries-from-sml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-queries-from-model ──────────────────────────────────────────
+    - name: Generate queries from model
+      if: inputs.operation == 'generate-queries-from-model'
+      run: |
+        ARGS=(
+          --model-file           "${{ inputs.model-file }}"
+          --xmla-output-file     "${{ inputs.xmla-output-file }}"
+          --sql-output-file      "${{ inputs.sql-output-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-queries-from-model "${ARGS[@]}"
       shell: bash
 
     # ── deploy-atscale-microk8s ───────────────────────────────────────────────

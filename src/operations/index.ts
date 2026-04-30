@@ -11,6 +11,7 @@ import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOpe
 import { PythonHelloWorldOperation } from "./python/PythonHelloWorldOperation.js";
 import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connection/GenerateSMLFromConnectionOperation.js";
 import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
+import { GenerateSMLFromXMLOperation } from "./generate-sml-from-xml/GenerateSMLFromXMLOperation.js";
 import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractModelFromSMLOperation.js";
 import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-model/GenerateNamespaceFromModelOperation.js";
 import { GenerateMetricsFromModelOperation } from "./generate-metrics-from-model/GenerateMetricsFromModelOperation.js";
@@ -20,6 +21,7 @@ import { GenerateExcelFromNamespaceOperation } from "./generate-excel-from-names
 import { ExtractQueryStatsFromAtScaleOperation } from "./extract-query-stats-from-atscale/ExtractQueryStatsFromAtScaleOperation.js";
 import { ExtractQueriesFromAtScaleOperation } from "./extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import { ExecuteAtScaleQueryHarnessOperation } from "./execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
+import { ExecuteQueryOnConnectionOperation } from "./execute-query-on-connection/ExecuteQueryOnConnectionOperation.js";
 import { GenerateAtScaleInstallYamlOperation } from "./generate-atscale-install-yaml/GenerateAtScaleInstallYamlOperation.js";
 import { AtScaleListDataSourcesOperation } from "./atscale-list-data-sources/AtScaleListDataSourcesOperation.js";
 import { AtScaleCreateDataSourceOperation } from "./atscale-create-data-source/AtScaleCreateDataSourceOperation.js";
@@ -34,6 +36,9 @@ import { GenerateDDLFromDataShapeOperation } from "./generate-ddl-from-data-shap
 import { GenerateDataFromDataShapeOperation } from "./generate-data-from-data-shape/GenerateDataFromDataShapeOperation.js";
 import { GenerateDataFromDataShapeToConnectionOperation } from "./generate-data-from-data-shape-to-connection/GenerateDataFromDataShapeToConnectionOperation.js";
 import { GenerateEnhancedQueryResultsOperation } from "./generate-enhanced-query-results/GenerateEnhancedQueryResultsOperation.js";
+import { ExecuteRunAnalysisOperation } from "./execute-run-analysis/ExecuteRunAnalysisOperation.js";
+import { GenerateQueriesFromSMLOperation } from "./generate-queries-from-sml/GenerateQueriesFromSMLOperation.js";
+import { GenerateQueriesFromModelOperation } from "./generate-queries-from-model/GenerateQueriesFromModelOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -57,6 +62,7 @@ export async function buildRegistry(
   registry.register(new PythonHelloWorldOperation(services, logger));
   registry.register(new GenerateSMLFromConnectionOperation(services, logger));
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
+  registry.register(new GenerateSMLFromXMLOperation(services, logger));
   registry.register(new ExtractModelFromSMLOperation(services, logger));
   registry.register(new GenerateNamespaceFromModelOperation(services, logger));
   registry.register(new GenerateMetricsFromModelOperation(services, logger));
@@ -66,6 +72,7 @@ export async function buildRegistry(
   registry.register(new ExtractQueryStatsFromAtScaleOperation(services, logger));
   registry.register(new ExtractQueriesFromAtScaleOperation(services, logger));
   registry.register(new ExecuteAtScaleQueryHarnessOperation(services, logger));
+  registry.register(new ExecuteQueryOnConnectionOperation(services, logger));
   registry.register(new GenerateAtScaleInstallYamlOperation(services, logger));
   registry.register(new AtScaleListDataSourcesOperation(services, logger));
   registry.register(new AtScaleCreateDataSourceOperation(services, logger));
@@ -80,5 +87,8 @@ export async function buildRegistry(
   registry.register(new GenerateDataFromDataShapeOperation(services, logger));
   registry.register(new GenerateDataFromDataShapeToConnectionOperation(services, logger));
   registry.register(new GenerateEnhancedQueryResultsOperation(services, logger));
+  registry.register(new ExecuteRunAnalysisOperation(services, logger));
+  registry.register(new GenerateQueriesFromSMLOperation(services, logger));
+  registry.register(new GenerateQueriesFromModelOperation(services, logger));
   return registry;
 }

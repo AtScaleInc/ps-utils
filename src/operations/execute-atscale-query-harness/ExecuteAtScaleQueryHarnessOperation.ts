@@ -44,6 +44,7 @@ interface ResultRecord {
   status: "SUCCEEDED" | "FAILED";
   durationMs: number;
   rowCount: number;
+  checksum: string;
   error: string;
   timestamp: number;
   originalTextHash: string;
@@ -162,7 +163,7 @@ class ExecuteHarnessParameterSet extends ParameterSet {
     new (class extends StringParameter {
       name = "annotate-queries";
       description =
-        "When true (default), prepend a /* {run_id, run_query_id, original_text_hash} */ " +
+        "When true (default), prepend a /* {run_id, run_query_uuid, original_text_hash} */ " +
         "comment to each executed query so AtScale's query log carries correlation fields. " +
         "Set to false to send queries unmodified.";
       required = false;
@@ -214,7 +215,7 @@ function sleep(ms: number): Promise<void> {
  * scanning all annotated queries across every run.
  */
 function buildQueryAnnotation(runId: string, runQueryId: string, originalTextHash: string): string {
-  return `/* ${JSON.stringify({ run_id: runId, run_query_id: runQueryId, original_text_hash: originalTextHash })} */\n`;
+  return `/* ${JSON.stringify({ run_id: runId, run_query_uuid: runQueryId, original_text_hash: originalTextHash })} */\n`;
 }
 
 /** Escape XML special characters in MDX query text. */
@@ -239,9 +240,9 @@ function csvField(value: string | number | null | undefined): string {
 /** Convert an array of ResultRecords to a CSV string. */
 function toCsv(records: ResultRecord[], redact: boolean): string {
   const baseColumns = [
-    "run_id", "task_name", "model", "query_name", "run_query_id",
+    "run_id", "task_name", "model", "query_name", "run_query_uuid",
     "original_atscale_query_id", "protocol", "status", "duration_ms",
-    "row_count", "error", "timestamp", "original_text_hash",
+    "row_count", "checksum", "error", "timestamp", "original_text_hash",
   ];
   const header = redact
     ? baseColumns.join(",")
@@ -251,7 +252,7 @@ function toCsv(records: ResultRecord[], redact: boolean): string {
     const base = [
       r.runId, r.taskName, r.model, r.queryName,
       r.runQueryId, r.originalAtscaleQueryId, r.protocol, r.status,
-      r.durationMs, r.rowCount, r.error, r.timestamp,
+      r.durationMs, r.rowCount, r.checksum, r.error, r.timestamp,
       r.originalTextHash,
     ];
     return (redact ? base : [...base, r.originalText]).map(csvField).join(",");
@@ -581,14 +582,20 @@ function buildSoapEnvelope(
 }
 
 /**
- * Execute one XMLA query and return timing/row-count result.
- * Returns rowCount = -1 when the response cannot be parsed.
+ * Execute one XMLA query and return timing/row-count/checksum result.
+ *
+ * Row count: counts <Value> elements within the <CellData> section of the XMLA response.
+ *
+ * Checksum: SHA1 of the SOAP <Body> content only — the SOAP <Header> is excluded
+ * because it contains per-request values (SessionId, timestamps) that would make
+ * identical result sets produce different checksums.  Empty when rowCount = 0 or
+ * on error.
  */
 async function executeXmlaQuery(
   query: QueryRecord,
   cfg: XmlaConfig,
   token: string,
-): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; error: string }> {
+): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; checksum: string; error: string }> {
   const envelope = buildSoapEnvelope(query.originalText, cfg);
   const headers: Record<string, string> = {
     "Content-Type": "text/xml; charset=UTF-8",
@@ -616,17 +623,34 @@ async function executeXmlaQuery(
         status: "FAILED",
         durationMs,
         rowCount: 0,
+        checksum: "",
         error: `HTTP ${response.status}: ${body.slice(0, 200)}`,
       };
     }
 
-    // Count <row> elements as a rough result-set size proxy
-    const rowCount = (body.match(/<row>/g) ?? []).length;
-    return { status: "SUCCEEDED", durationMs, rowCount, error: "" };
+    // Extract SOAP Body content (excludes Header with session IDs / timestamps)
+    // Handles namespace-prefixed tags such as SOAP-ENV:Body or soap:Body.
+    const bodyTagMatch = body.match(/<[A-Za-z0-9_]*:?Body[^>]*>([\s\S]*)<\/[A-Za-z0-9_]*:?Body>/i);
+    const bodyContent = bodyTagMatch ? bodyTagMatch[1] : body;
+
+    // Count <Value> elements inside <CellData> as the row count.
+    let rowCount = 0;
+    const cellDataMatch = bodyContent.match(
+      /<[A-Za-z0-9_]*:?CellData[^>]*>([\s\S]*?)<\/[A-Za-z0-9_]*:?CellData>/i,
+    );
+    if (cellDataMatch) {
+      rowCount = (cellDataMatch[1].match(/<[A-Za-z0-9_]*:?Value[\s>\/]/gi) ?? []).length;
+    }
+
+    const checksum = rowCount > 0
+      ? createHash("sha1").update(bodyContent, "utf8").digest("hex")
+      : "";
+
+    return { status: "SUCCEEDED", durationMs, rowCount, checksum, error: "" };
   } catch (err) {
     const durationMs = Date.now() - start;
     const msg = err instanceof Error ? err.message : String(err);
-    return { status: "FAILED", durationMs, rowCount: 0, error: msg };
+    return { status: "FAILED", durationMs, rowCount: 0, checksum: "", error: msg };
   }
 }
 
@@ -635,19 +659,32 @@ async function executeXmlaQuery(
 /**
  * Execute one SQL query on an already-open connection.
  * The caller is responsible for connection lifecycle (open / close).
+ *
+ * Checksum: SHA1 over the deterministically serialised row data (columns sorted
+ * alphabetically, values joined with tab, rows joined with newline).  Empty when
+ * rowCount = 0 or on error.
  */
 async function executeSqlQueryOnConn(
   query: QueryRecord,
   sqlSvc: SqlService,
   conn: SqlConnection,
-): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; error: string }> {
+): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; checksum: string; error: string }> {
   const start = Date.now();
   try {
     const rows = await sqlSvc.query(conn, query.originalText);
-    return { status: "SUCCEEDED", durationMs: Date.now() - start, rowCount: rows.length, error: "" };
+    const rowCount = rows.length;
+    let checksum = "";
+    if (rowCount > 0) {
+      const colNames = Object.keys(rows[0]).sort();
+      const serialized = rows
+        .map((row) => colNames.map((col) => String((row as Record<string, unknown>)[col] ?? "")).join("\t"))
+        .join("\n");
+      checksum = createHash("sha1").update(serialized, "utf8").digest("hex");
+    }
+    return { status: "SUCCEEDED", durationMs: Date.now() - start, rowCount, checksum, error: "" };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return { status: "FAILED", durationMs: Date.now() - start, rowCount: 0, error: msg };
+    return { status: "FAILED", durationMs: Date.now() - start, rowCount: 0, checksum: "", error: msg };
   }
 }
 
@@ -657,6 +694,7 @@ type ExecuteFn = (q: QueryRecord) => Promise<{
   status: "SUCCEEDED" | "FAILED";
   durationMs: number;
   rowCount: number;
+  checksum: string;
   error: string;
 }>;
 
@@ -689,7 +727,7 @@ async function runQueriesOnce(
       // both observe the same non-empty queue at the same await boundary.
       const q = queue.shift()!;
       const runQueryId = randomUUID();
-      // Prepend a comment carrying run_query_id and hash so AtScale's query log
+      // Prepend a comment carrying run_query_uuid and hash so AtScale's query log
       // carries correlation fields. Hash is from the original text; annotation
       // is only added to the executed copy, not stored in the output CSV.
       const annotated: typeof q = annotate ? {
@@ -706,6 +744,7 @@ async function runQueriesOnce(
         status: r.status,
         durationMs: r.durationMs,
         rowCount: r.rowCount,
+        checksum: r.checksum,
         error: r.error,
         timestamp: Date.now(),
         originalTextHash: q.originalTextHash,
@@ -764,6 +803,7 @@ async function runQueriesForDuration(
         status: r.status,
         durationMs: r.durationMs,
         rowCount: r.rowCount,
+        checksum: r.checksum,
         error: r.error,
         timestamp: Date.now(),
         originalTextHash: q.originalTextHash,

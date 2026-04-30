@@ -82,11 +82,35 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
    * Print usage and available operations.
    */
   function printUsage(): void {
+    function wrapText(prefix: string, text: string, maxWidth = 80): string[] {
+      const indent = " ".repeat(10);
+      const words = text.split(/\s+/).filter(Boolean);
+      const result: string[] = [];
+      let cur = prefix;
+      let first = true;
+      for (const word of words) {
+        if (first) {
+          cur += word;
+          first = false;
+        } else if (cur.length + 1 + word.length <= maxWidth) {
+          cur += " " + word;
+        } else {
+          result.push(cur);
+          cur = indent + word;
+        }
+      }
+      if (!first) result.push(cur);
+      return result;
+    }
     const lines = [
       "Usage:",
-      "  operation-cli <operation> --key value [--key value]",
-      "  cat input.yml | operation-cli",
-      "  atscale-utils --completion {bash|zsh|fish}",
+      "  atscale-utils <operation> --key value [--key value]",
+      "  cat input.yml | atscale-utils",
+      "",
+      "Shell completions:",
+      "  atscale-utils --completion bash    Install bash completions (~/.bash_completion.d/atscale-utils)",
+      "  atscale-utils --completion zsh     Install zsh completions  (~/.zsh/completions/_atscale-utils)",
+      "  atscale-utils --completion fish    Install fish completions (~/.config/fish/completions/atscale-utils.fish)",
       "",
       "Global parameters:",
       "  --logfile <path>   Path to the output log file.",
@@ -99,7 +123,94 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       "    key: value",
       "",
       "Available operations:",
-      ...operationList.map((op) => `  ${op.name}: ${op.description}`),
+      ...(() => {
+        const GROUPS: [string, string[]][] = [
+          [
+            "Visualization and Namespace Processing",
+            [
+              "generate-metrics-from-model",
+              "generate-namespace-from-model",
+              "extract-model-from-atscale",
+              "extract-model-from-sml",
+            ],
+          ],
+          [
+            "SML Creation and Manipulation",
+            [
+              "execute-sql-on-connection",
+              "extract-ddl-from-connection",
+              "generate-sml-from-connection",
+              "generate-sml-from-ddl",
+              "generate-sml-from-xml",
+              "generate-ddl-from-atscale",
+            ],
+          ],
+          [
+            "Synthetic Data Generation",
+            [
+              "extract-data-shape-from-connection",
+              "generate-ddl-from-data-shape",
+              "generate-data-from-data-shape",
+              "generate-data-from-data-shape-to-connection",
+            ],
+          ],
+          [
+            "BI Tool Integration",
+            [
+              "generate-tableau-from-namespace",
+              "generate-excel-from-namespace",
+              "generate-powerbi-from-namespace",
+            ],
+          ],
+          [
+            "Testing / Query Processing",
+            [
+              "generate-queries-from-sml",
+              "generate-queries-from-model",
+              "extract-query-stats-from-atscale",
+              "extract-queries-from-atscale",
+              "execute-atscale-query-harness",
+              "execute-query-on-connection",
+              "generate-enhanced-query-results",
+              "execute-run-analysis",
+            ],
+          ],
+          [
+            "AtScale Config",
+            [
+              "generate-atscale-install-yaml",
+              "atscale-list-data-sources",
+              "atscale-create-data-source",
+              "atscale-list-repos",
+              "atscale-create-repo",
+              "atscale-list-deployments",
+              "atscale-deploy-catalog",
+              "atscale-list-model-errors",
+            ],
+          ],
+        ];
+        const opMap = new Map(operationList.map((op) => [op.name, op]));
+        const listed = new Set<string>();
+        const output: string[] = [];
+        for (const [groupName, names] of GROUPS) {
+          output.push(`  ${groupName}:`);
+          for (const name of names) {
+            const op = opMap.get(name);
+            if (op) {
+              output.push(...wrapText(`    ${op.name}: `, op.description));
+              listed.add(name);
+            }
+          }
+        }
+        const other = operationList.filter((op) => !listed.has(op.name));
+        if (other.length > 0) {
+          output.push("  Other:");
+          for (const op of other) {
+            output.push(...wrapText(`    ${op.name}: `, op.description));
+          }
+        }
+        return output;
+      })(),
     ];
     console.log(lines.join("\n"));
   }
@@ -110,7 +221,7 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
   function printOperationHelp(operation: Operation<Record<string, unknown>>): void {
     const lines = [
       "Usage:",
-      `  operation-cli ${operation.name} --key value [--key value]`,
+      `  atscale-utils ${operation.name} --key value [--key value]`,
       "",
       "Global parameters:",
       "  --logfile <path>   Path to the output log file.",

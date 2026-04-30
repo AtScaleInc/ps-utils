@@ -6,22 +6,23 @@
  * actually ran.  The correlation works because execute-atscale-query-harness
  * prepends a comment to every executed query:
  *
- *   /* {"run_query_id":"<uuid>","original_text_hash":"<sha256>"} *\/
+ *   /* {"run_query_uuid":"<uuid>","original_text_hash":"<sha256>"} *\/
  *
  * This operation searches the AtScale internal Postgres backend for queries
- * whose query_text starts with that comment, extracts the run_query_id, and
+ * whose query_text starts with that comment, extracts the run_query_uuid, and
  * joins it back to the CSV rows, writing the result as a new CSV with these
- * additional columns:
+ * columns appended on the right (in order):
  *
- *   run_atscale_query_id  — AtScale's internal query_id
- *   outbound_text         — SQL AtScale sent to the underlying database
- *   used_agg              — 'true' if the query used an AtScale aggregate table
- *   elapsed_ms            — total query time from planning start to last result (ms)
- *   parse_ms              — planning phase duration (ms; only when backend exposes finish ts)
- *   execute_ms            — total execution time across all subqueries (ms; best-effort)
- *   fetch_ms              — total fetch time across all subqueries (ms; best-effort)
- *   execution_plan        — EXPLAIN output from the target database (optional;
- *                           requires --target-connection-name)
+ *   run_atscale_query_id       — AtScale's internal query_id (alias: run_inbound_query_id)
+ *   run_inbound_query_id       — AtScale's query_id for the inbound annotated query
+ *   run_outbound_text          — SQL AtScale sent to the underlying database
+ *   run_outbound_execution_plan — EXPLAIN output from the target database (optional;
+ *                                 requires --target-connection-name)
+ *   run_used_agg               — 'true' if the query used an AtScale aggregate table
+ *   run_elapsed_ms             — total query time from planning start to last result (ms)
+ *   run_planned_ms             — planning phase duration (ms; only when backend exposes finish ts)
+ *   run_wait_ms                — WAIT phase: total DB execution time across all subqueries (ms; best-effort)
+ *   run_fetch_ms               — FETCH phase: total row retrieval time across all subqueries (ms; best-effort)
  */
 import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter } from "../../Parameters.js";
@@ -167,9 +168,9 @@ function csvField(value: string | number | null | undefined): string {
 // ── Query text annotation parser ───────────────────────────────────────────────
 
 /**
- * Extract the run_query_id from an annotated query text.
+ * Extract the run_query_uuid from an annotated query text.
  * Expects the comment injected by execute-atscale-query-harness at the start:
- *   /* {"run_id":"<run_id>","run_query_id":"<uuid>","original_text_hash":"<hash>"} *\/
+ *   /* {"run_id":"<run_id>","run_query_uuid":"<uuid>","original_text_hash":"<hash>"} *\/
  * Returns null if no annotation is found or the JSON cannot be parsed.
  */
 function extractRunQueryId(queryText: string): string | null {
@@ -177,7 +178,7 @@ function extractRunQueryId(queryText: string): string | null {
   if (!match) return null;
   try {
     const obj = JSON.parse(match[1]) as Record<string, unknown>;
-    return typeof obj.run_query_id === "string" ? obj.run_query_id : null;
+    return typeof obj.run_query_uuid === "string" ? obj.run_query_uuid : null;
   } catch {
     return null;
   }
@@ -240,31 +241,35 @@ function sqEscape(value: string): string {
  * query_results.finished).  All other timing columns are optional — when absent,
  * the corresponding expression is emitted as NULL::bigint.
  *
- *   parse_ms   = plannedFinish - planning_started                   (queries_planned finish col)
- *   execute_ms = SUM(subqFetchStart - subqSubmittedCol)            (WAIT: DB execution time)
- *              — fallback: MAX(subqFetchStart) - planning_started   (planning+execution combined)
- *   fetch_ms   = SUM(subqFetchFinish - subqFetchStart)             (FETCH: row retrieval time)
- *   elapsed_ms = resultsFinish  - planning_started                 (always present)
+ *   run_duration_ms      = resultsFinish - queries.received         (total wall-clock; always present)
+ *   run_inbound_ms       = planning_started - queries.received      (INBOUND phase)
+ *   run_query_planning_ms = plannedFinish - planning_started        (QUERY PLANNING phase)
+ *   run_outbound_ms      = MAX(subqFetchFinish) - plannedFinish     (total OUTBOUND time)
+ *   run_wait_ms          = MIN(subqSubmitted) - plannedFinish       (WAIT: plan → first subq start)
+ *   run_execute          = SUM(subqFetchStart - subqSubmitted)      (EXECUTE: per-subq DB time)
+ *   run_fetch_ms         = SUM(subqFetchFinish - subqFetchStart)    (FETCH: row retrieval)
  */
 type TimingCols = {
-  plannedFinish: string | null;      // finish column in queries_planned; null → parse_ms = null
+  queriesReceivedCol: string | null; // 'received' column in queries table; null → inbound/duration degraded
+  plannedFinish: string | null;      // finish column in queries_planned; null → planning/wait/outbound = null
   resultsTable: string;              // 'query_results' or 'query_result'
-  resultsFinish: string;             // finish column in results table (required for elapsed_ms)
+  resultsFinish: string;             // finish column in results table (required for duration_ms)
   // subquery_results join
   subqPkCol: string | null;          // PK column of subqueries table (join key to subquery_results)
   subqFkCol: string | null;          // FK column in subquery_results referencing subqueries
-  // subqueries timing (WAIT phase start — when the subquery was submitted to the underlying DB)
-  subqSubmittedCol: string | null;   // column in subqueries for when subquery was sent to DB
+  // subqueries timing
+  subqSubmittedCol: string | null;   // when AtScale submitted the subquery to the DB (in subqueries)
   // subquery_results timing columns
   subqExecStart: string | null;      // explicit execute start in subquery_results (rare)
   subqExecFinish: string | null;     // explicit execute finish in subquery_results (rare)
-  subqFetchStart: string | null;     // WAIT ends / FETCH begins (e.g. subquery_fetch_started)
+  subqFetchStart: string | null;     // EXECUTE ends / FETCH begins (e.g. subquery_fetch_started)
   subqFetchFinish: string | null;    // FETCH ends / subquery done (e.g. subquery_finished)
 };
 
 /** Return value from discoverTimingColumns — includes diagnostics even on failure. */
 type TimingDiscovery = {
   timing: TimingCols | null;
+  queriesCols: string[];       // all columns found in queries
   plannedCols: string[];       // all columns found in queries_planned (for diagnostics)
   resultsCols: string[];       // all columns found in query_results / query_result
   subqueriesCols: string[];    // all columns found in subqueries
@@ -284,6 +289,7 @@ async function discoverTimingColumns(
 ): Promise<TimingDiscovery> {
   const empty: TimingDiscovery = {
     timing: null,
+    queriesCols: [],
     plannedCols: [],
     resultsCols: [],
     subqueriesCols: [],
@@ -294,7 +300,7 @@ async function discoverTimingColumns(
       SELECT table_name, column_name
       FROM   information_schema.columns
       WHERE  table_schema = '${sqEscape(schema)}'
-        AND  table_name IN ('queries_planned', 'query_results', 'query_result',
+        AND  table_name IN ('queries', 'queries_planned', 'query_results', 'query_result',
                             'subqueries', 'subquery_results')
       ORDER BY table_name, ordinal_position
     `);
@@ -309,6 +315,7 @@ async function discoverTimingColumns(
       }
     }
 
+    const queriesCols = byTable.get("queries") ?? [];
     const planned = byTable.get("queries_planned") ?? [];
     const resultsTable = byTable.has("query_results") ? "query_results" : "query_result";
     const results = byTable.get(resultsTable) ?? [];
@@ -322,8 +329,16 @@ async function discoverTimingColumns(
       results.find((c) => /\bend\b/i.test(c) && !/start/i.test(c)) ??
       null;
 
+    // queries.received — the timestamp when AtScale first received the query (inbound start)
+    const queriesReceivedCol =
+      queriesCols.find((c) => /^received$/i.test(c)) ??
+      queriesCols.find((c) => /^received_at$/i.test(c)) ??
+      queriesCols.find((c) => /^query_received$/i.test(c)) ??
+      null;
+
     const diag: TimingDiscovery = {
       timing: null,
+      queriesCols,
       plannedCols: planned,
       resultsCols: results,
       subqueriesCols,
@@ -331,9 +346,12 @@ async function discoverTimingColumns(
     };
     if (!resultsFinish) return diag;
 
-    // planning finish — optional; enables parse_ms breakdown
+    // planning finish — optional; enables run_planned_ms and run_wait_ms.
+    // Matches: planning_completed (confirmed), planning_finish, or generic finish/end/complete columns.
     const plannedFinish =
+      planned.find((c) => /planning_complet/i.test(c)) ??
       planned.find((c) => /planning_finish/i.test(c)) ??
+      planned.find((c) => /complet/i.test(c) && !/start/i.test(c)) ??
       planned.find((c) => /finish/i.test(c) && !/start/i.test(c)) ??
       planned.find((c) => /\bend\b/i.test(c) && !/start/i.test(c)) ??
       null;
@@ -391,6 +409,7 @@ async function discoverTimingColumns(
     return {
       ...diag,
       timing: {
+        queriesReceivedCol,
         plannedFinish,
         resultsTable,
         resultsFinish,
@@ -415,7 +434,7 @@ async function discoverTimingColumns(
  * The annotation comment starts with /* {"run_id":"<run_id>", so filtering on
  * that prefix is a left-anchored LIKE that can use a btree index if one exists.
  * One OR condition is emitted per unique run_id found in the results CSV.
- * Row-to-CSV correlation is done in TypeScript via the run_query_id embedded
+ * Row-to-CSV correlation is done in TypeScript via the run_query_uuid embedded
  * in the returned query_text.
  *
  * Subqueries are aggregated with STRING_AGG so multiple subquery texts for
@@ -438,63 +457,89 @@ function buildLookupSql(
     .map((id) => `q.query_text LIKE '/* {"run_id":"${sqEscape(id)}",%'`)
     .join("\n    OR    ");
 
-  // parse_ms: planning_started → planning finish (requires plannedFinish in queries_planned)
-  const parseMsExpr = timing?.plannedFinish
-    ? `ROUND(EXTRACT(EPOCH FROM (MAX(p.${timing.plannedFinish}) - MAX(p.planning_started))) * 1000)::bigint`
-    : `NULL::bigint`;
-  // elapsed_ms: planning_started → last result row (always available when timing is non-null)
-  const elapsedMsExpr = timing
-    ? `ROUND(EXTRACT(EPOCH FROM (MAX(r.${timing.resultsFinish}) - MAX(p.planning_started))) * 1000)::bigint`
-    : `NULL::bigint`;
   const resultsTable = timing ? timing.resultsTable : "query_results";
 
-  // execute_ms / fetch_ms: derived from subqueries + subquery_results.
-  // Requires a valid join key (subqPkCol in subqueries, subqFkCol in subquery_results).
-  //
-  // execute_ms (WAIT phase in AtScale UI):
-  //   Preferred: SUM(srl.fetch_start - s.submitted) — DB execution time per subquery.
-  //   Second: SUM of explicit exec start/finish cols in subquery_results (rare).
-  //   Fallback: MAX(srl.fetch_start) - planning_started — planning + execution combined.
-  //
-  // fetch_ms (FETCH phase in AtScale UI):
-  //   SUM(srl.finish - srl.fetch_start) — row retrieval time per subquery.
-  //   Typically 0–2 ms for small result sets; larger for wide/many-row results.
-  const hasSubqBase = !!(timing?.subqFkCol && timing?.subqPkCol);
+  // run_duration_ms: total wall-clock from query receipt to last result row.
+  //   Preferred: q.received → query_results.finished
+  //   Fallback:  planning_started → finished (misses INBOUND phase)
+  const durationMsExpr = timing?.queriesReceivedCol
+    ? `ROUND(EXTRACT(EPOCH FROM (MAX(r.${timing.resultsFinish}) - q.${timing.queriesReceivedCol})) * 1000)::bigint`
+    : timing
+      ? `ROUND(EXTRACT(EPOCH FROM (MAX(r.${timing.resultsFinish}) - MAX(p.planning_started))) * 1000)::bigint`
+      : `NULL::bigint`;
 
-  // Preferred: explicit execute columns in subquery_results (dedicated start+finish)
-  const hasSubqExec = hasSubqBase && !!(timing?.subqExecStart && timing?.subqExecFinish);
-  // WAIT calculation: subquery submission timestamp (in subqueries table) → fetch_start
-  const hasExecFromWait = !hasSubqExec && hasSubqBase && !!(timing?.subqSubmittedCol && timing?.subqFetchStart);
-  // Fallback: plan start → max fetch_start (includes planning time)
-  const hasExecFromFetch = !hasSubqExec && !hasExecFromWait && hasSubqBase && !!timing?.subqFetchStart;
-  // Fetch phase
+  // run_inbound_ms: time from query receipt to planning start (INBOUND phase).
+  const inboundMsExpr = timing?.queriesReceivedCol
+    ? `ROUND(EXTRACT(EPOCH FROM (MAX(p.planning_started) - q.${timing.queriesReceivedCol})) * 1000)::bigint`
+    : `NULL::bigint`;
+
+  // run_query_planning_ms: planning_started → planning_completed (QUERY PLANNING phase).
+  const queryPlanningMsExpr = timing?.plannedFinish
+    ? `ROUND(EXTRACT(EPOCH FROM (MAX(p.${timing.plannedFinish}) - MAX(p.planning_started))) * 1000)::bigint`
+    : `NULL::bigint`;
+
+  // Subquery join flags
+  const hasSubqBase = !!(timing?.subqFkCol && timing?.subqPkCol);
   const hasSubqFetch = hasSubqBase && !!(timing?.subqFetchStart && timing?.subqFetchFinish);
 
-  const hasSubqJoin = hasSubqBase && (hasSubqExec || hasExecFromWait || hasExecFromFetch || hasSubqFetch);
+  // run_outbound_ms: planning_completed → MAX(subquery_finished) (total OUTBOUND time).
+  const outboundMsExpr = (timing?.plannedFinish && hasSubqFetch)
+    ? `ROUND(EXTRACT(EPOCH FROM (MAX(srl.${timing!.subqFetchFinish}) - MAX(p.${timing!.plannedFinish}))) * 1000)::bigint`
+    : `NULL::bigint`;
 
-  const executeMsExpr = hasSubqExec
+  // run_wait_ms (WAIT phase): planning_completed → first subquery_started.
+  //   Preferred: MIN(s.submitted) - MAX(p.plannedFinish)
+  //   Fallback A: SUM(srl.fetch_start - s.submitted) — proxy when plannedFinish unavailable
+  //   Fallback B: MAX(srl.fetch_start) - planning_started (last resort)
+  const hasSubqExec = hasSubqBase && !!(timing?.subqExecStart && timing?.subqExecFinish);
+  const hasWaitFromPlan = !hasSubqExec && !!(timing?.plannedFinish && timing?.subqSubmittedCol) && hasSubqBase;
+  const hasExecFromWait = !hasSubqExec && !hasWaitFromPlan && hasSubqBase && !!(timing?.subqSubmittedCol && timing?.subqFetchStart);
+  const hasExecFromFetch = !hasSubqExec && !hasWaitFromPlan && !hasExecFromWait && hasSubqBase && !!timing?.subqFetchStart;
+
+  const waitMsExpr = hasSubqExec
     ? `ROUND(SUM(EXTRACT(EPOCH FROM (srl.${timing!.subqExecFinish} - srl.${timing!.subqExecStart})) * 1000))::bigint`
-    : hasExecFromWait
-      ? `ROUND(SUM(EXTRACT(EPOCH FROM (srl.${timing!.subqFetchStart} - s.${timing!.subqSubmittedCol})) * 1000))::bigint`
-      : hasExecFromFetch
-        ? `ROUND(EXTRACT(EPOCH FROM (MAX(srl.${timing!.subqFetchStart}) - MAX(p.planning_started))) * 1000)::bigint`
-        : `NULL::bigint`;
+    : hasWaitFromPlan
+      ? `ROUND(EXTRACT(EPOCH FROM (MIN(s.${timing!.subqSubmittedCol}) - MAX(p.${timing!.plannedFinish}))) * 1000)::bigint`
+      : hasExecFromWait
+        ? `ROUND(SUM(EXTRACT(EPOCH FROM (srl.${timing!.subqFetchStart} - s.${timing!.subqSubmittedCol})) * 1000))::bigint`
+        : hasExecFromFetch
+          ? `ROUND(EXTRACT(EPOCH FROM (MAX(srl.${timing!.subqFetchStart}) - MAX(p.planning_started))) * 1000)::bigint`
+          : `NULL::bigint`;
+
+  // run_execute: SUM(fetch_started - subquery_started) per subquery (EXECUTE phase: DB execution time).
+  const hasExecute = hasSubqBase && !!(timing?.subqFetchStart && timing?.subqSubmittedCol);
+  const executeMsExpr = hasExecute
+    ? `ROUND(SUM(EXTRACT(EPOCH FROM (srl.${timing!.subqFetchStart} - s.${timing!.subqSubmittedCol})) * 1000))::bigint`
+    : `NULL::bigint`;
+
+  // run_fetch_ms: SUM(subquery_finished - fetch_started) per subquery (FETCH phase).
   const fetchMsExpr = hasSubqFetch
     ? `ROUND(SUM(EXTRACT(EPOCH FROM (srl.${timing!.subqFetchFinish} - srl.${timing!.subqFetchStart})) * 1000))::bigint`
     : `NULL::bigint`;
+
+  const hasSubqJoin = hasSubqBase && (hasSubqExec || hasWaitFromPlan || hasExecFromWait || hasExecFromFetch || hasSubqFetch || hasExecute);
 
   // Only emit the subquery_results join when at least one timing column pair is available.
   const subqJoin = hasSubqJoin
     ? `LEFT JOIN ${safeSchema}.subquery_results srl ON srl.${timing!.subqFkCol} = s.${timing!.subqPkCol}`
     : "";
 
+  // Include q.received in GROUP BY when used in an expression.
+  const groupBy = timing?.queriesReceivedCol
+    ? `q.query_id, q.query_text, q.${timing.queriesReceivedCol}`
+    : `q.query_id, q.query_text`;
+
   return `
 SELECT q.query_id::text AS run_atscale_query_id,
+       q.query_id::text AS run_inbound_query_id,
        q.query_text,
        STRING_AGG(s.subquery_text, E'\\n---\\n' ORDER BY s.subquery_text) AS outbound_text,
        CASE WHEN MAX(s.subquery_text) LIKE '%as_agg_%' THEN 'true' ELSE 'false' END AS used_agg,
-       ${elapsedMsExpr} AS elapsed_ms,
-       ${parseMsExpr} AS parse_ms,
+       ${durationMsExpr} AS duration_ms,
+       ${inboundMsExpr} AS inbound_ms,
+       ${queryPlanningMsExpr} AS query_planning_ms,
+       ${outboundMsExpr} AS outbound_ms,
+       ${waitMsExpr} AS wait_ms,
        ${executeMsExpr} AS execute_ms,
        ${fetchMsExpr} AS fetch_ms
 FROM   ${safeSchema}.queries    q
@@ -505,7 +550,7 @@ JOIN      ${safeSchema}.queries_planned  p ON p.query_id = q.query_id
 LEFT JOIN ${safeSchema}.${resultsTable}  r ON r.query_id = q.query_id
 WHERE  q.service = 'user-query'
 AND    (${clauses})
-GROUP BY q.query_id, q.query_text
+GROUP BY ${groupBy}
 `.trim();
 }
 
@@ -657,10 +702,10 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
     const header = rows[0];
     const dataRows = rows.slice(1);
 
-    const runQueryIdIdx = header.indexOf("run_query_id");
+    const runQueryIdIdx = header.indexOf("run_query_uuid");
     if (runQueryIdIdx === -1) {
       throw new Error(
-        `Column 'run_query_id' not found in ${resultsPath}. ` +
+        `Column 'run_query_uuid' not found in ${resultsPath}. ` +
         `Was the file produced by execute-atscale-query-harness with --annotate-queries true?`,
       );
     }
@@ -673,7 +718,7 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
       ? [...new Set(dataRows.map((r) => r[runIdIdx]).filter(Boolean))]
       : [];
     this.logger.info(
-      `Read ${dataRows.length} row(s) with ${runQueryIds.size} unique run_query_id(s)` +
+      `Read ${dataRows.length} row(s) with ${runQueryIds.size} unique run_query_uuid(s)` +
       (runIds.length ? ` across ${runIds.length} run_id(s)` : "") +
       ` from ${resultsPath}`,
     );
@@ -701,24 +746,33 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
     const conn = await sqlSvc.connect(connConfig, connName);
     let atscaleRows: any[];
     try {
-      const { timing, plannedCols, resultsCols, subqueriesCols, subqResultsCols } = await discoverTimingColumns(sqlSvc, conn, schema);
+      const { timing, queriesCols, plannedCols, resultsCols, subqueriesCols, subqResultsCols } = await discoverTimingColumns(sqlSvc, conn, schema);
       if (timing) {
         const hasSubqBase = !!(timing.subqFkCol && timing.subqPkCol);
         const hasSubqExec = hasSubqBase && !!(timing.subqExecStart && timing.subqExecFinish);
-        const hasExecFromWait = !hasSubqExec && hasSubqBase && !!(timing.subqSubmittedCol && timing.subqFetchStart);
-        const hasExecFromFetch = !hasSubqExec && !hasExecFromWait && hasSubqBase && !!timing.subqFetchStart;
+        const hasWaitFromPlan = !hasSubqExec && !!(timing.plannedFinish && timing.subqSubmittedCol) && hasSubqBase;
+        const hasExecFromWait = !hasSubqExec && !hasWaitFromPlan && hasSubqBase && !!(timing.subqSubmittedCol && timing.subqFetchStart);
+        const hasExecFromFetch = !hasSubqExec && !hasWaitFromPlan && !hasExecFromWait && hasSubqBase && !!timing.subqFetchStart;
         const hasSubqFetch = hasSubqBase && !!(timing.subqFetchStart && timing.subqFetchFinish);
-        const executeSource = hasSubqExec ? "execute_ms (explicit cols)"
-          : hasExecFromWait ? "execute_ms (WAIT: fetch_start - submitted)"
-          : hasExecFromFetch ? "execute_ms (fallback: fetch_start - planning_started)"
+        const hasExecute = hasSubqBase && !!(timing.subqFetchStart && timing.subqSubmittedCol);
+        const waitSource = hasSubqExec ? `run_wait_ms (explicit exec cols)`
+          : hasWaitFromPlan ? `run_wait_ms (${timing.subqSubmittedCol} - ${timing.plannedFinish})`
+          : hasExecFromWait ? `run_wait_ms (fallback: fetch_start - submitted)`
+          : hasExecFromFetch ? `run_wait_ms (fallback: fetch_start - planning_started)`
           : null;
         const phases = [
-          timing.plannedFinish ? "parse_ms" : null,
-          executeSource,
-          hasSubqFetch ? "fetch_ms" : null,
+          timing.queriesReceivedCol ? `run_inbound_ms (planning_started - ${timing.queriesReceivedCol})` : null,
+          timing.plannedFinish ? `run_query_planning_ms (${timing.plannedFinish} - planning_started)` : null,
+          (timing.plannedFinish && hasSubqFetch) ? `run_outbound_ms (subquery_finished - ${timing.plannedFinish})` : null,
+          waitSource,
+          hasExecute ? `run_execute (${timing.subqFetchStart} - ${timing.subqSubmittedCol})` : null,
+          hasSubqFetch ? "run_fetch_ms" : null,
         ].filter(Boolean);
+        const durationSource = timing.queriesReceivedCol
+          ? `run_duration_ms (finished - ${timing.queriesReceivedCol})`
+          : `run_duration_ms (finished - planning_started, inbound not available)`;
         this.logger.verbose(
-          `Timing: elapsed_ms always present; phase breakdown: ${phases.length ? phases.join(", ") : "none (intermediate timestamps absent)"}`,
+          `Timing: ${durationSource}; phases: ${phases.length ? phases.join(", ") : "none (intermediate timestamps absent)"}`,
         );
         const subqSummary = subqueriesCols.length
           ? `subqueries columns: [${subqueriesCols.join(", ")}]`
@@ -729,12 +783,14 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
         this.logger.verbose(
           `Subquery timing discovery:\n` +
           `  join_key=${timing.subqPkCol ?? "not found"} / ${timing.subqFkCol ?? "not found"}\n` +
-          `  submitted=${timing.subqSubmittedCol ?? "not found"} (WAIT start, in subqueries)\n` +
-          `  fetch_start=${timing.subqFetchStart ?? "not found"}, fetch_finish=${timing.subqFetchFinish ?? "not found"}\n` +
+          `  submitted=${timing.subqSubmittedCol ?? "not found"}, fetch_start=${timing.subqFetchStart ?? "not found"}, fetch_finish=${timing.subqFetchFinish ?? "not found"}\n` +
           `  ${subqSummary}\n` +
           `  ${subqResultsSummary}`,
         );
       } else {
+        const queriesSummary = queriesCols.length
+          ? `queries columns: [${queriesCols.join(", ")}]`
+          : `${schema}.queries not found`;
         const plannedSummary = plannedCols.length
           ? `queries_planned columns: [${plannedCols.join(", ")}]`
           : `${schema}.queries_planned not found`;
@@ -743,6 +799,7 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
           : `${schema}.query_results not found`;
         this.logger.log(
           `WARN: Could not identify timing columns — all timing fields will be empty.\n` +
+          `      ${queriesSummary}\n` +
           `      ${plannedSummary}\n` +
           `      ${resultsSummary}`,
         );
@@ -756,15 +813,19 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
 
     this.logger.info(`Found ${atscaleRows.length} annotated query row(s) in the AtScale backend`);
 
-    // ── Build run_query_id → enriched-fields map ────────────────────────────────
-    // A run_query_id is a UUID unique to one execution, so at most one row should
-    // match. If multiple rows somehow match the same run_query_id, keep the first.
+    // ── Build run_query_uuid → enriched-fields map ────────────────────────────────
+    // A run_query_uuid is a UUID unique to one execution, so at most one row should
+    // match. If multiple rows somehow match the same run_query_uuid, keep the first.
     const lookupMap = new Map<string, {
       atscaleQueryId: string;
+      inboundQueryId: string;
       outboundText: string;
       usedAgg: string;
-      elapsedMs: string;
-      parseMs: string;
+      durationMs: string;
+      inboundMs: string;
+      queryPlanningMs: string;
+      outboundMs: string;
+      waitMs: string;
       executeMs: string;
       fetchMs: string;
     }>();
@@ -773,15 +834,19 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
     for (const row of atscaleRows) {
       const queryText: string = row.query_text ?? row.QUERY_TEXT ?? "";
       const atscaleQueryId: string = row.run_atscale_query_id ?? row.RUN_ATSCALE_QUERY_ID ?? "";
+      const inboundQueryId: string = row.run_inbound_query_id ?? row.RUN_INBOUND_QUERY_ID ?? "";
       const outboundText: string = row.outbound_text ?? row.OUTBOUND_TEXT ?? "";
       const usedAgg: string = row.used_agg ?? row.USED_AGG ?? "";
-      const elapsedMs: string = row.elapsed_ms != null ? String(row.elapsed_ms) : "";
-      const parseMs: string = row.parse_ms != null ? String(row.parse_ms) : "";
+      const durationMs: string = row.duration_ms != null ? String(row.duration_ms) : "";
+      const inboundMs: string = row.inbound_ms != null ? String(row.inbound_ms) : "";
+      const queryPlanningMs: string = row.query_planning_ms != null ? String(row.query_planning_ms) : "";
+      const outboundMs: string = row.outbound_ms != null ? String(row.outbound_ms) : "";
+      const waitMs: string = row.wait_ms != null ? String(row.wait_ms) : "";
       const executeMs: string = row.execute_ms != null ? String(row.execute_ms) : "";
       const fetchMs: string = row.fetch_ms != null ? String(row.fetch_ms) : "";
       const runQueryId = extractRunQueryId(queryText);
       if (runQueryId && !lookupMap.has(runQueryId)) {
-        lookupMap.set(runQueryId, { atscaleQueryId, outboundText, usedAgg, elapsedMs, parseMs, executeMs, fetchMs });
+        lookupMap.set(runQueryId, { atscaleQueryId, inboundQueryId, outboundText, usedAgg, durationMs, inboundMs, queryPlanningMs, outboundMs, waitMs, executeMs, fetchMs });
       } else if (!runQueryId) {
         parseErrors++;
       }
@@ -790,7 +855,7 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
     if (parseErrors > 0) {
       this.logger.log(
         `WARN: ${parseErrors} row(s) from the AtScale backend had a matching LIKE prefix ` +
-        `but the run_query_id could not be parsed from the comment.`,
+        `but the run_query_uuid could not be parsed from the comment.`,
       );
     }
 
@@ -855,35 +920,40 @@ export class GenerateEnhancedQueryResultsOperation extends Operation<Params> {
     }
 
     // ── Build enhanced CSV ────────────────────────────────────────────────────
-    // Insert enriched columns after run_query_id.
-    const insertAfterIdx = runQueryIdIdx + 1;
+    // Append enriched columns to the right of the original columns.
     const enhancedHeader = [
-      ...header.slice(0, insertAfterIdx),
+      ...header,
       "run_atscale_query_id",
-      "outbound_text",
-      "used_agg",
-      "elapsed_ms",
-      "parse_ms",
-      "execute_ms",
-      "fetch_ms",
-      ...(targetConnName ? ["execution_plan"] : []),
-      ...header.slice(insertAfterIdx),
+      "run_inbound_query_id",
+      "run_outbound_text",
+      ...(targetConnName ? ["run_outbound_execution_plan"] : []),
+      "run_used_agg",
+      "run_duration_ms",
+      "run_inbound_ms",
+      "run_query_planning_ms",
+      "run_outbound_ms",
+      "run_wait_ms",
+      "run_execute",
+      "run_fetch_ms",
     ];
 
     const enhancedRows = dataRows.map((row) => {
       const runQueryId = row[runQueryIdIdx] ?? "";
       const match = lookupMap.get(runQueryId);
       return [
-        ...row.slice(0, insertAfterIdx),
+        ...row,
         match?.atscaleQueryId ?? "",
+        match?.inboundQueryId ?? "",
         match?.outboundText ?? "",
+        ...(targetConnName ? [explainMap.get(runQueryId) ?? ""] : []),
         match?.usedAgg ?? "",
-        match?.elapsedMs ?? "",
-        match?.parseMs ?? "",
+        match?.durationMs ?? "",
+        match?.inboundMs ?? "",
+        match?.queryPlanningMs ?? "",
+        match?.outboundMs ?? "",
+        match?.waitMs ?? "",
         match?.executeMs ?? "",
         match?.fetchMs ?? "",
-        ...(targetConnName ? [explainMap.get(runQueryId) ?? ""] : []),
-        ...row.slice(insertAfterIdx),
       ];
     });
 

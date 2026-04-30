@@ -31,6 +31,7 @@ flowchart LR
     ATS["AtScale Instance"] --> B["generate-ddl-from-atscale"] --> DDL
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
+    XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     click A href "#extract-ddl-from-connection"
@@ -39,6 +40,7 @@ flowchart LR
     click D href "#generate-sml-from-connection"
     click E href "#execute-sql-on-connection"
     click F href "#generate-metrics-from-model"
+    click G href "#generate-sml-from-xml"
 ```
 
 ### Synthetic Data Generation
@@ -141,6 +143,7 @@ flowchart LR
     - [`extract-ddl-from-connection`](#extract-ddl-from-connection)
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
+    - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -447,6 +450,52 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--max-hierarchies-per-dim` | No | `4` | Maximum hierarchies kept per dimension; extras are truncated |
 
 **Output layout:** Same as `generate-sml-from-connection` (including `sml.style.yaml`).
+
+---
+
+### `generate-sml-from-xml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an AtScale XML project file (schema version `project_2_0`) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the XML model definition.
+
+Dimensions, metrics, datasets, catalog, connection, and model files are all emitted based on the XML structure. Relationships are inferred from the cube's key-ref logical sections: cross-table FKs (`complete="false"`) are mapped to separate dimension datasets, and degenerate dimensions (`complete="true"`) are mapped as self-joins within the fact table. Schema-level dimensions that have no join path to the cube are omitted.
+
+```bash
+./atscale-utils generate-sml-from-xml \
+  --xml-file "./MyModel.xml" \
+  --output-dir "./sml-output"
+```
+
+With optional overrides:
+
+```bash
+./atscale-utils generate-sml-from-xml \
+  --xml-file "./MyModel.xml" \
+  --output-dir "./sml-output" \
+  --connection-name "my_snowflake" \
+  --connection-type "snowflake" \
+  --catalog-name "My Catalog"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--xml-file` | Yes | | Path to the AtScale XML project file (`project_2_0` format) |
+| `--output-dir` | Yes | | Directory to write SML files |
+| `--connection-name` | No | `my_connection` | Connection `unique_name` to embed in generated files |
+| `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `postgresql`) |
+| `--catalog-name` | No | XML schema name | Override the catalog label |
+
+**Output layout:**
+```
+<output-dir>/
+  catalog.yml
+  connections/<connection-name>.yml
+  datasets/<dataset-name>.yml   (one per XML <data-set>)
+  dimensions/<dim-name>.yml     (one per referenced dimension)
+  metrics/<metric-name>.yml     (one per measure / calculated member)
+  models/<cube-name>.yml        (one per XML <cube>)
+```
 
 ---
 

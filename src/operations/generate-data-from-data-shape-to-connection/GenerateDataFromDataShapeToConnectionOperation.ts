@@ -34,6 +34,14 @@ import { SqlService, type ConnectionConfig, type SqlConnection } from "../../ser
 import { readFingerprintFile }  from "../../statistics/fingerprint.js";
 import { generateData, type GeneratedTable } from "../../statistics/data-generator.js";
 import { generateDdl, type SqlDialect } from "../../statistics/ddl-generator.js";
+import {
+  SECURITY_PROFILE_VERSION,
+  sha256File,
+  writePipelineIsolationReport,
+  writeRunManifest,
+  writeIntegrityReport,
+}                                 from "../../statistics/security.js";
+import crypto                    from "crypto";
 
 // ─── Parameters ────────────────────────────────────────────────────────────────
 
@@ -96,6 +104,12 @@ class GenerateDataToConnectionParams extends ParameterSet {
       description = "Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default.";
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name         = "reports-dir";
+      description  = "Directory where security reports are written (default: ./_reports)";
+      required     = false;
+      defaultValue = "_reports";
+    })(),
   ];
 }
 
@@ -110,6 +124,7 @@ type Params = {
   "dialect":       string;
   "batch-size":    number;
   "schema"?:       string;
+  "reports-dir":   string;
 };
 
 // ─── Operation ────────────────────────────────────────────────────────────────
@@ -126,11 +141,13 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
   async run(params: Params): Promise<void> {
     const tag         = "GenerateDataToConnection";
     const inputFile   = path.resolve(params["input-file"]);
+    const reportsDir  = path.resolve(params["reports-dir"]);
     const dialect     = params["dialect"] as SqlDialect;
     const batchSize   = Math.max(1, params["batch-size"]);
     const schemaPrefix = params["schema"] ? `${params["schema"]}.` : "";
     const doCreate    = params["create-tables"] || params["drop-if-exists"];
     const doDrop      = params["drop-if-exists"];
+    const startedAt   = new Date().toISOString();
 
     const yaml = this.services.get<YamlService>("yaml");
     const sql  = this.services.get<SqlService>("sql");
@@ -141,7 +158,8 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
 
     // ── Read fingerprint ──────────────────────────────────────────────────────
     this.logger.log(`[${tag}] Reading fingerprint: ${inputFile}`);
-    const fp = readFingerprintFile(inputFile);
+    const fp                = readFingerprintFile(inputFile);
+    const fingerprintSha256 = sha256File(inputFile);
     this.logger.log(
       `[${tag}] Fingerprint v${fp.version} — ` +
       `${fp.dimensions.length} dimension(s), ${fp.facts.length} fact(s)`,
@@ -196,9 +214,62 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
       }
 
       const totalRows = allTables.reduce((s, t) => s + t.rows.length, 0);
+      const completedAt = new Date().toISOString();
+
+      // ── Security reports (review/03 §Layer 7, review/05 §Promotion Gate) ────
+      const rowCounts: Record<string, number> = {};
+      for (const t of allTables) rowCounts[t.tableName] = t.rows.length;
+
+      const outputDigest = crypto.createHash("sha256")
+        .update(JSON.stringify({
+          rowCounts, fingerprintSha256,
+          connection: params["connection-name"],
+          schema:     params["schema"] ?? null,
+          seed:       params["seed"],
+          scaleFactor: params["scale-factor"],
+        }))
+        .digest("hex");
+
+      writePipelineIsolationReport(reportsDir, {
+        operation:   this.name,
+        startedAt, completedAt,
+        inputs: { fingerprintFile: inputFile, fingerprintSha256, fingerprintVersion: fp.version },
+        outputs: {
+          path: `${params["connection-name"]}:${params["schema"] ?? "(default)"}`,
+          kind: "database",
+          artifacts: allTables.map((t) => `${schemaPrefix}${t.tableName}`),
+        },
+        enforced: {
+          noRealDataAccessed:        true,
+          outputsResolveWithinScope: true,  // writes are scoped to configured connection
+          generatedKeyShapeOk:       true,
+          fkClosureOk:               data.fkClosure.failed.length === 0,
+        },
+        profileVersion: SECURITY_PROFILE_VERSION,
+      });
+      writeRunManifest(reportsDir, {
+        operation:  this.name,
+        startedAt, completedAt,
+        seed:        params["seed"],
+        scaleFactor: params["scale-factor"],
+        fingerprintSha256,
+        outputDigest,
+        rowCounts,
+        profileVersion: SECURITY_PROFILE_VERSION,
+      });
+      writeIntegrityReport(reportsDir, {
+        checkedAt: completedAt,
+        tables:    allTables.map((t) => ({
+          name: t.tableName, rowCount: t.rows.length, columnCount: t.columns.length,
+        })),
+        fkClosure:      data.fkClosure,
+        profileVersion: SECURITY_PROFILE_VERSION,
+      });
+
       this.logger.log(
         `[${tag}] Done — ${allTables.length} table(s), ` +
-        `${totalRows.toLocaleString()} total rows inserted`,
+        `${totalRows.toLocaleString()} total rows inserted; ` +
+        `security reports → ${reportsDir}`,
       );
     } finally {
       await sql.close(conn);

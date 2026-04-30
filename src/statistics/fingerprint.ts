@@ -10,15 +10,25 @@ import path from "path";
 import yaml from "js-yaml";
 
 import type { SchemaFingerprint } from "./types.js";
+import { validateFingerprint }    from "./security.js";
 
 /**
  * Read and parse a fingerprint YAML file produced by writeFingerprintFile.
- * Throws if the file does not exist or cannot be parsed.
+ * Throws if the file does not exist, cannot be parsed, or fails any
+ * fatal security validation (review/04 §Hardened Fingerprint Contract).
+ * Non-fatal warnings are surfaced on stderr so CI logs capture them.
  */
 export function readFingerprintFile(inputPath: string): SchemaFingerprint {
   const resolved = path.resolve(inputPath);
   const raw = fs.readFileSync(resolved, "utf8");
-  return yaml.load(raw) as SchemaFingerprint;
+  const fp  = yaml.load(raw) as SchemaFingerprint;
+
+  const { errors, warnings } = validateFingerprint(fp);
+  for (const w of warnings) process.stderr.write(`[security/fingerprint] warn: ${w}\n`);
+  if (errors.length > 0) {
+    throw new Error(`[security/fingerprint] validation failed:\n  - ${errors.join("\n  - ")}`);
+  }
+  return fp;
 }
 
 /**
@@ -38,6 +48,12 @@ export function fingerprintToYaml(fp: SchemaFingerprint): string {
  * Write the fingerprint to `outputPath`, creating parent directories as needed.
  */
 export function writeFingerprintFile(fp: SchemaFingerprint, outputPath: string): void {
+  const { errors } = validateFingerprint(fp);
+  if (errors.length > 0) {
+    throw new Error(
+      `[security/fingerprint] refusing to write fingerprint — validation failed:\n  - ${errors.join("\n  - ")}`,
+    );
+  }
   const resolved = path.resolve(outputPath);
   const dir      = path.dirname(resolved);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
