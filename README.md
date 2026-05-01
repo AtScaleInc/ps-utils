@@ -175,6 +175,8 @@ flowchart LR
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+  - Web Services
+    - [`execute-web-services`](#execute-web-services)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [SML Style Config (`sml.style.yaml`)](#sml-style-config-smlstyleyaml)
@@ -1743,6 +1745,43 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 † Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
+
+---
+
+### `execute-web-services`
+
+[↑ Table of Contents](#table-of-contents)
+
+Starts a GraphQL HTTP server that dynamically exposes every registered operation as a mutation. The schema is built at startup from the live operation registry — no configuration required.
+
+File parameters (names ending in `-file`) accept either a local path string or a multipart-uploaded file via the `Upload` scalar.
+
+See [GRAPHQL.md](GRAPHQL.md) for the full schema reference and per-operation documentation.
+
+```bash
+./atscale-utils execute-web-services
+./atscale-utils execute-web-services --port 4000 --host 0.0.0.0
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--port` | No | `4000` | Port to listen on |
+| `--host` | No | `localhost` | Bind address (`0.0.0.0` to accept external connections) |
+
+**Example GraphQL call:**
+
+```graphql
+mutation {
+  generateSmlFromXml(input: {
+    xmlFile: "/data/project.xml"
+    outputDir: "/output/sml"
+  }) {
+    success
+    output
+    error
+  }
+}
+```
 
 ---
 

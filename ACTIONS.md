@@ -107,6 +107,8 @@ flowchart TD
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
     - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
+  - Web Services
+    - [`execute-web-services`](#execute-web-services)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
   - [Database → Tableau](#database--tableau)
@@ -1503,6 +1505,31 @@ Installs MicroK8s, configures it, and deploys AtScale via Helm on a remote VM ov
 1. Copies `genCerts.sh` and `values.yaml` from the repo to `/home/atscale/` on the remote host via SCP
 2. Installs `microk8s`, `kubectl`, `helm`, `yq`, and `net-tools` via SSH
 3. Generates TLS certs, enables `hostpath-storage` and `metallb`, patches the ingress gateway service, and deploys AtScale via `helm install`
+
+---
+
+### `execute-web-services`
+
+Starts a GraphQL HTTP server that exposes all operations as mutations. The schema is built dynamically from the operation registry. See [GRAPHQL.md](GRAPHQL.md) for the full schema reference.
+
+**Requires:** No secrets — the server runs locally and operations can use their own connection files.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: execute-web-services
+    port: 4000         # optional — default 4000
+    host: localhost    # optional — default localhost
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `port` | No | `4000` | Port for the GraphQL server |
+| `host` | No | `localhost` | Bind address |
 
 ---
 

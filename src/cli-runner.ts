@@ -188,6 +188,10 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
               "atscale-list-model-errors",
             ],
           ],
+          [
+            "Web Services",
+            ["execute-web-services"],
+          ],
         ];
         const opMap = new Map(operationList.map((op) => [op.name, op]));
         const listed = new Set<string>();
@@ -327,7 +331,12 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
     return 1;
   }
 
-  if (argv.length === 1) {
+  // Show per-operation help when invoked with no arguments, but only when the
+  // operation has at least one required parameter (otherwise just run it with defaults).
+  const hasRequiredParams = operation.parameters.parameters.some(
+    (p) => p.required && p.defaultValue === undefined,
+  );
+  if (argv.length === 1 && hasRequiredParams) {
     printOperationHelp(operation);
     return 0;
   }

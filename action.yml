@@ -702,6 +702,20 @@ inputs:
     required: false
     default: "2026.1.0"
 
+  # ── execute-web-services ─────────────────────────────────────────────────────
+  port:
+    description: >
+      Port for the GraphQL HTTP server.
+      Used by: execute-web-services.
+    required: false
+    default: "4000"
+  host:
+    description: >
+      Bind address for the GraphQL HTTP server.
+      Used by: execute-web-services.
+    required: false
+    default: "localhost"
+
 runs:
   using: composite
   steps:
@@ -1354,3 +1368,13 @@ runs:
           sleep 10
           microk8s kubectl patch svc atscale-ingress-gateway -n atscale \
             -p '{"spec": {"type": "LoadBalancer"}}'
+
+    # ── execute-web-services ─────────────────────────────────────────────────
+    - name: Start GraphQL web server
+      if: inputs.operation == 'execute-web-services'
+      run: |
+        ARGS=(--verbose true)
+        [[ -n "${{ inputs.port }}" ]] && ARGS+=(--port "${{ inputs.port }}")
+        [[ -n "${{ inputs.host }}" ]] && ARGS+=(--host "${{ inputs.host }}")
+        node "${{ github.action_path }}/dist/cli.js" execute-web-services "${ARGS[@]}"
+      shell: bash

@@ -1,14 +1,11 @@
 /**
  * Operation registry entrypoint.
  */
-import { EchoOperation } from "./echo/EchoOperation.js";
-import { ToggleOperation } from "./toggle/ToggleOperation.js";
 import { ExtractAtScaleModelOperation } from "./extract-model-from-atscale/ExtractAtScaleModelOperation.js";
 import { GeneratePowerBIFromNamespaceOperation } from "./generate-powerbi-from-namespace/GeneratePowerBIFromNamespaceOperation.js";
 import { GenerateNotebookFromConnectionOperation } from "./generate-notebook-from-connection/GenerateNotebookFromConnectionOperation.js";
 import { GenerateTableauFromNamespaceOperation } from "./generate-tableau-from-namespace/GenerateTableauFromNamespaceOperation.js";
 import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOperation.js";
-import { PythonHelloWorldOperation } from "./python/PythonHelloWorldOperation.js";
 import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connection/GenerateSMLFromConnectionOperation.js";
 import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
 import { GenerateSMLFromXMLOperation } from "./generate-sml-from-xml/GenerateSMLFromXMLOperation.js";
@@ -39,6 +36,7 @@ import { GenerateEnhancedQueryResultsOperation } from "./generate-enhanced-query
 import { ExecuteRunAnalysisOperation } from "./execute-run-analysis/ExecuteRunAnalysisOperation.js";
 import { GenerateQueriesFromSMLOperation } from "./generate-queries-from-sml/GenerateQueriesFromSMLOperation.js";
 import { GenerateQueriesFromModelOperation } from "./generate-queries-from-model/GenerateQueriesFromModelOperation.js";
+import { ExecuteWebServicesOperation } from "./execute-web-services/ExecuteWebServicesOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -52,14 +50,11 @@ export async function buildRegistry(
 ): Promise<OperationRegistry> {
   const services = await buildServiceRegistry({ ...serviceOptions, logger });
   const registry = new OperationRegistry();
-  registry.register(new EchoOperation(services, logger));
-  registry.register(new ToggleOperation(services, logger));
   registry.register(new ExtractAtScaleModelOperation(services, logger));
   registry.register(new GeneratePowerBIFromNamespaceOperation(services, logger));
   registry.register(new GenerateNotebookFromConnectionOperation(services, logger));
   registry.register(new GenerateTableauFromNamespaceOperation(services, logger));
   registry.register(new EchoConnectionMetaDataOperation(services, logger));
-  registry.register(new PythonHelloWorldOperation(services, logger));
   registry.register(new GenerateSMLFromConnectionOperation(services, logger));
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
   registry.register(new GenerateSMLFromXMLOperation(services, logger));
@@ -90,5 +85,8 @@ export async function buildRegistry(
   registry.register(new ExecuteRunAnalysisOperation(services, logger));
   registry.register(new GenerateQueriesFromSMLOperation(services, logger));
   registry.register(new GenerateQueriesFromModelOperation(services, logger));
+  // execute-web-services receives the registry itself so it can build the schema
+  // dynamically without a circular import back to this file.
+  registry.register(new ExecuteWebServicesOperation(services, logger, registry));
   return registry;
 }

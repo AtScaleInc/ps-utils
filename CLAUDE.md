@@ -8,6 +8,19 @@ When making any code change, update the following files as part of the same chan
 - **ACTIONS.md** — update if the change affects GitHub Actions usage
 - **action.yml** — update if the change adds/modifies operations or parameters exposed to the composite action
 
+## GRAPHQL.md and REST.md — regenerate when operations change
+
+`GRAPHQL.md` and `REST.md` are auto-generated and **must never be edited by hand**. After any change to an operation definition, its parameters, or its description, regenerate both:
+
+```bash
+npm run generate:graphql-docs
+npm run generate:rest-docs
+```
+
+Both run automatically as part of `npm run build`. The scripts live at:
+- `src/scripts/generate-graphql-docs.ts` — builds GraphQL API docs via `buildOpMetas()` / `buildSdl()` in `graphql-server.ts`
+- `src/scripts/generate-rest-docs.ts` — builds REST API docs via `buildOpMetas()` in `graphql-server.ts`
+
 ## Adding a new SML style parameter
 
 Three files must always be updated together:

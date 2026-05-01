@@ -6,17 +6,11 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "echo toggle extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata python-hello-world generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model" -- "$cur") )
+    COMPREPLY=( $(compgen -W "extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model execute-web-services" -- "$cur") )
     return 0
   fi
 
   case "$op" in
-    echo)
-      params="--logfile --output --verbose --message"
-      ;;
-    toggle)
-      params="--logfile --output --verbose --enabled"
-      ;;
     extract-model-from-atscale)
       params="--logfile --output --verbose --model --connection-file --connection-name --output-model-file"
       ;;
@@ -31,9 +25,6 @@ _atscale_utils_complete() {
       ;;
     echo-connection-metadata)
       params="--logfile --output --verbose --connection-file --connection-name --schema"
-      ;;
-    python-hello-world)
-      params="--logfile --output --verbose --name"
       ;;
     generate-sml-from-connection)
       params="--logfile --output --verbose --connection-file --connection-name --model-name --output-dir --sml-config-file --schema --catalog-name --pii-severity --sample-size --fact-tables --camel-case-files --camel-case-measures --min-hierarchies-per-dim --max-hierarchies-per-dim"
@@ -124,6 +115,9 @@ _atscale_utils_complete() {
       ;;
     generate-queries-from-model)
       params="--logfile --output --verbose --model-file --model-name --cube-name --xmla-output-file --sql-output-file"
+      ;;
+    execute-web-services)
+      params="--logfile --output --verbose --port --host"
       ;;
     *)
       params="--logfile --output --verbose"
