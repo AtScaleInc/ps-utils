@@ -42,6 +42,8 @@ inputs:
         generate-queries-from-model
         extract-query-stats-from-atscale
         generate-sml-from-xml
+        generate-shared-model-plan
+        generate-shared-design
         deploy-atscale-microk8s
     required: true
 
@@ -184,6 +186,35 @@ inputs:
       Schema or dataset name written into the connection file. When set, individual
       datasets use a plain table name instead of a nested db/schema/name object.
       Used by: generate-sml-from-xml.
+    required: false
+
+  # ── generate-shared-design ───────────────────────────────────────────────
+  plan-file:
+    description: >
+      Path to the option YAML file produced by generate-shared-model-plan.
+      Used by: generate-shared-design.
+    required: false
+  remove-sources:
+    description: >
+      When "true", delete local source copies after writing the shared file.
+      Used by: generate-shared-design.
+    required: false
+  dry-run:
+    description: >
+      When "true", print all actions without writing or deleting any files.
+      Used by: generate-shared-design.
+    required: false
+
+  # ── generate-shared-model-plan ───────────────────────────────────────────
+  input-dirs:
+    description: >
+      Comma-separated list of SML output directories to analyse for sharing opportunities.
+      Used by: generate-shared-model-plan.
+    required: false
+  threshold:
+    description: >
+      Similarity threshold 0–1 for generate-shared-model-plan; lower values surface more
+      options (default 0.3). Used by: generate-shared-model-plan.
     required: false
 
   # ── generate-namespace-from-model / generate-metrics-from-model / generate-queries-from-model ──
@@ -858,6 +889,33 @@ runs:
         [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-shared-design ───────────────────────────────────────────────
+    - name: Generate Shared Design
+      if: inputs.operation == 'generate-shared-design'
+      run: |
+        ARGS=(
+          --plan-file  "${{ inputs.plan-file }}"
+          --shared-dir "${{ inputs.shared-dir }}"
+          --verbose true
+        )
+        [[ "${{ inputs.remove-sources }}" == "true" ]] && ARGS+=(--remove-sources)
+        [[ "${{ inputs.dry-run }}"        == "true" ]] && ARGS+=(--dry-run)
+        node "${{ github.action_path }}/dist/cli.js" generate-shared-design "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-shared-model-plan ───────────────────────────────────────────
+    - name: Generate Shared Model Plan
+      if: inputs.operation == 'generate-shared-model-plan'
+      run: |
+        ARGS=(
+          --input-dirs "${{ inputs.input-dirs }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.threshold }}" ]] && ARGS+=(--threshold "${{ inputs.threshold }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-shared-model-plan "${ARGS[@]}"
       shell: bash
 
     # ── generate-namespace-from-model ────────────────────────────────────────

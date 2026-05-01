@@ -32,6 +32,9 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
+    SML2B["SML Dir B"] --> H
+    PLAN --> I["generate-shared-design"] --> SHARED["shared/dimensions, datasets, models"]
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     click A href "#extract-ddl-from-connection"
@@ -41,6 +44,8 @@ flowchart LR
     click E href "#execute-sql-on-connection"
     click F href "#generate-metrics-from-model"
     click G href "#generate-sml-from-xml"
+    click H href "#generate-shared-model-plan"
+    click I href "#generate-shared-design"
 ```
 
 ### Synthetic Data Generation
@@ -144,6 +149,8 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-shared-model-plan`](#generate-shared-model-plan)
+    - [`generate-shared-design`](#generate-shared-design)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -503,6 +510,99 @@ With optional overrides:
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
 ```
+
+---
+
+### `generate-shared-model-plan`
+
+[↑ Table of Contents](#table-of-contents)
+
+Analyses one or more SML output directories to identify opportunities for sharing or reusing dimensions, datasets, and model structures across projects. Uses Jaccard-based fuzzy subtree matching to compute similarity scores and emits a human-readable recommendation report plus machine-readable option YAML files.
+
+Each option falls into one of three categories:
+
+| Kind | What it does |
+|------|-------------|
+| `shared-dimension-library` | Extract near-identical dimensions from multiple projects into a shared library |
+| `dataset-consolidation` | Merge datasets that reference the same physical table or share similar column sets |
+| `base-model-extraction` | Factor out a common base model when two models share most dimensions and metrics |
+
+```bash
+./atscale-utils generate-shared-model-plan \
+  --input-dirs "./project-a,./project-b" \
+  --output-dir "./plan-output"
+```
+
+With threshold override:
+
+```bash
+./atscale-utils generate-shared-model-plan \
+  --input-dirs "./project-a,./project-b,./project-c" \
+  --output-dir "./plan-output" \
+  --threshold 0.5
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--input-dirs` | Yes | | Comma-separated list of SML output directories to analyse |
+| `--output-dir` | Yes | | Directory where output files are written |
+| `--threshold` | No | `0.5` | Similarity threshold 0–1; lower values surface more options |
+
+**Output layout:**
+```
+<output-dir>/
+  RECOMMENDATION.md              — options with diagrams, change lists, and pros/cons
+  option-1-<kind>.yml            — machine-readable changes for option 1
+  option-2-<kind>.yml            — machine-readable changes for option 2
+  ...
+```
+
+---
+
+### `generate-shared-design`
+
+[↑ Table of Contents](#table-of-contents)
+
+Applies a machine-readable recommendation YAML produced by `generate-shared-model-plan` to create shared SML files. Three kinds are supported:
+
+| Kind | What is written |
+|------|----------------|
+| `dataset-consolidation` | `<shared-dir>/datasets/<name>.yml` — merged column union of all source copies |
+| `shared-dimension-library` | `<shared-dir>/dimensions/<name>.yml` — merged dimension preserving all SML attributes |
+| `base-model-extraction` | `<shared-dir>/models/<base>.yml` — common core; slim models for any project-specific content |
+
+```bash
+./atscale-utils generate-shared-design \
+  --plan-file "./shared-plan/option-1-dataset-consolidation.yml" \
+  --shared-dir "./shared"
+```
+
+To also delete the local source copies after writing the shared file:
+
+```bash
+./atscale-utils generate-shared-design \
+  --plan-file "./shared-plan/option-11-shared-dimension-library.yml" \
+  --shared-dir "./shared" \
+  --remove-sources
+```
+
+Preview without touching disk:
+
+```bash
+./atscale-utils generate-shared-design \
+  --plan-file "./shared-plan/option-31-base-model-extraction.yml" \
+  --shared-dir "./shared" \
+  --dry-run
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--plan-file` | Yes | | Path to the option YAML file from `generate-shared-model-plan` |
+| `--shared-dir` | Yes | | Base directory where shared files are written |
+| `--remove-sources` | No | `false` | Delete local source copies after writing the shared version |
+| `--dry-run` | No | `false` | Print all actions without writing or deleting any files |
+
+An `APPLY_REPORT.md` is written to `<shared-dir>` summarising every action taken and the deployment steps required.
 
 ---
 

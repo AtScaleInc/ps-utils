@@ -447,6 +447,66 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-xml \
 
 ---
 
+### `generate-shared-model-plan`
+
+> Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan
+
+**Endpoint:** `POST /rest/generate-shared-model-plan`  |  **GraphQL:** `generateSharedModelPlan`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `inputDirs` | `String` | Yes | Comma-separated list of SML output directories to analyse (at least one required) |
+| `threshold` | `Int` | No | Similarity threshold 0–1; lower values surface more options (default 0.5) |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-shared-model-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+      "inputDirs": "value"
+  }'
+```
+
+---
+
+### `generate-shared-design`
+
+> Apply a generate-shared-model-plan recommendation YAML to create shared SML files
+
+**Endpoint:** `POST /rest/generate-shared-design`  |  **GraphQL:** `generateSharedDesign`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `planFile` | `String` | Yes\* | Path to the option YAML file produced by generate-shared-model-plan |
+| `planFileContent` | `String` | No | Raw string content — alternative to `planFile` |
+| `planFileUpload` | file field | No | Multipart upload — alternative to `planFile` |
+| `sharedDir` | `String` | Yes | Base directory for shared output files (e.g. ./shared) |
+| `removeSources` | `Boolean` | No | Delete the local source files after writing the shared version (default false) |
+| `dryRun` | `Boolean` | No | Print all actions that would be taken without writing or deleting any files |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-shared-design \
+  -H "Content-Type: application/json" \
+  -d '{
+      "planFileContent": "--- # inline YAML/file content",
+      "sharedDir": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-shared-design \
+  -F "planFileUpload=@/path/to/file" \
+  -F "sharedDir=value"
+```
+
+---
+
 ### `extract-model-from-sml`
 
 > Read an SML directory and output the same model.yaml format as extract-model-from-atscale

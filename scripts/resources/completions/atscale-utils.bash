@@ -6,7 +6,7 @@ _atscale_utils_complete() {
   op="${COMP_WORDS[1]}"
 
   if [[ $COMP_CWORD -eq 1 ]]; then
-    COMPREPLY=( $(compgen -W "extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model execute-web-services" -- "$cur") )
+    COMPREPLY=( $(compgen -W "extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml generate-shared-model-plan generate-shared-design extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model execute-web-services" -- "$cur") )
     return 0
   fi
 
@@ -34,6 +34,12 @@ _atscale_utils_complete() {
       ;;
     generate-sml-from-xml)
       params="--logfile --output --verbose --xml-file --output-dir --connection-name --connection-type --catalog-name --connection-db --connection-schema"
+      ;;
+    generate-shared-model-plan)
+      params="--logfile --output --verbose --input-dirs --output-dir --threshold"
+      ;;
+    generate-shared-design)
+      params="--logfile --output --verbose --plan-file --shared-dir --remove-sources --dry-run"
       ;;
     extract-model-from-sml)
       params="--logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file"

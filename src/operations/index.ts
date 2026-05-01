@@ -36,6 +36,8 @@ import { GenerateEnhancedQueryResultsOperation } from "./generate-enhanced-query
 import { ExecuteRunAnalysisOperation } from "./execute-run-analysis/ExecuteRunAnalysisOperation.js";
 import { GenerateQueriesFromSMLOperation } from "./generate-queries-from-sml/GenerateQueriesFromSMLOperation.js";
 import { GenerateQueriesFromModelOperation } from "./generate-queries-from-model/GenerateQueriesFromModelOperation.js";
+import { GenerateSharedModelPlanOperation } from "./generate-shared-model-plan/GenerateSharedModelPlanOperation.js";
+import { GenerateSharedDesignOperation } from "./generate-shared-design/GenerateSharedDesignOperation.js";
 import { ExecuteWebServicesOperation } from "./execute-web-services/ExecuteWebServicesOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
@@ -58,6 +60,8 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromConnectionOperation(services, logger));
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
   registry.register(new GenerateSMLFromXMLOperation(services, logger));
+  registry.register(new GenerateSharedModelPlanOperation(services, logger));
+  registry.register(new GenerateSharedDesignOperation(services, logger));
   registry.register(new ExtractModelFromSMLOperation(services, logger));
   registry.register(new GenerateNamespaceFromModelOperation(services, logger));
   registry.register(new GenerateMetricsFromModelOperation(services, logger));

@@ -528,6 +528,90 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSharedModelPlan`
+
+> Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan
+
+**CLI name:** `generate-shared-model-plan`  |  **REST:** `POST /rest/generate-shared-model-plan`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `inputDirs` | `String` | Yes | Comma-separated list of SML output directories to analyse (at least one required) |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `threshold` | `Int` | No | Similarity threshold 0–1; lower values surface more options (default 0.5) |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSharedModelPlan(input: {
+    inputDirs: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSharedModelPlan(input:{inputDirs: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
+### `generateSharedDesign`
+
+> Apply a generate-shared-model-plan recommendation YAML to create shared SML files
+
+**CLI name:** `generate-shared-design`  |  **REST:** `POST /rest/generate-shared-design`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `planFile` | `String` | Yes\* | Path to the option YAML file produced by generate-shared-model-plan |
+| `planFileUpload` | `Upload` | No | Multipart upload — alternative to `planFile` |
+| `planFileContent` | `String` | No | Raw string content — alternative to `planFile` |
+| `sharedDir` | `String` | Yes | Base directory for shared output files (e.g. ./shared) |
+| `removeSources` | `Boolean` | No | Delete the local source files after writing the shared version (default false) |
+| `dryRun` | `Boolean` | No | Print all actions that would be taken without writing or deleting any files |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSharedDesign(input: {
+    planFileContent: "--- # file content"
+    sharedDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSharedDesign(input:{planFileContent: \"--- # file content\", sharedDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSharedDesign(input:{planFileUpload:$f,sharedDir:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `extractModelFromSml`
 
 > Read an SML directory and output the same model.yaml format as extract-model-from-atscale
@@ -2212,6 +2296,32 @@ input GenerateSmlFromXmlInput {
   connectionSchema: String
 }
 
+"""Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
+input GenerateSharedModelPlanInput {
+  """Comma-separated list of SML output directories to analyse (at least one required)"""
+  inputDirs: String!
+  """Directory where RECOMMENDATION.md and option YAML files will be written"""
+  outputDir: String
+  """Similarity threshold 0–1; lower values surface more options (default 0.5)"""
+  threshold: Int
+}
+
+"""Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""
+input GenerateSharedDesignInput {
+  """Path to the option YAML file produced by generate-shared-model-plan"""
+  planFile: String
+  """Uploaded file — alternative to planFile"""
+  planFileUpload: Upload
+  """Raw file content as a string — alternative to planFile"""
+  planFileContent: String
+  """Base directory for shared output files (e.g. ./shared)"""
+  sharedDir: String!
+  """Delete the local source files after writing the shared version (default false)"""
+  removeSources: Boolean
+  """Print all actions that would be taken without writing or deleting any files"""
+  dryRun: Boolean
+}
+
 """Read an SML directory and output the same model.yaml format as extract-model-from-atscale"""
 input ExtractModelFromSmlInput {
   """Path to the SML directory (must contain models/, metrics/, dimensions/, datasets/ sub-directories)"""
@@ -2911,6 +3021,10 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput!): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput!): OperationResult!
+  """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
+  generateSharedModelPlan(input: GenerateSharedModelPlanInput!): OperationResult!
+  """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""
+  generateSharedDesign(input: GenerateSharedDesignInput!): OperationResult!
   """Read an SML directory and output the same model.yaml format as extract-model-from-atscale"""
   extractModelFromSml(input: ExtractModelFromSmlInput!): OperationResult!
   """Generate a namespace YAML from a model.yaml file using analysis suggestions"""

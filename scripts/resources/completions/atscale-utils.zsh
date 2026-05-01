@@ -6,7 +6,7 @@ _arguments -s \
 
 case $state in
   ops)
-    _values 'operations' extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model execute-web-services
+    _values 'operations' extract-model-from-atscale generate-powerbi-from-namespace generate-notebook-from-connection generate-tableau-from-namespace echo-connection-metadata generate-sml-from-connection generate-sml-from-ddl generate-sml-from-xml generate-shared-model-plan generate-shared-design extract-model-from-sml generate-namespace-from-model generate-metrics-from-model execute-sql-on-connection extract-ddl-from-connection generate-excel-from-namespace extract-query-stats-from-atscale extract-queries-from-atscale execute-atscale-query-harness execute-query-on-connection generate-atscale-install-yaml atscale-list-data-sources atscale-create-data-source atscale-list-repos atscale-create-repo atscale-list-deployments atscale-deploy-catalog atscale-list-model-errors generate-ddl-from-atscale extract-data-shape-from-connection generate-ddl-from-data-shape generate-data-from-data-shape generate-data-from-data-shape-to-connection generate-enhanced-query-results execute-run-analysis generate-queries-from-sml generate-queries-from-model execute-web-services
     ;;
   args)
     case "$words[2]" in
@@ -33,6 +33,12 @@ case $state in
     ;;
   generate-sml-from-xml)
     _values 'params' --logfile --output --verbose --xml-file --output-dir --connection-name --connection-type --catalog-name --connection-db --connection-schema
+    ;;
+  generate-shared-model-plan)
+    _values 'params' --logfile --output --verbose --input-dirs --output-dir --threshold
+    ;;
+  generate-shared-design)
+    _values 'params' --logfile --output --verbose --plan-file --shared-dir --remove-sources --dry-run
     ;;
   extract-model-from-sml)
     _values 'params' --logfile --output --verbose --sml-dir --model-name --connection-name --output-model-file

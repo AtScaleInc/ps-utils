@@ -77,6 +77,8 @@ flowchart TD
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-shared-model-plan`](#generate-shared-model-plan)
+    - [`generate-shared-design`](#generate-shared-design)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
@@ -658,6 +660,62 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
 | `connection-db` | No | | Database/project name written to the connection file; when set, datasets use a plain table name |
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, datasets use a plain table name |
 | `catalog-name` | No | XML schema name | Override the catalog label |
+
+---
+
+### `generate-shared-model-plan`
+
+Analyses one or more SML output directories for sharing opportunities and generates a refactoring recommendation plan.
+
+**Requires:** No secrets — SML directories must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-shared-model-plan
+    input-dirs: project-a,project-b   # comma-separated SML directories
+    output-dir: plan-output
+    threshold: "0.3"                  # optional — default 0.3
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `input-dirs` | Yes | | Comma-separated list of SML output directories to analyse |
+| `output-dir` | Yes | | Directory where output files are written |
+| `threshold` | No | `0.5` | Similarity threshold 0–1; lower values surface more options |
+
+---
+
+### `generate-shared-design`
+
+Applies a `generate-shared-model-plan` recommendation YAML to create shared SML files.
+
+**Requires:** No secrets — plan file and SML source directories must be present in the repository.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: generate-shared-design
+    plan-file: shared-plan/option-11-shared-dimension-library.yml
+    shared-dir: shared
+    remove-sources: "false"   # optional — set "true" to delete local source copies
+    dry-run: "false"          # optional — set "true" to preview without writing files
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `plan-file` | Yes | | Path to the option YAML file from `generate-shared-model-plan` |
+| `shared-dir` | Yes | | Base directory where shared files are written |
+| `remove-sources` | No | `false` | Delete local source copies after writing the shared version |
+| `dry-run` | No | `false` | Print all actions without writing or deleting any files |
 
 ---
 

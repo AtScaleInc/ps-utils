@@ -142,6 +142,8 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
               "generate-sml-from-connection",
               "generate-sml-from-ddl",
               "generate-sml-from-xml",
+              "generate-shared-model-plan",
+              "generate-shared-design",
               "generate-ddl-from-atscale",
             ],
           ],
@@ -268,8 +270,8 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       }
 
       const key = withoutPrefix.trim();
-      const value = args[i + 1];
-      if (!key || value === undefined || value === null || value.startsWith("--")) {
+      const nextValue = args[i + 1];
+      if (!key || nextValue === undefined || nextValue === null || nextValue.startsWith("--")) {
         if (knownKeys && !knownKeys.has(key)) {
           throw new Error(`Unknown parameter: --${key}`);
         }
@@ -279,8 +281,16 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
         }
         throw new Error(`Missing value for parameter: --${key}`);
       }
-      params[key] = value;
+      // Collect all consecutive non-flag tokens as the value (comma-joined).
+      // This allows shell glob expansion to produce multiple space-separated paths
+      // that are then treated as a comma-separated list by the receiving operation.
+      const values: string[] = [nextValue];
       i += 1;
+      while (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+        i += 1;
+        values.push(args[i]);
+      }
+      params[key] = values.join(",");
     }
     return params;
   }
