@@ -45,6 +45,7 @@ inputs:
         generate-shared-model-plan
         generate-shared-design
         deploy-atscale-microk8s
+        execute-web-services
     required: true
 
   # ── Shared ────────────────────────────────────────────────────────────────
@@ -194,14 +195,14 @@ inputs:
       Path to the option YAML file produced by generate-shared-model-plan.
       Used by: generate-shared-design.
     required: false
+  shared-dir:
+    description: >
+      Directory where shared SML files (dimensions, datasets, models) will be written.
+      Used by: generate-shared-design.
+    required: false
   remove-sources:
     description: >
       When "true", delete local source copies after writing the shared file.
-      Used by: generate-shared-design.
-    required: false
-  dry-run:
-    description: >
-      When "true", print all actions without writing or deleting any files.
       Used by: generate-shared-design.
     required: false
 
@@ -214,7 +215,7 @@ inputs:
   threshold:
     description: >
       Similarity threshold 0–1 for generate-shared-model-plan; lower values surface more
-      options (default 0.3). Used by: generate-shared-model-plan.
+      options (default 0.5). Used by: generate-shared-model-plan.
     required: false
 
   # ── generate-namespace-from-model / generate-metrics-from-model / generate-queries-from-model ──
@@ -289,6 +290,13 @@ inputs:
       BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
     required: false
 
+  dry-run:
+    description: >
+      When "true", skips all side effects.
+      - generate-shared-design: no files written or deleted, actions are only logged.
+      - execute-sql-on-connection: prints statements without executing them.
+    required: false
+
   # ── execute-sql-on-connection ────────────────────────────────────────────
   sql-file:
     description: Path to the SQL file to execute.
@@ -297,9 +305,6 @@ inputs:
     description: Behaviour when a statement fails — stop (default) or continue.
     required: false
     default: stop
-  dry-run:
-    description: Set to "true" to print statements without executing them.
-    required: false
 
   # ── extract-data-shape-from-connection ───────────────────────────────────
   sml-path:

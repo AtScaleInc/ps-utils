@@ -15,7 +15,7 @@ aggregate level, without divulging any actual data values.
 > is attached for downstream auditors. A `_reports/` directory alongside each output
 > carries three audit artifacts — `pipeline_isolation_report.json`,
 > `generation_manifest.json`, and `integrity_report.json` — that together satisfy
-> the promotion-gate checklist in [`review/05_cube_security_checklist.md`](review/05_cube_security_checklist.md).
+> the promotion-gate checklist in [`../review/05_cube_security_checklist.md`](../review/05_cube_security_checklist.md).
 > See [§Security & Compliance Controls](#security--compliance-controls) below for the full list.
 
 The algorithm is specific to semantic layers and OLAP models. It requires an SML
@@ -645,8 +645,8 @@ files may be checked into source control, shared with partner teams, or used as 
 seed for external synthetic-data environments. To make that publication safe, every
 fingerprint passes through a hardening stage implemented in
 [`src/statistics/security.ts`](src/statistics/security.ts). The controls below map
-1:1 to findings in [`review/01_risk_register.md`](review/01_risk_register.md) and
-layers in [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md).
+1:1 to findings in [`../review/01_risk_register.md`](../review/01_risk_register.md) and
+layers in [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md).
 
 ### Controls enforced automatically
 
@@ -688,10 +688,10 @@ this repository today. They are exposed as explicit stubs on `deferredControls` 
 
 | Control | Deferred because | Spec reference |
 |---|---|---|
-| ε-differential-privacy noise on aggregate queries | Requires an ε-budget ledger and a SQL-noise injection layer | [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md) §Layer 4 |
-| Ed25519 fingerprint signing | Requires a key-management service and rotation policy | [`review/01_risk_register.md`](review/01_risk_register.md) R-25 |
-| Append-only WORM audit log | Requires object-lock storage integration | [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md) §Layer 6 |
-| Dynamic RBAC / column masking | Runtime concern of the semantic layer, not the fingerprint | [`review/03_obfuscation_tactics.md`](review/03_obfuscation_tactics.md) §Layer 3 |
+| ε-differential-privacy noise on aggregate queries | Requires an ε-budget ledger and a SQL-noise injection layer | [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md) §Layer 4 |
+| Ed25519 fingerprint signing | Requires a key-management service and rotation policy | [`../review/01_risk_register.md`](../review/01_risk_register.md) R-25 |
+| Append-only WORM audit log | Requires object-lock storage integration | [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md) §Layer 6 |
+| Dynamic RBAC / column masking | Runtime concern of the semantic layer, not the fingerprint | [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md) §Layer 3 |
 
 Each stub throws a descriptive error that names the review document section an
 implementer must read before wiring the control in, so the controls cannot silently

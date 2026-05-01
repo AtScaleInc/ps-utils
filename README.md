@@ -17,8 +17,8 @@ Connect to a live AtScale instance or read local SML files to produce a portable
 flowchart LR
     ATS["AtScale Instance"] --> A["extract-model-from-atscale"] --> MODEL["model.yaml"]
     SML["SML Files"] --> B["extract-model-from-sml"] --> MODEL
-    click A href "#extract-model-from-atscale"
-    click B href "#extract-model-from-sml"
+    click A href "#extract-model-from-atscale" _self
+    click B href "#extract-model-from-sml" _self
 ```
 
 ### SML Creation and Manipulation
@@ -37,15 +37,15 @@ flowchart LR
     PLAN --> I["generate-shared-design"] --> SHARED["shared/dimensions, datasets, models"]
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
-    click A href "#extract-ddl-from-connection"
-    click B href "#generate-ddl-from-atscale"
-    click C href "#generate-sml-from-ddl"
-    click D href "#generate-sml-from-connection"
-    click E href "#execute-sql-on-connection"
-    click F href "#generate-metrics-from-model"
-    click G href "#generate-sml-from-xml"
-    click H href "#generate-shared-model-plan"
-    click I href "#generate-shared-design"
+    click A href "#extract-ddl-from-connection" _self
+    click B href "#generate-ddl-from-atscale" _self
+    click C href "#generate-sml-from-ddl" _self
+    click D href "#generate-sml-from-connection" _self
+    click E href "#execute-sql-on-connection" _self
+    click F href "#generate-metrics-from-model" _self
+    click G href "#generate-sml-from-xml" _self
+    click H href "#generate-shared-model-plan" _self
+    click I href "#generate-shared-design" _self
 ```
 
 ### Synthetic Data Generation
@@ -58,10 +58,10 @@ flowchart LR
     SHAPE --> B["generate-ddl-from-data-shape"] --> DDL["DDL (.sql)"]
     SHAPE --> C["generate-data-from-data-shape"] --> CSV["Synthetic CSVs"]
     SHAPE --> D["generate-data-from-data-shape-to-connection"] --> TARGET[("Target Database")]
-    click A href "#extract-data-shape-from-connection"
-    click B href "#generate-ddl-from-data-shape"
-    click C href "#generate-data-from-data-shape"
-    click D href "#generate-data-from-data-shape-to-connection"
+    click A href "#extract-data-shape-from-connection" _self
+    click B href "#generate-ddl-from-data-shape" _self
+    click C href "#generate-data-from-data-shape" _self
+    click D href "#generate-data-from-data-shape-to-connection" _self
 ```
 
 ### Visualization and Namespace Processing
@@ -76,10 +76,10 @@ flowchart LR
     NS --> D["generate-powerbi-from-namespace"] --> PBI["output/powerbi/"]
     CONN["connections.yaml"] --> B & C & D
     ALIASES["aliases.yaml (opt.)"] -.-> B & C & D
-    click A href "#generate-namespace-from-model"
-    click B href "#generate-tableau-from-namespace"
-    click C href "#generate-excel-from-namespace"
-    click D href "#generate-powerbi-from-namespace"
+    click A href "#generate-namespace-from-model" _self
+    click B href "#generate-tableau-from-namespace" _self
+    click C href "#generate-excel-from-namespace" _self
+    click D href "#generate-powerbi-from-namespace" _self
 ```
 
 ### Testing / Query Processing
@@ -102,14 +102,14 @@ flowchart TD
     F --> SUMMARY["summary.txt"]
     F --> COMPARISON["comparison.csv"]
     F --> OUTLIERS["outliers.csv"]
-    click G href "#generate-queries-from-sml"
-    click H href "#generate-queries-from-model"
-    click A href "#extract-query-stats-from-atscale"
-    click B href "#extract-queries-from-atscale"
-    click C href "#execute-atscale-query-harness"
-    click D href "#execute-query-on-connection"
-    click E href "#generate-enhanced-query-results"
-    click F href "#execute-run-analysis"
+    click G href "#generate-queries-from-sml" _self
+    click H href "#generate-queries-from-model" _self
+    click A href "#extract-query-stats-from-atscale" _self
+    click B href "#extract-queries-from-atscale" _self
+    click C href "#execute-atscale-query-harness" _self
+    click D href "#execute-query-on-connection" _self
+    click E href "#generate-enhanced-query-results" _self
+    click F href "#execute-run-analysis" _self
 ```
 
 ### AtScale Config
@@ -126,14 +126,14 @@ flowchart LR
     ATS --> F["atscale-list-repos"] --> INFO
     ATS --> G["atscale-list-deployments"] --> INFO
     ATS --> H["atscale-list-model-errors"] --> INFO
-    click A href "#generate-atscale-install-yaml"
-    click B href "#atscale-create-data-source"
-    click C href "#atscale-create-repo"
-    click D href "#atscale-deploy-catalog"
-    click E href "#atscale-list-data-sources"
-    click F href "#atscale-list-repos"
-    click G href "#atscale-list-deployments"
-    click H href "#atscale-list-model-errors"
+    click A href "#generate-atscale-install-yaml" _self
+    click B href "#atscale-create-data-source" _self
+    click C href "#atscale-create-repo" _self
+    click D href "#atscale-deploy-catalog" _self
+    click E href "#atscale-list-data-sources" _self
+    click F href "#atscale-list-repos" _self
+    click G href "#atscale-list-deployments" _self
+    click H href "#atscale-list-model-errors" _self
 ```
 
 ## Table of Contents
@@ -184,6 +184,7 @@ flowchart LR
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
+- [Reference Documentation](#reference-documentation)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
 - [SML Style Config (`sml.style.yaml`)](#sml-style-config-smlstyleyaml)
@@ -199,6 +200,22 @@ flowchart LR
 npm install
 npm run build
 ```
+
+## Reference Documentation
+
+The `docs/` directory contains extended reference material:
+
+| File | Description |
+|------|-------------|
+| [docs/ACTIONS.md](docs/ACTIONS.md) | GitHub Actions guide — run any operation as a composite workflow step |
+| [docs/GRAPHQL.md](docs/GRAPHQL.md) | GraphQL API reference for the web services server (auto-generated) |
+| [docs/REST.md](docs/REST.md) | REST API reference for the web services server (auto-generated) |
+| [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
+| [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
+| [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
+| [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+
+---
 
 ## Operations
 
@@ -738,7 +755,7 @@ With sampling tuning:
 
 All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`). The mapping from original names to IDs is discarded at the end of each run.
 
-See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
+See [STATISTICS.md](docs/STATISTICS.md) for the full algorithm description.
 
 ---
 
@@ -778,7 +795,7 @@ With dialect selection:
 - `snowflake` — integer types are mapped to `NUMBER(n,0)`, decimals to `NUMBER(18,4)`
 - All other dialects — standard ANSI SQL types (`SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL(18,4)`, `VARCHAR(200)`)
 
-See [STATISTICS.md](STATISTICS.md) §Phase 7 for the reconstruction algorithm.
+See [STATISTICS.md](docs/STATISTICS.md) §Phase 7 for the reconstruction algorithm.
 
 ---
 
@@ -813,7 +830,7 @@ With a scale factor and reproducible seed:
 
 **Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
 
-See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
@@ -861,7 +878,7 @@ With scale factor and batch tuning:
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order respects FK constraints throughout.
 
-See [STATISTICS.md](STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
@@ -1856,7 +1873,7 @@ Starts a GraphQL HTTP server that dynamically exposes every registered operation
 
 File parameters (names ending in `-file`) accept either a local path string or a multipart-uploaded file via the `Upload` scalar.
 
-See [GRAPHQL.md](GRAPHQL.md) for the full schema reference and per-operation documentation.
+See [GRAPHQL.md](docs/GRAPHQL.md) for the full schema reference and per-operation documentation.
 
 ```bash
 ./atscale-utils execute-web-services
