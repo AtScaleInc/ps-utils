@@ -31,6 +31,8 @@ export interface XmlConversionOptions {
   connectionDb?: string;
   /** Schema name to embed in the connection file (moves schema out of individual datasets). */
   connectionSchema?: string;
+  /** Original XML filename — included in the generated README.md for traceability. */
+  xmlFileName?: string;
 }
 
 /**
@@ -75,6 +77,47 @@ export async function convertXmlToSml(
   const output = new Map<string, string>();
 
   // ---------------------------------------------------------------
+  // Conversion report accumulators
+  // ---------------------------------------------------------------
+
+  const rptDatasets: DatasetRecord[] = [];
+  const rptDimensions: DimRecord[] = [];
+  const rptMetrics: MetricRecord[] = [];
+  const rptModels: ModelRecord[] = [];
+  const rptOmissions: OmissionRecord[] = [];
+  const rptUnboundByCube: CubeBindingRecord[] = [];
+
+  // Structural omissions: check for XML features the converter doesn't handle.
+  const hasRoles        = arr(schemaEl.roles).length > 0 || arr((schemaEl as Record<string, unknown>)["role"]).length > 0;
+  const hasPerspectives = arr(schemaEl.perspectives).length > 0 || arr((schemaEl as Record<string, unknown>).perspective).length > 0;
+  const hasTranslations = arr(schemaEl.translations).length > 0 || arr((schemaEl as Record<string, unknown>).translation).length > 0;
+
+  if (hasPerspectives) {
+    rptOmissions.push({
+      category: "Structural",
+      item: "Perspectives",
+      reason: "Perspective definitions are not converted — no equivalent in SML.",
+      recommendation: "Recreate perspectives using row-level security or BI-tool-level views in the consuming application.",
+    });
+  }
+  if (hasRoles) {
+    rptOmissions.push({
+      category: "Structural",
+      item: "Security Roles",
+      reason: "Role and grant definitions are not converted.",
+      recommendation: "Recreate security roles in the AtScale Design Center after deployment.",
+    });
+  }
+  if (hasTranslations) {
+    rptOmissions.push({
+      category: "Structural",
+      item: "Translations / Localization",
+      reason: "Translation overrides are not converted.",
+      recommendation: "Add multi-language labels manually to the SML files if localization is required.",
+    });
+  }
+
+  // ---------------------------------------------------------------
   // Phase 1: Build UUID resolution maps
   // ---------------------------------------------------------------
 
@@ -91,6 +134,19 @@ export async function convertXmlToSml(
       if (name) {
         const phys = parseDatasetPhysical(ds);
         if (phys) datasetNameToPhysical.set(name, phys);
+      }
+    }
+  }
+
+  // Datasets with no physical table or SQL binding (will be emitted with placeholder table name)
+  const unboundDatasetNames = new Set<string>();
+  for (const dsSec of arr(schemaEl["data-sets"])) {
+    for (const ds of arr(dsSec["data-set"])) {
+      const dsName = a(ds, "name");
+      if (!dsName) continue;
+      const phys = datasetNameToPhysical.get(dsName);
+      if (!phys || (!phys.tableName && !phys.sql)) {
+        unboundDatasetNames.add(dsName);
       }
     }
   }
@@ -244,6 +300,17 @@ export async function convertXmlToSml(
       const fname = safeFilename(dsName);
       output.set(`datasets/${fname}.yml`, dsYaml);
       logger.log(`  → datasets/${fname}.yml`);
+
+      // Report tracking
+      const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
+      rptDatasets.push({
+        name: dsName,
+        file: `datasets/${fname}.yml`,
+        type: physRpt?.sql ? "sql" : "table",
+        columnCount: physRpt?.columns?.length ?? 0,
+        isImmutable: physRpt?.immutable ?? false,
+        isUnbound: unboundDatasetNames.has(dsName),
+      });
     }
   }
 
@@ -295,6 +362,26 @@ export async function convertXmlToSml(
 
   for (const cube of cubeEls) {
     const cubeName = a(cube, "name") ?? schemaName;
+
+    // Classify all dataset refs for this cube as bound or unbound
+    const cubeBoundDatasets: string[] = [];
+    const cubeUnboundDatasets: string[] = [];
+    for (const dsSec of arr(cube["data-sets"])) {
+      for (const dsRef of arr(dsSec["data-set-ref"])) {
+        const refId = a(dsRef, "id");
+        if (!refId) continue;
+        const dsName = datasetIdToName.get(refId);
+        if (!dsName) continue; // completely unknown ID — skip
+        if (unboundDatasetNames.has(dsName)) {
+          if (!cubeUnboundDatasets.includes(dsName)) cubeUnboundDatasets.push(dsName);
+        } else {
+          if (!cubeBoundDatasets.includes(dsName)) cubeBoundDatasets.push(dsName);
+        }
+      }
+    }
+    if (cubeUnboundDatasets.length > 0) {
+      rptUnboundByCube.push({ cubeName, boundDatasets: cubeBoundDatasets, unboundDatasets: cubeUnboundDatasets });
+    }
 
     // Find fact dataset name for this cube
     let factDatasetName: string | undefined;
@@ -363,7 +450,17 @@ export async function convertXmlToSml(
           // Resolve column: attrMap[attrId] → column
           const colRef = attrMap.get(attrId);
           const column = colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
-          if (!column || !factDatasetName) continue;
+          if (!column || !factDatasetName) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: !factDatasetName
+                ? "No fact dataset could be identified for this cube"
+                : "Could not resolve the measure column reference from attribute-ref mapping",
+              recommendation: "Add this measure manually to the appropriate metrics/*.yml file after verifying the fact table column name.",
+            });
+            continue;
+          }
 
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = safeName(attrNameRaw).toLowerCase();
@@ -374,6 +471,7 @@ export async function convertXmlToSml(
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
+          rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
         } else if (exprEl) {
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
@@ -385,6 +483,7 @@ export async function convertXmlToSml(
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
+          rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "calculated_measure", folder: folder || undefined, isHidden: !visible });
         }
       }
     }
@@ -395,7 +494,15 @@ export async function convertXmlToSml(
         const refId = a(cmRef, "id");
         const def = refId ? calcMemberDefs.get(refId) : undefined;
         if (!def) continue;
-        if (!def.visible) continue;
+        if (!def.visible) {
+          rptOmissions.push({
+            category: "Calculated Member",
+            item: def.name,
+            reason: "Marked as not visible (visible=false) in the source XML — excluded from output",
+            recommendation: `If this calculated member is needed, create \`calculations/${safeFilename(safeName(def.name).toLowerCase())}.yml\` manually with \`is_hidden_from_ui: false\`.`,
+          });
+          continue;
+        }
         const label = def.caption ?? def.name;
         const uniqueName = safeName(def.name).toLowerCase();
         const format = resolveFormat(def.formatString, def.namedFormat);
@@ -406,6 +513,29 @@ export async function convertXmlToSml(
         );
         logger.log(`  → calculations/${fname}.yml`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
+        rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: false });
+      }
+    }
+
+    // Cube-level structural omission checks (run once per cube)
+    if (arr(cube["named-sets"]).length > 0 || arr((cube as Record<string, unknown>)["named-set"]).length > 0) {
+      if (!rptOmissions.some((o) => o.item === "Named Sets")) {
+        rptOmissions.push({
+          category: "Structural",
+          item: "Named Sets",
+          reason: "Named set definitions (cube-level) are not converted — no direct SML equivalent.",
+          recommendation: "Recreate named sets as saved filters or query parameters in the consuming BI tool.",
+        });
+      }
+    }
+    if (arr(cube.kpis).length > 0 || arr((cube as Record<string, unknown>).kpi).length > 0) {
+      if (!rptOmissions.some((o) => o.item === "KPIs")) {
+        rptOmissions.push({
+          category: "Structural",
+          item: "KPIs",
+          reason: "KPI definitions are not converted — no direct SML equivalent.",
+          recommendation: "Recreate KPI targets and statuses as calculated metrics or in the BI tool layer.",
+        });
       }
     }
 
@@ -455,6 +585,27 @@ export async function convertXmlToSml(
     const fname = safeFilename(cubeName);
     output.set(`models/${fname}.yml`, modelYaml);
     logger.log(`  → models/${fname}.yml`);
+
+    // Dimension datasets: datasets backing this cube's dimensions (not the fact tables)
+    const dimDsSet = new Set<string>();
+    for (const rel of relationships) {
+      if (rel.dimensionDataset && !cubeBoundDatasets.includes(rel.dimensionDataset)) {
+        dimDsSet.add(rel.dimensionDataset);
+      }
+    }
+
+    rptModels.push({
+      name: cubeName,
+      file: `models/${fname}.yml`,
+      relationships,
+      relationshipCount: relationships.length,
+      dimensionCount: cubeDimNames.length,
+      metricCount: metricNames.length,
+      hasDefaultDrillthrough: includeDefaultDrillthrough,
+      isHidden: !cubeVisible,
+      factDatasets: cubeBoundDatasets,
+      dimensionDatasets: [...dimDsSet],
+    });
   }
 
   // ---------------------------------------------------------------
@@ -464,10 +615,27 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
-    const dimYaml = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, factDatasetNames);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, factDatasetNames);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
+
+    rptDimensions.push({
+      name: dimName,
+      file: `dimensions/${fname}.yml`,
+      type: dimMeta.type,
+      hierarchyCount: dimMeta.hierarchyCount,
+      levelCount: dimMeta.levelCount,
+      hasDefaultMembers: dimMeta.hasDefaultMembers,
+    });
+    for (const skipped of dimMeta.skippedCrossDimRefs) {
+      rptOmissions.push({
+        category: "Secondary Attribute",
+        item: `attribute ${skipped.attrId} in dimension "${skipped.dimName}"`,
+        reason: "Cross-dimension embedded relationship (ref-id) cannot be represented as a secondary attribute in SML",
+        recommendation: "Verify that the dimension-to-dimension relationship is covered by a model relationship, or add it manually as a secondary attribute referencing the correct dataset.",
+      });
+    }
   }
 
   // ---------------------------------------------------------------
@@ -481,6 +649,17 @@ export async function convertXmlToSml(
   );
   logger.log(`  → catalog.yml`);
   logger.log(`  → connections/${safeFilename(connName)}.yml`);
+
+  // ---------------------------------------------------------------
+  // Phase 8: Generate README.md conversion report
+  // ---------------------------------------------------------------
+
+  const readme = buildReadme(
+    catalogName, connName, opts.xmlFileName,
+    rptDatasets, rptDimensions, rptMetrics, rptModels, rptOmissions, rptUnboundByCube,
+  );
+  output.set("README.md", readme);
+  logger.log(`  → README.md`);
 
   return output;
 }
@@ -535,6 +714,79 @@ interface DatasetPhysical {
   immutable?: boolean;
 }
 
+// ============================================================
+// Conversion report types
+// ============================================================
+
+interface DatasetRecord {
+  name: string;
+  file: string;
+  type: "table" | "sql";
+  columnCount: number;
+  isImmutable: boolean;
+  /** True when the source XML has no physical table or SQL binding for this dataset. */
+  isUnbound: boolean;
+}
+
+interface CubeBindingRecord {
+  cubeName: string;
+  /** Datasets fully bound (have a physical table or SQL in the XML). */
+  boundDatasets: string[];
+  /** Datasets referenced by this cube but with no physical binding — need to be created/bound. */
+  unboundDatasets: string[];
+}
+
+interface DimRecord {
+  name: string;
+  file: string;
+  type: "time" | "standard" | "degenerate";
+  hierarchyCount: number;
+  levelCount: number;
+  hasDefaultMembers: boolean;
+}
+
+interface MetricRecord {
+  name: string;
+  label: string;
+  file: string;
+  metricType: "measure" | "calculated_measure" | "calculated_member";
+  aggregation?: string;
+  folder?: string;
+  isHidden: boolean;
+}
+
+interface ModelRecord {
+  name: string;
+  file: string;
+  relationships: RelationshipDef[];
+  relationshipCount: number;
+  dimensionCount: number;
+  metricCount: number;
+  hasDefaultDrillthrough: boolean;
+  isHidden: boolean;
+  /** Datasets explicitly bound to this cube as fact tables (cube data-set-refs). */
+  factDatasets: string[];
+  /** Datasets used by the model's dimensions but not listed as cube fact tables. */
+  dimensionDatasets: string[];
+}
+
+interface OmissionRecord {
+  category: string;
+  item: string;
+  reason: string;
+  recommendation: string;
+}
+
+/** Metadata extracted alongside YAML during dimension conversion. */
+interface DimMeta {
+  type: "time" | "standard" | "degenerate";
+  hierarchyCount: number;
+  levelCount: number;
+  hasDefaultMembers: boolean;
+  /** Secondary attribute refs skipped because they carried a cross-dimension ref-id. */
+  skippedCrossDimRefs: Array<{ dimName: string; attrId: string }>;
+}
+
 interface RelationshipDef {
   uniqueName: string;
   fromDataset: string;
@@ -542,6 +794,8 @@ interface RelationshipDef {
   toDimension: string;
   toLevel: string;
   rolePlay?: string;
+  /** Dataset that backs the dimension key (complete=true side of the join). */
+  dimensionDataset?: string;
 }
 
 // ============================================================
@@ -857,12 +1111,17 @@ function buildDimensionYaml(
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
   factDatasetNames: Set<string>,
-): string {
+): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
   const isTime = dimTypeRaw === "Time";
   const label = props ? (s(first(arr(props.caption))) ?? dimName) : dimName;
   const dimDescription = props ? s(first(arr(props.description))) : undefined;
+
+  // Meta tracking
+  let metaTotalLevels = 0;
+  let metaHasDefaultMembers = false;
+  const metaSkippedCrossDimRefs: Array<{ dimName: string; attrId: string }> = [];
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
@@ -913,6 +1172,7 @@ function buildDimensionYaml(
         literal_value: unescapeHtml(literalMember),
         ...(applyInQuery ? { apply_in_query: true } : {}),
       };
+      metaHasDefaultMembers = true;
     }
 
     const hierLevels: Array<{
@@ -953,7 +1213,10 @@ function buildDimensionYaml(
         const attrId = a(kref, "attribute-id");
         const role = a(kref, "role");
         const refId = a(kref, "ref-id"); // cross-dimension embedded relationship — skip
-        if (!attrId || refId) continue;
+        if (!attrId || refId) {
+          if (refId && attrId) metaSkippedCrossDimRefs.push({ dimName, attrId });
+          continue;
+        }
 
         // Resolve the display column for this attribute reference
         let resolvedCol: string | undefined;
@@ -1029,6 +1292,7 @@ function buildDimensionYaml(
     }
 
     if (hierLevels.length > 0) {
+      metaTotalLevels += hierLevels.length;
       hierarchies.push({
         uniqueName: hierName,
         label: hierCaption ?? hierName,
@@ -1119,7 +1383,15 @@ function buildDimensionYaml(
     });
   }
 
-  return toYaml(obj);
+  const meta: DimMeta = {
+    type: isDegenerate ? "degenerate" : isTime ? "time" : "standard",
+    hierarchyCount: hierarchies.length,
+    levelCount: metaTotalLevels,
+    hasDefaultMembers: metaHasDefaultMembers,
+    skippedCrossDimRefs: metaSkippedCrossDimRefs,
+  };
+
+  return { yaml: toYaml(obj), meta };
 }
 
 // ============================================================
@@ -1321,6 +1593,9 @@ function inferRelationships(
 
     const relUniqueName = `${safeName(factDatasetName)}_to_${safeName(dimName)}_${safeName(fromColumns.join("_"))}`;
 
+    // Dimension dataset: the complete=true side of the key-ref (the lookup table)
+    const dimDataset = keyMap.get(keyUuid)?.find((e) => e.complete === "true")?.datasetName;
+
     relationships.push({
       uniqueName: relUniqueName,
       fromDataset: factDatasetName,
@@ -1328,6 +1603,7 @@ function inferRelationships(
       toDimension: dimName,
       toLevel,
       rolePlay: cubeKeyRolePlays.get(keyUuid),
+      dimensionDataset: dimDataset,
     });
   }
 
@@ -1423,4 +1699,305 @@ function toYaml(obj: unknown): string {
     quotingType: '"',
     forceQuotes: false,
   });
+}
+
+// ============================================================
+// Mermaid schema diagram
+// ============================================================
+
+/**
+ * Sanitize a name to a valid Mermaid erDiagram entity identifier.
+ * Entity names must start with a letter; only A-Z, 0-9, and _ are safe.
+ */
+function mermaidEnt(name: string): string {
+  let id = name.toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/__+/g, "_").replace(/^_+|_+$/g, "");
+  // Mermaid entity names must start with a letter
+  if (/^[0-9]/.test(id)) id = "T_" + id;
+  return id || "ENTITY";
+}
+
+/**
+ * Build a Mermaid erDiagram code block showing fact datasets,
+ * dimensions, and the join relationships between them.
+ */
+function buildMermaidDiagram(models: ModelRecord[], dimensions: DimRecord[]): string {
+  const dimByName = new Map<string, DimRecord>();
+  for (const d of dimensions) dimByName.set(d.name, d);
+
+  // Collect all unique fact datasets and their join columns across all models
+  const factColumns = new Map<string, Set<string>>(); // mermaid-entity-name → join cols
+  // Collect all unique dimension entities used in any relationship
+  const dimEntities = new Map<string, string>(); // mermaid-entity-name → original dim name
+  // Relationship lines (deduped)
+  const relLines: string[] = [];
+  const seenRels = new Set<string>();
+
+  for (const model of models) {
+    for (const rel of model.relationships) {
+      const factEnt = mermaidEnt(rel.fromDataset);
+      const dimEnt  = mermaidEnt(rel.toDimension);
+
+      if (!factColumns.has(factEnt)) factColumns.set(factEnt, new Set());
+      for (const col of rel.fromColumns) factColumns.get(factEnt)!.add(col);
+
+      if (!dimEntities.has(dimEnt)) dimEntities.set(dimEnt, rel.toDimension);
+
+      const label   = (rel.rolePlay ?? rel.fromColumns.join(", ")).replace(/"/g, "'");
+      const relKey  = `${factEnt}|${dimEnt}|${label}`;
+      if (!seenRels.has(relKey)) {
+        seenRels.add(relKey);
+        relLines.push(`    ${factEnt} }o--|| ${dimEnt} : "${label}"`);
+      }
+    }
+  }
+
+  if (relLines.length === 0) return "";
+
+  const lines: string[] = ["```mermaid", "erDiagram"];
+
+  // Emit fact entities with their join columns (cap at 10)
+  const MAX_COLS = 10;
+  for (const [factEnt, cols] of factColumns) {
+    const colArr = [...cols];
+    lines.push(`    ${factEnt} {`);
+    for (const col of colArr.slice(0, MAX_COLS)) {
+      const colId = col.toUpperCase().replace(/[^A-Z0-9]/g, "_").replace(/^_+|_+$/g, "") || "COL";
+      lines.push(`        string ${colId}`);
+    }
+    if (colArr.length > MAX_COLS) {
+      lines.push(`        string etc "...${colArr.length - MAX_COLS} more"`);
+    }
+    lines.push("    }");
+  }
+
+  // Emit dimension entities with type and level count
+  for (const [dimEnt, dimName] of dimEntities) {
+    const dim = dimByName.get(dimName);
+    lines.push(`    ${dimEnt} {`);
+    lines.push(`        string dim_type "${dim?.type ?? "standard"}"`);
+    lines.push(`        int level_count "${dim?.levelCount ?? 0}"`);
+    lines.push("    }");
+  }
+
+  // Emit relationships
+  lines.push(...relLines);
+
+  lines.push("```");
+  return lines.join("\n");
+}
+
+// ============================================================
+// README.md generation
+// ============================================================
+
+function buildReadme(
+  catalogName: string,
+  connectionName: string,
+  xmlFileName: string | undefined,
+  datasets: DatasetRecord[],
+  dimensions: DimRecord[],
+  metrics: MetricRecord[],
+  models: ModelRecord[],
+  omissions: OmissionRecord[],
+  unboundByCube: CubeBindingRecord[] = [],
+): string {
+  const date = new Date().toISOString().split("T")[0];
+  const measures      = metrics.filter((m) => m.metricType === "measure");
+  const calcMeasures  = metrics.filter((m) => m.metricType === "calculated_measure");
+  const calcMembers   = metrics.filter((m) => m.metricType === "calculated_member");
+  const structural    = omissions.filter((o) => o.category === "Structural");
+  const itemLevel     = omissions.filter((o) => o.category !== "Structural");
+
+  const lines: string[] = [];
+
+  // ── Title ──
+  lines.push(`# SML Conversion Report: ${catalogName}`, "");
+  lines.push(`**Source:** \`${xmlFileName ?? "unknown"}\`  `);
+  lines.push(`**Generated:** ${date}  `);
+  lines.push(`**Connection:** \`${connectionName}\``, "");
+
+  // ── Schema diagram ──
+  const diagram = buildMermaidDiagram(models, dimensions);
+  if (diagram) {
+    lines.push("## Schema Diagram", "");
+    lines.push(diagram, "");
+    lines.push("---", "");
+  }
+
+  // ── TOC ──
+  lines.push("## Table of Contents", "");
+  lines.push("- [Summary](#summary)");
+  lines.push("- [Successful Conversions](#successful-conversions)");
+  lines.push("  - [Catalog and Connection](#catalog-and-connection)");
+  lines.push(`  - [Datasets (${datasets.length})](#datasets)`);
+  lines.push(`  - [Dimensions (${dimensions.length})](#dimensions)`);
+  lines.push(`  - [Metrics and Calculations (${metrics.length})](#metrics-and-calculations)`);
+  lines.push(`  - [Models (${models.length})](#models)`);
+  if (models.some((m) => m.dimensionDatasets.length > 0)) {
+    lines.push("  - [Model Dataset Dependencies](#model-dataset-dependencies)");
+  }
+  lines.push("- [Omissions and Recommendations](#omissions-and-recommendations)");
+  if (unboundByCube.length > 0) lines.push("  - [Unbound Datasets](#unbound-datasets)");
+  if (structural.length > 0)    lines.push("  - [Structural Omissions](#structural-omissions)");
+  if (itemLevel.length > 0)     lines.push("  - [Item-Level Omissions](#item-level-omissions)");
+  lines.push("", "---", "");
+
+  // ── Summary ──
+  const unboundCount = datasets.filter((d) => d.isUnbound).length;
+  lines.push("## Summary", "");
+  lines.push("| Category | Count |");
+  lines.push("|----------|-------|");
+  lines.push(`| Datasets | ${datasets.length} |`);
+  if (unboundCount > 0) lines.push(`| ⚠ Unbound Datasets | ${unboundCount} |`);
+  lines.push(`| Dimensions | ${dimensions.length} |`);
+  lines.push(`| Measures | ${measures.length} |`);
+  lines.push(`| Calculated Measures | ${calcMeasures.length} |`);
+  lines.push(`| Calculated Members | ${calcMembers.length} |`);
+  lines.push(`| Models | ${models.length} |`);
+  lines.push(`| Omissions | ${omissions.length} |`);
+  lines.push("", "---", "");
+
+  // ── Successful Conversions ──
+  lines.push("## Successful Conversions", "");
+
+  // Catalog & Connection
+  lines.push("### Catalog and Connection", "");
+  lines.push("| File | Object |");
+  lines.push("|------|--------|");
+  lines.push(`| \`catalog.yml\` | Catalog: **${catalogName}** |`);
+  lines.push(`| \`connections/${safeFilename(connectionName)}.yml\` | Connection: **${connectionName}** |`);
+  lines.push("");
+
+  // Datasets
+  lines.push("### Datasets", "");
+  if (datasets.length === 0) {
+    lines.push("_No datasets were converted._", "");
+  } else {
+    lines.push("| Dataset | File | Type | Columns | Notes |");
+    lines.push("|---------|------|------|---------|-------|");
+    for (const ds of datasets) {
+      const noteParts: string[] = [];
+      if (ds.isImmutable) noteParts.push("immutable");
+      if (ds.isUnbound)   noteParts.push("⚠ no physical binding");
+      const cols = ds.columnCount > 0 ? String(ds.columnCount) : "—";
+      lines.push(`| ${ds.name} | \`${ds.file}\` | ${ds.type} | ${cols} | ${noteParts.join(", ")} |`);
+    }
+    lines.push("");
+  }
+
+  // Dimensions
+  lines.push("### Dimensions", "");
+  if (dimensions.length === 0) {
+    lines.push("_No dimensions were converted._", "");
+  } else {
+    lines.push("| Dimension | File | Type | Hierarchies | Levels | Default Member |");
+    lines.push("|-----------|------|------|-------------|--------|----------------|");
+    for (const dim of dimensions) {
+      const dm = dim.hasDefaultMembers ? "yes" : "—";
+      lines.push(`| ${dim.name} | \`${dim.file}\` | ${dim.type} | ${dim.hierarchyCount} | ${dim.levelCount} | ${dm} |`);
+    }
+    lines.push("");
+  }
+
+  // Metrics
+  lines.push("### Metrics and Calculations", "");
+  if (metrics.length === 0) {
+    lines.push("_No metrics were converted._", "");
+  } else {
+    lines.push("| Metric | Label | File | Type | Aggregation | Folder |");
+    lines.push("|--------|-------|------|------|-------------|--------|");
+    for (const m of metrics) {
+      const agg    = m.aggregation ?? "—";
+      const folder = m.folder ?? "—";
+      const hidden = m.isHidden ? " *(hidden)*" : "";
+      lines.push(`| \`${m.name}\` | ${m.label}${hidden} | \`${m.file}\` | ${m.metricType.replace("_", " ")} | ${agg} | ${folder} |`);
+    }
+    lines.push("");
+  }
+
+  // Models
+  lines.push("### Models", "");
+  if (models.length === 0) {
+    lines.push("_No models were converted._", "");
+  } else {
+    lines.push("| Model | File | Relationships | Dimensions | Metrics | Notes |");
+    lines.push("|-------|------|---------------|------------|---------|-------|");
+    for (const m of models) {
+      const notes: string[] = [];
+      if (m.isHidden) notes.push("hidden");
+      if (m.hasDefaultDrillthrough) notes.push("drillthrough");
+      lines.push(`| ${m.name} | \`${m.file}\` | ${m.relationshipCount} | ${m.dimensionCount} | ${m.metricCount} | ${notes.join(", ")} |`);
+    }
+    lines.push("");
+  }
+
+  // Model dataset dependencies table
+  const modelsWithDimDs = models.filter((m) => m.dimensionDatasets.length > 0);
+  if (modelsWithDimDs.length > 0) {
+    lines.push("### Model Dataset Dependencies", "");
+    lines.push(
+      "Each model requires both its directly-bound fact tables (cube `data-set-ref`s) and the " +
+      "dimension datasets that back its join dimensions. Both sets of tables must exist in the " +
+      "warehouse and be accessible via the connection.", "");
+    lines.push("| Model | Fact Tables | Dimension Tables |");
+    lines.push("|-------|-------------|------------------|");
+    for (const m of modelsWithDimDs) {
+      const factStr = m.factDatasets.length > 0 ? m.factDatasets.join(", ") : "—";
+      const dimStr  = m.dimensionDatasets.join(", ");
+      lines.push(`| **${m.name}** | ${factStr} | ${dimStr} |`);
+    }
+    lines.push("");
+  }
+
+  lines.push("---", "");
+
+  // ── Omissions ──
+  lines.push("## Omissions and Recommendations", "");
+
+  if (omissions.length === 0 && unboundByCube.length === 0) {
+    lines.push("✅ No omissions detected.", "");
+    lines.push("---");
+    return lines.join("\n");
+  }
+
+  // ── Unbound datasets ──
+  if (unboundByCube.length > 0) {
+    lines.push("### Unbound Datasets", "");
+    lines.push(
+      "The following models reference datasets that have no physical table or SQL binding " +
+      "in the source XML. Placeholder YAML was emitted but **these models will not execute** " +
+      "until every listed dataset is bound to a real database table.", "");
+    lines.push("| Model | Currently Bound | Needs Binding |");
+    lines.push("|-------|-----------------|---------------|");
+    for (const rec of unboundByCube) {
+      const bound   = rec.boundDatasets.length  > 0 ? rec.boundDatasets.join(", ")   : "—";
+      const unbound = rec.unboundDatasets.join(", ");
+      lines.push(`| **${rec.cubeName}** | ${bound} | ${unbound} |`);
+    }
+    lines.push("");
+  }
+
+  if (structural.length > 0) {
+    lines.push("### Structural Omissions", "");
+    lines.push("The following XML features have no direct SML equivalent and were not converted:", "");
+    lines.push("| Feature | Reason | Recommendation |");
+    lines.push("|---------|--------|----------------|");
+    for (const o of structural) {
+      lines.push(`| **${o.item}** | ${o.reason} | ${o.recommendation} |`);
+    }
+    lines.push("");
+  }
+
+  if (itemLevel.length > 0) {
+    lines.push("### Item-Level Omissions", "");
+    lines.push("| Category | Item | Reason | Recommendation |");
+    lines.push("|----------|------|--------|----------------|");
+    for (const o of itemLevel) {
+      lines.push(`| ${o.category} | \`${o.item}\` | ${o.reason} | ${o.recommendation} |`);
+    }
+    lines.push("");
+  }
+
+  lines.push("---");
+  return lines.join("\n");
 }

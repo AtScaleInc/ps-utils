@@ -104,6 +104,7 @@ export class GenerateSMLFromXMLOperation extends Operation<Params> {
     const sml = await convertXmlToSml(
       xmlContent,
       {
+        xmlFileName:      path.basename(xmlFile),
         connectionName:   params["connection-name"],
         connectionType:   params["connection-type"],
         catalogName:      params["catalog-name"],
