@@ -10,8 +10,8 @@ Connect to a live AtScale instance or read local SML files to produce a portable
 flowchart LR
     ATS["AtScale Instance"] --> A["extract-model-from-atscale"] --> MODEL["model.yaml"]
     SML["SML Files"] --> B["extract-model-from-sml"] --> MODEL
-    click A href "#extract-model-from-atscale" _top
-    click B href "#extract-model-from-sml" _top
+    click A href "#extract-model-from-atscale"
+    click B href "#extract-model-from-sml"
 ```
 
 ### SML Creation and Manipulation
@@ -30,15 +30,15 @@ flowchart LR
     PLAN --> I["generate-shared-design"] --> SHARED["shared/dimensions, datasets, models"]
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
-    click A href "#extract-ddl-from-connection" _top
-    click B href "#generate-ddl-from-atscale" _top
-    click C href "#generate-sml-from-ddl" _top
-    click D href "#generate-sml-from-connection" _top
-    click E href "#execute-sql-on-connection" _top
-    click F href "#generate-metrics-from-model" _top
-    click G href "#generate-sml-from-xml" _top
-    click H href "#generate-shared-model-plan" _top
-    click I href "#generate-shared-design" _top
+    click A href "#extract-ddl-from-connection"
+    click B href "#generate-ddl-from-atscale"
+    click C href "#generate-sml-from-ddl"
+    click D href "#generate-sml-from-connection"
+    click E href "#execute-sql-on-connection"
+    click F href "#generate-metrics-from-model"
+    click G href "#generate-sml-from-xml"
+    click H href "#generate-shared-model-plan"
+    click I href "#generate-shared-design"
 ```
 
 ### Synthetic Data Generation
@@ -51,10 +51,10 @@ flowchart LR
     SHAPE --> B["generate-ddl-from-data-shape"] --> DDL["DDL (.sql)"]
     SHAPE --> C["generate-data-from-data-shape"] --> CSV["Synthetic CSVs"]
     SHAPE --> D["generate-data-from-data-shape-to-connection"] --> TARGET[("Target Database")]
-    click A href "#extract-data-shape-from-connection" _top
-    click B href "#generate-ddl-from-data-shape" _top
-    click C href "#generate-data-from-data-shape" _top
-    click D href "#generate-data-from-data-shape-to-connection" _top
+    click A href "#extract-data-shape-from-connection"
+    click B href "#generate-ddl-from-data-shape"
+    click C href "#generate-data-from-data-shape"
+    click D href "#generate-data-from-data-shape-to-connection"
 ```
 
 ### Visualization and Namespace Processing
@@ -69,10 +69,10 @@ flowchart LR
     NS --> D["generate-powerbi-from-namespace"] --> PBI["output/powerbi/"]
     CONN["connections.yaml"] --> B & C & D
     ALIASES["aliases.yaml (opt.)"] -.-> B & C & D
-    click A href "#generate-namespace-from-model" _top
-    click B href "#generate-tableau-from-namespace" _top
-    click C href "#generate-excel-from-namespace" _top
-    click D href "#generate-powerbi-from-namespace" _top
+    click A href "#generate-namespace-from-model"
+    click B href "#generate-tableau-from-namespace"
+    click C href "#generate-excel-from-namespace"
+    click D href "#generate-powerbi-from-namespace"
 ```
 
 ### Testing / Query Processing
@@ -95,14 +95,14 @@ flowchart TD
     F --> SUMMARY["summary.txt"]
     F --> COMPARISON["comparison.csv"]
     F --> OUTLIERS["outliers.csv"]
-    click G href "#generate-queries-from-sml" _top
-    click H href "#generate-queries-from-model" _top
-    click A href "#extract-query-stats-from-atscale" _top
-    click B href "#extract-queries-from-atscale" _top
-    click C href "#execute-atscale-query-harness" _top
-    click D href "#execute-query-on-connection" _top
-    click E href "#generate-enhanced-query-results" _top
-    click F href "#execute-run-analysis" _top
+    click G href "#generate-queries-from-sml"
+    click H href "#generate-queries-from-model"
+    click A href "#extract-query-stats-from-atscale"
+    click B href "#extract-queries-from-atscale"
+    click C href "#execute-atscale-query-harness"
+    click D href "#execute-query-on-connection"
+    click E href "#generate-enhanced-query-results"
+    click F href "#execute-run-analysis"
 ```
 
 ### AtScale Config
@@ -120,15 +120,15 @@ flowchart LR
     ATS --> F["atscale-list-repos"] --> INFO
     ATS --> G["atscale-list-deployments"] --> INFO
     ATS --> H["atscale-list-model-errors"] --> INFO
-    click A href "#generate-atscale-install-yaml" _top
-    click B href "#atscale-create-data-source" _top
-    click C href "#atscale-create-repo" _top
-    click D href "#atscale-deploy-catalog" _top
-    click E href "#atscale-list-data-sources" _top
-    click F href "#atscale-list-repos" _top
-    click G href "#atscale-list-deployments" _top
-    click H href "#atscale-list-model-errors" _top
-    click K href "#deploy-atscale-microk8s" _top
+    click A href "#generate-atscale-install-yaml"
+    click B href "#atscale-create-data-source"
+    click C href "#atscale-create-repo"
+    click D href "#atscale-deploy-catalog"
+    click E href "#atscale-list-data-sources"
+    click F href "#atscale-list-repos"
+    click G href "#atscale-list-deployments"
+    click H href "#atscale-list-model-errors"
+    click K href "#deploy-atscale-microk8s"
 ```
 
 ### Web Services
@@ -139,7 +139,7 @@ Start an HTTP server that exposes every operation as both a GraphQL mutation and
 flowchart LR
     OPS["All CLI Operations"] --> A["execute-web-services"] --> GQL["GraphQL /graphql"]
     A --> REST["REST /rest"]
-    click A href "#execute-web-services" _top
+    click A href "#execute-web-services"
 ```
 
 ## Table of Contents
