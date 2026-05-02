@@ -76,7 +76,7 @@ export interface GeneratedData {
   /**
    * Referential-integrity report produced after all tables are generated.
    * Always present; every fact FK is verified to resolve to a dim leaf key.
-   * (review/05 §Referential Integrity)
+   * Referential integrity is verified after generation via assertFkClosure.
    */
   fkClosure:  FkClosureReport;
 }
@@ -111,7 +111,7 @@ export function generateData(
     facts.push(generateFactTable(fact, dimLeaves, fp, scale, rand));
   }
 
-  // ── Security: generated-key shape + FK closure (review/01 R-15, review/05) ──
+  // ── Security: generated-key shape (R-15) + FK closure ──────────────────────
   for (const t of dimensions) assertGeneratedKeyShape(t.tableName, t.columns, t.rows);
   for (const t of facts)      assertGeneratedKeyShape(t.tableName, t.columns, t.rows);
 

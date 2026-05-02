@@ -151,7 +151,7 @@ export async function extractFingerprint(
     conformedDimensions: conformedFps,
   };
 
-  // ── Step 7: Security hardening (review/04 §Hardened Fingerprint Contract) ───
+  // ── Step 7: Security hardening ──────────────────────────────────────────────
   log("Applying security hardening…");
   const hardened = hardenFingerprint(assembled);
   for (const w of smallTableWarnings(hardened)) log(`  ⚠ ${w}`);

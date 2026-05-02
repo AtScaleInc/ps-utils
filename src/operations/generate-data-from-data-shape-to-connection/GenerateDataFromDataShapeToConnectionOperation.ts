@@ -216,7 +216,7 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
       const totalRows = allTables.reduce((s, t) => s + t.rows.length, 0);
       const completedAt = new Date().toISOString();
 
-      // ── Security reports (review/03 §Layer 7, review/05 §Promotion Gate) ────
+      // ── Security reports ───────────────────────────────────────────────────
       const rowCounts: Record<string, number> = {};
       for (const t of allTables) rowCounts[t.tableName] = t.rows.length;
 

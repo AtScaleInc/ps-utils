@@ -15,7 +15,7 @@ import { validateFingerprint }    from "./security.js";
 /**
  * Read and parse a fingerprint YAML file produced by writeFingerprintFile.
  * Throws if the file does not exist, cannot be parsed, or fails any
- * fatal security validation (review/04 §Hardened Fingerprint Contract).
+ * fatal security validation (see docs/STATISTICS.md §Security & Compliance Controls).
  * Non-fatal warnings are surfaced on stderr so CI logs capture them.
  */
 export function readFingerprintFile(inputPath: string): SchemaFingerprint {

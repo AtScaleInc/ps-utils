@@ -1,14 +1,6 @@
 /**
  * Security & compliance controls for the statistical fingerprint pipeline.
  *
- * Centralizes every enforceable invariant derived from the review artifacts:
- *
- *   review/01_risk_register.md        — itemized risks (R-1 … R-25)
- *   review/02_synthetic_data_strategy — digital-twin fidelity requirements
- *   review/03_obfuscation_tactics.md  — seven-layer defense program
- *   review/04_statistics_revised.md   — hardened fingerprint contract
- *   review/05_cube_security_checklist — promotion-gate checklist
- *
  * Integration points (all additive — no existing API changed):
  *
  *   • extractor.ts              → hardenFingerprint(fp) after assembly
@@ -16,8 +8,7 @@
  *   • data-generator.ts         → assertFkClosure(data) post-generation
  *   • GenerateDataFromDataShape → writePipelineIsolationReport / writeRunManifest
  *
- * Controls NOT implemented here (require out-of-repo infrastructure — documented
- * in review/03 §Layer 1-5 with TODO hooks below):
+ * Controls NOT implemented here (require out-of-repo infrastructure):
  *
  *   • Differential-privacy noise on aggregate queries (requires ε-budget ledger)
  *   • Ed25519 fingerprint signing               (requires key-management service)
@@ -26,6 +17,7 @@
  *
  * These hooks raise clear "control not installed" diagnostics rather than
  * silently no-op, so a future implementer can discover them.
+ * See docs/STATISTICS.md §Security & Compliance Controls for the full list.
  */
 
 import crypto from "crypto";
@@ -42,7 +34,7 @@ import type {
   ConformedDimensionFingerprint,
 } from "./types.js";
 
-// ─── Constants from review/01_risk_register.md ────────────────────────────────
+// ─── Security constants ───────────────────────────────────────────────────────
 
 /** R-21: below this row count, unmasked aggregate stats risk re-identification. */
 export const MIN_ROWS_FOR_UNMASKED_FINGERPRINT = 5000;
@@ -56,7 +48,7 @@ export const DEFAULT_SENSITIVITY: SensitivityClass = "Confidential";
 /** Review §04: semantic version of this security profile, stamped into manifests. */
 export const SECURITY_PROFILE_VERSION = "1.0.0";
 
-// ─── Sensitivity classification (review/04 §Sensitivity Classifications) ──────
+// ─── Sensitivity classification ──────────────────────────────────────────────
 
 export type SensitivityClass = "Public" | "Internal" | "Confidential" | "Restricted";
 
@@ -76,7 +68,7 @@ const PUBLIC_PATTERNS = [
 ];
 
 /**
- * Classify a field by name using the rules in review/04.
+ * Classify a field by name.
  * Returns DEFAULT_SENSITIVITY ("Confidential") when no pattern matches —
  * i.e. the system defaults to *more* protection, never less.
  */
@@ -90,7 +82,7 @@ export function sensitivityFor(fieldName: string): SensitivityClass {
   return DEFAULT_SENSITIVITY;
 }
 
-// ─── Binning helpers (review/01 R-4, R-10, review/03 §Layer 4) ────────────────
+// ─── Binning helpers (R-4, R-10) ─────────────────────────────────────────────
 
 export type ColdMemberBucket   = "0-10%" | "10-30%" | "30-60%" | "60-100%";
 export type OverlapBucket      = "0-20%" | "20-50%" | "50-80%" | "80-100%";
@@ -109,14 +101,14 @@ export function bucketOverlap(fraction: number): OverlapBucket {
   return "80-100%";
 }
 
-// ─── Pearson r rounding (review/01 R-7) ───────────────────────────────────────
+// ─── Pearson r rounding (R-7) ────────────────────────────────────────────────
 
 /** Round to two decimal places — sufficient for copula reconstruction, blunts fingerprinting. */
 export function roundPearsonR(r: number): number {
   return Math.round(r * 100) / 100;
 }
 
-// ─── Near-functional threshold (review/01 R-11) ───────────────────────────────
+// ─── Near-functional threshold (R-11) ────────────────────────────────────────
 
 export const NEAR_FUNCTIONAL_THRESHOLD = 0.90;
 
@@ -125,7 +117,7 @@ export function isNearFunctional(score: number): boolean {
   return score >= NEAR_FUNCTIONAL_THRESHOLD;
 }
 
-// ─── Absolute-date rejector (review/01 R-9) ───────────────────────────────────
+// ─── Absolute-date rejector (R-9) ────────────────────────────────────────────
 
 /**
  * ISO-8601-like date pattern.  The fingerprint schema does not currently carry
@@ -133,7 +125,7 @@ export function isNearFunctional(score: number): boolean {
  * min/max as ISO dates) would leak event timelines directly.  This rejector
  * recursively scans any string value in the fingerprint and throws if one looks
  * like a date — forcing implementers to quantize into year/month/weekday tiles
- * before adding new temporal fields (see review/04 §Temporal Dimensions).
+ * before adding new temporal fields (quantize into year/month/weekday tiles instead).
  */
 const ABSOLUTE_DATE_RE = /\b(19|20)\d{2}-\d{2}-\d{2}([T ]\d{2}:\d{2})?/;
 
@@ -146,7 +138,7 @@ export function containsAbsoluteDate(value: unknown): boolean {
   return false;
 }
 
-// ─── Small-table gate (review/01 R-21) ────────────────────────────────────────
+// ─── Small-table gate (R-21) ─────────────────────────────────────────────────
 
 /**
  * A dimension or fact with fewer than MIN_ROWS_FOR_UNMASKED_FINGERPRINT rows
@@ -159,7 +151,7 @@ export function smallTableWarnings(fp: SchemaFingerprint): string[] {
     if (dim.rowCount < MIN_ROWS_FOR_UNMASKED_FINGERPRINT) {
       warnings.push(
         `dimension ${dim.id} has ${dim.rowCount} rows (< ${MIN_ROWS_FOR_UNMASKED_FINGERPRINT}); ` +
-        `consider DP noise per review/03 §Layer 4 before external distribution`,
+        `consider adding differential-privacy noise before external distribution`,
       );
     }
   }
@@ -167,14 +159,14 @@ export function smallTableWarnings(fp: SchemaFingerprint): string[] {
     if (fact.rowCount < MIN_ROWS_FOR_UNMASKED_FINGERPRINT) {
       warnings.push(
         `fact ${fact.id} has ${fact.rowCount} rows (< ${MIN_ROWS_FOR_UNMASKED_FINGERPRINT}); ` +
-        `consider DP noise per review/03 §Layer 4 before external distribution`,
+        `consider adding differential-privacy noise before external distribution`,
       );
     }
   }
   return warnings;
 }
 
-// ─── Generated-key shape invariant (adapted from review/01 R-15) ──────────────
+// ─── Generated-key shape invariant (R-15) ────────────────────────────────────
 
 /**
  * The upstream generator uses dense positive integer keys (1..N) allocated
@@ -207,14 +199,14 @@ export function assertGeneratedKeyShape(
           `[security] generated-key invariant violated in ${tableName} ` +
           `row ${r} column "${columns[i]}": got ${JSON.stringify(v)} ` +
           `(expected a positive integer allocated in-process). ` +
-          `See review/01_risk_register.md R-15.`,
+          `See docs/STATISTICS.md §Security & Compliance Controls (R-15).`,
         );
       }
     }
   }
 }
 
-// ─── FK closure assertion (review/05 §Referential Integrity) ──────────────────
+// ─── FK closure assertion ────────────────────────────────────────────────────
 
 export interface FkClosureReport {
   /** Checks where every fact FK value was resolvable to a dimension leaf key. */
@@ -263,7 +255,7 @@ export function assertFkClosure(
     ).join("\n");
     throw new Error(
       `[security] FK closure assertion failed — synthetic data violates ` +
-      `referential integrity (review/05 §Referential Integrity):\n${detail}`,
+      `referential integrity:\n${detail}`,
     );
   }
 
@@ -299,7 +291,7 @@ export function validateFingerprint(fp: SchemaFingerprint): ValidationResult {
   if (containsAbsoluteDate(dataPortions)) {
     errors.push(
       "absolute date string detected in fingerprint data (R-9 violation); " +
-      "temporal fields must be quantized per review/04 §Temporal Dimensions",
+      "temporal fields must be quantized (year/month/weekday tiles) — no absolute dates in fingerprint data",
     );
   }
 
@@ -312,7 +304,7 @@ export function validateFingerprint(fp: SchemaFingerprint): ValidationResult {
       if (Math.abs(c.pearsonR - roundPearsonR(c.pearsonR)) > 1e-9) {
         warnings.push(
           `fact ${fact.id} measure correlation (${c.measureId1}, ${c.measureId2}) ` +
-          `has unrounded pearsonR ${c.pearsonR}; review/01 R-7 recommends 2-dp rounding`,
+          `has unrounded pearsonR ${c.pearsonR}; R-7 recommends 2-dp rounding`,
         );
         break; // one warning per fact is enough
       }
@@ -327,7 +319,7 @@ export function validateFingerprint(fp: SchemaFingerprint): ValidationResult {
         if (f !== undefined && !(lvl as LevelFingerprint & { coldMemberBucket?: string }).coldMemberBucket) {
           warnings.push(
             `dim ${dim.id} level ${lvl.id} has raw coldMemberFraction but no bucketed form; ` +
-            `review/01 R-4 recommends quartile binning`,
+            `R-4 recommends quartile binning`,
           );
           break;
         }
@@ -338,7 +330,7 @@ export function validateFingerprint(fp: SchemaFingerprint): ValidationResult {
   return { warnings, errors };
 }
 
-// ─── Hardening pass (review/04 §Hardened Fingerprint Contract) ────────────────
+// ─── Hardening pass ───────────────────────────────────────────────────────────
 
 export interface HardenOptions {
   /** When true, replace raw fractions with bucketed values.  Default: true. */
@@ -439,10 +431,10 @@ export function hardenFingerprint(
     appliedAt:       new Date().toISOString(),
     appliedControls: Object.entries(opts).filter(([, v]) => v).map(([k]) => k),
     deferredControls: [
-      "differential_privacy_noise",   // review/03 §Layer 4
-      "ed25519_signing",              // review/01 R-25
-      "worm_audit_log",               // review/03 §Layer 6
-      "dynamic_rbac_masking",         // review/03 §Layer 3
+      "differential_privacy_noise",
+      "ed25519_signing",
+      "worm_audit_log",
+      "dynamic_rbac_masking",
     ],
   };
 
@@ -456,7 +448,7 @@ export interface SecurityStamp {
   deferredControls:  string[];
 }
 
-// ─── Pipeline isolation report (review/03 §Layer 7) ───────────────────────────
+// ─── Pipeline isolation report ───────────────────────────────────────────────
 
 export interface PipelineIsolationReport {
   operation:       string;
@@ -497,12 +489,12 @@ export function writePipelineIsolationReport(
   return out;
 }
 
-// ─── Run manifest (review/03 §Layer 6 simplified) ─────────────────────────────
+// ─── Run manifest ────────────────────────────────────────────────────────────
 
 /**
- * Simplified audit record.  Full WORM storage requires object-lock
- * infrastructure outside this repo's scope; this record is a forensic anchor
- * that a pipeline orchestrator can ingest into a real append-only log.
+ * Simplified audit record.  Full WORM storage requires object-lock infrastructure;
+ * this record is a forensic anchor that a pipeline orchestrator can ingest into a
+ * real append-only log.
  */
 export interface RunManifest {
   operation:       string;
@@ -526,7 +518,7 @@ export function writeRunManifest(
   return out;
 }
 
-// ─── Integrity report (review/05 §Promotion Gate) ─────────────────────────────
+// ─── Integrity report ────────────────────────────────────────────────────────
 
 export interface IntegrityReport {
   checkedAt:          string;
@@ -560,19 +552,19 @@ export const deferredControls = {
   applyDifferentialPrivacy(_fp: SchemaFingerprint, _epsilon: number): never {
     throw new Error(
       "[security] differential-privacy noise is not installed. " +
-      "See review/03_obfuscation_tactics.md §Layer 4 for the ε-budget ledger spec.",
+      "An ε-budget ledger and SQL-noise injection layer are required before enabling this control.",
     );
   },
   signFingerprintEd25519(_fp: SchemaFingerprint, _keyId: string): never {
     throw new Error(
       "[security] Ed25519 signing is not installed. " +
-      "See review/01_risk_register.md R-25 for the key-management requirement.",
+      "A key-management service and rotation policy are required before enabling this control.",
     );
   },
   appendWormAuditRecord(_record: RunManifest): never {
     throw new Error(
       "[security] append-only WORM audit log is not installed. " +
-      "See review/03_obfuscation_tactics.md §Layer 6 for storage requirements.",
+      "Object-lock storage integration is required before enabling this control.",
     );
   },
 };

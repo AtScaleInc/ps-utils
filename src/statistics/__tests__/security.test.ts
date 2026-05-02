@@ -16,10 +16,8 @@ import {
 import type { SchemaFingerprint } from "../types.js";
 
 /**
- * Regression coverage for the review-derived security controls.
- * Each block maps to a specific finding in review/01_risk_register.md
- * or control in review/03_obfuscation_tactics.md so that future edits
- * have a clear anchor back to the source requirement.
+ * Regression coverage for the security controls in security.ts.
+ * See docs/STATISTICS.md §Security & Compliance Controls for descriptions.
  */
 
 function sampleFingerprint(): SchemaFingerprint {
@@ -68,7 +66,7 @@ function sampleFingerprint(): SchemaFingerprint {
   };
 }
 
-describe("security / binning (review/01 R-4, R-10)", () => {
+describe("security / binning (R-4, R-10)", () => {
   it("buckets cold-member fractions into quartiles", () => {
     expect(bucketCold(0.00)).toBe("0-10%");
     expect(bucketCold(0.09)).toBe("0-10%");
@@ -84,7 +82,7 @@ describe("security / binning (review/01 R-4, R-10)", () => {
   });
 });
 
-describe("security / Pearson r rounding (review/01 R-7)", () => {
+describe("security / Pearson r rounding (R-7)", () => {
   it("rounds to two decimal places", () => {
     expect(roundPearsonR(0.83472)).toBe(0.83);
     expect(roundPearsonR(-0.9876)).toBe(-0.99);
@@ -92,7 +90,7 @@ describe("security / Pearson r rounding (review/01 R-7)", () => {
   });
 });
 
-describe("security / near-functional threshold (review/01 R-11)", () => {
+describe("security / near-functional threshold (R-11)", () => {
   it("flags scores ≥ 0.90 as near-functional", () => {
     expect(isNearFunctional(0.89)).toBe(false);
     expect(isNearFunctional(0.90)).toBe(true);
@@ -100,7 +98,7 @@ describe("security / near-functional threshold (review/01 R-11)", () => {
   });
 });
 
-describe("security / sensitivity classification (review/04)", () => {
+describe("security / sensitivity classification", () => {
   it("classifies known patterns", () => {
     expect(sensitivityFor("customer_ssn")).toBe("Restricted");
     expect(sensitivityFor("email_address")).toBe("Confidential");
@@ -111,7 +109,7 @@ describe("security / sensitivity classification (review/04)", () => {
   });
 });
 
-describe("security / absolute-date rejector (review/01 R-9)", () => {
+describe("security / absolute-date rejector (R-9)", () => {
   it("detects ISO-8601 dates recursively", () => {
     expect(containsAbsoluteDate("2024-03-27")).toBe(true);
     expect(containsAbsoluteDate({ nested: { when: "2024-03-27T12:00" } })).toBe(true);
@@ -121,7 +119,7 @@ describe("security / absolute-date rejector (review/01 R-9)", () => {
   });
 });
 
-describe("security / generated-key shape (review/01 R-15 adapted)", () => {
+describe("security / generated-key shape (R-15)", () => {
   it("accepts positive integers in *_key columns", () => {
     expect(() => assertGeneratedKeyShape(
       "dim_1", ["l1_key", "l1_label"], [[1, "lbl"], [2, "lbl"]],
@@ -138,7 +136,7 @@ describe("security / generated-key shape (review/01 R-15 adapted)", () => {
   });
 });
 
-describe("security / FK closure (review/05)", () => {
+describe("security / FK closure", () => {
   const dimLeafKeys = new Map<string, Set<number>>([
     ["dim_1", new Set([1, 2, 3])],
   ]);
@@ -160,7 +158,7 @@ describe("security / FK closure (review/05)", () => {
   });
 });
 
-describe("security / hardenFingerprint (review/04)", () => {
+describe("security / hardenFingerprint", () => {
   it("attaches bucket, sensitivity, and security stamp", () => {
     const hardened = hardenFingerprint(sampleFingerprint());
     const leaf     = hardened.dimensions[0]!.hierarchies[0]!.levels[1]! as any;
@@ -192,7 +190,7 @@ describe("security / validateFingerprint", () => {
 });
 
 describe("security / constants", () => {
-  it("exposes small-table threshold from review/01 R-21", () => {
+  it("exposes small-table threshold (R-21)", () => {
     expect(MIN_ROWS_FOR_UNMASKED_FINGERPRINT).toBe(5000);
   });
 });

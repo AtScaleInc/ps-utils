@@ -8,14 +8,11 @@ aggregate level, without divulging any actual data values.
 > **Security hardening:** every fingerprint produced by `extract-data-shape-from-connection`
 > and every dataset produced by `generate-data-from-data-shape[-to-connection]` is passed
 > through the controls centralized in [`src/statistics/security.ts`](src/statistics/security.ts).
-> The controls are derived from the review artifacts under [`review/`](review/) — notably the
-> risk register, obfuscation strategy, and cube promotion checklist — and are **strictly
-> additive**: existing fields and behavior are preserved, and additional metadata
-> (`coldMemberBucket`, `overlapBucket`, `sensitivity`, `isNearFunctional`, `security`)
-> is attached for downstream auditors. A `_reports/` directory alongside each output
+> The controls are **strictly additive**: existing fields and behavior are preserved, and
+> additional metadata (`coldMemberBucket`, `overlapBucket`, `sensitivity`, `isNearFunctional`,
+> `security`) is attached for downstream auditors. A `_reports/` directory alongside each output
 > carries three audit artifacts — `pipeline_isolation_report.json`,
-> `generation_manifest.json`, and `integrity_report.json` — that together satisfy
-> the promotion-gate checklist in [`../review/05_cube_security_checklist.md`](../review/05_cube_security_checklist.md).
+> `generation_manifest.json`, and `integrity_report.json`.
 > See [§Security & Compliance Controls](#security--compliance-controls) below for the full list.
 
 The algorithm is specific to semantic layers and OLAP models. It requires an SML
@@ -108,10 +105,9 @@ For every level in every hierarchy:
 
 | Statistic | Query | Purpose |
 |---|---|---|
-| `member_count` | `COUNT(DISTINCT key_col)` | Absolute cardinality; determines memory footprint |
-| `null_key_fraction` | `COUNT(NULL key) / COUNT(*)` | Data quality; affects join completeness |
-| `label_uniqueness` | `COUNT(DISTINCT label_col) / member_count` | Whether labels are reliable for display |
-| `has_orphan_keys` | Keys in fact absent from dimension | Referential integrity gap; affects aggregation completeness |
+| `memberCount` | `COUNT(DISTINCT key_col)` | Absolute cardinality; determines memory footprint |
+| `nullKeyFraction` | `COUNT(NULL key) / COUNT(*)` | Data quality; affects join completeness |
+| `labelUniqueness` | `COUNT(DISTINCT label_col) / COUNT(DISTINCT key_col)` | Whether labels are reliable for display; present only when a label column exists |
 
 ### Per-edge (rollup ratio) statistics
 
@@ -119,25 +115,26 @@ For every adjacent level pair `(parent_level, child_level)`:
 
 ```sql
 SELECT
-  COUNT(*)                          AS child_member_count,
-  COUNT(DISTINCT parent_key_col)    AS parent_member_count,
-  AVG(children_per_parent)          AS avg_rollup_ratio,
-  STDDEV(children_per_parent)       AS stddev_rollup_ratio,
-  MIN(children_per_parent)          AS min_children,
+  AVG(children_per_parent)    AS avg_ratio,
+  STDDEV(children_per_parent) AS stddev_ratio,
+  MIN(children_per_parent)    AS min_children,
+  MAX(children_per_parent)    AS max_children,
   PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY children_per_parent) AS p50,
-  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY children_per_parent) AS p95,
-  MAX(children_per_parent)          AS max_children
+  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY children_per_parent) AS p95
 FROM (
-  SELECT parent_key_col, COUNT(*) AS children_per_parent
+  SELECT parent_key_col, COUNT(DISTINCT child_key_col) AS children_per_parent
   FROM dim_table
+  WHERE parent_key_col IS NOT NULL
   GROUP BY parent_key_col
-)
+) rollup_counts
 ```
 
-The distribution shape of `children_per_parent` is critical. Classify as:
+The distribution shape of `children_per_parent` is classified (see
+[§Distribution Shape Classification](#distribution-shape-classification)) as one of:
 - **uniform** — all parents have similar child counts
 - **power_law** — a few parents dominate (most common in business data)
-- **bimodal** — two distinct population clusters
+- **log_normal** — moderate to high variance with positive skew
+- **normal** — roughly symmetric, moderate spread
 
 An average rollup ratio alone tells you almost nothing about query cost.
 
@@ -154,11 +151,13 @@ fraction of **all children** belonging to Q4 parents are stored in `rollupFromPa
 ```sql
 SELECT
   ntile_bucket,
-  AVG(children_per_parent) AS avg_children,
-  SUM(children_per_parent) AS child_total
+  AVG(children_per_parent)  AS avg_children,
+  SUM(children_per_parent)  AS child_total,
+  COUNT(*)                  AS parent_count
 FROM (
-  SELECT children_per_parent,
-         NTILE(4) OVER (ORDER BY children_per_parent) AS ntile_bucket
+  SELECT
+    children_per_parent,
+    NTILE(4) OVER (ORDER BY children_per_parent) AS ntile_bucket
   FROM (
     SELECT parent_key, COUNT(DISTINCT child_key) AS children_per_parent
     FROM dim_table WHERE parent_key IS NOT NULL GROUP BY parent_key
@@ -171,25 +170,25 @@ GROUP BY ntile_bucket ORDER BY ntile_bucket
 head": if 80% of children belong to the top-quartile parents, synthetic generation must
 assign child counts from a heavy-tailed distribution rather than a uniform one.
 
-Tier statistics are omitted when there are fewer than 8 parents (not enough for
-meaningful quartiles).
+Tier statistics are omitted when the query returns fewer than 4 buckets or when any
+bucket contains fewer than 2 parents — the minimum needed for meaningful quartiles.
 
 ### Cold member fraction
 
-The fraction of dimension members that appear in zero fact rows (dimension sparsity):
+The fraction of dimension leaf members that appear in zero fact rows is computed during
+Phase 3 (density profiling) when the fact table is available. The density query counts
+distinct FK values seen in the fact; that count is compared against the total leaf
+member count from the dimension:
 
-```sql
-SELECT
-  COUNT(CASE WHEN fact_rows = 0 THEN 1 END) * 1.0 / COUNT(*) AS cold_member_fraction
-FROM (
-  SELECT d.key_col, COUNT(f.fk_col) AS fact_rows
-  FROM dim_table d
-  LEFT JOIN fact_table f ON f.fk_col = d.leaf_key_col
-  GROUP BY d.key_col
-)
+```
+coverageFraction  = min(1, distinct_fk_values_in_fact / total_leaf_members)
+coldMemberFraction = max(0, 1 - coverageFraction)
 ```
 
-This affects aggregation completeness queries and pre-aggregated rollup table coverage.
+When the density query ran on a sample, the `distinct_fk_values_in_fact` count is
+projected to the full table before the division (`sampled_count × scale_factor`).
+
+The result is stamped onto the leaf `LevelFingerprint` after density profiling completes.
 
 ---
 
@@ -198,25 +197,39 @@ This affects aggregation completeness queries and pre-aggregated rollup table co
 The leaf level is the join anchor — every fact query touches the dimension through its
 leaf. This statistic is most directly tied to query execution cost.
 
-For each `fact → dimension_leaf` join:
+### Null FK fraction
+
+A separate query captures the null FK fraction before any sampling is applied:
 
 ```sql
 SELECT
-  COUNT(*)                          AS total_fact_rows,
-  COUNT(DISTINCT fk_col)            AS distinct_leaf_members_with_facts,
-  AVG(rows_per_leaf)                AS avg_fact_density,
-  STDDEV(rows_per_leaf)             AS stddev_fact_density,
-  PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY rows_per_leaf) AS p50_density,
-  PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY rows_per_leaf) AS p90_density,
-  PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY rows_per_leaf) AS p99_density,
-  MAX(rows_per_leaf)                AS max_density,
   SUM(CASE WHEN fk_col IS NULL THEN 1 ELSE 0 END) * 1.0
-    / COUNT(*)                      AS null_fk_fraction
+    / NULLIF(COUNT(*), 0) AS null_fk_fraction
+FROM fact_table
+```
+
+### Density distribution
+
+Large fact tables are sampled via `TABLESAMPLE SYSTEM(pct)` (or a `LIMIT`-based fallback
+for databases that do not support `TABLESAMPLE`). The `sampled` flag and the
+`sampleFraction` are stored in the fingerprint so downstream tools know when the density
+statistics are estimates rather than exact counts.
+
+```sql
+SELECT
+  COUNT(*)                    AS group_count,     -- distinct leaf members with facts
+  AVG(rows_per_leaf)          AS avg_density,
+  STDDEV(rows_per_leaf)       AS stddev_density,
+  MAX(rows_per_leaf)          AS max_density,
+  PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY rows_per_leaf) AS p50,
+  PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY rows_per_leaf) AS p90,
+  PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY rows_per_leaf) AS p99
 FROM (
   SELECT fk_col, COUNT(*) AS rows_per_leaf
-  FROM fact_table
+  FROM [sample of] fact_table
+  WHERE fk_col IS NOT NULL
   GROUP BY fk_col
-)
+) density_counts
 ```
 
 The density distribution shape drives:
@@ -232,18 +245,57 @@ The density distribution shape drives:
 
 ---
 
-## Phase 4: General Column Profiling
+## Phase 4: Measure Column Profiling
 
-For columns not covered by hierarchy-specific passes (secondary attributes, degenerate
-dimensions, measures), apply standard statistical profiling.
+For each numeric measure in the fact table, apply statistical profiling on a sampled
+slice of the fact table (default: 10,000 rows; configurable via `targetColumnRows`).
 
-### Numeric columns (measures, IDs)
+### Null fraction and scalar statistics
 
-| Statistic | Purpose |
+```sql
+SELECT
+  MIN(expr)    AS v_min,
+  MAX(expr)    AS v_max,
+  AVG(expr)    AS v_mean,
+  STDDEV(expr) AS v_stddev
+FROM [sample] WHERE expr IS NOT NULL
+
+-- Null fraction (separate query):
+SELECT SUM(CASE WHEN expr IS NULL THEN 1 ELSE 0 END) * 1.0
+         / NULLIF(COUNT(*), 0) AS null_frac
+FROM [sample]
+```
+
+### Percentile distribution
+
+Six percentile points are captured using `PERCENTILE_CONT … WITHIN GROUP (ORDER BY …)`
+(SQL:2003; supported by Snowflake, PostgreSQL ≥ 9.4, Redshift, DuckDB). When this
+syntax fails, an `NTILE(100)`-based window function fallback is attempted automatically.
+
+| Percentile | Purpose |
 |---|---|
-| `MIN`, `MAX`, `MEAN`, `STDDEV` | Scalar bounds and spread |
-| Percentiles: P5, P25, P50, P75, P95, P99 | Distribution shape without storing values |
-| Shape hint | log-normal, normal, uniform, power-law (from skewness/kurtosis) |
+| P5, P25, P50, P75, P95, P99 | Distribution shape without storing values |
+
+### Distribution shape classification
+
+Given the mean, stddev, P50, and P95, the shape is classified as:
+
+| Condition | Shape |
+|---|---|
+| `P95/P50 > 8` and `(mean − P50)/P50 > 1.0` | `power_law` |
+| `stddev/mean < 0.25` and `|(mean − P50)/P50| < 0.10` | `uniform` |
+| `(mean − P50)/P50 > 0.25` or `stddev/mean > 0.6` | `log_normal` |
+| default | `normal` |
+
+### Additivity classification
+
+Additivity is determined by a two-step heuristic — no cross-hierarchy SQL verification
+is performed:
+
+1. If the measure's only declared aggregation is `AVG` → `non_additive`
+2. If the measure name contains any of `balance`, `stock`, `inventory`, `headcount`,
+   `open_`, `_open`, `on_hand` → `semi_additive`
+3. Otherwise → `additive`
 
 ### Measure-to-measure Pearson correlation
 
@@ -259,43 +311,6 @@ indicate strong linear dependence; values near 0 indicate independence.
 
 Pairs where either measure has zero variance (constant column) are skipped.
 Capped at the first 10 numeric measures per fact (45 pairs maximum).
-
-### Categorical columns (low-cardinality strings/integers)
-
-| Statistic | Purpose |
-|---|---|
-| Distinct count `K` | Number of categories |
-| Normalized frequency vector | Sorted probability vector e.g. `[0.42, 0.31, 0.18, 0.09]` — shape without labels |
-| Entropy score | How skewed vs. uniform the distribution is |
-
-No actual category values are stored.
-
-### String attribute columns
-
-| Statistic | Purpose |
-|---|---|
-| Length distribution: min, max, mean, stddev | Drives synthetic string generator |
-| Character class composition | Fraction alpha / digit / special |
-| Structural pattern | UUID, email-like, phone-like, code-like — described structurally, not by example |
-
-### Date/timestamp columns
-
-| Statistic | Purpose |
-|---|---|
-| Span in days (relative, not absolute) | Absolute dates are identifying |
-| Distribution shape | uniform, right-skewed, seasonal-periodic |
-| Granularity | day / hour / second |
-
-### Semi-additive measures
-
-Measures like inventory balance or headcount that cannot be simply summed across time
-require their distribution to be captured at **multiple hierarchy levels**, not just
-globally. Verify additivity:
-
-```sql
--- Does SUM(leaf) ≈ SUM(parent) for each level transition?
--- Non-additive divergence here flags semi-additive behavior.
-```
 
 ---
 
@@ -316,6 +331,14 @@ dim_date used by: fact_orders, fact_inventory, fact_budget
 This determines whether drill-across queries will produce dense or sparse results and
 whether the semantic layer can optimize them with early filtering.
 
+The overlap formula:
+
+```
+overlapFraction(F1, F2) = |{FK values in F1} ∩ {FK values in F2}| / leafMemberCount
+```
+
+Implemented as a self-join of two `SELECT DISTINCT fk_val FROM fact_i` subqueries.
+
 ### FK pairwise association
 
 When multiple FK columns appear on the same fact table, their values are often
@@ -332,6 +355,7 @@ associationScore = 1 − distinctPairs / min(sampleSize, card₁ × card₂)
 
 - `distinctPairs` — `COUNT(*)` of `(DISTINCT fk1, fk2)` observed in the fact sample
 - `card₁`, `card₂` — `COUNT(DISTINCT fk1)`, `COUNT(DISTINCT fk2)` in the same sample
+- `sampleSize` — total row count of the sample
 
 A score near 0 means the FK values are independently distributed.  A score near 1
 means knowing `fk1` almost fully determines `fk2` (near one-to-one mapping).  No
@@ -343,9 +367,9 @@ Capped at the first 6 FK joins per fact (15 pairs maximum).
 
 ## Phase 6: Obfuscation Rules
 
-1. **Table and column names** → synthetic identifiers (`T1`, `T2`; `C1`, `C2`) or
-   semantic role labels (`fact_orders`, `dim_product`, `pk`, `fk_to_dim_product`).
-   The mapping is discarded. Names may optionally be hashed.
+1. **Table and column names** → opaque sequential IDs (`D1`, `D2`; `F1`, `F2`; level
+   keys within a hierarchy become `D1.H1.L1`, `D1.H1.L2`, etc.).
+   The mapping from original names to IDs is discarded after extraction.
 
 2. **Categorical frequency vectors** store only relative frequencies, never actual
    values. `["Male", "Female"]` → `[0.51, 0.49]`. Synthetic labels are invented at
@@ -363,67 +387,86 @@ Capped at the first 6 FK joins per fact (15 pairs maximum).
 
 6. **No sample rows** are ever stored. The entire file is derived from aggregate SQL.
 
-7. **Small tables** (fewer than ~1000 rows) require special treatment — absolute counts
-   in frequency vectors become re-identifying. Apply noise addition or coarser bucketing.
+7. **Small tables** (fewer than 5,000 rows) require special treatment — absolute counts
+   in frequency vectors become re-identifying. A warning is emitted; differential-privacy
+   noise addition is a deferred control (see §Security & Compliance Controls).
 
 ---
 
 ## The Fingerprint File Format
 
-The file is organized around the model, not the database tables:
+The file is organized around the model, not the database tables. All field names use
+camelCase (the YAML is serialized directly from the TypeScript object graph). The IDs
+use a dot-hierarchical convention: `D1.H1.L3` means dimension 1, hierarchy 1, level 3.
 
 ```yaml
-fingerprint_version: "2.0"
-model_role: "semantic_layer"
+version: '2.0'
+capturedAt: '2024-01-15T10:30:00.000Z'
+sampling:
+  targetFactRows: 100000
+  targetColumnRows: 10000
+  confidenceLevel: 0.95
+  marginOfError: 0.05
 
 dimensions:
   - id: D1
-    row_count: 42000
+    rowCount: 42000
     hierarchies:
-      - id: H1
+      - id: D1.H1
         levels:
-          - id: L0
+          - id: D1.H1.L1
             role: root
-            member_count: 5
-            null_key_fraction: 0.0
-          - id: L1
-            member_count: 52
-            null_key_fraction: 0.0
-            rollup_from_parent:
-              avg_ratio: 10.4
-              stddev_ratio: 3.1
+            memberCount: 5
+            nullKeyFraction: 0
+            sensitivity: Confidential
+          - id: D1.H1.L2
+            role: intermediate
+            memberCount: 52
+            nullKeyFraction: 0
+            sensitivity: Confidential
+            rollupFromParent:
+              avgRatio: 10.4
+              stddevRatio: 3.1
               shape: uniform
+              min: 8
               p50: 10
               p95: 17
-          - id: L2
-            member_count: 28000
-            null_key_fraction: 0.003
-            rollup_from_parent:
-              avg_ratio: 538.0
-              stddev_ratio: 612.0
+              max: 12
+          - id: D1.H1.L3
+            role: intermediate
+            memberCount: 28000
+            nullKeyFraction: 0.003
+            sensitivity: Confidential
+            rollupFromParent:
+              avgRatio: 538
+              stddevRatio: 612
               shape: power_law     # a few states have many cities
+              min: 1
               p50: 220
               p95: 1800
+              max: 12000
               tiers:               # quartile breakdown of parents by child count
-                q1_avg_children: 12
-                q2_avg_children: 85
-                q3_avg_children: 310
-                q4_avg_children: 1740
-                q4_child_fraction: 0.81  # 81% of cities belong to top-quartile states
-          - id: L3
+                q1AvgChildren: 12
+                q2AvgChildren: 85
+                q3AvgChildren: 310
+                q4AvgChildren: 1740
+                q4ChildFraction: 0.81  # 81% of cities belong to top-quartile states
+          - id: D1.H1.L4
             role: leaf
-            member_count: 42000
-            cold_member_fraction: 0.08   # 8% of customers have never ordered
-            null_key_fraction: 0.0
+            memberCount: 42000
+            nullKeyFraction: 0
+            coldMemberFraction: 0.08   # 8% of customers have never ordered
+            coldMemberBucket: 0-10%
+            sensitivity: Confidential
 
 facts:
   - id: F1
-    row_count: 3200000
+    rowCount: 3200000
     joins:
-      - to_dimension: D1
-        to_leaf: D1.H1.L3
-        null_fk_fraction: 0.001
-        coverage_fraction: 0.92   # 92% of leaf members appear in this fact
+      - toDimensionId: D1
+        toLeafLevelId: D1.H1.L4
+        nullFkFraction: 0.001
+        coverageFraction: 0.92   # 92% of leaf members appear in this fact
         density:
           avg: 76.2
           stddev: 149.4
@@ -432,27 +475,61 @@ facts:
           p90: 198
           p99: 980
           max: 14200
+          sampled: false
     measures:
-      - id: M1
+      - id: F1.M1
         aggregation: SUM
-        type: decimal
+        dataType: decimal
         additivity: additive
+        nullFraction: 0
+        sensitivity: Confidential
         distribution:
           shape: log_normal
-          percentiles: { p5: 8.2, p25: 42.1, p50: 142.5, p75: 390.0, p95: 1820.0 }
-    measure_correlations:          # pairwise Pearson r between numeric measures
-      - measure_id_1: F1.M1
-        measure_id_2: F1.M2
-        pearson_r: 0.84            # quantity and revenue are strongly correlated
-    fk_associations:               # normalized non-independence scores between FK pairs
-      - dimension_id_1: D1
-        dimension_id_2: D2
-        association_score: 0.31    # moderate correlation between customer and product FKs
+          min: 1.5
+          max: 50000
+          mean: 347
+          stddev: 912
+          percentiles:
+            p5: 8.2
+            p25: 42.1
+            p50: 142.5
+            p75: 390
+            p95: 1820
+            p99: 4200
+    measureCorrelations:          # pairwise Pearson r between numeric measures
+      - measureId1: F1.M1
+        measureId2: F1.M2
+        pearsonR: 0.84            # quantity and revenue are strongly correlated
+    fkAssociations:               # normalized non-independence scores between FK pairs
+      - dimensionId1: D1
+        dimensionId2: D2
+        associationScore: 0.31    # moderate correlation between customer and product FKs
+        isNearFunctional: false
 
-conformed_dimensions:
-  - dimension: D1
-    facts: [F1, F2]
-    overlap_fraction: 0.84
+conformedDimensions:
+  - dimensionId: D1
+    factIds:
+      - F1
+      - F2
+    pairwiseOverlap:
+      - factId1: F1
+        factId2: F2
+        overlapFraction: 0.84
+        overlapBucket: 80-100%
+
+security:
+  profileVersion: '1.0.0'
+  appliedAt: '2024-01-15T10:30:05.000Z'
+  appliedControls:
+    - applyBinning
+    - applyRounding
+    - applySensitivity
+    - applyNearFunctional
+  deferredControls:
+    - differential_privacy_noise
+    - ed25519_signing
+    - worm_audit_log
+    - dynamic_rbac_masking
 ```
 
 ---
@@ -536,14 +613,16 @@ produces identical output.  `randNormal` uses the Box-Muller transform.
 
 For each dimension, hierarchies are walked top-down:
 
-1. **Root level** — generate `memberCount` synthetic string keys.
+1. **Root level** — generate `memberCount` synthetic integer keys starting at 1.
 2. **Each rollup edge** — for every parent, sample a child count:
    - If `tiers` are present (Phase 2 §rollup tier buckets), the parent is assigned a
      tier via `idx % 4` round-robin, and its child count is drawn from that tier's
      average using the edge's distribution shape (`power_law`, `log_normal`, or
-     `normal`).  `power_law` uses an exponential draw; `log_normal` computes σ² from
-     the mu/sigma relationship; `normal` uses Box-Muller.
-   - Without tiers, the child count is drawn directly from the global distribution.
+     `normal`).  `power_law` uses an exponential draw (`−avg × ln(U)`); `log_normal`
+     computes σ² from the mean/stddev relationship; `normal` uses Box-Muller.  `uniform`
+     samples between `edge.min` and `edge.max`.
+   - Without tiers, the child count is drawn directly from the global distribution using
+     the same shape-based sampler.
    - All per-parent counts are scaled proportionally so the total leaf count matches the
      recorded `memberCount` exactly (`scaleToTarget`).
 3. **Secondary hierarchies** — assign ancestors by distributing leaf indices across the
@@ -552,14 +631,15 @@ For each dimension, hierarchies are walked top-down:
 
 ### 8.3 Fact table generation
 
-1. **Anchor leaves** — taken from the first FK join column; cold members (first
-   `coldFraction × leafCount` leaves) receive zero rows.
+1. **Anchor leaves** — taken from the first FK join column; the first
+   `coldFraction × leafCount` leaves (deterministic slice) are treated as cold members
+   and receive zero rows.
 2. **Density budget** — for each hot leaf, sample a row budget from the density
    distribution shape (`power_law`, `log_normal`, `uniform`).  Budgets are scaled to
    the target `totalRows` using `scaleToTarget`.
 3. **FK assignment** — for each row, the anchor FK is assigned by weighted sampling over
    hot-leaf budgets.  Non-anchor FK columns are filled by:
-   - **Association constraints** (Phase 3): for each FK pair with `associationScore >
+   - **Association constraints** (Phase 5): for each FK pair with `associationScore >
      0.05`, a `Map<dim1Key, number[]>` of allowed dim2 keys is precomputed; the subset
      size is `max(1, round((1 − score) × dim2Count))`.  The FK value is drawn from this
      allowed subset.
@@ -567,14 +647,18 @@ For each dimension, hierarchies are walked top-down:
      leaf keys.
 4. **Measure generation** — uses a **Gaussian copula** for correlated pairs
    (Phase 4 §pairwise Pearson r):
-   - One standard-normal draw per measure.
-   - For each correlated pair `(i, j)` with Pearson `r`: `z[j] = r·z[i] + √(1−r²)·z[j]`.
-   - Each `z` is mapped to `U[0,1]` via `normalCdf` (Abramowitz & Stegun approximation,
-     max error 7.5×10⁻⁸), then mapped to the target distribution via piecewise-linear
-     interpolation through the eight percentile control points
+   - One standard-normal draw `z[i]` per measure via Box-Muller.
+   - For each correlated pair `(i, j)` with `j > i` and Pearson `r`:
+     `z[j] = r·z[i] + √(1−r²)·z[j]`.  The `j > i` guard ensures each pair is
+     processed exactly once (from the lower-index measure as the driver).
+   - Each `z[i]` is mapped to `U[0,1]` via `normalCdf` (Abramowitz & Stegun
+     approximation, max error 7.5×10⁻⁸), then mapped to the target distribution via
+     piecewise-linear interpolation through the eight percentile control points
      (0%, 5%, 25%, 50%, 75%, 95%, 99%, 100%).
-   - Measures without correlations are sampled directly from their marginal distribution
-     via the same percentile interpolation.
+   - Measures without correlations are sampled the same way: a standard-normal draw
+     mapped through normalCdf and then through the percentile inverse CDF.
+   - For `uniform` and `normal` shapes without a full percentile set, the code falls
+     back to direct sampling from the shape parameters.
 
 ### 8.4 Output
 
@@ -644,9 +728,7 @@ The fingerprint algorithm is designed to produce a publishable artifact: the out
 files may be checked into source control, shared with partner teams, or used as the
 seed for external synthetic-data environments. To make that publication safe, every
 fingerprint passes through a hardening stage implemented in
-[`src/statistics/security.ts`](src/statistics/security.ts). The controls below map
-1:1 to findings in [`../review/01_risk_register.md`](../review/01_risk_register.md) and
-layers in [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md).
+[`src/statistics/security.ts`](src/statistics/security.ts).
 
 ### Controls enforced automatically
 
@@ -659,10 +741,10 @@ layers in [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tacti
 | R-11 | `fkAssociation` scores ≥ 0.90 flagged with `isNearFunctional: true` | `hardenFingerprint()` |
 | R-15 | Every generated `*_key` value must be a positive integer allocated in-process (no real-data key ever reaches the generator) | `assertGeneratedKeyShape()` — runs after every table is built |
 | R-21 | Small-table warning (< 5,000 rows) emitted for any dim or fact that would require DP noise before external distribution | `smallTableWarnings()` — surfaced through `onProgress` |
-| Phase 6 / review §04 | Sensitivity classification (`Public` / `Internal` / `Confidential` / `Restricted`) attached to every level and measure | `hardenFingerprint()` — via `sensitivityFor()` |
-| review/03 §Layer 7 | Pipeline-isolation report emitted alongside every output batch | `writePipelineIsolationReport()` |
-| review/03 §Layer 6 (simplified) | Run manifest (`fingerprint SHA-256`, seed, scale, row counts, output digest) | `writeRunManifest()` |
-| review/05 §Referential Integrity | Every fact-FK value verified to resolve to a dim leaf key | `assertFkClosure()` — throws on orphans |
+| —    | Sensitivity classification (`Public` / `Internal` / `Confidential` / `Restricted`) attached to every level and measure | `hardenFingerprint()` — via `sensitivityFor()` |
+| —    | Pipeline-isolation report emitted alongside every output batch | `writePipelineIsolationReport()` |
+| —    | Run manifest (`fingerprint SHA-256`, seed, scale, row counts, output digest) | `writeRunManifest()` |
+| —    | Every fact-FK value verified to resolve to a dim leaf key | `assertFkClosure()` — throws on orphans |
 
 Each generator output directory therefore contains a `_reports/` subdirectory with three JSON artifacts:
 
@@ -682,20 +764,19 @@ destination is a database rather than a filesystem location.
 
 ### Controls deliberately deferred
 
-The following controls from the review program require infrastructure not present in
-this repository today. They are exposed as explicit stubs on `deferredControls` in
-`security.ts` so a future implementer cannot miss them:
+The following controls require infrastructure not present in this repository today.
+They are exposed as explicit stubs on `deferredControls` in `security.ts` so a future
+implementer cannot miss them:
 
-| Control | Deferred because | Spec reference |
-|---|---|---|
-| ε-differential-privacy noise on aggregate queries | Requires an ε-budget ledger and a SQL-noise injection layer | [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md) §Layer 4 |
-| Ed25519 fingerprint signing | Requires a key-management service and rotation policy | [`../review/01_risk_register.md`](../review/01_risk_register.md) R-25 |
-| Append-only WORM audit log | Requires object-lock storage integration | [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md) §Layer 6 |
-| Dynamic RBAC / column masking | Runtime concern of the semantic layer, not the fingerprint | [`../review/03_obfuscation_tactics.md`](../review/03_obfuscation_tactics.md) §Layer 3 |
+| Control | Deferred because |
+|---|---|
+| ε-differential-privacy noise on aggregate queries | Requires an ε-budget ledger and a SQL-noise injection layer |
+| Ed25519 fingerprint signing | Requires a key-management service and rotation policy |
+| Append-only WORM audit log | Requires object-lock storage integration |
+| Dynamic RBAC / column masking | Runtime concern of the semantic layer, not the fingerprint |
 
-Each stub throws a descriptive error that names the review document section an
-implementer must read before wiring the control in, so the controls cannot silently
-no-op after a future refactor.
+Each stub throws a descriptive error so the controls cannot silently no-op after a
+future refactor.
 
 ### Validation contract
 
