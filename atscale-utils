@@ -40,6 +40,18 @@ install_completion() {
   esac
 }
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+needs_build() {
+  [ ! -f "$SCRIPT_DIR/dist/cli.js" ] && return 0
+  [ -n "$(find "$SCRIPT_DIR/src" "$SCRIPT_DIR/resources" "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/tsconfig.json" -newer "$SCRIPT_DIR/dist/cli.js" 2>/dev/null | head -1)" ] && return 0
+  return 1
+}
+
+if [ "${ATSCALE_SKIP_BUILD:-0}" != "1" ] && needs_build; then
+  npm run build
+fi
+
 if [ "$#" -ge 1 ] && [ "$1" = "--completion" ]; then
   if [ "$#" -ne 2 ]; then
     show_completion_usage
@@ -72,7 +84,5 @@ if [ "$#" -ge 1 ] && [ "$1" = "--print-completion" ]; then
   exit 0
 fi
 
-if [ "${ATSCALE_SKIP_BUILD:-0}" != "1" ]; then
-  npm run build
-fi
+
 node dist/cli.js "$@"
