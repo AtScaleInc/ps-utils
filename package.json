@@ -4,7 +4,7 @@
   "description": "CLI framework with operations and required parameters",
   "type": "module",
   "bin": {
-    "operation-cli": "dist/cli.js"
+    "operation-cli": "./atscale-util.sh"
   },
   "files": [
     "dist",
