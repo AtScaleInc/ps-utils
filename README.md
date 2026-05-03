@@ -2349,7 +2349,9 @@ An optional YAML file that stores SML generation parameters so you don't have to
 
 **Input vs. output:** `--sml-config-file` is the *input* path only. After generation, the **effective settings** (all values including defaults) are always written to `<output-dir>/sml.style.yaml` — a fixed location independent of the input path. If `--sml-config-file` points to the same file (e.g. you pass `--sml-config-file sml-output/sml.style.yaml`), it is simply overwritten.
 
-**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`resources/style/sml.style.yaml`](resources/style/sml.style.yaml). Copy it to your working directory as a starting point.
+**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`docs/sml.style.yaml`](docs/sml.style.yaml). Copy it to your working directory as a starting point.
+
+**Style guide:** [`docs/STYLE.md`](docs/STYLE.md) documents the naming conventions, casing rules, and generation settings that `sml.style.yaml` controls.
 
 ### All fields
 

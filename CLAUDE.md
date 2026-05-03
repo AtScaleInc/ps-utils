@@ -49,10 +49,10 @@ The generated output must follow the same documentation structure as README.md a
 Three files must always be updated together:
 
 1. `src/operations/sml-style-config.ts` — add the field to `SmlStyleConfig`, `MergedSmlStyle`, `SML_STYLE_DEFAULTS`, and `mergeSmlStyle()`
-2. `resources/style/sml.style.yaml` — add the parameter with its default value and an explanatory comment
+2. `docs/sml.style.yaml` — add the parameter with its default value and an explanatory comment
 3. `src/algorithm/report-generator.ts` → `buildStyleGuide()` — extend the generated STYLE.md to reflect the new parameter
 
-`resources/style/sml.style.yaml` is the canonical reference that users copy as a starting point; the generated STYLE.md must stay consistent with it.
+`docs/sml.style.yaml` is the canonical reference that users copy as a starting point; the generated STYLE.md must stay consistent with it.
 
 ## Closing a pg Client connected to AtScale's SQL port
 
