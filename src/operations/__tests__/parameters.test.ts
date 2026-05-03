@@ -52,7 +52,7 @@ describe("ParameterSet", () => {
       "must be a number"
     );
     expect(() => set.parse({ name: "example", enabled: "maybe" })).toThrow(
-      "must be true or false"
+      "must be a boolean"
     );
   });
 });
