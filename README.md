@@ -180,6 +180,14 @@ flowchart LR
 
 ## Setup
 
+**Prerequisites:**
+
+- Node.js 18+
+- **macOS only:** Xcode Command Line Tools (required for native module compilation):
+  ```bash
+  xcode-select --install
+  ```
+
 **Install globally from npm:**
 ```bash
 sudo npm install -g @atscale/ps-utils
