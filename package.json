@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@types/node": "^25.3.0",
-    "axios": "^1.13.5",
+    "axios": "^1.16.0",
     "busboy": "^1.6.0",
     "ejs": "^3.1.10",
     "exceljs": "^4.4.0",
