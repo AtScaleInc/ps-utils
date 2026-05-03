@@ -190,7 +190,7 @@ A single `CONNECTIONS_FILE` secret can serve all operations because they all rea
 `action.yml` at the root of this repository is a GitHub [composite action](https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action). It handles Node.js setup, dependency installation, build, and credential writing automatically.
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-model-from-atscale
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -218,7 +218,7 @@ Connects to a live AtScale instance via MDX and extracts a model's metrics and a
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-model-from-atscale
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -242,7 +242,7 @@ Reads a local SML directory and outputs a `model.yaml` in the same format as `ex
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-model-from-sml
     sml-dir: sml-output
@@ -267,7 +267,7 @@ Reads a SQL file, splits it into individual statements (handling string literals
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-sql-on-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -279,7 +279,7 @@ Reads a SQL file, splits it into individual statements (handling string literals
 **Dry-run mode** (preview statements without executing):
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-sql-on-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -303,7 +303,7 @@ Connects to a live database, reads schema metadata for each table in the target 
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-ddl-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -315,7 +315,7 @@ Connects to a live database, reads schema metadata for each table in the target 
 With table filtering:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-ddl-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -342,7 +342,7 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-sml-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -378,7 +378,7 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-sml-from-ddl
     ddl-file: schema/sales.sql
@@ -409,7 +409,7 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-sml-from-xml
     xml-file: MyModel.xml
@@ -446,7 +446,7 @@ Analyses one or more SML output directories for sharing opportunities and genera
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-shared-model-plan
     input-dirs: project-a,project-b   # comma-separated SML directories
@@ -475,7 +475,7 @@ Applies a `generate-shared-model-plan` recommendation YAML to create shared SML 
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-shared-design
     plan-file: shared-plan/option-11-shared-dimension-library.yml
@@ -523,7 +523,7 @@ Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql`
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-metrics-from-model
     model-file: model.yaml
@@ -536,7 +536,7 @@ Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql`
 **Using a style config file** (persist settings between runs):
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-metrics-from-model
     model-file: model.yaml
@@ -547,7 +547,7 @@ Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql`
 **YAML output** (for downstream scripting):
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-metrics-from-model
     model-file: model.yaml
@@ -570,7 +570,7 @@ Generates DDL (`CREATE TABLE` statements) by reading table and column metadata d
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-ddl-from-atscale
     connection-file:          ${{ secrets.CONNECTIONS_FILE }}
@@ -584,7 +584,7 @@ Generates DDL (`CREATE TABLE` statements) by reading table and column metadata d
 With a table filter:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-ddl-from-atscale
     connection-file:          ${{ secrets.CONNECTIONS_FILE }}
@@ -646,14 +646,14 @@ All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `F1`, `
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-sml-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
     connection-name: snow_demo
     output-dir: sml-output
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-data-shape-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -665,7 +665,7 @@ All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `F1`, `
 With sampling tuning and MySQL (`--no-tablesample`):
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-data-shape-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -705,7 +705,7 @@ Dimension tables are emitted first so foreign key references are always valid. T
 
 ```yaml
 # Typical pipeline: extract shape → generate DDL
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-data-shape-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -713,7 +713,7 @@ Dimension tables are emitted first so foreign key references are always valid. T
     sml-path: sml-output
     output-file: data-shape.yaml
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-ddl-from-data-shape
     input-file: data-shape.yaml
@@ -723,7 +723,7 @@ Dimension tables are emitted first so foreign key references are always valid. T
 With Snowflake dialect:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-ddl-from-data-shape
     input-file: data-shape.yaml
@@ -752,7 +752,7 @@ Reads a `data-shape.yaml` fingerprint and generates statistically equivalent syn
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-data-from-data-shape
     input-file: data-shape.yaml
@@ -762,7 +762,7 @@ Reads a `data-shape.yaml` fingerprint and generates statistically equivalent syn
 With scale factor and seed:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-data-from-data-shape
     input-file: data-shape.yaml
@@ -796,7 +796,7 @@ End-to-end pipeline: reads a `data-shape.yaml` fingerprint, generates synthetic 
 Minimal — insert into existing tables:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-data-from-data-shape-to-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -807,7 +807,7 @@ Minimal — insert into existing tables:
 Full pipeline — extract shape, generate DDL, populate:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-data-shape-from-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -815,7 +815,7 @@ Full pipeline — extract shape, generate DDL, populate:
     sml-path: sml-output
     output-file: data-shape.yaml
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-data-from-data-shape-to-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -863,7 +863,7 @@ Reads a `model.yaml` file and auto-generates a namespace YAML using the analysis
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-namespace-from-model
     model-file: model.yaml
@@ -888,7 +888,7 @@ Generates a Tableau `.twb` workbook from a namespace YAML and a model YAML.
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-tableau-from-namespace
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -930,7 +930,7 @@ Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Ea
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-excel-from-namespace
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -967,7 +967,7 @@ The output is written to `output/<target-folder>/` and can be opened directly in
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-powerbi-from-namespace
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1000,7 +1000,7 @@ Reads an SML directory and generates XMLA (MDX) and SQL query JSON files, both c
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-queries-from-sml
     sml-dir: sml
@@ -1027,7 +1027,7 @@ Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-mo
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-queries-from-model
     model-file: model.yaml
@@ -1056,7 +1056,7 @@ Paginates through the AtScale query history REST API for a given time window and
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-query-stats-from-atscale
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1101,7 +1101,7 @@ Connects to the AtScale internal Postgres backend and extracts deduplicated quer
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: extract-queries-from-atscale
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1142,7 +1142,7 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 ```yaml
 # Direct mode — replay a query JSON file
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-atscale-query-harness
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1155,7 +1155,7 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 ```yaml
 # Task-file mode — run all executor tasks
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-atscale-query-harness
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1206,7 +1206,7 @@ Output format depends on protocol: **SQL** → CSV with column headers and data 
 
 ```yaml
 # Execute one query by exact name
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-query-on-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1217,7 +1217,7 @@ Output format depends on protocol: **SQL** → CSV with column headers and data 
     output-file: output/revenue_by_region.xml
 
 # Execute all queries whose names start with "sales_" — writes one file per query
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-query-on-connection
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1250,7 +1250,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-enhanced-query-results
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1298,7 +1298,7 @@ When the same join-key value appears multiple times in a file, rows are sorted b
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-run-analysis
     file-a: run_results/2026-04-21-ABC123_model.csv
@@ -1338,7 +1338,7 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-atscale-install-yaml
     hostname: ${{ inputs.hostname }}
@@ -1349,7 +1349,7 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 
 ```yaml
 # With an existing certificate and license key stored as secrets
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: generate-atscale-install-yaml
     hostname: ${{ inputs.hostname }}
@@ -1387,7 +1387,7 @@ Lists the data warehouses (data sources) registered in an AtScale instance and w
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-list-data-sources
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1441,7 +1441,7 @@ Registers a data warehouse (data source) in an AtScale instance using the SQL co
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-create-data-source
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1453,7 +1453,7 @@ Registers a data warehouse (data source) in an AtScale instance using the SQL co
 With all options:
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-create-data-source
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1490,7 +1490,7 @@ Lists the git repositories registered in an AtScale instance.
 **Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-list-repos
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1516,7 +1516,7 @@ Registers a git repository in an AtScale instance.
 **Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-create-repo
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1550,7 +1550,7 @@ Lists the deployed catalogs (semantic models) in an AtScale instance.
 **Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-list-deployments
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1578,7 +1578,7 @@ Reads local SML files, uploads them to an AtScale git-backed repository, and pub
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-deploy-catalog
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1623,7 +1623,7 @@ Supports two source modes — provide exactly one:
 #### Local mode (CI/CD pre-deploy)
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-list-model-errors
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1635,7 +1635,7 @@ Supports two source modes — provide exactly one:
 #### Remote mode (post-connect inspection)
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: atscale-list-model-errors
     connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1675,7 +1675,7 @@ Installs MicroK8s, configures it, and deploys AtScale via Helm on a remote VM ov
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: deploy-atscale-microk8s
     microk8s-hostname: ${{ inputs.hostname }}
@@ -1711,7 +1711,7 @@ Starts a GraphQL HTTP server that exposes all operations as mutations. The schem
 ```yaml
 - uses: actions/checkout@v4
 
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: execute-web-services
     port: 4000         # optional — default 4000
@@ -1738,7 +1738,7 @@ Prints the installed version of `atscale-utils` to stdout.
 #### Using the composite action
 
 ```yaml
-- uses: AtScaleInc/ps-template@main
+- uses: AtScaleInc/ps-utils@v1
   with:
     operation: version
 ```
@@ -1749,7 +1749,7 @@ This operation takes no parameters.
 
 ## End-to-end pipelines
 
-The pipelines below use the composite action for each step. Each `uses: AtScaleInc/ps-template@main` call handles setup, install, and build internally — no separate setup steps are needed.
+The pipelines below use the composite action for each step. Each `uses: AtScaleInc/ps-utils@v1` call handles setup, install, and build internally — no separate setup steps are needed.
 
 ### DDL → Tableau (fully offline)
 
@@ -1800,7 +1800,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-sml-from-ddl
           ddl-file: ${{ env.DDL_FILE }}
@@ -1808,20 +1808,20 @@ jobs:
           output-dir: sml-output
           connection-name: ${{ env.CONN_NAME }}
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-sml
           sml-dir: sml-output
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ env.MODEL_NAME }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-tableau-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1874,7 +1874,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-sml-from-connection
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1882,20 +1882,20 @@ jobs:
           model-name: ${{ inputs.model-name }}
           output-dir: sml-output
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-sml
           sml-dir: sml-output
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ inputs.model-name }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-tableau-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1947,7 +1947,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-atscale
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -1955,14 +1955,14 @@ jobs:
           model: ${{ inputs.model }}
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ inputs.model }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-tableau-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2014,7 +2014,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-atscale
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2022,14 +2022,14 @@ jobs:
           model: ${{ inputs.model }}
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ inputs.model }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-excel-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2081,7 +2081,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-atscale
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2089,14 +2089,14 @@ jobs:
           model: ${{ inputs.model }}
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ inputs.model }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-powerbi-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2153,7 +2153,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-sml-from-ddl
           ddl-file: ${{ inputs.ddl-file }}
@@ -2173,7 +2173,7 @@ jobs:
       - name: Deploy SML to AtScale
         run: echo "Deploy sml-output/ to AtScale here"
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-atscale
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2181,14 +2181,14 @@ jobs:
           model: ${{ inputs.model-name }}
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ inputs.model-name }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-tableau-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2251,7 +2251,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-sml-from-connection
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2259,20 +2259,20 @@ jobs:
           model-name: ${{ vars.MODEL_NAME }}
           output-dir: sml-output
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: extract-model-from-sml
           sml-dir: sml-output
           output-model-file: model.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-namespace-from-model
           model-file: model.yaml
           title: "${{ vars.MODEL_NAME }} Analysis"
           output-file: namespace.yaml
 
-      - uses: AtScaleInc/ps-template@main
+      - uses: AtScaleInc/ps-utils@v1
         with:
           operation: generate-tableau-from-namespace
           connection-file: ${{ secrets.CONNECTIONS_FILE }}
@@ -2301,4 +2301,4 @@ jobs:
 
 > **Note:** `vars.CONNECTION_NAME` and `vars.MODEL_NAME` are repository variables (not secrets). Set them at **Settings → Variables → Actions → New repository variable**.
 >
-> The `migrate` job's loop calls the CLI directly rather than via `uses: AtScaleInc/ps-template@main` because composite actions cannot be invoked inside a shell loop. For a single-file migration, replace the loop with a single `uses: AtScaleInc/ps-template@main` step using `operation: execute-sql-on-connection`.
+> The `migrate` job's loop calls the CLI directly rather than via `uses: AtScaleInc/ps-utils@v1` because composite actions cannot be invoked inside a shell loop. For a single-file migration, replace the loop with a single `uses: AtScaleInc/ps-utils@v1` step using `operation: execute-sql-on-connection`.

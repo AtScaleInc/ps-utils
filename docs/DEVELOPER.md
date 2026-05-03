@@ -271,14 +271,14 @@ export class MyOperation extends Operation<{ input: string }> {
 - `parameters` (optional JSON object string)
 
 ```yaml
-- uses: your-org/ps-template@v1
+- uses: your-org/ps-utils@v1
   with:
     operation: echo
     parameters: '{"message":"hello from action"}'
 ```
 
 ```yaml
-- uses: your-org/ps-template@v1
+- uses: your-org/ps-utils@v1
   with:
     operation: echo-connection-metadata
     parameters: '{"connection-file":"./connections.yaml","connection-name":"snow_demo"}'
