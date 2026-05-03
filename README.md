@@ -14,7 +14,6 @@ Upcoming features:
 Connect to a live AtScale instance or read local SML files to produce a portable model.yaml capturing all metrics and dimension hierarchies.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     ATS["AtScale Instance"] --> A["<a href='#extract-model-from-atscale'>extract-model-from-atscale</a>"] --> MODEL["model.yaml"]
     SML["SML Files"] --> B["<a href='#extract-model-from-sml'>extract-model-from-sml</a>"] --> MODEL
@@ -26,7 +25,6 @@ flowchart LR
 Generate a complete AtScale SML semantic model from a live database connection or a DDL file, extract existing schema DDL for inspection, or run ad-hoc SQL against any registered connection, or run the analysis-suggestions engine against an extracted model to surface the highest-value metric combinations.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     DB[("Database")] --> A["<a href='#extract-ddl-from-connection'>extract-ddl-from-connection</a>"] --> DDL["DDL (.sql)"]
     ATS["AtScale Instance"] --> B["<a href='#generate-ddl-from-atscale'>generate-ddl-from-atscale</a>"] --> DDL
@@ -45,7 +43,6 @@ flowchart LR
 Profile an existing database's schema and value distributions, then generate matching synthetic DDL and CSV data — either written to local files or loaded directly into a target database.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     DB[("Source Database")] --> A["<a href='#extract-data-shape-from-connection'>extract-data-shape-from-connection</a>"] --> SHAPE["data-shape.json"]
     SHAPE --> B["<a href='#generate-ddl-from-data-shape'>generate-ddl-from-data-shape</a>"] --> DDL["DDL (.sql)"]
@@ -58,7 +55,6 @@ flowchart LR
 Generate a namespace definition from a model, then produce ready-to-open Tableau, Excel, and Power BI workbooks with optional field-label aliases.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     MODEL["model.yaml"] --> A["<a href='#generate-namespace-from-model'>generate-namespace-from-model</a>"] --> NS["namespace.yaml"]
     NS --> B["<a href='#generate-tableau-from-namespace'>generate-tableau-from-namespace</a>"] --> TWB["tableau.twb"]
@@ -73,7 +69,6 @@ flowchart LR
 Capture queries from AtScale's Postgres backend, replay them through a load harness, enrich results with execution metadata, and compare two runs side-by-side to detect regressions in row counts, duration, or error behavior.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart TD
     SML["SML Files"] --> G["<a href='#generate-queries-from-sml'>generate-queries-from-sml</a>"] --> QJSON["queries/*.json"]
     MODEL["model.yaml"] --> H["<a href='#generate-queries-from-model'>generate-queries-from-model</a>"] --> QJSON
@@ -96,7 +91,6 @@ flowchart TD
 Expose every operation as a GraphQL mutation and REST endpoint via an embedded HTTP server.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     CLIENT["HTTP Client"] --> A["<a href='#execute-web-services'>execute-web-services</a>"] --> OPS["All Operations (GraphQL / REST)"]
 ```
@@ -104,7 +98,6 @@ flowchart LR
 ### Utilities
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     A["<a href='#version'>version</a>"] --> VER["@atscale/ps-utils@x.y.z (stdout)"]
 ```
@@ -114,7 +107,6 @@ flowchart LR
 Bootstrap and manage an AtScale instance — generate Helm install values, register data sources and SML repositories, deploy catalogs, and inspect live configuration state.
 
 ```mermaid
-%%{init: {"flowchart": {"htmlLabels": true}} }%%
 flowchart LR
     HOSTNAME["Hostname"] --> A["<a href='#generate-atscale-install-yaml'>generate-atscale-install-yaml</a>"] --> VALUES["values.yaml (Helm)"]
     CONN["connections.yaml"] --> B["<a href='#atscale-create-data-source'>atscale-create-data-source</a>"] --> ATS["AtScale Instance"]
