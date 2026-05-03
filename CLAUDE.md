@@ -7,10 +7,27 @@ When making any code change, update the following files as part of the same chan
 - **README.md** — update if the change adds/modifies operations, parameters, or behavior
 - **docs/ACTIONS.md** — update if the change affects GitHub Actions usage
 - **action.yml** — update if the change adds/modifies operations or parameters exposed to the composite action
+- **docs/NODE.md** — update if the change adds/modifies operations, parameters, or their descriptions (the Node.js library API reference). Also update `src/index.ts` to export any new operation function with appropriate defaults from `Object.assign`.
 - **docs/GRAPHQL.md** — auto-generated; regenerate via `npm run generate:graphql-docs` (runs automatically during `npm run build`)
 - **docs/REST.md** — auto-generated; regenerate via `npm run generate:rest-docs` (runs automatically during `npm run build`)
 
-All five files must reflect every operation change before the change is considered complete.
+All six files must reflect every operation change before the change is considered complete.
+
+## docs/NODE.md — Node.js library API reference
+
+`docs/NODE.md` documents the typed `async` function exported from `src/index.ts` for every operation. It is written by hand and must be kept in sync with the code. When adding or modifying an operation:
+
+1. Add the export type alias at the bottom of the operation's `Params` type block (e.g. `export type GenerateFooParams = Params;`).
+2. Import the type in `src/index.ts` (both the `export type` block and the `import type` block).
+3. Add an exported function in `src/index.ts` that calls `run("operation-name", Object.assign({...defaults}, p), o)`.
+4. Add the operation to the correct `#### <Group Name>` section in `docs/NODE.md` with:
+   - A TypeScript code example showing a minimal call
+   - A `function` signature block
+   - A parameter table with columns: Key, Type, Required, Default, Description
+   - `[↑ Table of Contents](#table-of-contents)` immediately after the `###` heading
+5. Add the operation to the TOC in `docs/NODE.md`.
+
+Use the same group names and ordering as README.md.
 
 ## docs/GRAPHQL.md and docs/REST.md — regenerate when operations change
 

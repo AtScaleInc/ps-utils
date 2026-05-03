@@ -31,7 +31,7 @@ import { loadSmlStyleConfig, mergeSmlStyle } from "../sml-style-config.js";
 // Parameter declarations
 // ----------------------------------------------------------
 
-class GenerateSMLFromDDLParams extends ParameterSet {
+class GenerateSMLFromDDLParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "ddl-file";
@@ -130,6 +130,7 @@ type Params = {
   "min-hierarchies-per-dim"?:   number;
   "max-hierarchies-per-dim"?:   number;
 };
+export type GenerateSMLFromDDLParams = Params;
 
 // ----------------------------------------------------------
 // Helpers
@@ -158,7 +159,7 @@ function detectDialectFromFilename(filePath: string): string | undefined {
 export class GenerateSMLFromDDLOperation extends Operation<Params> {
   name        = "generate-sml-from-ddl";
   description = "Parse a DDL file and generate AtScale SML files from the inferred semantic model";
-  parameters  = new GenerateSMLFromDDLParams();
+  parameters  = new GenerateSMLFromDDLParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

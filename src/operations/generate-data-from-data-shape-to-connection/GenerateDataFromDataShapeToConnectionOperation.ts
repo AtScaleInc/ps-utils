@@ -126,6 +126,7 @@ type Params = {
   "schema"?:       string;
   "reports-dir":   string;
 };
+export type GenerateDataFromDataShapeToConnectionParams = Params;
 
 // ─── Operation ────────────────────────────────────────────────────────────────
 

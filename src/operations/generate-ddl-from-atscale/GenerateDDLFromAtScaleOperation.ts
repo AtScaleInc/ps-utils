@@ -33,7 +33,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class GenerateDDLFromAtScaleParams extends ParameterSet {
+class GenerateDDLFromAtScaleParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -89,6 +89,7 @@ type Params = {
   "output-file"?:           string;
   insecure?:                boolean;
 };
+export type GenerateDDLFromAtScaleParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -192,7 +193,7 @@ function buildCreateTable(schema: string, tableName: string, cols: ColumnInfo[])
 export class GenerateDDLFromAtScaleOperation extends Operation<Params> {
   name        = "generate-ddl-from-atscale";
   description = "Generate DDL from an AtScale data source by reading table metadata via the REST API";
-  parameters  = new GenerateDDLFromAtScaleParams();
+  parameters  = new GenerateDDLFromAtScaleParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

@@ -31,7 +31,7 @@ import { loadSmlStyleConfig, mergeSmlStyle, writeSmlStyleConfig } from "../sml-s
 // Parameters
 // ----------------------------------------------------------
 
-class GenerateMetricsFromModelParams extends ParameterSet {
+class GenerateMetricsFromModelParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "model-file";
@@ -88,6 +88,7 @@ type Params = {
   "format":           string;
   "output-file"?:     string;
 };
+export type GenerateMetricsFromModelParams = Params;
 
 // ----------------------------------------------------------
 // Text formatter
@@ -162,7 +163,7 @@ function formatYaml(suggestions: AnalysisSuggestion[], modelName: string): strin
 export class GenerateMetricsFromModelOperation extends Operation<Params> {
   name        = "generate-metrics-from-model";
   description = "Generate ranked metric suggestions from a model.yaml file using the analysis-suggestions engine";
-  parameters  = new GenerateMetricsFromModelParams();
+  parameters  = new GenerateMetricsFromModelParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

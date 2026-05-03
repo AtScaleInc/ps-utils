@@ -91,6 +91,24 @@ flowchart TD
     F --> OUTLIERS["outliers.csv"]
 ```
 
+### Web Services
+
+Expose every operation as a GraphQL mutation and REST endpoint via an embedded HTTP server.
+
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": true}} }%%
+flowchart LR
+    CLIENT["HTTP Client"] --> A["<a href='#execute-web-services'>execute-web-services</a>"] --> OPS["All Operations (GraphQL / REST)"]
+```
+
+### Utilities
+
+```mermaid
+%%{init: {"flowchart": {"htmlLabels": true}} }%%
+flowchart LR
+    A["<a href='#version'>version</a>"] --> VER["@atscale/ps-utils@x.y.z (stdout)"]
+```
+
 ### AtScale Config
 
 Bootstrap and manage an AtScale instance — generate Helm install values, register data sources and SML repositories, deploy catalogs, and inspect live configuration state.
@@ -156,6 +174,8 @@ flowchart LR
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
+  - Utilities
+    - [`version`](#version)
 - [Reference Documentation](#reference-documentation)
 - [Extract AtScale Model Workflow](#extract-atscale-model-workflow)
 - [Connection YAML (`connections.yaml`)](#connection-yaml-connectionsyaml)
@@ -168,6 +188,12 @@ flowchart LR
 
 ## Setup
 
+**Install globally from npm:**
+```bash
+sudo npm install -g @atscale/ps-utils
+```
+
+**Build from source:**
 ```bash
 npm install
 npm run build
@@ -180,6 +206,7 @@ The `docs/` directory contains extended reference material:
 | File | Description |
 |------|-------------|
 | [docs/ACTIONS.md](docs/ACTIONS.md) | GitHub Actions guide — run any operation as a composite workflow step |
+| [docs/NODE.md](docs/NODE.md) | Node.js library API reference — typed `async` functions for every operation |
 | [docs/GRAPHQL.md](docs/GRAPHQL.md) | GraphQL API reference for the web services server (auto-generated) |
 | [docs/REST.md](docs/REST.md) | REST API reference for the web services server (auto-generated) |
 | [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
@@ -1871,6 +1898,25 @@ mutation {
   }
 }
 ```
+
+---
+
+#### Utilities
+
+### `version`
+
+[↑ Table of Contents](#table-of-contents)
+
+Prints the installed version of `atscale-utils` to stdout.
+
+```bash
+atscale-utils version
+atscale-utils --version
+```
+
+**Output:** `@atscale/ps-utils@<version>`
+
+This operation takes no parameters.
 
 ---
 

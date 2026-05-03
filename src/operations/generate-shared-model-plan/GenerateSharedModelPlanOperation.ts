@@ -29,7 +29,7 @@ import {
 // Parameter declarations
 // ----------------------------------------------------------
 
-class GenerateSharedModelPlanParams extends ParameterSet {
+class GenerateSharedModelPlanParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "input-dirs";
@@ -55,6 +55,7 @@ type Params = {
   "output-dir":  string;
   "threshold"?:  number;
 };
+export type GenerateSharedModelPlanParams = Params;
 
 // ----------------------------------------------------------
 // Operation
@@ -63,7 +64,7 @@ type Params = {
 export class GenerateSharedModelPlanOperation extends Operation<Params> {
   name        = "generate-shared-model-plan";
   description = "Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan";
-  parameters  = new GenerateSharedModelPlanParams();
+  parameters  = new GenerateSharedModelPlanParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

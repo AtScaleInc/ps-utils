@@ -100,6 +100,7 @@ type Params = {
   days: string;
   "target-connection-name"?: string;
 };
+export type GenerateEnhancedQueryResultsParams = Params;
 
 // ── CSV helpers ────────────────────────────────────────────────────────────────
 

@@ -2163,6 +2163,27 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `version`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Print the installed version of atscale-utils
+
+**CLI name:** `version`  |  **REST:** `POST /rest/version`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{version(input:{}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
 ## Full SDL
 
 ```graphql
@@ -3147,80 +3168,87 @@ input GenerateQueriesFromModelInput {
   sqlOutputFileContent: String
 }
 
+"""Print the installed version of atscale-utils"""
+input VersionInput {
+  _placeholder: Boolean
+}
+
 type Mutation {
   """Extract an AtScale model (stub)"""
-  extractModelFromAtscale(input: ExtractModelFromAtscaleInput!): OperationResult!
+  extractModelFromAtscale(input: ExtractModelFromAtscaleInput): OperationResult!
   """Generate a PowerBI workbook from a namespace (stub)"""
-  generatePowerbiFromNamespace(input: GeneratePowerbiFromNamespaceInput!): OperationResult!
+  generatePowerbiFromNamespace(input: GeneratePowerbiFromNamespaceInput): OperationResult!
   """Generate a Notebook from a namespace (stub)"""
-  generateNotebookFromConnection(input: GenerateNotebookFromConnectionInput!): OperationResult!
+  generateNotebookFromConnection(input: GenerateNotebookFromConnectionInput): OperationResult!
   """Generate a Tableau workbook from a namespace (stub)"""
-  generateTableauFromNamespace(input: GenerateTableauFromNamespaceInput!): OperationResult!
+  generateTableauFromNamespace(input: GenerateTableauFromNamespaceInput): OperationResult!
   """Print schemas, tables, columns, and foreign keys for a connection"""
-  echoConnectionMetadata(input: EchoConnectionMetadataInput!): OperationResult!
+  echoConnectionMetadata(input: EchoConnectionMetadataInput): OperationResult!
   """Connect to a database and generate AtScale SML files from the inferred semantic model"""
-  generateSmlFromConnection(input: GenerateSmlFromConnectionInput!): OperationResult!
+  generateSmlFromConnection(input: GenerateSmlFromConnectionInput): OperationResult!
   """Parse a DDL file and generate AtScale SML files from the inferred semantic model"""
-  generateSmlFromDdl(input: GenerateSmlFromDdlInput!): OperationResult!
+  generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
-  generateSmlFromXml(input: GenerateSmlFromXmlInput!): OperationResult!
+  generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
   """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
-  generateSharedModelPlan(input: GenerateSharedModelPlanInput!): OperationResult!
+  generateSharedModelPlan(input: GenerateSharedModelPlanInput): OperationResult!
   """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""
-  generateSharedDesign(input: GenerateSharedDesignInput!): OperationResult!
+  generateSharedDesign(input: GenerateSharedDesignInput): OperationResult!
   """Read an SML directory and output the same model.yaml format as extract-model-from-atscale"""
-  extractModelFromSml(input: ExtractModelFromSmlInput!): OperationResult!
+  extractModelFromSml(input: ExtractModelFromSmlInput): OperationResult!
   """Generate a namespace YAML from a model.yaml file using analysis suggestions"""
-  generateNamespaceFromModel(input: GenerateNamespaceFromModelInput!): OperationResult!
+  generateNamespaceFromModel(input: GenerateNamespaceFromModelInput): OperationResult!
   """Generate ranked metric suggestions from a model.yaml file using the analysis-suggestions engine"""
-  generateMetricsFromModel(input: GenerateMetricsFromModelInput!): OperationResult!
+  generateMetricsFromModel(input: GenerateMetricsFromModelInput): OperationResult!
   """Execute a SQL file against a named database connection"""
-  executeSqlOnConnection(input: ExecuteSqlOnConnectionInput!): OperationResult!
+  executeSqlOnConnection(input: ExecuteSqlOnConnectionInput): OperationResult!
   """Connect to a database and extract CREATE TABLE DDL for each table in the schema"""
-  extractDdlFromConnection(input: ExtractDdlFromConnectionInput!): OperationResult!
+  extractDdlFromConnection(input: ExtractDdlFromConnectionInput): OperationResult!
   """Generate an Excel workbook with OLAP pivot tables from a namespace"""
-  generateExcelFromNamespace(input: GenerateExcelFromNamespaceInput!): OperationResult!
+  generateExcelFromNamespace(input: GenerateExcelFromNamespaceInput): OperationResult!
   """Analyse AtScale query history and output a CSV occurrence matrix of (dimension attribute × measure) query pairs"""
-  extractQueryStatsFromAtscale(input: ExtractQueryStatsFromAtscaleInput!): OperationResult!
+  extractQueryStatsFromAtscale(input: ExtractQueryStatsFromAtscaleInput): OperationResult!
   """Extract deduplicated query history from the AtScale Postgres backend and write JSON files for use with execute-atscale-query-harness"""
-  extractQueriesFromAtscale(input: ExtractQueriesFromAtscaleInput!): OperationResult!
+  extractQueriesFromAtscale(input: ExtractQueriesFromAtscaleInput): OperationResult!
   """Execute a set of AtScale queries (XMLA or SQL) with configurable concurrency and write a timestamped CSV results file"""
-  executeAtscaleQueryHarness(input: ExecuteAtscaleQueryHarnessInput!): OperationResult!
+  executeAtscaleQueryHarness(input: ExecuteAtscaleQueryHarnessInput): OperationResult!
   """Execute one or more named queries (wildcard-matched) against a connection and write the results to file(s)"""
-  executeQueryOnConnection(input: ExecuteQueryOnConnectionInput!): OperationResult!
+  executeQueryOnConnection(input: ExecuteQueryOnConnectionInput): OperationResult!
   """Generate a Helm values.yaml for an AtScale Kubernetes deployment, optionally creating a self-signed TLS certificate for the provided hostname"""
-  generateAtscaleInstallYaml(input: GenerateAtscaleInstallYamlInput!): OperationResult!
+  generateAtscaleInstallYaml(input: GenerateAtscaleInstallYamlInput): OperationResult!
   """List data sources (data warehouses) registered in an AtScale instance"""
-  atscaleListDataSources(input: AtscaleListDataSourcesInput!): OperationResult!
+  atscaleListDataSources(input: AtscaleListDataSourcesInput): OperationResult!
   """Register a data source (data warehouse) in an AtScale instance"""
-  atscaleCreateDataSource(input: AtscaleCreateDataSourceInput!): OperationResult!
+  atscaleCreateDataSource(input: AtscaleCreateDataSourceInput): OperationResult!
   """List git repositories registered in an AtScale instance"""
-  atscaleListRepos(input: AtscaleListReposInput!): OperationResult!
+  atscaleListRepos(input: AtscaleListReposInput): OperationResult!
   """Register a git repository in an AtScale instance"""
-  atscaleCreateRepo(input: AtscaleCreateRepoInput!): OperationResult!
+  atscaleCreateRepo(input: AtscaleCreateRepoInput): OperationResult!
   """List deployed catalogs (semantic models) in an AtScale instance"""
-  atscaleListDeployments(input: AtscaleListDeploymentsInput!): OperationResult!
+  atscaleListDeployments(input: AtscaleListDeploymentsInput): OperationResult!
   """Deploy local SML files to an AtScale git repository and publish the catalog"""
-  atscaleDeployCatalog(input: AtscaleDeployCatalogInput!): OperationResult!
+  atscaleDeployCatalog(input: AtscaleDeployCatalogInput): OperationResult!
   """Validate an SML model and list structural and engine-level problems"""
-  atscaleListModelErrors(input: AtscaleListModelErrorsInput!): OperationResult!
+  atscaleListModelErrors(input: AtscaleListModelErrorsInput): OperationResult!
   """Generate DDL from an AtScale data source by reading table metadata via the REST API"""
-  generateDdlFromAtscale(input: GenerateDdlFromAtscaleInput!): OperationResult!
+  generateDdlFromAtscale(input: GenerateDdlFromAtscaleInput): OperationResult!
   """Connect to a database and extract a statistical fingerprint of the SML model data shape"""
-  extractDataShapeFromConnection(input: ExtractDataShapeFromConnectionInput!): OperationResult!
+  extractDataShapeFromConnection(input: ExtractDataShapeFromConnectionInput): OperationResult!
   """Generate CREATE TABLE DDL from a data-shape.yaml statistical fingerprint"""
-  generateDdlFromDataShape(input: GenerateDdlFromDataShapeInput!): OperationResult!
+  generateDdlFromDataShape(input: GenerateDdlFromDataShapeInput): OperationResult!
   """Generate synthetic CSV data from a data-shape.yaml statistical fingerprint"""
-  generateDataFromDataShape(input: GenerateDataFromDataShapeInput!): OperationResult!
+  generateDataFromDataShape(input: GenerateDataFromDataShapeInput): OperationResult!
   """Generate synthetic data from a fingerprint and load it into a live database"""
-  generateDataFromDataShapeToConnection(input: GenerateDataFromDataShapeToConnectionInput!): OperationResult!
+  generateDataFromDataShapeToConnection(input: GenerateDataFromDataShapeToConnectionInput): OperationResult!
   """Enrich a execute-atscale-query-harness results CSV with the AtScale query_id, outbound SQL text, and optionally the execution plan from the target data source (requires --target-connection-name)"""
-  generateEnhancedQueryResults(input: GenerateEnhancedQueryResultsInput!): OperationResult!
+  generateEnhancedQueryResults(input: GenerateEnhancedQueryResultsInput): OperationResult!
   """Compare two execute-atscale-query-harness run logs (or enhanced outputs) query-by-query; writes a plain-text summary report, a full row-by-row comparison CSV, and a filtered outliers CSV for row-count and duration mismatches"""
-  executeRunAnalysis(input: ExecuteRunAnalysisInput!): OperationResult!
+  executeRunAnalysis(input: ExecuteRunAnalysisInput): OperationResult!
   """Read an SML directory and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness"""
-  generateQueriesFromSml(input: GenerateQueriesFromSmlInput!): OperationResult!
+  generateQueriesFromSml(input: GenerateQueriesFromSmlInput): OperationResult!
   """Read a model.yaml file and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness"""
-  generateQueriesFromModel(input: GenerateQueriesFromModelInput!): OperationResult!
+  generateQueriesFromModel(input: GenerateQueriesFromModelInput): OperationResult!
+  """Print the installed version of atscale-utils"""
+  version(input: VersionInput): OperationResult!
 }
 ```

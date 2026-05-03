@@ -27,7 +27,7 @@ import { writeSmlFiles } from "../generate-sml-shared.js";
 // Parameter declarations
 // ----------------------------------------------------------
 
-class GenerateSMLFromXMLParams extends ParameterSet {
+class GenerateSMLFromXMLParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "xml-file";
@@ -76,6 +76,7 @@ type Params = {
   "connection-db"?:     string;
   "connection-schema"?: string;
 };
+export type GenerateSMLFromXMLParams = Params;
 
 // ----------------------------------------------------------
 // Operation
@@ -84,7 +85,7 @@ type Params = {
 export class GenerateSMLFromXMLOperation extends Operation<Params> {
   name        = "generate-sml-from-xml";
   description = "Convert an AtScale XML project file (project_2_0 format) to AtScale SML files";
-  parameters  = new GenerateSMLFromXMLParams();
+  parameters  = new GenerateSMLFromXMLParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

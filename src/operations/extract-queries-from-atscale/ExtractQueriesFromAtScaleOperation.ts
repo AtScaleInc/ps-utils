@@ -107,6 +107,7 @@ type Params = {
   "min-executions": string;
   "db-schema": string;
 };
+export type ExtractQueriesFromAtScaleParams = Params;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

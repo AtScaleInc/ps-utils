@@ -91,6 +91,7 @@ type Params = {
   "enable-mcp": boolean;
   "minimal": boolean;
 };
+export type GenerateAtScaleInstallYamlParams = Params;
 
 // ── DER / ASN.1 helpers ────────────────────────────────────────────────────────
 

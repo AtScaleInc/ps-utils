@@ -16,7 +16,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleCreateRepoParams extends ParameterSet {
+class AtScaleCreateRepoParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -73,6 +73,7 @@ type Params = {
   "default-branch"?: string;
   "insecure"?: boolean;
 };
+export type AtScaleCreateRepoParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ function resolveAtScaleEnv(
 export class AtScaleCreateRepoOperation extends Operation<Params> {
   name        = "atscale-create-repo";
   description = "Register a git repository in an AtScale instance";
-  parameters  = new AtScaleCreateRepoParams();
+  parameters  = new AtScaleCreateRepoParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

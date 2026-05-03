@@ -16,7 +16,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleListReposParams extends ParameterSet {
+class AtScaleListReposParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -42,6 +42,7 @@ type Params = {
   "atscale-connection-name": string;
   "insecure"?: boolean;
 };
+export type AtScaleListReposParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ function resolveAtScaleEnv(
 export class AtScaleListReposOperation extends Operation<Params> {
   name        = "atscale-list-repos";
   description = "List git repositories registered in an AtScale instance";
-  parameters  = new AtScaleListReposParams();
+  parameters  = new AtScaleListReposParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

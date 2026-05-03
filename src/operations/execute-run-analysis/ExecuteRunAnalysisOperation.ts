@@ -39,7 +39,7 @@ import path from "path";
 
 // ── Parameter set ──────────────────────────────────────────────────────────────
 
-class ExecuteRunAnalysisParams extends ParameterSet {
+class ExecuteRunAnalysisParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name = "file-a";
@@ -102,6 +102,7 @@ type Params = {
   "comparison-file": string;
   "outliers-file": string;
 };
+export type ExecuteRunAnalysisParams = Params;
 
 // ── CSV helpers ────────────────────────────────────────────────────────────────
 
@@ -611,7 +612,7 @@ export class ExecuteRunAnalysisOperation extends Operation<Params> {
     "Compare two execute-atscale-query-harness run logs (or enhanced outputs) " +
     "query-by-query; writes a plain-text summary report, a full row-by-row " +
     "comparison CSV, and a filtered outliers CSV for row-count and duration mismatches";
-  parameters = new ExecuteRunAnalysisParams();
+  parameters = new ExecuteRunAnalysisParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

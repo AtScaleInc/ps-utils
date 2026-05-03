@@ -31,7 +31,7 @@ import path from "path";
 
 // ── Parameter set ──────────────────────────────────────────────────────────────
 
-class GenerateQueriesFromSMLParams extends ParameterSet {
+class GenerateQueriesFromSMLParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name = "sml-dir";
@@ -72,6 +72,7 @@ type Params = {
   "xmla-output-file": string;
   "sql-output-file": string;
 };
+export type GenerateQueriesFromSMLParams = Params;
 
 // ── Operation ──────────────────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
     "Read an SML directory and generate XMLA and SQL query JSON files " +
     "covering every metric (grand-total) and every hierarchy level " +
     "(per-level breakdown), compatible with execute-atscale-query-harness";
-  parameters = new GenerateQueriesFromSMLParams();
+  parameters = new GenerateQueriesFromSMLParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

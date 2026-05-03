@@ -246,12 +246,14 @@ export function buildSdl(metas: OpMeta[]): string {
       }
       return lines;
     });
-    return `"""${esc(description)}"""\ninput ${inputTypeName} {\n${fields.join("\n")}\n}`;
+    // GraphQL forbids empty input types; add a dummy field for parameter-less operations.
+    const body = fields.length > 0 ? fields.join("\n") : "  _placeholder: Boolean";
+    return `"""${esc(description)}"""\ninput ${inputTypeName} {\n${body}\n}`;
   });
 
   const mutations = metas.map(
     ({ mutName, inputTypeName, description }) =>
-      `  """${esc(description)}"""\n  ${mutName}(input: ${inputTypeName}!): OperationResult!`,
+      `  """${esc(description)}"""\n  ${mutName}(input: ${inputTypeName}): OperationResult!`,
   );
 
   return [
@@ -382,7 +384,7 @@ function buildResolvers(registry: OperationRegistry, metas: OpMeta[]) {
 
   for (const meta of metas) {
     const op = registry.get(meta.opName)!;
-    Mutation[meta.mutName] = async (_: unknown, { input }: { input: Record<string, unknown> }) => {
+    Mutation[meta.mutName] = async (_: unknown, { input = {} }: { input?: Record<string, unknown> }) => {
       const tempFiles: string[] = [];
       const tempDirs: string[] = [];
       const rawParams: Record<string, string> = {};

@@ -28,7 +28,7 @@ import { stringify } from "yaml";
 // Parameter declarations
 // ----------------------------------------------------------
 
-class ExtractModelFromSMLParams extends ParameterSet {
+class ExtractModelFromSMLParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "sml-dir";
@@ -59,6 +59,7 @@ type Params = {
   "connection-name"?:    string;
   "output-model-file"?:  string;
 };
+export type ExtractModelFromSMLParams = Params;
 
 // ----------------------------------------------------------
 // Data-type and aggregation mappings
@@ -118,7 +119,7 @@ function roleAndType(dataTypeString: string): { role: string; type: string } {
 export class ExtractModelFromSMLOperation extends Operation<Params> {
   name        = "extract-model-from-sml";
   description = "Read an SML directory and output the same model.yaml format as extract-model-from-atscale";
-  parameters  = new ExtractModelFromSMLParams();
+  parameters  = new ExtractModelFromSMLParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

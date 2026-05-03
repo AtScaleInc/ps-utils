@@ -101,6 +101,7 @@ type Params = {
   limit: string;
   "num-queries": string;
 };
+export type ExtractQueryStatsFromAtScaleParams = Params;
 
 // Map key for an (attribute | null, measure | null) pair.
 type PairKey = string;

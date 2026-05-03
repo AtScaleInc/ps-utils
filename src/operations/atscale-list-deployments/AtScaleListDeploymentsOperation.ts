@@ -16,7 +16,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleListDeploymentsParams extends ParameterSet {
+class AtScaleListDeploymentsParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -42,6 +42,7 @@ type Params = {
   "atscale-connection-name": string;
   "insecure"?: boolean;
 };
+export type AtScaleListDeploymentsParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ function resolveAtScaleEnv(
 export class AtScaleListDeploymentsOperation extends Operation<Params> {
   name        = "atscale-list-deployments";
   description = "List deployed catalogs (semantic models) in an AtScale instance";
-  parameters  = new AtScaleListDeploymentsParams();
+  parameters  = new AtScaleListDeploymentsParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

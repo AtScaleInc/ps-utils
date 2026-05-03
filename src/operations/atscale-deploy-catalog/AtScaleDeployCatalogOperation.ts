@@ -53,7 +53,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleDeployCatalogParams extends ParameterSet {
+class AtScaleDeployCatalogParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -109,6 +109,7 @@ type Params = {
   "tableau-servers"?: string;
   "insecure"?: boolean;
 };
+export type AtScaleDeployCatalogParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -206,7 +207,7 @@ function inferConIds(smlFiles: SmlRawFile[]): string[] {
 export class AtScaleDeployCatalogOperation extends Operation<Params> {
   name        = "atscale-deploy-catalog";
   description = "Deploy local SML files to an AtScale git repository and publish the catalog";
-  parameters  = new AtScaleDeployCatalogParams();
+  parameters  = new AtScaleDeployCatalogParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

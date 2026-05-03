@@ -34,6 +34,7 @@ type SQLParams = {
   "connection-name": string;
   schema?: string;
 };
+export type EchoConnectionMetadataParams = SQLParams;
 
 /**
  * Base SQL operation that prints database metadata.

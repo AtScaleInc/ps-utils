@@ -162,6 +162,8 @@ flowchart LR
     - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
+  - Utilities
+    - [`version`](#version)
 - [End-to-end pipelines](#end-to-end-pipelines)
   - [DDL → Tableau (fully offline)](#ddl--tableau-fully-offline)
   - [Database → Tableau](#database--tableau)
@@ -1727,6 +1729,28 @@ Starts a GraphQL HTTP server that exposes all operations as mutations. The schem
 |---|---|---|---|
 | `port` | No | `4000` | Port for the GraphQL server |
 | `host` | No | `localhost` | Bind address |
+
+---
+
+#### Utilities
+
+### `version`
+
+[↑ Table of Contents](#table-of-contents)
+
+Prints the installed version of `atscale-utils` to stdout.
+
+**Requires:** No secrets or inputs.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-template@main
+  with:
+    operation: version
+```
+
+This operation takes no parameters.
 
 ---
 

@@ -24,7 +24,7 @@ import { startServer } from "./graphql-server.js";
 // Parameters
 // ──────────────────────────────────────────────────────────────────────────────
 
-class ExecuteWebServicesParams extends ParameterSet {
+class ExecuteWebServicesParamsSet extends ParameterSet {
   parameters = [
     new (class extends NumberParameter {
       name        = "port";
@@ -45,6 +45,7 @@ type Params = {
   port:  number;
   host:  string;
 };
+export type ExecuteWebServicesParams = Params;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Operation
@@ -53,7 +54,7 @@ type Params = {
 export class ExecuteWebServicesOperation extends Operation<Params> {
   name        = "execute-web-services";
   description = "Start a GraphQL HTTP server that exposes all operations as mutations";
-  parameters  = new ExecuteWebServicesParams();
+  parameters  = new ExecuteWebServicesParamsSet();
 
   /**
    * The registry is injected at construction time (from index.ts) so that the

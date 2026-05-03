@@ -45,7 +45,7 @@ import { parse as parseYaml } from "yaml";
 
 // ── Parameter set ──────────────────────────────────────────────────────────────
 
-class ExecuteQueryOnConnectionParams extends ParameterSet {
+class ExecuteQueryOnConnectionParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name = "connection-file";
@@ -99,6 +99,7 @@ type Params = {
   "query-name": string;
   "output-file": string;
 };
+export type ExecuteQueryOnConnectionParams = Params;
 
 // ── Query file loading ─────────────────────────────────────────────────────────
 
@@ -442,7 +443,7 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
   description =
     "Execute one or more named queries (wildcard-matched) against a connection " +
     "and write the results to file(s)";
-  parameters = new ExecuteQueryOnConnectionParams();
+  parameters = new ExecuteQueryOnConnectionParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

@@ -30,7 +30,7 @@ import { generateDdl, type SqlDialect } from "../../statistics/ddl-generator.js"
 
 // ─── Parameters ────────────────────────────────────────────────────────────────
 
-class GenerateDDLFromDataShapeParams extends ParameterSet {
+class GenerateDDLFromDataShapeParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "input-file";
@@ -57,13 +57,14 @@ type Params = {
   "output-file"?: string;
   "dialect":      string;
 };
+export type GenerateDDLFromDataShapeParams = Params;
 
 // ─── Operation ────────────────────────────────────────────────────────────────
 
 export class GenerateDDLFromDataShapeOperation extends Operation<Params> {
   name        = "generate-ddl-from-data-shape";
   description = "Generate CREATE TABLE DDL from a data-shape.yaml statistical fingerprint";
-  parameters  = new GenerateDDLFromDataShapeParams();
+  parameters  = new GenerateDDLFromDataShapeParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

@@ -39,6 +39,7 @@ import { GenerateQueriesFromModelOperation } from "./generate-queries-from-model
 import { GenerateSharedModelPlanOperation } from "./generate-shared-model-plan/GenerateSharedModelPlanOperation.js";
 import { GenerateSharedDesignOperation } from "./generate-shared-design/GenerateSharedDesignOperation.js";
 import { ExecuteWebServicesOperation } from "./execute-web-services/ExecuteWebServicesOperation.js";
+import { VersionOperation } from "./version/VersionOperation.js";
 import { OperationRegistry } from "./registry.js";
 import { buildServiceRegistry, type ServiceRegistryOptions } from "../services/index.js";
 import type { Logger } from "../logging.js";
@@ -92,5 +93,6 @@ export async function buildRegistry(
   // execute-web-services receives the registry itself so it can build the schema
   // dynamically without a circular import back to this file.
   registry.register(new ExecuteWebServicesOperation(services, logger, registry));
+  registry.register(new VersionOperation(services, logger));
   return registry;
 }

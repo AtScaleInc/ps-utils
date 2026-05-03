@@ -87,6 +87,7 @@ type Params = {
   "target-column-rows": number;
   "tablesample":        boolean;
 };
+export type ExtractDataShapeFromConnectionParams = Params;
 
 // ─── DatabaseQueryRunner adapter ──────────────────────────────────────────────
 

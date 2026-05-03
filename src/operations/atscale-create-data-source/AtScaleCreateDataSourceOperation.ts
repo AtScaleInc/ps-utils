@@ -45,7 +45,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleCreateDataSourceParams extends ParameterSet {
+class AtScaleCreateDataSourceParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -108,6 +108,7 @@ type Params = {
   "aggregate-project-id"?: string;
   "insecure"?: boolean;
 };
+export type AtScaleCreateDataSourceParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -177,7 +178,7 @@ function resolveAtScaleEnv(
 export class AtScaleCreateDataSourceOperation extends Operation<Params> {
   name        = "atscale-create-data-source";
   description = "Register a data source (data warehouse) in an AtScale instance";
-  parameters  = new AtScaleCreateDataSourceParams();
+  parameters  = new AtScaleCreateDataSourceParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

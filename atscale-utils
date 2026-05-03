@@ -2,6 +2,21 @@
 
 set -eu
 
+# Resolve all symlinks so SCRIPT_DIR is the real package directory even when
+# invoked via a global npm bin symlink (e.g. /usr/local/bin/atscale-utils →
+# /usr/local/lib/node_modules/@atscale/ps-utils/atscale-utils → real path).
+_resolve_script() {
+  _p="$1"
+  while [ -L "$_p" ]; do
+    _d="$(cd "$(dirname "$_p")" && pwd)"
+    _p="$(readlink "$_p")"
+    case "$_p" in /*) ;; *) _p="$_d/$_p" ;; esac
+  done
+  echo "$(cd "$(dirname "$_p")" && pwd)"
+}
+
+SCRIPT_DIR="$(_resolve_script "$0")"
+
 show_completion_usage() {
   echo "Usage: $0 --completion {bash|zsh|fish}" >&2
 }
@@ -13,7 +28,7 @@ install_completion() {
       target_dir="$HOME/.bash_completion.d"
       target_file="$target_dir/atscale-utils"
       mkdir -p "$target_dir"
-      "$(dirname "$0")/atscale-utils" --print-completion bash > "$target_file"
+      "$SCRIPT_DIR/atscale-utils" --print-completion bash > "$target_file"
       echo "Installed bash completions to $target_file"
       echo "To enable in this session: source $target_file"
       ;;
@@ -21,7 +36,7 @@ install_completion() {
       target_dir="$HOME/.zsh/completions"
       target_file="$target_dir/_atscale-utils"
       mkdir -p "$target_dir"
-      "$(dirname "$0")/atscale-utils" --print-completion zsh > "$target_file"
+      "$SCRIPT_DIR/atscale-utils" --print-completion zsh > "$target_file"
       echo "Installed zsh completions to $target_file"
       echo "To enable in this session: fpath=($target_dir $fpath) && autoload -Uz compinit && compinit"
       ;;
@@ -29,7 +44,7 @@ install_completion() {
       target_dir="$HOME/.config/fish/completions"
       target_file="$target_dir/atscale-utils.fish"
       mkdir -p "$target_dir"
-      "$(dirname "$0")/atscale-utils" --print-completion fish > "$target_file"
+      "$SCRIPT_DIR/atscale-utils" --print-completion fish > "$target_file"
       echo "Installed fish completions to $target_file"
       echo "To enable in this session: source $target_file"
       ;;
@@ -40,16 +55,15 @@ install_completion() {
   esac
 }
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
 needs_build() {
+  [ ! -d "$SCRIPT_DIR/src" ] && return 1
   [ ! -f "$SCRIPT_DIR/dist/cli.js" ] && return 0
   [ -n "$(find "$SCRIPT_DIR/src" "$SCRIPT_DIR/resources" "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/tsconfig.json" -newer "$SCRIPT_DIR/dist/cli.js" 2>/dev/null | head -1)" ] && return 0
   return 1
 }
 
 if [ "${ATSCALE_SKIP_BUILD:-0}" != "1" ] && needs_build; then
-  npm run build
+  (cd "$SCRIPT_DIR" && npm run build)
 fi
 
 if [ "$#" -ge 1 ] && [ "$1" = "--completion" ]; then
@@ -68,13 +82,13 @@ if [ "$#" -ge 1 ] && [ "$1" = "--print-completion" ]; then
   fi
   case "$2" in
     bash)
-      cat "$(dirname "$0")/scripts/resources/completions/atscale-utils.bash"
+      cat "$SCRIPT_DIR/scripts/resources/completions/atscale-utils.bash"
       ;;
     zsh)
-      cat "$(dirname "$0")/scripts/resources/completions/atscale-utils.zsh"
+      cat "$SCRIPT_DIR/scripts/resources/completions/atscale-utils.zsh"
       ;;
     fish)
-      cat "$(dirname "$0")/scripts/resources/completions/atscale-utils.fish"
+      cat "$SCRIPT_DIR/scripts/resources/completions/atscale-utils.fish"
       ;;
     *)
       show_completion_usage
@@ -84,5 +98,4 @@ if [ "$#" -ge 1 ] && [ "$1" = "--print-completion" ]; then
   exit 0
 fi
 
-
-node dist/cli.js "$@"
+node "$SCRIPT_DIR/dist/cli.js" "$@"

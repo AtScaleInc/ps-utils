@@ -26,7 +26,7 @@ import { parsePlanYaml, applyPlan, type ApplyAction } from "./design-applier.js"
 // Parameters
 // ----------------------------------------------------------
 
-class GenerateSharedDesignParams extends ParameterSet {
+class GenerateSharedDesignParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "plan-file";
@@ -61,6 +61,7 @@ type Params = {
   "remove-sources"?: boolean;
   "dry-run"?:        boolean;
 };
+export type GenerateSharedDesignParams = Params;
 
 // ----------------------------------------------------------
 // Operation
@@ -69,7 +70,7 @@ type Params = {
 export class GenerateSharedDesignOperation extends Operation<Params> {
   name        = "generate-shared-design";
   description = "Apply a generate-shared-model-plan recommendation YAML to create shared SML files";
-  parameters  = new GenerateSharedDesignParams();
+  parameters  = new GenerateSharedDesignParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

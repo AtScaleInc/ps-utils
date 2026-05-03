@@ -28,7 +28,7 @@ import { loadSmlStyleConfig, mergeSmlStyle } from "../sml-style-config.js";
 // Parameter declarations
 // ----------------------------------------------------------
 
-class GenerateSMLFromConnectionParams extends ParameterSet {
+class GenerateSMLFromConnectionParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "connection-file";
@@ -121,6 +121,7 @@ type Params = {
   "min-hierarchies-per-dim"?:   number;
   "max-hierarchies-per-dim"?:   number;
 };
+export type GenerateSMLFromConnectionParams = Params;
 
 // ----------------------------------------------------------
 // Operation
@@ -129,7 +130,7 @@ type Params = {
 export class GenerateSMLFromConnectionOperation extends Operation<Params> {
   name        = "generate-sml-from-connection";
   description = "Connect to a database and generate AtScale SML files from the inferred semantic model";
-  parameters  = new GenerateSMLFromConnectionParams();
+  parameters  = new GenerateSMLFromConnectionParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

@@ -41,6 +41,7 @@ type ExtractAtScaleParams = {
   "connection-name": string;
   "output-model-file"?: string;
 };
+export type ExtractModelFromAtScaleParams = ExtractAtScaleParams;
 
 /**
  * Stub operation for extracting an AtScale model.

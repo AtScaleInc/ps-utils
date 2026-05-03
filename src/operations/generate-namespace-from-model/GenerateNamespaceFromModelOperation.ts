@@ -40,7 +40,7 @@ import {
 // Parameters
 // ----------------------------------------------------------
 
-class GenerateNamespaceFromModelParams extends ParameterSet {
+class GenerateNamespaceFromModelParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "model-file";
@@ -85,6 +85,7 @@ type Params = {
   "min-score":          string;
   "output-file"?:       string;
 };
+export type GenerateNamespaceFromModelParams = Params;
 
 // ----------------------------------------------------------
 // Local helpers (namespace-specific)
@@ -365,7 +366,7 @@ function buildNamespace(
 export class GenerateNamespaceFromModelOperation extends Operation<Params> {
   name        = "generate-namespace-from-model";
   description = "Generate a namespace YAML from a model.yaml file using analysis suggestions";
-  parameters  = new GenerateNamespaceFromModelParams();
+  parameters  = new GenerateNamespaceFromModelParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

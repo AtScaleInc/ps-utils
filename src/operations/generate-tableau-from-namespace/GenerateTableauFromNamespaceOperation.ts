@@ -49,6 +49,7 @@ type GenerateTableauParams = TemplateOperationParams & {
   "tableau-version": string;
   "connection-name": string;
 };
+export type GenerateTableauFromNamespaceParams = GenerateTableauParams;
 
 /**
  * Stub operation to generate Tableau workbook from a namespace.

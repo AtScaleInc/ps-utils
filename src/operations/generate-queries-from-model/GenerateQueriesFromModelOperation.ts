@@ -33,7 +33,7 @@ import path from "path";
 
 // ── Parameter set ──────────────────────────────────────────────────────────────
 
-class GenerateQueriesFromModelParams extends ParameterSet {
+class GenerateQueriesFromModelParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name = "model-file";
@@ -75,6 +75,7 @@ type Params = {
   "xmla-output-file": string;
   "sql-output-file": string;
 };
+export type GenerateQueriesFromModelParams = Params;
 
 // ── Operation ──────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ export class GenerateQueriesFromModelOperation extends Operation<Params> {
     "Read a model.yaml file and generate XMLA and SQL query JSON files " +
     "covering every metric (grand-total) and every hierarchy level " +
     "(per-level breakdown), compatible with execute-atscale-query-harness";
-  parameters = new GenerateQueriesFromModelParams();
+  parameters = new GenerateQueriesFromModelParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

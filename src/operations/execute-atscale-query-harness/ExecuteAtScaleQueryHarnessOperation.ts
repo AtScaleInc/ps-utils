@@ -187,6 +187,7 @@ type Params = {
   "duration-minutes": string;
   "annotate-queries": string;
 };
+export type ExecuteAtScaleQueryHarnessParams = Params;
 
 // ── Small utilities ────────────────────────────────────────────────────────────
 

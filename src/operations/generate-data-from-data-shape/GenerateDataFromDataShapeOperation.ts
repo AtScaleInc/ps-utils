@@ -34,7 +34,7 @@ import crypto                    from "crypto";
 
 // ─── Parameters ────────────────────────────────────────────────────────────────
 
-class GenerateDataFromDataShapeParams extends ParameterSet {
+class GenerateDataFromDataShapeParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "input-file";
@@ -74,13 +74,14 @@ type Params = {
   "seed"?:         number;
   "reports-dir"?:  string;
 };
+export type GenerateDataFromDataShapeParams = Params;
 
 // ─── Operation ────────────────────────────────────────────────────────────────
 
 export class GenerateDataFromDataShapeOperation extends Operation<Params> {
   name        = "generate-data-from-data-shape";
   description = "Generate synthetic CSV data from a data-shape.yaml statistical fingerprint";
-  parameters  = new GenerateDataFromDataShapeParams();
+  parameters  = new GenerateDataFromDataShapeParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

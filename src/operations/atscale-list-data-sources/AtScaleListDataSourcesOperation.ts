@@ -33,7 +33,7 @@ import { resolveAtScaleEnv } from "../atscale-env.js";
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleListDataSourcesParams extends ParameterSet {
+class AtScaleListDataSourcesParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -59,6 +59,7 @@ type Params = {
   "atscale-connection-name": string;
   "insecure"?: boolean;
 };
+export type AtScaleListDataSourcesParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ type Params = {
 export class AtScaleListDataSourcesOperation extends Operation<Params> {
   name        = "atscale-list-data-sources";
   description = "List data sources (data warehouses) registered in an AtScale instance";
-  parameters  = new AtScaleListDataSourcesParams();
+  parameters  = new AtScaleListDataSourcesParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

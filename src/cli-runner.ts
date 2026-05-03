@@ -107,6 +107,9 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       "  atscale-utils <operation> --key value [--key value]",
       "  cat input.yml | atscale-utils",
       "",
+      "Installation:",
+      "  sudo npm install -g @atscale/ps-utils",
+      "",
       "Shell completions:",
       "  atscale-utils --completion bash    Install bash completions (~/.bash_completion.d/atscale-utils)",
       "  atscale-utils --completion zsh     Install zsh completions  (~/.zsh/completions/_atscale-utils)",
@@ -193,6 +196,10 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
           [
             "Web Services",
             ["execute-web-services"],
+          ],
+          [
+            "Utilities",
+            ["version"],
           ],
         ];
         const opMap = new Map(operationList.map((op) => [op.name, op]));
@@ -296,6 +303,12 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
   }
 
   const operationName = argv[0];
+  if (operationName === "--version" || operationName === "-v") {
+    const versionOp = baseRegistry.get("version");
+    if (versionOp) await versionOp.run({});
+    return 0;
+  }
+
   if (!operationName) {
     if (stdinData && stdinData.trim().length > 0) {
       let stdinOperation: Operation<Record<string, unknown>> | undefined;

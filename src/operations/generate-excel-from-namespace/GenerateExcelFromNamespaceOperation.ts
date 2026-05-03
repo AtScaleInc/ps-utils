@@ -47,6 +47,7 @@ type GenerateExcelParams = TemplateOperationParams & {
   "connection-name": string;
   "target-file":     string;
 };
+export type GenerateExcelFromNamespaceParams = GenerateExcelParams;
 
 // ------------------------------------------------------------------
 // Operation

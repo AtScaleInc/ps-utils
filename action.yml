@@ -1441,3 +1441,9 @@ runs:
         [[ -n "${{ inputs.host }}" ]] && ARGS+=(--host "${{ inputs.host }}")
         node "${{ github.action_path }}/dist/cli.js" execute-web-services "${ARGS[@]}"
       shell: bash
+
+    # ── version ──────────────────────────────────────────────────────────────
+    - name: Print version
+      if: inputs.operation == 'version'
+      run: node "${{ github.action_path }}/dist/cli.js" version
+      shell: bash

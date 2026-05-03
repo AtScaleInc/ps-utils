@@ -36,6 +36,7 @@ class GenerateNotebookParameterSet extends TemplateParameterSet {
 type GenerateNotebookParams = TemplateOperationParams & {
   "connection-name": string;
 };
+export type GenerateNotebookFromConnectionParams = GenerateNotebookParams;
 
 /**
  * Stub operation to generate Notebook workbook from a namespace.

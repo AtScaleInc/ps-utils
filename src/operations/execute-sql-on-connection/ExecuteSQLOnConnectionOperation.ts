@@ -28,7 +28,7 @@ import { SqlService, type ConnectionConfig } from "../../services/SqlService.js"
 // Parameters
 // ----------------------------------------------------------
 
-class ExecuteSQLOnConnectionParams extends ParameterSet {
+class ExecuteSQLOnConnectionParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "sql-file";
@@ -69,6 +69,7 @@ type Params = {
   "on-error":        string;
   "dry-run":         boolean;
 };
+export type ExecuteSQLOnConnectionParams = Params;
 
 // ----------------------------------------------------------
 // SQL statement splitter
@@ -177,7 +178,7 @@ export function splitStatements(sql: string): string[] {
 export class ExecuteSQLOnConnectionOperation extends Operation<Params> {
   name        = "execute-sql-on-connection";
   description = "Execute a SQL file against a named database connection";
-  parameters  = new ExecuteSQLOnConnectionParams();
+  parameters  = new ExecuteSQLOnConnectionParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

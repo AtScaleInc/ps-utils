@@ -1745,3 +1745,21 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 ```
 
 ---
+
+### `version`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Print the installed version of atscale-utils
+
+**Endpoint:** `POST /rest/version`  |  **GraphQL:** `version`
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/version \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+---

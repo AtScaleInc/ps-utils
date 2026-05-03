@@ -50,7 +50,7 @@ import {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-class AtScaleListModelErrorsParams extends ParameterSet {
+class AtScaleListModelErrorsParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -108,6 +108,7 @@ type Params = {
   "model-name"?: string;
   "insecure"?:   boolean;
 };
+export type AtScaleListModelErrorsParams = Params;
 
 // ── Resolve AtScale environment ───────────────────────────────────────────────
 
@@ -374,7 +375,7 @@ function buildEngineChecks(
 export class AtScaleListModelErrorsOperation extends Operation<Params> {
   name        = "atscale-list-model-errors";
   description = "Validate an SML model and list structural and engine-level problems";
-  parameters  = new AtScaleListModelErrorsParams();
+  parameters  = new AtScaleListModelErrorsParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);

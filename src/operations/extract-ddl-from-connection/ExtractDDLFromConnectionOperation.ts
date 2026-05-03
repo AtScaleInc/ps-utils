@@ -28,7 +28,7 @@ import { SqlService, type ConnectionConfig, type SqlConnection } from "../../ser
 // Parameters
 // ----------------------------------------------------------
 
-class ExtractDDLFromConnectionParams extends ParameterSet {
+class ExtractDDLFromConnectionParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name         = "connection-file";
@@ -66,6 +66,7 @@ type Params = {
   tables?:           string;
   "output-file"?:    string;
 };
+export type ExtractDDLFromConnectionParams = Params;
 
 // ----------------------------------------------------------
 // Wildcard matching
@@ -263,7 +264,7 @@ function buildCreateTable(tableName: string, cols: ColumnInfo[], fks: ForeignKey
 export class ExtractDDLFromConnectionOperation extends Operation<Params> {
   name        = "extract-ddl-from-connection";
   description = "Connect to a database and extract CREATE TABLE DDL for each table in the schema";
-  parameters  = new ExtractDDLFromConnectionParams();
+  parameters  = new ExtractDDLFromConnectionParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);
