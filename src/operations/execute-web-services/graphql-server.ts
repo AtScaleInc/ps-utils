@@ -472,9 +472,9 @@ async function readMultipartBody(req: IncomingMessage): Promise<{
 
     const bb = Busboy({ headers: req.headers as Record<string, string | string[]> });
 
-    bb.on("field", (name, val) => { fields[name] = val; });
+    bb.on("field", (name: string, val: string) => { fields[name] = val; });
 
-    bb.on("file", (name, stream) => {
+    bb.on("file", (name: string, stream: NodeJS.ReadableStream) => {
       const tmpPath = join(tmpdir(), `rest-upload-${randomUUID()}`);
       tempPaths.push(tmpPath);
       files[name] = tmpPath;

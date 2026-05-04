@@ -65,9 +65,9 @@ export * from "./types.js";
 interface RawMetadata {
   tables: TableMeta[];
   columnsByTable: Map<string, ColumnMeta[]>;
-  foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>;
-  indexesByTable: Map<string, import("./types").IndexMeta[]>;
-  views: import("./types").ViewMeta[];
+  foreignKeysByTable: Map<string, import("./types.js").ForeignKeyMeta[]>;
+  indexesByTable: Map<string, import("./types.js").IndexMeta[]>;
+  views: import("./types.js").ViewMeta[];
 }
 
 async function readMetadata(
@@ -80,8 +80,8 @@ async function readMetadata(
   const views = await db.getViews(schemaPattern);
 
   const columnsByTable = new Map<string, ColumnMeta[]>();
-  const foreignKeysByTable = new Map<string, import("./types").ForeignKeyMeta[]>();
-  const indexesByTable = new Map<string, import("./types").IndexMeta[]>();
+  const foreignKeysByTable = new Map<string, import("./types.js").ForeignKeyMeta[]>();
+  const indexesByTable = new Map<string, import("./types.js").IndexMeta[]>();
 
   await Promise.all(
     tables.map(async (t) => {
@@ -120,7 +120,7 @@ async function readMetadata(
 function inferNamingConventionFKs(
   tables: TableMeta[],
   columnsByTable: Map<string, ColumnMeta[]>,
-  foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>,
+  foreignKeysByTable: Map<string, import("./types.js").ForeignKeyMeta[]>,
 ): Array<{ fromTable: string; fromColumn: string; toTable: string; toColumn: string }> {
   // Build lookup: lowercase table name → { original name, single-column PK or null }
   const tableIndex = new Map<string, { tableName: string; pkCol: string | null }>();
@@ -143,7 +143,7 @@ function inferNamingConventionFKs(
     // Track which (column → pkTable) pairs are already covered by a declared FK.
     const covered = new Set(existingFKs.map((fk) => `${fk.fkColumnName.toLowerCase()}|${fk.pkTableName.toLowerCase()}`));
 
-    const newFKs: import("./types").ForeignKeyMeta[] = [];
+    const newFKs: import("./types.js").ForeignKeyMeta[] = [];
 
     for (const col of cols) {
       if (!FK_SUFFIX.test(col.columnName)) continue;
@@ -254,7 +254,7 @@ const LOOKUP_NAME_PATTERNS: RegExp[] = [
 function classifyTables(
   tables: TableMeta[],
   columnsByTable: Map<string, ColumnMeta[]>,
-  foreignKeysByTable: Map<string, import("./types").ForeignKeyMeta[]>,
+  foreignKeysByTable: Map<string, import("./types.js").ForeignKeyMeta[]>,
 ): { factTables: Set<string>; dimensionTables: Set<string>; bridgeTables: Set<string> } {
   const factTables = new Set<string>();
   const dimensionTables = new Set<string>();
@@ -424,8 +424,8 @@ export interface ProposeOptions {
 function buildPiiExclusionSet(
   tableName: string,
   cols: ColumnMeta[],
-  severity: import("./pii-detection").PiiSeverity | false,
-  tableProfiles: Map<string, import("./column-profiler").ColumnProfile> | undefined,
+  severity: import("./pii-detection.js").PiiSeverity | false,
+  tableProfiles: Map<string, import("./column-profiler.js").ColumnProfile> | undefined,
   flagAccumulator: PiiColumnFlag[],
 ): Set<string> {
   if (severity === false) return new Set<string>();
@@ -1017,8 +1017,8 @@ export async function proposeSemanticModel(
       name: toTitleCase(v.viewName),
       sourceSql: v.definition,
       attributes: v.columns
-        .filter((c) => !viewPiiExclusion.has(c.columnName))
-        .map((c) => ({
+        .filter((c: ColumnMeta) => !viewPiiExclusion.has(c.columnName))
+        .map((c: ColumnMeta) => ({
           name: toTitleCase(c.columnName),
           sourceColumn: c.columnName,
           dataType: toSemanticType(c.dataType),
@@ -1056,7 +1056,7 @@ export async function proposeSemanticModel(
       ...smlOpts,
       columnsByTable:
         smlOpts.columnsByTable ??
-        (rawMetadata.columnsByTable as Map<string, import("./types").ColumnMeta[]>),
+        (rawMetadata.columnsByTable as Map<string, import("./types.js").ColumnMeta[]>),
     };
     model.sml = serializeToSml(model, smlOptsWithCols);
   }
