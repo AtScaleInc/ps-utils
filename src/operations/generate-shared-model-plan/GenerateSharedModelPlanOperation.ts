@@ -47,13 +47,20 @@ class GenerateSharedModelPlanParamsSet extends ParameterSet {
       required     = false;
       defaultValue = 0.5;
     })(),
+    new (class extends NumberParameter {
+      name         = "max-per-subject";
+      description  = "Maximum number of recommendations to emit per subject entity (dataset, dimension, or model pair); prevents flooding the output with near-duplicate options for the same entity (default 3)";
+      required     = false;
+      defaultValue = 3;
+    })(),
   ];
 }
 
 type Params = {
-  "input-dirs": string;
-  "output-dir":  string;
-  "threshold"?:  number;
+  "input-dirs":       string;
+  "output-dir":       string;
+  "threshold"?:       number;
+  "max-per-subject"?: number;
 };
 export type GenerateSharedModelPlanParams = Params;
 
@@ -71,8 +78,9 @@ export class GenerateSharedModelPlanOperation extends Operation<Params> {
   }
 
   async run(params: Params): Promise<void> {
-    const threshold  = params["threshold"] ?? 0.5;
-    const outputDir  = path.resolve(params["output-dir"]);
+    const threshold     = params["threshold"] ?? 0.5;
+    const maxPerSubject = params["max-per-subject"] ?? 3;
+    const outputDir     = path.resolve(params["output-dir"]);
 
     // Parse and resolve input directories
     const inputDirs = params["input-dirs"]
@@ -121,7 +129,7 @@ export class GenerateSharedModelPlanOperation extends Operation<Params> {
     );
 
     // Build plan options
-    const options = buildAllOptions(analysis, projects, threshold);
+    const options = buildAllOptions(analysis, projects, threshold, maxPerSubject);
     this.logger.log(`[GenerateSharedModelPlan] Generated ${options.length} option(s)`);
 
     // Ensure output directory exists

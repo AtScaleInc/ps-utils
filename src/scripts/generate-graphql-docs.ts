@@ -83,7 +83,7 @@ const GROUPS: [string, string[]][] = [
     "execute-sql-on-connection", "extract-ddl-from-connection",
     "generate-sml-from-connection", "generate-sml-from-ddl",
     "generate-sml-from-xml", "generate-shared-model-plan",
-    "generate-shared-design", "generate-ddl-from-atscale",
+    "apply-shared-model-plan-option", "generate-ddl-from-atscale",
     "generate-metrics-from-model",
   ]],
   ["Synthetic Data Generation", [

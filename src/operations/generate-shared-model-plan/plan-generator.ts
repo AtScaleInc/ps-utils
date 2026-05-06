@@ -67,6 +67,8 @@ export interface PlanOption {
     sql?: string;
     union_columns: SmlColumn[];
     consumers: Array<{ project: string; dir: string; dimension: string }>;
+    /** Column presence per source: maps sourceRef uniqueName → Set of column names in that source. */
+    source_column_sets: Map<string, Set<string>>;
   };
 
   baseModelExtraction?: {
@@ -171,16 +173,16 @@ function buildDimLibraryDiagram(opt: PlanOption): string {
   lines.push("  subgraph current[\"Current State\"]");
   for (const ref of opt.sourceRefs) {
     const mId = mid(`${ref.project}_${ref.uniqueName}`);
-    lines.push(`    ${mId}["${ref.uniqueName}\\n(${ref.project})"]`);
+    lines.push(`    ${mId}["${ref.uniqueName} (${ref.project})"]`);
   }
   lines.push("  end");
 
   // Proposed state (right side)
   lines.push("  subgraph proposed[\"Proposed State\"]");
-  lines.push(`    ${sharedId}["${opt.sharedDimension!.proposed_label}\\n(shared)"]`);
+  lines.push(`    ${sharedId}["${opt.sharedDimension!.proposed_label} (shared)"]`);
   for (const c of opt.sharedDimension!.consumers) {
     const mId = mid(`${c.project}_${c.model}_new`);
-    lines.push(`    ${mId}["${c.model}\\n(${c.project})"]`);
+    lines.push(`    ${mId}["${c.model} (${c.project})"]`);
     lines.push(`    ${mId} --> ${sharedId}`);
   }
   lines.push("  end");
@@ -197,15 +199,15 @@ function buildDatasetConsolidationDiagram(opt: PlanOption): string {
   lines.push("  subgraph current[\"Current State\"]");
   for (const ref of opt.sourceRefs) {
     const id = mid(`${ref.project}_${ref.uniqueName}`);
-    lines.push(`    ${id}["${ref.uniqueName}\\n(${ref.project})"]`);
+    lines.push(`    ${id}["${ref.uniqueName} (${ref.project})"]`);
   }
   lines.push("  end");
 
   lines.push("  subgraph proposed[\"Proposed State\"]");
-  lines.push(`    ${sharedId}["${opt.datasetConsolidation!.proposed_label}\\n(shared)"]`);
+  lines.push(`    ${sharedId}["${opt.datasetConsolidation!.proposed_label} (shared)"]`);
   for (const c of opt.datasetConsolidation!.consumers) {
     const id = mid(`${c.project}_${c.dimension}_new`);
-    lines.push(`    ${id}["${c.dimension}\\n(${c.project})"]`);
+    lines.push(`    ${id}["${c.dimension} (${c.project})"]`);
     lines.push(`    ${id} --> ${sharedId}`);
   }
   lines.push("  end");
@@ -216,14 +218,15 @@ function buildDatasetConsolidationDiagram(opt: PlanOption): string {
 }
 
 function buildBaseModelDiagram(opt: PlanOption): string {
-  const baseId = mid(`base_${opt.baseModelExtraction!.proposed_model_name}`);
+  const bm     = opt.baseModelExtraction!;
+  const baseId = mid(`base_${bm.proposed_model_name}`);
   const lines: string[] = ["```mermaid", "graph TD"];
 
-  lines.push(`  ${baseId}["Base Model: ${opt.baseModelExtraction!.proposed_model_name}\\n${opt.baseModelExtraction!.common_dimensions.length} shared dims, ${opt.baseModelExtraction!.common_metrics.length} shared metrics"]`);
+  lines.push(`  ${baseId}["Base Model: ${bm.proposed_model_name} | ${bm.common_dimensions.length} shared dims, ${bm.common_metrics.length} shared metrics"]`);
 
-  for (const s of opt.baseModelExtraction!.source_models) {
+  for (const s of bm.source_models) {
     const id = mid(`${s.project}_${s.model}`);
-    lines.push(`  ${id}["${s.model}\\n(${s.project})\\n+${s.specific_dimensions.length} specific dims"]`);
+    lines.push(`  ${id}["${s.model} (${s.project}) +${s.specific_dimensions.length} specific dims"]`);
     lines.push(`  ${id} -->|extends| ${baseId}`);
   }
 
@@ -520,8 +523,10 @@ export function buildDatasetConsolidationOptions(
     if (entries.length < 2) continue;
 
     let unionCols: SmlColumn[] = [];
+    const sourceColSets = new Map<string, Set<string>>();
     for (const { dataset } of entries) {
       unionCols = mergeColumns(unionCols, dataset.columns);
+      sourceColSets.set(dataset.uniqueName, new Set(dataset.columns.map((c) => c.name.toLowerCase())));
     }
 
     const firstDs = entries[0].dataset;
@@ -569,6 +574,7 @@ export function buildDatasetConsolidationOptions(
         sql: firstDs.sql,
         union_columns: unionCols,
         consumers,
+        source_column_sets: sourceColSets,
       },
       mermaidDiagram: "",
       changeList: [],
@@ -623,6 +629,11 @@ export function buildDatasetConsolidationOptions(
       }
     }
 
+    const pairColSets = new Map<string, Set<string>>([
+      [pair.dataset.uniqueName,      new Set(pair.dataset.columns.map((c) => c.name.toLowerCase()))],
+      [pair.otherDataset.uniqueName, new Set(pair.otherDataset.columns.map((c) => c.name.toLowerCase()))],
+    ]);
+
     const option: PlanOption = {
       id: "",
       kind: "dataset-consolidation",
@@ -642,6 +653,7 @@ export function buildDatasetConsolidationOptions(
         sql: pair.dataset.sql ?? pair.otherDataset.sql,
         union_columns: unionColumns,
         consumers,
+        source_column_sets: pairColSets,
       },
       mermaidDiagram: "",
       changeList: [],
@@ -770,10 +782,52 @@ function pruneContainedOptions(options: PlanOption[]): PlanOption[] {
   });
 }
 
+/**
+ * For each subject entity (a physical dataset, a logical dimension group, or a
+ * model pair), keep at most `maxPerSubject` options by score.  This prevents the
+ * output from being flooded with near-duplicate recommendations for the same
+ * entity while still allowing different-kind options for distinct entities to
+ * surface.
+ *
+ * Subject key derivation (stable across kind):
+ *   dataset-consolidation    → "ds:" + normalized proposed_unique_name
+ *   shared-dimension-library → "dim:" + normalized proposed_unique_name
+ *   base-model-extraction    → "model:" + sorted source unique-names joined
+ */
+function pruneToTopNPerSubject(options: PlanOption[], maxPerSubject: number): PlanOption[] {
+  if (maxPerSubject <= 0) return options;
+
+  function subjectKey(opt: PlanOption): string {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+    switch (opt.kind) {
+      case "dataset-consolidation":
+        return "ds:" + norm(opt.datasetConsolidation!.proposed_unique_name);
+      case "shared-dimension-library":
+        return "dim:" + norm(opt.sharedDimension!.proposed_unique_name);
+      case "base-model-extraction":
+        return "model:" + opt.sourceRefs.map((r) => norm(r.uniqueName)).sort().join("|");
+    }
+  }
+
+  const countBySubject = new Map<string, number>();
+  const kept: PlanOption[] = [];
+
+  for (const opt of options) {
+    const key = subjectKey(opt);
+    const count = countBySubject.get(key) ?? 0;
+    if (count < maxPerSubject) {
+      kept.push(opt);
+      countBySubject.set(key, count + 1);
+    }
+  }
+  return kept;
+}
+
 export function buildAllOptions(
   analysis: SimilarityAnalysis,
   projects: SmlProject[],
   threshold: number,
+  maxPerSubject = 3,
 ): PlanOption[] {
   // Build each kind independently so the per-kind cap applies before combining.
   const dsOptions  = buildDatasetConsolidationOptions(analysis.datasetPairs, projects, threshold)
@@ -783,24 +837,81 @@ export function buildAllOptions(
   const bmOptions  = buildBaseModelOptions(analysis.modelPairs, projects, threshold)
     .slice(0, MAX_PER_KIND["base-model-extraction"]);
 
-  // Sort: dataset consolidation first (highest value), then dim library, then base model;
-  // within a kind, sort by score descending.
+  // Sort by kind priority first (base-model-extraction is the most impactful refactoring,
+  // shared-dimension-library is a logical-level fix, dataset-consolidation is the most
+  // granular), then by score descending within each kind.
   const kindOrder: Record<OptionKind, number> = {
-    "dataset-consolidation": 0,
-    "shared-dimension-library": 1,
-    "base-model-extraction": 2,
+    "base-model-extraction":     0,
+    "shared-dimension-library":  1,
+    "dataset-consolidation":     2,
   };
-  const combined = [...dsOptions, ...dimOptions, ...bmOptions];
+  const combined = [...bmOptions, ...dimOptions, ...dsOptions];
   combined.sort((a, b) => {
     const ko = kindOrder[a.kind] - kindOrder[b.kind];
     return ko !== 0 ? ko : b.score - a.score;
   });
 
   // Remove options whose source set is entirely covered by another option.
-  const options = pruneContainedOptions(combined);
+  const afterContainment = pruneContainedOptions(combined);
+
+  // For each subject entity keep at most maxPerSubject options (already sorted by
+  // score descending, so we naturally keep the highest-scoring ones first).
+  const options = pruneToTopNPerSubject(afterContainment, maxPerSubject);
 
   options.forEach((o, i) => { o.id = `option-${i + 1}`; });
   return options;
+}
+
+// ============================================================
+// Column coverage table
+// ============================================================
+
+/**
+ * Builds a markdown table showing which columns each source dataset/dimension has.
+ * Rows = all columns in the union, columns = each source (by uniqueName), cells = ✓ or blank.
+ */
+function buildColumnCoverageTable(opt: PlanOption): string[] {
+  const ds      = opt.datasetConsolidation!;
+  const sources = opt.sourceRefs;
+  const colSets = ds.source_column_sets;
+  const n       = sources.length;
+
+  // Partition columns into those present in every source (identical) vs. those
+  // that differ (missing from at least one source).
+  const diffCols: Array<{ name: string; cells: string[] }> = [];
+  let identicalCount = 0;
+
+  for (const col of ds.union_columns) {
+    const key   = col.name.toLowerCase();
+    const cells = sources.map((r) => (colSets.get(r.uniqueName)?.has(key) ? "✓" : ""));
+    if (cells.every((c) => c === "✓")) {
+      identicalCount++;
+    } else {
+      diffCols.push({ name: col.name, cells });
+    }
+  }
+
+  // All columns are identical across every source — no table needed.
+  if (diffCols.length === 0) {
+    return [`All ${n} source(s) share the same ${identicalCount} column(s) — no column-level differences.`];
+  }
+
+  const lines: string[] = [];
+
+  if (identicalCount > 0) {
+    lines.push(
+      `${identicalCount} column(s) are identical across all sources and are omitted. ` +
+      `The table shows only the ${diffCols.length} column(s) that differ.`,
+      "",
+    );
+  }
+
+  lines.push(`| Column | ${sources.map((r) => r.uniqueName).join(" | ")} |`);
+  lines.push(`|--------|${sources.map(() => "--------").join("|")}|`);
+  for (const { name, cells } of diffCols) {
+    lines.push(`| \`${name}\` | ${cells.join(" | ")} |`);
+  }
+  return lines;
 }
 
 // ============================================================
@@ -856,10 +967,21 @@ export function renderRecommendationMarkdown(
   );
 
   // TOC
+  // Anchors are derived from heading text using the GitHub Markdown algorithm:
+  // lowercase → strip non-word chars (keep spaces/hyphens) → spaces to hyphens.
+  function headingAnchor(text: string): string {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+  }
+
   lines.push("## Table of Contents", "");
   for (const opt of options) {
-    const anchor = `#${opt.id}-${opt.kind}`;
-    lines.push(`- [${opt.id}: ${opt.title}](${anchor})`);
+    const headingText = `${opt.id}: ${opt.title}`;
+    lines.push(`- [${headingText}](#${headingAnchor(headingText)})`);
   }
   lines.push("", "---", "");
 
@@ -877,6 +999,15 @@ export function renderRecommendationMarkdown(
     lines.push("### Changes Required", "");
     for (const c of opt.changeList) lines.push(`- ${c}`);
     lines.push("");
+
+    if (opt.kind === "dataset-consolidation" && opt.datasetConsolidation) {
+      lines.push("### Column Coverage", "");
+      lines.push(
+        "Rows are all columns in the proposed union; ✓ indicates the source has that column.",
+        "",
+      );
+      lines.push(...buildColumnCoverageTable(opt), "");
+    }
 
     lines.push("### Pros", "");
     for (const p of opt.pros) lines.push(`- ${p}`);

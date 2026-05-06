@@ -25,7 +25,7 @@ flowchart LR
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
     SML2B["SML Dir B"] --> H
-    PLAN --> I["generate-shared-design"] --> SHARED["shared/dimensions, datasets, models"]
+    PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
 ```
@@ -121,7 +121,7 @@ flowchart LR
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
-    - [`generate-shared-design`](#generate-shared-design)
+    - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
   - Synthetic Data Generation
@@ -459,10 +459,11 @@ Analyses one or more SML output directories for sharing opportunities and genera
 | `input-dirs` | Yes | | Comma-separated list of SML output directories to analyse |
 | `output-dir` | Yes | | Directory where output files are written |
 | `threshold` | No | `0.5` | Similarity threshold 0–1; lower values surface more options |
+| `max-per-subject` | No | `3` | Maximum recommendations per subject entity; prevents flooding output with near-duplicate options |
 
 ---
 
-### `generate-shared-design`
+### `apply-shared-model-plan-option`
 
 [↑ Table of Contents](#table-of-contents)
 
@@ -477,7 +478,7 @@ Applies a `generate-shared-model-plan` recommendation YAML to create shared SML 
 
 - uses: AtScaleInc/ps-utils@v1
   with:
-    operation: generate-shared-design
+    operation: apply-shared-model-plan-option
     plan-file: shared-plan/option-11-shared-dimension-library.yml
     shared-dir: shared
     remove-sources: "false"   # optional — set "true" to delete local source copies

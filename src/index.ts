@@ -221,9 +221,10 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
 
 export type GenerateSharedModelPlanParams = {
   /** Comma-separated paths, or a Readable ZIP whose top-level folders are the directories. */
-  inputDirs:   DirInput;
-  outputDir:   DirOutput;
-  threshold?:  number;  // default: 0.5
+  inputDirs:        DirInput;
+  outputDir:        DirOutput;
+  threshold?:       number;  // default: 0.5
+  maxPerSubject?:   number;  // default: 3
 };
 
 export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, o: LibraryOptions = {}) {
@@ -233,26 +234,27 @@ export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, 
   });
   try {
     await run("generate-shared-model-plan", Object.assign({
-      threshold: 0.5,
+      threshold:        0.5,
+      "max-per-subject": 3,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
-export type GenerateSharedDesignParams = {
+export type ApplySharedModelPlanOptionParams = {
   planFile:        FileInput;
   sharedDir:       DirOutput;
   removeSources?:  boolean;  // default: false
   dryRun?:         boolean;  // default: false
 };
 
-export async function generateSharedDesign(p: GenerateSharedDesignParams, o: LibraryOptions = {}) {
+export async function applySharedModelPlanOption(p: ApplySharedModelPlanOptionParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
     inputFiles: ["planFile"],
     outputDirs: ["sharedDir"],
   });
   try {
-    await run("generate-shared-design", Object.assign({
+    await run("apply-shared-model-plan-option", Object.assign({
       "remove-sources": false,
       "dry-run":        false,
     }, cc2kebab(params)), o);

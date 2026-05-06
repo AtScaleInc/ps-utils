@@ -43,7 +43,7 @@ inputs:
         extract-query-stats-from-atscale
         generate-sml-from-xml
         generate-shared-model-plan
-        generate-shared-design
+        apply-shared-model-plan-option
         deploy-atscale-microk8s
         execute-web-services
     required: true
@@ -189,21 +189,21 @@ inputs:
       Used by: generate-sml-from-xml.
     required: false
 
-  # ── generate-shared-design ───────────────────────────────────────────────
+  # ── apply-shared-model-plan-option ──────────────────────────────────
   plan-file:
     description: >
       Path to the option YAML file produced by generate-shared-model-plan.
-      Used by: generate-shared-design.
+      Used by: apply-shared-model-plan-option.
     required: false
   shared-dir:
     description: >
       Directory where shared SML files (dimensions, datasets, models) will be written.
-      Used by: generate-shared-design.
+      Used by: apply-shared-model-plan-option.
     required: false
   remove-sources:
     description: >
       When "true", delete local source copies after writing the shared file.
-      Used by: generate-shared-design.
+      Used by: apply-shared-model-plan-option.
     required: false
 
   # ── generate-shared-model-plan ───────────────────────────────────────────
@@ -216,6 +216,12 @@ inputs:
     description: >
       Similarity threshold 0–1 for generate-shared-model-plan; lower values surface more
       options (default 0.5). Used by: generate-shared-model-plan.
+    required: false
+  max-per-subject:
+    description: >
+      Maximum number of recommendations to emit per subject entity (dataset, dimension, or
+      model pair). Prevents flooding output with near-duplicate options for the same entity
+      (default 3). Used by: generate-shared-model-plan.
     required: false
 
   # ── generate-namespace-from-model / generate-metrics-from-model / generate-queries-from-model ──
@@ -293,7 +299,7 @@ inputs:
   dry-run:
     description: >
       When "true", skips all side effects.
-      - generate-shared-design: no files written or deleted, actions are only logged.
+      - apply-shared-model-plan-option: no files written or deleted, actions are only logged.
       - execute-sql-on-connection: prints statements without executing them.
     required: false
 
@@ -896,9 +902,9 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
       shell: bash
 
-    # ── generate-shared-design ───────────────────────────────────────────────
-    - name: Generate Shared Design
-      if: inputs.operation == 'generate-shared-design'
+    # ── apply-shared-model-plan-option ──────────────────────────────────
+    - name: Generate SML From Shared Model Plan
+      if: inputs.operation == 'apply-shared-model-plan-option'
       run: |
         ARGS=(
           --plan-file  "${{ inputs.plan-file }}"
@@ -907,7 +913,7 @@ runs:
         )
         [[ "${{ inputs.remove-sources }}" == "true" ]] && ARGS+=(--remove-sources)
         [[ "${{ inputs.dry-run }}"        == "true" ]] && ARGS+=(--dry-run)
-        node "${{ github.action_path }}/dist/cli.js" generate-shared-design "${ARGS[@]}"
+        node "${{ github.action_path }}/dist/cli.js" apply-shared-model-plan-option "${ARGS[@]}"
       shell: bash
 
     # ── generate-shared-model-plan ───────────────────────────────────────────
@@ -919,7 +925,8 @@ runs:
           --output-dir "${{ inputs.output-dir }}"
           --verbose true
         )
-        [[ -n "${{ inputs.threshold }}" ]] && ARGS+=(--threshold "${{ inputs.threshold }}")
+        [[ -n "${{ inputs.threshold }}" ]]       && ARGS+=(--threshold       "${{ inputs.threshold }}")
+        [[ -n "${{ inputs.max-per-subject }}" ]] && ARGS+=(--max-per-subject "${{ inputs.max-per-subject }}")
         node "${{ github.action_path }}/dist/cli.js" generate-shared-model-plan "${ARGS[@]}"
       shell: bash
 

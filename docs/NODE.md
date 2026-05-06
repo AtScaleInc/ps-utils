@@ -89,7 +89,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
-  - [`generateSharedDesign`](#generateshareddesign)
+  - [`applySharedModelPlanOption`](#generatesmlFromsharedmodelplan)
   - [`generateDDLFromAtScale`](#generateddlfromatscale)
   - [`generateMetricsFromModel`](#generatemetricsfrommodel)
   - [`echoConnectionMetadata`](#echoconnectionmetadata)
@@ -408,27 +408,28 @@ function generateSharedModelPlan(
 | `inputDirs` | `DirInput` | Yes | | Comma-separated SML directories to analyse, or a `Readable` ZIP whose top-level folders become the list |
 | `outputDir` | `DirOutput` | Yes | | Output directory for `RECOMMENDATION.md` and option YAML files, or a `Writable` to receive a ZIP |
 | `threshold` | `number` | No | `0.5` | Similarity threshold 0–1; lower surfaces more options |
+| `maxPerSubject` | `number` | No | `3` | Maximum recommendations per subject entity (dataset, dimension, or model pair); prevents flooding output with near-duplicate options for the same entity |
 
 ---
 
-### `generateSharedDesign`
+### `applySharedModelPlanOption`
 
 [↑ Table of Contents](#table-of-contents)
 
 Applies a `generateSharedModelPlan` recommendation YAML to produce shared SML files.
 
 ```typescript
-import { generateSharedDesign } from "@atscale/ps-utils";
+import { applySharedModelPlanOption } from "@atscale/ps-utils";
 
-await generateSharedDesign({
+await applySharedModelPlanOption({
   planFile:  "./shared-plan/option-1.yml",
   sharedDir: "./shared",
 });
 ```
 
 ```typescript
-function generateSharedDesign(
-  params: GenerateSharedDesignParams,
+function applySharedModelPlanOption(
+  params: ApplySharedModelPlanOptionParams,
   options?: LibraryOptions
 ): Promise<void>
 ```

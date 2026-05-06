@@ -21,7 +21,7 @@
     - [`generateSmlFromDdl`](#generatesmlfromddl)
     - [`generateSmlFromXml`](#generatesmlfromxml)
     - [`generateSharedModelPlan`](#generatesharedmodelplan)
-    - [`generateSharedDesign`](#generateshareddesign)
+    - [`applySharedModelPlanOption`](#applysharedmodelplanoption)
     - [`generateDdlFromAtscale`](#generateddlfromatscale)
     - [`generateMetricsFromModel`](#generatemetricsfrommodel)
   - Synthetic Data Generation
@@ -541,6 +541,7 @@ curl -X POST http://localhost:4000/graphql \
 | `inputDirs` | `String` | Yes | Comma-separated list of SML output directories to analyse (at least one required) |
 | `outputDir` | `String` | — | *Server-managed output path — do not pass* |
 | `threshold` | `Int` | No | Similarity threshold 0–1; lower values surface more options (default 0.5) |
+| `maxPerSubject` | `Int` | No | Maximum number of recommendations to emit per subject entity (dataset, dimension, or model pair); prevents flooding the output with near-duplicate options for the same entity (default 3) |
 
 **GraphQL:**
 
@@ -565,13 +566,13 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
-### `generateSharedDesign`
+### `applySharedModelPlanOption`
 
 [↑ Table of Contents](#table-of-contents)
 
 > Apply a generate-shared-model-plan recommendation YAML to create shared SML files
 
-**CLI name:** `generate-shared-design`  |  **REST:** `POST /rest/generate-shared-design`
+**CLI name:** `apply-shared-model-plan-option`  |  **REST:** `POST /rest/apply-shared-model-plan-option`
 
 | Input field | GraphQL type | Required | Description |
 |-------------|-------------|----------|-------------|
@@ -588,7 +589,7 @@ curl -X POST http://localhost:4000/graphql \
 
 ```graphql
 mutation {
-  generateSharedDesign(input: {
+  applySharedModelPlanOption(input: {
     planFileContent: "--- # file content"
     sharedDir: "value"
   }) {
@@ -603,13 +604,13 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateSharedDesign(input:{planFileContent: \"--- # file content\", sharedDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{applySharedModelPlanOption(input:{planFileContent: \"--- # file content\", sharedDir: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateSharedDesign(input:{planFileUpload:$f,sharedDir:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'operations={"query":"mutation($f:Upload!){applySharedModelPlanOption(input:{planFileUpload:$f,sharedDir:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
@@ -2468,10 +2469,12 @@ input GenerateSharedModelPlanInput {
   outputDir: String
   """Similarity threshold 0–1; lower values surface more options (default 0.5)"""
   threshold: Int
+  """Maximum number of recommendations to emit per subject entity (dataset, dimension, or model pair); prevents flooding the output with near-duplicate options for the same entity (default 3)"""
+  maxPerSubject: Int
 }
 
 """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""
-input GenerateSharedDesignInput {
+input ApplySharedModelPlanOptionInput {
   """Path to the option YAML file produced by generate-shared-model-plan"""
   planFile: String
   """Uploaded file — alternative to planFile"""
@@ -3193,7 +3196,7 @@ type Mutation {
   """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
   generateSharedModelPlan(input: GenerateSharedModelPlanInput): OperationResult!
   """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""
-  generateSharedDesign(input: GenerateSharedDesignInput): OperationResult!
+  applySharedModelPlanOption(input: ApplySharedModelPlanOptionInput): OperationResult!
   """Read an SML directory and output the same model.yaml format as extract-model-from-atscale"""
   extractModelFromSml(input: ExtractModelFromSmlInput): OperationResult!
   """Generate a namespace YAML from a model.yaml file using analysis suggestions"""

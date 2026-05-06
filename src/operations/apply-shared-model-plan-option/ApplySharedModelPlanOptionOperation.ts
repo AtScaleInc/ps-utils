@@ -1,5 +1,5 @@
 /**
- * GenerateSharedDesign
+ * ApplySharedModelPlanOption
  *
  * Applies a machine-readable recommendation YAML produced by
  * generate-shared-model-plan.  For each kind:
@@ -26,7 +26,7 @@ import { parsePlanYaml, applyPlan, type ApplyAction } from "./design-applier.js"
 // Parameters
 // ----------------------------------------------------------
 
-class GenerateSharedDesignParamsSet extends ParameterSet {
+class ApplySharedModelPlanOptionParamsSet extends ParameterSet {
   parameters = [
     new (class extends StringParameter {
       name        = "plan-file";
@@ -61,16 +61,16 @@ type Params = {
   "remove-sources"?: boolean;
   "dry-run"?:        boolean;
 };
-export type GenerateSharedDesignParams = Params;
+export type ApplySharedModelPlanOptionParams = Params;
 
 // ----------------------------------------------------------
 // Operation
 // ----------------------------------------------------------
 
-export class GenerateSharedDesignOperation extends Operation<Params> {
-  name        = "generate-shared-design";
+export class ApplySharedModelPlanOptionOperation extends Operation<Params> {
+  name        = "apply-shared-model-plan-option";
   description = "Apply a generate-shared-model-plan recommendation YAML to create shared SML files";
-  parameters  = new GenerateSharedDesignParamsSet();
+  parameters  = new ApplySharedModelPlanOptionParamsSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
     super(services, logger);
@@ -87,15 +87,15 @@ export class GenerateSharedDesignOperation extends Operation<Params> {
     }
 
     if (dryRun) {
-      this.logger.log("[GenerateSharedDesign] DRY RUN — no files will be written or deleted");
+      this.logger.log("[ApplySharedModelPlanOption] DRY RUN — no files will be written or deleted");
     }
 
-    this.logger.log(`[GenerateSharedDesign] Reading plan: ${planFile}`);
+    this.logger.log(`[ApplySharedModelPlanOption] Reading plan: ${planFile}`);
     const plan = parsePlanYaml(planFile);
-    this.logger.log(`[GenerateSharedDesign] Kind: ${plan.kind} — ${plan.title}`);
-    this.logger.log(`[GenerateSharedDesign] Sources: ${plan.source_references.length} reference(s)`);
-    this.logger.log(`[GenerateSharedDesign] Shared output dir: ${sharedDir}`);
-    if (removeSources) this.logger.log("[GenerateSharedDesign] --remove-sources: local copies will be deleted");
+    this.logger.log(`[ApplySharedModelPlanOption] Kind: ${plan.kind} — ${plan.title}`);
+    this.logger.log(`[ApplySharedModelPlanOption] Sources: ${plan.source_references.length} reference(s)`);
+    this.logger.log(`[ApplySharedModelPlanOption] Shared output dir: ${sharedDir}`);
+    if (removeSources) this.logger.log("[ApplySharedModelPlanOption] --remove-sources: local copies will be deleted");
 
     fs.mkdirSync(sharedDir, { recursive: true });
 
@@ -112,7 +112,7 @@ export class GenerateSharedDesignOperation extends Operation<Params> {
     }
 
     if (result.warnings.length > 0) {
-      this.logger.log("\n[GenerateSharedDesign] Warnings:");
+      this.logger.log("\n[ApplySharedModelPlanOption] Warnings:");
       for (const w of result.warnings) this.logger.log(`  ! ${w}`);
     }
 
@@ -123,14 +123,14 @@ export class GenerateSharedDesignOperation extends Operation<Params> {
     ].filter(Boolean).join(", ");
 
     this.logger.log(
-      `\n[GenerateSharedDesign] ${dryRun ? "DRY RUN — " : ""}Done — ${summary}`,
+      `\n[ApplySharedModelPlanOption] ${dryRun ? "DRY RUN — " : ""}Done — ${summary}`,
     );
 
     // Write an apply report alongside the shared files
     if (!dryRun) {
       const reportPath = path.join(sharedDir, "APPLY_REPORT.md");
       fs.writeFileSync(reportPath, this.buildReport(plan, result.actions, result.warnings, removeSources), "utf8");
-      this.logger.log(`[GenerateSharedDesign] Report: ${reportPath}`);
+      this.logger.log(`[ApplySharedModelPlanOption] Report: ${reportPath}`);
     }
   }
 

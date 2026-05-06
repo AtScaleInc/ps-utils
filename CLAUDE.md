@@ -129,6 +129,18 @@ const diagram = lines.join("\n");
 
 This applies to every place a Mermaid code block is assembled: `buildDimLibraryDiagram`, `buildDatasetConsolidationDiagram`, `buildBaseModelDiagram`, `buildMermaidDiagram` in the XML converter, inline diagrams in README sections, and any future diagram builders.
 
+**Never use `\n` inside Mermaid node labels.** `htmlLabels` is disabled in this project, so `\n` inside a quoted label string is not interpreted as a line break — it renders as the literal two characters `\n`. Use a space or another inline separator instead:
+
+**Wrong:**
+```typescript
+lines.push(`  ${id}["${name}\\n(${project})"]`);
+```
+
+**Correct:**
+```typescript
+lines.push(`  ${id}["${name} (${project})"]`);
+```
+
 ## Operation body structure — group headers and back-to-TOC links
 
 Inside the `## Operations` section of every documentation file (README.md, docs/ACTIONS.md, and generated docs/GRAPHQL.md / docs/REST.md), operations must be organized under group section headers that exactly match the TOC groupings. Add a `#### <Group Name>` heading before the first operation in each group. The group name must be identical to how it appears in the TOC.

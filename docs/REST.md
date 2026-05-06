@@ -20,7 +20,7 @@
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
-    - [`generate-shared-design`](#generate-shared-design)
+    - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -467,6 +467,7 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-xml \
 |-----------------|------|----------|-------------|
 | `inputDirs` | `String` | Yes | Comma-separated list of SML output directories to analyse (at least one required) |
 | `threshold` | `Int` | No | Similarity threshold 0–1; lower values surface more options (default 0.5) |
+| `maxPerSubject` | `Int` | No | Maximum number of recommendations to emit per subject entity (dataset, dimension, or model pair); prevents flooding the output with near-duplicate options for the same entity (default 3) |
 
 **curl (JSON):**
 
@@ -480,13 +481,13 @@ curl -X POST http://localhost:4000/rest/generate-shared-model-plan \
 
 ---
 
-### `generate-shared-design`
+### `apply-shared-model-plan-option`
 
 [↑ Table of Contents](#table-of-contents)
 
 > Apply a generate-shared-model-plan recommendation YAML to create shared SML files
 
-**Endpoint:** `POST /rest/generate-shared-design`  |  **GraphQL:** `generateSharedDesign`
+**Endpoint:** `POST /rest/apply-shared-model-plan-option`  |  **GraphQL:** `applySharedModelPlanOption`
 
 | Field (JSON key) | Type | Required | Description |
 |-----------------|------|----------|-------------|
@@ -502,7 +503,7 @@ curl -X POST http://localhost:4000/rest/generate-shared-model-plan \
 **curl (JSON):**
 
 ```bash
-curl -X POST http://localhost:4000/rest/generate-shared-design \
+curl -X POST http://localhost:4000/rest/apply-shared-model-plan-option \
   -H "Content-Type: application/json" \
   -d '{
       "planFileContent": "--- # inline YAML/file content",
@@ -512,7 +513,7 @@ curl -X POST http://localhost:4000/rest/generate-shared-design \
 
 ```bash
 # With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-shared-design \
+curl -X POST http://localhost:4000/rest/apply-shared-model-plan-option \
   -F "planFileUpload=@/path/to/file" \
   -F "sharedDir=value"
 ```
