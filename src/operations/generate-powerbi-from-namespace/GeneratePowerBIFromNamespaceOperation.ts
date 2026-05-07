@@ -58,7 +58,12 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
     const folderName = path.basename(outDir);
 
     this.logger.verbose(`Reading model file: ${modelFile}`);
-    const modelData = yaml.readFromFile<Record<string, unknown>>(modelFile);
+    const rawModelData = yaml.readFromFile<Record<string, unknown>>(modelFile);
+    const aliasesFile  = params["aliases-file"];
+    const aliasesData  = aliasesFile
+      ? yaml.readFromFile<Record<string, unknown>>(aliasesFile)
+      : null;
+    const modelData = yaml.augmentModelData(rawModelData, aliasesData);
 
     this.logger.verbose(`Reading connection file: ${connectionFile}`);
     const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile) as any;
