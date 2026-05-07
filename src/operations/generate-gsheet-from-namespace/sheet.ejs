@@ -1,0 +1,41 @@
+[{
+  <%
+    let measure;
+    let level;
+    let dimension;
+    let hierarchy;
+    if (model.mdx.metrics.map((metric) => metric.query_name).includes(worksheet.xAxis)) {
+      measure = worksheet.xAxis
+      level = worksheet.yAxis
+    }
+    else {
+      measure = worksheet.yAxis
+      level = worksheet.xAxis
+    }
+    let shouldBreak = false;
+    Object.entries(model.mdx.attributes).forEach(([dimensionName, dimensionInfo]) => {
+      if (shouldBreak) return;
+      Object.entries(dimensionInfo).forEach(([hierarchyName, hierarchyInfo]) => {
+        for (let attribute of hierarchyInfo) {
+          if (attribute.query_name === level) {
+            dimension = dimensionName;
+            hierarchy = hierarchyName;
+            shouldBreak = true;
+          };
+        };
+      });
+    });
+  %>
+  "name": "<%= worksheet.title %>",
+  "catalog": "<%= connection.mdx.catalog_name %>",
+  "cube": "<%= model.sql.table_name %>",
+  "engineUrl": "<%= connectionString %>",
+  "rows": [
+    "[<%= dimension %>].[<%= hierarchy %>].[<%= level %>]"
+  ],
+  "columns": [],
+  "values": [
+    "[Measures].[<%= measure %>]"
+  ],
+  "filters": []
+}]

@@ -3,6 +3,7 @@
  */
 import { ExtractAtScaleModelOperation } from "./extract-model-from-atscale/ExtractAtScaleModelOperation.js";
 import { GeneratePowerBIFromNamespaceOperation } from "./generate-powerbi-from-namespace/GeneratePowerBIFromNamespaceOperation.js";
+import { GenerateGSheetFromNamespaceOperation } from "./generate-gsheet-from-namespace/GenerateGSheetFromNamespaceOperation.js";
 import { GenerateNotebookFromConnectionOperation } from "./generate-notebook-from-connection/GenerateNotebookFromConnectionOperation.js";
 import { GenerateTableauFromNamespaceOperation } from "./generate-tableau-from-namespace/GenerateTableauFromNamespaceOperation.js";
 import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOperation.js";
@@ -55,6 +56,7 @@ export async function buildRegistry(
   const registry = new OperationRegistry();
   registry.register(new ExtractAtScaleModelOperation(services, logger));
   registry.register(new GeneratePowerBIFromNamespaceOperation(services, logger));
+  registry.register(new GenerateGSheetFromNamespaceOperation(services, logger));
   registry.register(new GenerateNotebookFromConnectionOperation(services, logger));
   registry.register(new GenerateTableauFromNamespaceOperation(services, logger));
   registry.register(new EchoConnectionMetaDataOperation(services, logger));
