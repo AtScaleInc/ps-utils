@@ -25,6 +25,6 @@ export class VersionOperation extends Operation<Params> {
   run(_params: Params): void {
     const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../../package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string; name: string };
-    console.log(`${pkg.name}@${pkg.version}`);
+    this.logger.log(`${pkg.name}@${pkg.version}`);
   }
 }

@@ -5,8 +5,13 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
 Upcoming features:
 - Google Sheets
 - Rudy's aggregate util
-- Complete GitActions
-- SSO
+- Perspectives
+- -- apply plan should show command
+- graphql output not going to output
+- web interface better + REST
+- tableau, mstr, ssas conversion
+  - find Hive dialect in a workbook
+  
 
 
 ### Model Extraction
@@ -186,6 +191,8 @@ flowchart LR
 - **macOS only:** Xcode Command Line Tools (required for native module compilation):
   ```bash
   xcode-select --install
+  brew install npm 
+  brew install tsc
   ```
 
 **Install globally from npm:**
