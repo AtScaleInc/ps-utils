@@ -41,8 +41,8 @@ export type GenerateNotebookFromConnectionParams = GenerateNotebookParams;
 /**
  * Stub operation to generate Notebook workbook from a namespace.
  */
-export class GenerateNotebookFromConnectionOperation extends TemplateOperation<GenerateNotebookParams> {
-  name = "generate-notebook-from-connection";
+export class GenerateNotebookFromNamespaceOperation extends TemplateOperation<GenerateNotebookParams> {
+  name = "generate-notebook-from-namespace";
   description = "Generate a Notebook from a namespace (stub)";
   parameters = new GenerateNotebookParameterSet();
 
@@ -54,12 +54,27 @@ export class GenerateNotebookFromConnectionOperation extends TemplateOperation<G
     const yaml = this.services.get<YamlService>("yaml");
     const ejs = this.services.get<EjsTemplateService>("ejs");
 
+    const modelFile = params["model-file"] ?? "model.yaml";
     const connectionFile = params["connection-file"] ?? "connections.yaml";
-    const targetFile = params["target-file"] ?? "notebook.ipynb";
+    const targetFile = params["target-file"] ?? "tableau.twb";
+
+    this.logger.verbose(`Reading model file: ${modelFile}`);
+    const rawModelData = yaml.readFromFile<Record<string, unknown>>(modelFile);
+    const aliasesFile  = params["aliases-file"];
+    const aliasesData  = aliasesFile
+      ? yaml.readFromFile<Record<string, unknown>>(aliasesFile)
+      : null;
+    const modelData = yaml.augmentModelData(rawModelData, aliasesData);
+    const models = modelData as Record<string, any>;
+
+
+    this.logger.verbose("Reading overview namespace: " + params["namespace-file"]);
+    const overviewData = yaml.readFromFile<Record<string, unknown>>(params["namespace-file"]);
+    const namespace = this.sanitizeNamespace(overviewData as Record<string, any>, models);
 
     this.logger.verbose(`Reading connection file: ${connectionFile}`);
     const connectionData = yaml.readFromFile<Record<string, unknown>>(connectionFile) as any;
-    var connection = connectionData.connections[params["connection-name"]] as any;
+    var connection = connectionData.connections?.[params["connection-name"]] as any;
     if (!connection) {
       this.logger.error(`Connection ${params["connection-name"]} not found in ${connectionFile}`);
       return;
@@ -80,8 +95,10 @@ export class GenerateNotebookFromConnectionOperation extends TemplateOperation<G
 
     try {
       const output = ejs.render(template, {
+        models,
         connection,
-        mdxUser
+        mdxUser,
+        namespace
       });
       fs.writeFileSync(targetFile, output, "utf8");
       this.logger.info(`Wrote Notebook workbook to ${targetFile}`);

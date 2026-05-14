@@ -28,7 +28,8 @@
     "from atscale.repo import Repo\n",
     "from atscale.catalog import Catalog\n",
     <% } %>
-    "from atscale.data_model import DataModel"
+    "from atscale.data_model import DataModel\n",
+    "import plotly.express as px"
    ]
   },
   {
@@ -102,66 +103,29 @@
    ]
   },
   <% } %>
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "d9ad09cf",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "data_model.get_folders()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "0d77d524",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "data_model.get_all_numeric_feature_names()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "640c0541",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "data_model.get_all_categorical_feature_names()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "02e6c1c4",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "data_model.get_dimensions()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "39c73874",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "data_model.get_hierarchies()"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "0db9d42a",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "data_model.get_data(feature_list=[])"
-   ]
-  },
+  <% Object.entries(namespace.worksheets).forEach(([worksheetName, worksheet]) => { %>
+     {
+       "cell_type": "code",
+       "execution_count": null,
+       "id": "0db9d42a",
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        <% if (worksheet.graphType == "text") { %>
+          "df = data_model.get_data(feature_list=[<%= worksheet.measures %>])\n",
+          "print(df)"
+        <% } else if (worksheet.graphType == "line") { %>
+          "df = data_model.get_data(feature_list=[\"<%= worksheet.xAxis %>\", \"<%= worksheet.yAxis %>\"])\n",
+          "fig = px.line(df, x=\"<%= worksheet.xAxis %>\", y=\"<%= worksheet.yAxis %>\", title=\"<%= worksheet.title %>\")\n",
+          "fig.show()"
+        <% } else if (worksheet.graphType == "bar") { %>
+          "df = data_model.get_data(feature_list=[\"<%= worksheet.xAxis %>\", \"<%= worksheet.yAxis %>\"])\n",
+          "fig = px.bar(df, x=\"<%= worksheet.xAxis %>\", y=\"<%= worksheet.yAxis %>\", title=\"<%= worksheet.title %>\")\n",
+          "fig.show()"
+        <% } %>
+       ]
+     },
+  <% }) %>
   {
    "cell_type": "code",
    "execution_count": null,
