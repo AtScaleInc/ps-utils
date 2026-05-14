@@ -352,7 +352,8 @@ Extract only specific tables or wildcard patterns:
 | `--connection-name` | Yes | | Connection name in the file |
 | `--schema` | Yes | | Database schema to introspect |
 | `--connection-file` | No | `connections.yaml` | Path to connections file |
-| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-insensitive. |
+| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-sensitive by default. |
+| `--case-insensitive` | No | `false` | Match table names case-insensitively |
 | `--output-file` | No | stdout | Output path for the DDL |
 
 ---

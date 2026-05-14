@@ -571,6 +571,11 @@ inputs:
       Comma-separated table names or wildcard patterns to extract (e.g. "Dim*,FactSales").
       Omit to extract all tables in the schema.
     required: false
+  case-insensitive:
+    description: >
+      When "true", match table names case-insensitively. Default is case-sensitive matching.
+      Used by: extract-ddl-from-connection.
+    required: false
 
   # ── generate-atscale-install-yaml ────────────────────────────────────────
   hostname:
@@ -1036,8 +1041,9 @@ runs:
           --schema          "${{ inputs.schema }}"
           --verbose true
         )
-        [[ -n "${{ inputs.tables }}" ]]      && ARGS+=(--tables      "${{ inputs.tables }}")
-        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.tables }}" ]]            && ARGS+=(--tables           "${{ inputs.tables }}")
+        [[ "${{ inputs.case-insensitive }}" == "true" ]] && ARGS+=(--case-insensitive true)
+        [[ -n "${{ inputs.output-file }}" ]]       && ARGS+=(--output-file      "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
       shell: bash
 

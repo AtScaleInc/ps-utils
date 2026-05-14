@@ -322,6 +322,7 @@ With table filtering:
     connection-name: snow_demo
     schema: PUBLIC
     tables: "Dim*,FactInternetSales"
+    case-insensitive: "true"
     output-file: schema/extracted.ddl
 ```
 
