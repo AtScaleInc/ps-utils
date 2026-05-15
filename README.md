@@ -2,7 +2,7 @@
 
 CLI tool for extracting AtScale models, generating SML semantic models, and generating BI workbooks (Tableau, Excel, Power BI).
 
-Upcoming features:
+  Upcoming features:
 - Google Sheets
 - Rudy's aggregate util
 - Perspectives
@@ -11,7 +11,8 @@ Upcoming features:
 - web interface better + REST
 - tableau, mstr, ssas conversion
   - find Hive dialect in a workbook
-  
+- Apply style to SML
+
 
 
 ### Model Extraction
