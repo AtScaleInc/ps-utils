@@ -566,6 +566,119 @@ The customer creates a static IP or DNS-managed CNAME entry pointing to the exte
 | Enables global routing (Route 53 latency routing, Azure Traffic Manager) | |
 | Static IP simplifies firewall rules on the BI tool side | |
 
+#### TCP Traffic Configuration (L4 Load Balancer)
+
+AtScale exposes two distinct traffic types that require different load balancer layers:
+
+| Traffic type | Protocol | Port | Load balancer layer | `values.yaml` key |
+|---|---|---|---|---|
+| HTTP — Design Center, REST API, XMLA/MDX | HTTPS (L7) | 443 | Application / L7 LB | `ingressDomain` |
+| SQL — JDBC, TDS, pgwire | TCP (L4) | 15432 | Network / L4 LB | `ingressTCPDomain` |
+
+If `ingressTCPDomain` is not set, all traffic (including TCP on `:15432`) falls back to `ingressDomain`. This works only when both the HTTP and TCP traffic share the same Network Load Balancer (single-LB option below). If they are split across separate load balancers, `ingressTCPDomain` must be explicitly set.
+
+After deployment, downloaded `.tds` Tableau data-source files automatically reference `ingressTCPDomain` as the pgwire connection host.
+
+##### Option A — Single Network Load Balancer (AWS NLB)
+
+One NLB handles both HTTPS and TCP traffic. TLS termination for HTTPS occurs at the `atscale-proxy` pod. This is the simpler option when a single DNS hostname for all traffic is acceptable.
+
+```mermaid
+flowchart LR
+    CLIENTS["BI Tools / Browsers"]
+    NLB["AWS Network Load Balancer (TCP passthrough - ports 443 and 15432)"]
+
+    subgraph NS["Namespace: atscale"]
+        PROXY["atscale-proxy (TLS termination for HTTPS)"]
+        ENGINE["atscale-engine (pgwire :15432)"]
+        SERVICES["API / SML / Auth"]
+    end
+
+    CLIENTS -->|"HTTPS :443"| NLB -->|":443"| PROXY --> SERVICES
+    CLIENTS -->|"SQL/pgwire :15432"| NLB -->|":15432"| ENGINE
+```
+
+Annotate the `atscale-proxy` Kubernetes Service in `values.yaml`:
+
+```yaml
+ingressDomain: atscale.example.com      # single hostname for all traffic
+# ingressTCPDomain is left unset — falls back to ingressDomain
+
+atscale-proxy:
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+```
+
+##### Option B — Dual Load Balancer (L7 for HTTP + L4 for TCP)
+
+An L7 Application Load Balancer (ALB / GCP HTTPS LB / Azure App Gateway) handles HTTPS traffic. A separate L4 Network Load Balancer (or a `LoadBalancer`-type Kubernetes Service) handles raw TCP on `:15432`. This is the preferred option when WAF, path-based routing, or Google GCE ingress is required.
+
+```mermaid
+flowchart LR
+    CLIENTS["BI Tools / Browsers"]
+
+    subgraph L7["L7 Load Balancer (Application / HTTPS)"]
+        ALB["ALB / GCE HTTPS LB (TLS termination)"]
+        WAF["WAF / Security Policy"]
+    end
+
+    subgraph L4["L4 Load Balancer (Network / TCP)"]
+        NLB["NLB / TCP Service (port 15432 passthrough)"]
+    end
+
+    subgraph NS["Namespace: atscale"]
+        PROXY["atscale-proxy"]
+        ENGINE["atscale-engine (pgwire :15432)"]
+        SERVICES["API / SML / Auth"]
+    end
+
+    CLIENTS -->|"HTTPS :443"| ALB
+    ALB -.-> WAF
+    ALB -->|"HTTP"| PROXY --> SERVICES
+
+    CLIENTS -->|"SQL/pgwire :15432"| NLB --> ENGINE
+```
+
+Set separate domain values in `values.yaml` and configure a dedicated `LoadBalancer` Service for the engine TCP port:
+
+```yaml
+ingressDomain: atscale.example.com       # hostname for HTTPS / Design Center / XMLA
+ingressTCPDomain: sql.atscale.example.com  # hostname for JDBC / TDS / pgwire
+
+# L7 ingress — GCE example (adjust for ALB / App Gateway as needed)
+atscale-proxy:
+  ingress:
+    enabled: true
+    ingressClassName: gce
+    annotations:
+      kubernetes.io/ingress.allow-http: "false"
+    tls:
+      - secretName: atscale-tls
+        hosts:
+          - atscale.example.com
+
+# L4 service for raw TCP on port 15432
+atscale-engine:
+  tcpService:
+    enabled: true
+    type: LoadBalancer
+    port: 15432
+    targetPort: 15432
+    loadBalancerSourceRanges:          # restrict to known BI tool / office CIDRs
+      - 10.0.0.0/8
+      - 203.0.113.0/24
+```
+
+`loadBalancerSourceRanges` is strongly recommended on the L4 service — unlike the L7 layer there is no WAF or path-based policy to restrict access.
+
+##### Health Check Port
+
+Both load balancer options require a health check against the `atscale-proxy` HTTP port. Configure the health check target as port `8888` (the NGINX stub-status endpoint) rather than `:443`, which requires TLS negotiation and adds latency to health probe cycles.
+
 ---
 
 ### Decision 5 — Persistent Volume Support
