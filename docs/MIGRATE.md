@@ -273,8 +273,9 @@ Add the following secrets to **each** environment:
 | `ATSCALE_SQL_HOST` | Hostname for the AtScale Postgres backend (may be the same as `ATSCALE_HOST`) |
 | `ATSCALE_SQL_PORT` | Postgres port for AtScale backend (typically `10520`) |
 | `ATSCALE_SQL_PASSWORD` | Password for the AtScale Postgres backend |
+| `ATSCALE_LEGACY_SQL_PASSWORD` | Password for the **legacy installer-based** AtScale Postgres backend — used in Phase 2 query extraction only; can be removed after M1 is complete |
 
-`ATSCALE_SQL_*` secrets are only used in query extraction and harness workflows and only need to be set on the environment(s) where extraction runs (typically `uat` and `prod`).
+`ATSCALE_SQL_*` secrets are only used in query extraction and harness workflows and only need to be set on the environment(s) where extraction runs (typically `uat` and `prod`). `ATSCALE_LEGACY_SQL_PASSWORD` is a repository-level secret (not per-environment) and is temporary — it grants read access to the legacy system solely to capture the query baseline.
 
 ### 1.4 Configure Branch Protection
 
