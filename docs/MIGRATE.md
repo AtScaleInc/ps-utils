@@ -915,8 +915,13 @@ jobs:
 
       - name: Check for query failures
         run: |
-          # Fail the workflow if any query returned an error
-          if grep -r '"error"' run_results/*.csv 2>/dev/null; then
+          if awk -F',' '
+            FNR==1 { col=0; for(i=1;i<=NF;i++) if($i=="status") col=i; next }
+            col && $col=="error" { found=1 }
+            END { exit (found ? 1 : 0) }
+          ' run_results/*.csv; then
+            echo "All queries passed."
+          else
             echo "::error::One or more queries failed in UAT. Check the uploaded harness results artifact."
             exit 1
           fi
@@ -1032,7 +1037,13 @@ jobs:
 
       - name: Check for query failures
         run: |
-          if grep -r '"error"' run_results/*.csv 2>/dev/null; then
+          if awk -F',' '
+            FNR==1 { col=0; for(i=1;i<=NF;i++) if($i=="status") col=i; next }
+            col && $col=="error" { found=1 }
+            END { exit (found ? 1 : 0) }
+          ' run_results/*.csv; then
+            echo "All queries passed."
+          else
             echo "::error::One or more queries failed in PROD. Review the harness results artifact immediately."
             exit 1
           fi
