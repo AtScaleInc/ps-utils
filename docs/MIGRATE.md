@@ -100,7 +100,7 @@ flowchart TD
     G --> H([Migration Complete])
 ```
 
-After migration, all model changes follow the GitOps workflow described in [docs/GIT.md](GIT.md): feature branches are reviewed, deployed to DEV, merged to `development` (which auto-deploys to UAT), and finally promoted to `main` (which auto-deploys to PROD after a manual approval gate). The query harness runs automatically on every UAT and PROD deploy to catch regressions against the captured baseline.
+After migration, all model changes follow the GitOps workflow described in [docs/GIT.md](GIT.md): feature branches are reviewed, deployed to DEV, merged to `development` (which auto-deploys to UAT), and finally promoted to `main` (which auto-deploys to PROD after a manual approval gate). The query harness runs automatically on every UAT and PROD deploy to catch outright query failures; regression analysis (row counts, elapsed time) requires manual review of the downloaded artifact.
 
 ---
 
@@ -263,7 +263,7 @@ In **GitHub → Settings → Environments**, create three environments named exa
 
 For the `prod` environment, add a **Required reviewers** rule listing the Administrator GitHub usernames. This creates the manual approval gate before any PROD deploy runs.
 
-Add the following secrets to **each** environment:
+Add the following secrets to **each** environment (**GitHub → Settings → Environments → [environment name] → Environment secrets**):
 
 | Secret | Description |
 |---|---|
@@ -273,11 +273,18 @@ Add the following secrets to **each** environment:
 | `ATSCALE_SQL_HOST` | Hostname for the AtScale Postgres backend (may be the same as `ATSCALE_HOST`) |
 | `ATSCALE_SQL_PORT` | Postgres port for AtScale backend (typically `10520`) |
 | `ATSCALE_SQL_PASSWORD` | Password for the AtScale Postgres backend |
-| `ATSCALE_LEGACY_SQL_PASSWORD` | Password for the **legacy installer-based** AtScale Postgres backend — used in Phase 2 query extraction only; can be removed after M1 is complete |
 | `ATSCALE_DATABASE` | Data warehouse database name written into the SML `.env` file at deploy time (e.g. the Snowflake database) |
 | `ATSCALE_SCHEMA` | Data warehouse schema name written into the SML `.env` file at deploy time |
 
-`ATSCALE_SQL_*` secrets are only used in query extraction and harness workflows and only need to be set on the environment(s) where extraction runs (typically `uat` and `prod`). `ATSCALE_LEGACY_SQL_PASSWORD` is a repository-level secret (not per-environment) and is temporary — it grants read access to the legacy system solely to capture the query baseline.
+`ATSCALE_SQL_HOST`, `ATSCALE_SQL_PORT`, `ATSCALE_SQL_PASSWORD` are only used in query extraction and harness workflows; they only need to be set on the environment(s) where those operations run (typically `uat` and `prod`).
+
+Add the following secret at **repository level** (**GitHub → Settings → Secrets and variables → Actions → Repository secrets**):
+
+| Secret | Description |
+|---|---|
+| `ATSCALE_LEGACY_SQL_PASSWORD` | Password for the **legacy installer-based** AtScale Postgres backend — used in Phase 2 query extraction only; remove after M1 is complete |
+
+This secret is repository-level (not per-environment) because it targets the legacy system, which is shared across all environments during the transition period.
 
 ### 1.4 Configure Branch Protection
 
@@ -334,7 +341,7 @@ Create the new aggregate schemas in the data warehouse and configure them in eac
 
 [↑ Table of Contents](#table-of-contents)
 
-Before converting the models, capture real query traffic from the running XML-based AtScale installation. This creates a test set that will be replayed against the SML-based installation on every UAT and PROD deploy to detect regressions.
+Before converting the models, capture real query traffic from the running XML-based AtScale installation. This creates a test set that will be replayed against the SML-based installation on every UAT and PROD deploy to detect query failures; row-count and elapsed-time regressions require manual review of the artifact.
 
 ### 2.1 Configure the Connections File
 
@@ -446,15 +453,15 @@ npx @atscale/ps-utils generate-sml-from-xml \
 
 **Parameter guidance:**
 
-| Parameter | Notes |
-|---|---|
-| `--xml-file` | The `.xml` export from the installer-based AtScale project |
-| `--output-dir` | Use `models/` — the directory established in step 1.2 |
-| `--connection-name` | Auto-detected from the XML `<connection id="...">` attribute; override only if the name must differ in SML |
-| `--connection-type` | Database dialect used in generated connection file (`snowflake`, `bigquery`, `databricks`, etc.) |
-| `--connection-db` | Database / project name; when provided, datasets use a flat `table:` reference instead of a nested `db/schema/table` object |
-| `--connection-schema` | Schema / dataset name; same effect as `--connection-db` for the schema level |
-| `--catalog-name` | Human-readable label for the catalog; defaults to the XML schema name |
+| Parameter | Required | Notes |
+|---|---|---|
+| `--xml-file` | Yes | The `.xml` export from the installer-based AtScale project |
+| `--output-dir` | Yes | Use `models/` — the directory established in step 1.2 |
+| `--connection-name` | No | Auto-detected from the XML `<connection id="...">` attribute; override only if the name must differ in SML |
+| `--connection-type` | No | Database dialect used in generated connection file (`snowflake`, `bigquery`, `databricks`, etc.) |
+| `--connection-db` | No | Database / project name; when provided, datasets use a flat `table:` reference instead of a nested `db/schema/table` object |
+| `--connection-schema` | No | Schema / dataset name; same effect as `--connection-db` for the schema level |
+| `--catalog-name` | No | Human-readable label for the catalog; defaults to the XML schema name |
 
 The converter produces the following layout under `models/`:
 
@@ -612,7 +619,7 @@ npx @atscale/ps-utils atscale-deploy-catalog \
   --connection-file /tmp/connections-dev.yaml \
   --atscale-connection-name dev \
   --sml-dir models \
-  --repo-name my-sml-repo
+  --repo-name atscale-sml-models
 ```
 
 Open the DEV AtScale Design Center at `https://atscale-dev.example.com/ui` and confirm:
@@ -700,8 +707,7 @@ flowchart TD
     subgraph triggers_pr["Trigger: PR opened or updated"]
         T1{Target branch?}
         T1 -->|development| W1["feature-pr.yml"]
-        T1 -->|main from development| W2["release-pr.yml"]
-        T1 -->|main from hotfix/*| W3["hotfix-pr.yml"]
+        T1 -->|main| W2["release-pr.yml"]
     end
 
     subgraph triggers_push["Trigger: Push to branch"]
@@ -774,6 +780,8 @@ jobs:
     needs: validate-sml
     runs-on: ubuntu-latest
     environment: dev
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -787,6 +795,11 @@ jobs:
                 apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
                 org: ${{ secrets.ATSCALE_ORG }}
           EOF
+
+      - name: Write SML .env file
+        run: |
+          echo "DATABASE=${{ secrets.ATSCALE_DATABASE }}" >> models/.env
+          echo "SCHEMA=${{ secrets.ATSCALE_SCHEMA }}" >> models/.env
 
       - name: Deploy model to DEV
         uses: AtScaleInc/ps-utils@v1
@@ -846,6 +859,11 @@ jobs:
                 apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
                 org: ${{ secrets.ATSCALE_ORG }}
           EOF
+
+      - name: Write SML .env file
+        run: |
+          echo "DATABASE=${{ secrets.ATSCALE_DATABASE }}" >> models/.env
+          echo "SCHEMA=${{ secrets.ATSCALE_SCHEMA }}" >> models/.env
 
       - name: Deploy model to UAT
         uses: AtScaleInc/ps-utils@v1
@@ -943,6 +961,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual re-deploy (e.g. rollback to a previous tag on main)"
+        required: true
 
 jobs:
   deploy-prod:
@@ -962,6 +985,11 @@ jobs:
                 apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
                 org: ${{ secrets.ATSCALE_ORG }}
           EOF
+
+      - name: Write SML .env file
+        run: |
+          echo "DATABASE=${{ secrets.ATSCALE_DATABASE }}" >> models/.env
+          echo "SCHEMA=${{ secrets.ATSCALE_SCHEMA }}" >> models/.env
 
       - name: Deploy model to PROD
         uses: AtScaleInc/ps-utils@v1
@@ -1082,13 +1110,24 @@ Every merge to `development` triggers `deploy-uat.yml`, which:
 1. Deploys the updated SML to the UAT AtScale instance
 2. Loops over all JSON files in `queries/` and runs the harness for each
 3. Uploads the CSV results as a GitHub Actions artifact (retained 30 days)
-4. Fails the workflow if any query returned an error, blocking the release pipeline
+4. Fails the workflow if any query returned a `status` of `error`, blocking the release pipeline
 
-The Model Administrator should download and review the harness artifact when validating UAT. Pay particular attention to:
+**What CI catches automatically:** outright query errors (`status == "error"`).
 
-- Queries that previously succeeded but now return errors (broken models, renamed measures, missing columns)
-- Queries whose row count (`avgResultSetSize`) has dropped to zero (silent data issues)
-- Queries whose elapsed time has increased significantly compared to the baseline `elapsedTimeInSeconds` (performance regression)
+**Aggregate warm-up:** container environments start with empty aggregate schemas. The first harness run after a fresh deploy will miss all aggregates and will be materially slower than steady state — making elapsed-time comparison against the legacy baseline unreliable. Before treating performance results as valid:
+
+1. Let the automated harness run complete (it populates lazy aggregates as a side effect)
+2. Check the AtScale Design Center aggregate build status and wait for all build jobs to finish
+3. Run the harness a second time manually and use those results for the elapsed-time comparison
+
+The `aggregate_used` column in the CSV confirms whether aggregates were hit; results where `aggregate_used` is false should not be compared against the legacy baseline for performance.
+
+**What requires manual review:** the Model Administrator must download the artifact and check for regressions that CI does not detect:
+
+- Queries whose row count (`row_count`) has dropped to zero — compare against `avgResultSetSize` in the source JSON (silent data issues)
+- Queries whose elapsed time (`elapsed_seconds`) has increased significantly — compare against `elapsedTimeInSeconds` in the source JSON (performance regression; only valid after aggregates are warm)
+
+> **Note:** the baseline JSON uses `avgResultSetSize` and `elapsedTimeInSeconds`; the harness results CSV uses `row_count` and `elapsed_seconds` — the fields measure the same things but have different names on each side.
 
 > **Milestone M3 — UAT Validated**
 >
@@ -1101,6 +1140,8 @@ The Model Administrator should download and review the harness artifact when val
 [↑ Table of Contents](#table-of-contents)
 
 The PROD deploy workflow (`deploy-prod.yml`) mirrors the UAT harness, but with a lower `--concurrent-users` value to minimise load on the live instance. Results are retained for 90 days.
+
+As with UAT, PROD starts with an empty aggregate schema. Wait for aggregate build jobs to complete in the Design Center and run a second manual harness pass before comparing `elapsed_seconds` results against the legacy baseline.
 
 A PROD harness failure does not roll back the deploy automatically. The on-call Model Administrator must:
 
@@ -1188,24 +1229,11 @@ git tag --sort=-creatordate | head -10
 
 # Re-deploy from a previous release tag
 gh workflow run deploy-prod.yml \
-  --ref v2026.05.01-abc1234
+  --ref v2026.05.01-abc1234 \
+  --field reason="Rollback to v2026.05.01-abc1234 — reverting broken PROD deploy"
 ```
 
-If `deploy-prod.yml` does not expose a `workflow_dispatch` trigger, add one:
-
-```yaml
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      reason:
-        description: "Reason for manual re-deploy (e.g. rollback to previous tag)"
-        required: true
-```
-
-Then trigger it via the GitHub Actions UI, selecting the desired tag ref.
+`deploy-prod.yml` will check out the specified tag and redeploy, overwriting the current PROD state. The `prod` environment approval gate still fires — the designated reviewer must approve before the deploy runs.
 
 ---
 
@@ -1340,6 +1368,8 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] Automated UAT deploy (`deploy-uat.yml`) completed without errors
 - [ ] SQL query harness on UAT completed with zero failures
 - [ ] XMLA query harness on UAT completed with zero failures
+- [ ] Aggregate build jobs confirmed complete in Design Center (empty schema after fresh deploy)
+- [ ] Second harness pass run after aggregates are warm; `aggregate_used` column confirms aggregate hits
 - [ ] Harness results artifact downloaded and reviewed by Model Administrator
 - [ ] Business stakeholders have formally signed off on the UAT AtScale instance
 - [ ] Sign-off documented (PR comment, linked issue, or equivalent)
@@ -1356,6 +1386,8 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] PROD deploy (`deploy-prod.yml`) completed without errors
 - [ ] SQL query harness on PROD completed with zero failures
 - [ ] XMLA query harness on PROD completed with zero failures
+- [ ] Aggregate build jobs confirmed complete in Design Center (empty schema after fresh deploy)
+- [ ] Second harness pass run after aggregates are warm; `aggregate_used` column confirms aggregate hits
 - [ ] PROD harness results artifact downloaded and reviewed
 - [ ] Release commit tagged on `main` (e.g. `v2026.05.15-abc1234`)
 - [ ] BI tool switch-over documents distributed to end users and developers
