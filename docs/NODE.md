@@ -90,6 +90,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromXML`](#generatesmlfromxml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
   - [`applySharedModelPlanOption`](#generatesmlFromsharedmodelplan)
+  - [`applyStyleToSML`](#applystyletosml)
   - [`generateDDLFromAtScale`](#generateddlfromatscale)
   - [`generateMetricsFromModel`](#generatemetricsfrommodel)
   - [`echoConnectionMetadata`](#echoconnectionmetadata)
@@ -299,7 +300,8 @@ function generateSMLFromConnection(
 | `sampleSize` | `number` | No | | Max rows per table for type inference (default 250; 0 to disable) |
 | `factTables` | `string` | No | | Comma-separated fact table names (overrides auto-classification) |
 | `camelCaseFiles` | `boolean` | No | | Use camelCase for dataset/dimension filenames |
-| `camelCaseMeasures` | `boolean` | No | | Use camelCase for metric labels |
+| `camelCaseMeasures` | `boolean` | No | | Use camelCase for metric labels (deprecated — use `labelStyle`) |
+| `labelStyle` | `"title-case" \| "camel-case" \| "none"` | No | `"title-case"` | Label style for all SML object labels; overrides `camelCaseMeasures` |
 | `minHierarchiesPerDim` | `number` | No | | Min hierarchies per dimension (default 1) |
 | `maxHierarchiesPerDim` | `number` | No | | Max hierarchies per dimension (default 4) |
 
@@ -341,7 +343,8 @@ function generateSMLFromDDL(
 | `dialect` | `string` | No | | Database dialect (e.g. `snowflake`, `postgresql`) |
 | `factTables` | `string` | No | | Comma-separated fact table names |
 | `camelCaseFiles` | `boolean` | No | | Use camelCase for dataset/dimension filenames |
-| `camelCaseMeasures` | `boolean` | No | | Use camelCase for metric labels |
+| `camelCaseMeasures` | `boolean` | No | | Use camelCase for metric labels (deprecated — use `labelStyle`) |
+| `labelStyle` | `"title-case" \| "camel-case" \| "none"` | No | `"title-case"` | Label style for all SML object labels; overrides `camelCaseMeasures` |
 | `minHierarchiesPerDim` | `number` | No | | Min hierarchies per dimension |
 | `maxHierarchiesPerDim` | `number` | No | | Max hierarchies per dimension |
 
@@ -440,6 +443,36 @@ function applySharedModelPlanOption(
 | `sharedDir` | `DirOutput` | Yes | | Base directory for shared output files, or a `Writable` to receive a ZIP |
 | `removeSources` | `boolean` | No | `false` | Delete local source files after writing shared version |
 | `dryRun` | `boolean` | No | `false` | Print all actions without writing or deleting files |
+
+---
+
+### `applyStyleToSML`
+
+[↑ Table of Contents](#table-of-contents)
+
+Re-applies display labels to an existing SML directory using a style config. Updates `label` fields in datasets, dimensions, and metrics YAML files in-place, and writes `STYLE.md` and `STYLE_CHANGES.md`.
+
+```typescript
+import { applyStyleToSML } from "@atscale/ps-utils";
+
+await applyStyleToSML({
+  smlDir: "./sml-output",
+});
+```
+
+```typescript
+function applyStyleToSML(
+  params: ApplyStyleToSMLParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `smlDir` | `DirInput` | Yes | | Path to the SML output directory to update, or a `Readable` ZIP archive of it |
+| `smlConfigFile` | `FileInput` | No | `"<smlDir>/sml.style.yaml"` | Path to SML style configuration file, or a `Readable` of its contents |
+| `labelStyle` | `"title-case" \| "camel-case" \| "none"` | No | `"title-case"` | Label style for all SML object labels; overrides `camelCaseMeasures` |
+| `catalogName` | `string` | No | | Catalog display name for `STYLE.md` |
 
 ---
 

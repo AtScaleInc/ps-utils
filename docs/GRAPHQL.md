@@ -376,6 +376,7 @@ curl -X POST http://localhost:4000/graphql \
 | `factTables` | `String` | No | Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml. |
 | `camelCaseFiles` | `Boolean` | No | When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml. |
 | `camelCaseMeasures` | `Boolean` | No | When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml. |
+| `labelStyle` | `String` | No | Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml. |
 | `minHierarchiesPerDim` | `Int` | No | Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml. |
 | `maxHierarchiesPerDim` | `Int` | No | Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml. |
 
@@ -439,6 +440,7 @@ curl -X POST http://localhost:4000/graphql \
 | `factTables` | `String` | No | Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml. |
 | `camelCaseFiles` | `Boolean` | No | When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml. |
 | `camelCaseMeasures` | `Boolean` | No | When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml. |
+| `labelStyle` | `String` | No | Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml. |
 | `minHierarchiesPerDim` | `Int` | No | Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml. |
 | `maxHierarchiesPerDim` | `Int` | No | Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml. |
 
@@ -2165,6 +2167,55 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `applyStyleToSml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md
+
+**CLI name:** `apply-style-to-sml`  |  **REST:** `POST /rest/apply-style-to-sml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories) |
+| `smlConfigFile` | `String` | No | Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml |
+| `smlConfigFileUpload` | `Upload` | No | Multipart upload — alternative to `smlConfigFile` |
+| `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
+| `labelStyle` | `String` | No | Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml. |
+| `catalogName` | `String` | No | Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  applyStyleToSml(input: {
+    smlDir: "value"
+    smlConfigFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{applyStyleToSml(input:{smlDir: \"value\", smlConfigFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){applyStyleToSml(input:{smlConfigFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `version`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2392,6 +2443,8 @@ input GenerateSmlFromConnectionInput {
   camelCaseFiles: Boolean
   """When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml."""
   camelCaseMeasures: Boolean
+  """Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml."""
+  labelStyle: String
   """Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml."""
   minHierarchiesPerDim: Int
   """Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml."""
@@ -2434,6 +2487,8 @@ input GenerateSmlFromDdlInput {
   camelCaseFiles: Boolean
   """When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml."""
   camelCaseMeasures: Boolean
+  """Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml."""
+  labelStyle: String
   """Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml."""
   minHierarchiesPerDim: Int
   """Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml."""
@@ -2460,6 +2515,22 @@ input GenerateSmlFromXmlInput {
   connectionDb: String
   """Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object"""
   connectionSchema: String
+}
+
+"""Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
+input ApplyStyleToSmlInput {
+  """Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories)"""
+  smlDir: String!
+  """Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml"""
+  smlConfigFile: String
+  """Uploaded file — alternative to smlConfigFile"""
+  smlConfigFileUpload: Upload
+  """Raw file content as a string — alternative to smlConfigFile"""
+  smlConfigFileContent: String
+  """Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml."""
+  labelStyle: String
+  """Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml."""
+  catalogName: String
 }
 
 """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
@@ -3196,6 +3267,8 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
+  applyStyleToSml(input: ApplyStyleToSmlInput): OperationResult!
   """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
   generateSharedModelPlan(input: GenerateSharedModelPlanInput): OperationResult!
   """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""

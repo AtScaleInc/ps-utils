@@ -339,6 +339,7 @@ curl -X POST http://localhost:4000/rest/extract-ddl-from-connection \
 | `factTables` | `String` | No | Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml. |
 | `camelCaseFiles` | `Boolean` | No | When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml. |
 | `camelCaseMeasures` | `Boolean` | No | When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml. |
+| `labelStyle` | `String` | No | Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml. |
 | `minHierarchiesPerDim` | `Int` | No | Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml. |
 | `maxHierarchiesPerDim` | `Int` | No | Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml. |
 
@@ -392,6 +393,7 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-connection \
 | `factTables` | `String` | No | Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml. |
 | `camelCaseFiles` | `Boolean` | No | When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml. |
 | `camelCaseMeasures` | `Boolean` | No | When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml. |
+| `labelStyle` | `String` | No | Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml. |
 | `minHierarchiesPerDim` | `Int` | No | Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml. |
 | `maxHierarchiesPerDim` | `Int` | No | Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml. |
 
@@ -1744,6 +1746,43 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 curl -X POST http://localhost:4000/rest/echo-connection-metadata \
   -F "connectionFileUpload=@/path/to/file" \
   -F "connectionName=value"
+```
+
+---
+
+### `apply-style-to-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md
+
+**Endpoint:** `POST /rest/apply-style-to-sml`  |  **GraphQL:** `applyStyleToSml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories) |
+| `smlConfigFile` | `String` | No | Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml |
+| `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
+| `smlConfigFileUpload` | file field | No | Multipart upload — alternative to `smlConfigFile` |
+| `labelStyle` | `String` | No | Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml. |
+| `catalogName` | `String` | No | Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/apply-style-to-sml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value",
+      "smlConfigFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/apply-style-to-sml \
+  -F "smlConfigFileUpload=@/path/to/file" \
+  -F "smlDir=value"
 ```
 
 ---

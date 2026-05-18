@@ -28,6 +28,7 @@ flowchart LR
     PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
+    SML --> J["apply-style-to-sml"] --> SML
 ```
 
 ### Synthetic Data Generation
@@ -122,6 +123,7 @@ flowchart LR
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
+    - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
   - Synthetic Data Generation
@@ -338,7 +340,7 @@ Connects to a live database, introspects its schema, runs semantic model inferen
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
-Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -355,7 +357,8 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
     schema: PUBLIC                                    # optional
     fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
     camel-case-files: "true"                          # optional — camelCase filenames
-    camel-case-measures: "true"                       # optional — camelCase metric labels
+    camel-case-measures: "true"                       # optional — camelCase metric labels (deprecated)
+    label-style: "title-case"                         # optional — label style (title-case/camel-case/none)
     min-hierarchies-per-dim: "1"                      # optional — drop dimensions with fewer hierarchies
     max-hierarchies-per-dim: "4"                      # optional — cap hierarchies per dimension
 ```
@@ -372,7 +375,7 @@ All inference capabilities from `generate-sml-from-connection` apply — composi
 
 **Requires:** No secrets — the DDL file must be present in the repository.
 
-Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -390,7 +393,8 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
     pii-severity: MEDIUM          # optional
     fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
     camel-case-files: "true"      # optional — camelCase filenames
-    camel-case-measures: "true"   # optional — camelCase metric labels
+    camel-case-measures: "true"   # optional — camelCase metric labels (deprecated)
+    label-style: "title-case"     # optional — label style (title-case/camel-case/none)
     min-hierarchies-per-dim: "1"  # optional — drop dimensions with fewer hierarchies
     max-hierarchies-per-dim: "4"  # optional — cap hierarchies per dimension
 ```
@@ -492,6 +496,37 @@ Applies a `generate-shared-model-plan` recommendation YAML to create shared SML 
 | `shared-dir` | Yes | | Base directory where shared files are written |
 | `remove-sources` | No | `false` | Delete local source copies after writing the shared version |
 | `dry-run` | No | `false` | Print all actions without writing or deleting any files |
+
+---
+
+### `apply-style-to-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Re-applies display labels to an existing SML directory using a style config. Reads datasets, dimensions, and metrics YAML files in-place and rewrites their `label` fields according to the active style, then writes `STYLE.md` and `STYLE_CHANGES.md`.
+
+**Requires:** No secrets — the SML directory must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: apply-style-to-sml
+    sml-dir: sml-output
+    sml-config-file: sml-output/sml.style.yaml  # optional
+    label-style: "title-case"                   # optional — title-case/camel-case/none
+    catalog-name: "Sales Analytics"             # optional — for STYLE.md
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML output directory to update |
+| `sml-config-file` | No | `<sml-dir>/sml.style.yaml` | Path to the SML style config to read settings from |
+| `label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names) |
+| `catalog-name` | No | | Catalog display name for `STYLE.md` |
 
 ---
 

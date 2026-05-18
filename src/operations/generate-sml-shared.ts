@@ -118,6 +118,7 @@ export async function runInferenceAndWrite(
       piiSeverity:          styleConfig["pii-severity"] ?? "MEDIUM",
       camelCaseFiles:       styleConfig["camel-case-files"] ?? false,
       camelCaseMeasures:    styleConfig["camel-case-measures"] ?? false,
+      labelStyle:           styleConfig["label-style"] ?? "title-case",
       factTables:           styleConfig["fact-tables"] ?? [],
       sampleSize:           styleConfig["sample-size"] ?? 0,
       minHierarchiesPerDim: styleConfig["min-hierarchies-per-dim"] ?? 1,
