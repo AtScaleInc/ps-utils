@@ -64,6 +64,7 @@ gantt
   - [4.1 Deploy to DEV and Verify](#41-deploy-to-dev-and-verify)
   - [4.2 Commit on a Migration Branch](#42-commit-on-a-migration-branch)
   - [4.3 Prepare BI Tool Endpoints and Go/No-Go Criteria](#43-prepare-bi-tool-endpoints-and-gonogo-criteria)
+    - [Tableau: Hive Thrift → PGWire Migration](#tableau-hive-thrift--pgwire-migration)
 - [Phase 5: Promote Through Environments with GitHub Actions](#phase-5-promote-through-environments-with-github-actions)
   - [5.1 Workflow Overview](#51-workflow-overview)
   - [5.2 Feature PR Workflow (DEV)](#52-feature-pr-workflow-dev)
@@ -660,12 +661,91 @@ Before the migration PR is approved, document and test the new BI tool connectio
 
 | Tool | Legacy (installer) | Container |
 |---|---|---|
-| **Tableau** | Hive thrift, port `11111` | PGWire (PostgreSQL JDBC), port `15432`. Tableau Server and Desktop require the PostgreSQL JDBC driver — no ODBC driver available. If SSO to Tableau Server is required, the branded AtScale Tableau connector is also needed. |
+| **Tableau** | Hive thrift, port `11111` | PGWire (PostgreSQL JDBC), port `15432` — see detailed steps below |
 | **Power BI** | Legacy AtScale connector URL | New URL + token-based auth or SSO via the Power BI Service connector |
 | **Excel** | Legacy plugin or URL | New URL + token, or Excel plugin update |
 | **Custom JDBC / API** | Legacy REST API paths | Map each existing API call to the container REST API equivalents; note that `/v1/` paths differ from `/wapi/p/` paths |
 
 Prepare a short switch-over document for each BI tool your users rely on, showing the before/after connection steps. Distribute these before the UAT window opens so that business stakeholders can validate reports using the new connection details.
+
+#### Tableau: Hive Thrift → PGWire Migration
+
+[↑ Table of Contents](#table-of-contents)
+
+The installer-based AtScale exposed a Hive thrift endpoint on port `11111`. The container version replaces this with PGWire — a PostgreSQL-wire-protocol endpoint on port `15432`. Every Tableau workbook and published data source that connects to AtScale must be updated.
+
+**1. Install the PostgreSQL JDBC driver**
+
+Tableau uses JDBC for AtScale connections; there is no ODBC driver for PGWire.
+
+- Download the PostgreSQL JDBC driver (`postgresql-42.x.x.jar`) from [jdbc.postgresql.org](https://jdbc.postgresql.org/download/)
+- **Tableau Server:** copy the `.jar` to the Tableau Server driver directory on every node, then restart Tableau Server services (`tsm restart`)
+- **Tableau Desktop:** copy the `.jar` to the driver directory for your OS:
+  - macOS: `~/Library/Tableau/Drivers`
+  - Windows: `C:\Program Files\Tableau\Drivers`
+- Restart Tableau Desktop after installing
+
+**2. Update the data source connection**
+
+For each Tableau workbook or published data source connected to the legacy AtScale instance:
+
+1. Open the workbook in Tableau Desktop (or download the published data source from Tableau Server)
+2. Navigate to **Data → Edit Data Source**
+3. Click the connection details in the top-left of the Data Source page
+4. Change the connection type from **Hive** to **PostgreSQL**
+5. Update the fields:
+
+| Field | Legacy value | New value |
+|---|---|---|
+| Server | `<atscale-host>` | `<atscale-host>` (unchanged) |
+| Port | `11111` | `15432` |
+| Database | _(Hive database name)_ | AtScale catalog name (e.g. `My_Catalog`) |
+| Authentication | Username / Kerberos | Username + password, or SSO via AtScale connector |
+
+6. Click **Sign In** and verify the connection succeeds
+7. Check that all fields and measures map correctly; remap any that show as broken
+
+**3. Republish to Tableau Server**
+
+After updating the connection in Tableau Desktop:
+
+1. **File → Publish Data Source** (or **Publish Workbook** if the data source is embedded)
+2. Choose the same project and name to overwrite the existing published source
+3. On Tableau Server, verify the data source shows a green connection status
+4. Re-run any scheduled extract refreshes to confirm they complete without error
+5. Check all subscriptions and alerts linked to the data source still fire correctly
+
+**4. Audit LOD expressions and calculated fields**
+
+> **This step is mandatory for any workbook that uses SQL passthrough or database-native functions.**
+
+Switching from HiveQL (port `11111`) to PostgreSQL dialect (port `15432`) can silently break calculated fields that pass SQL directly to the database. Identify and test every workbook with:
+
+| Tableau feature | What to check |
+|---|---|
+| `RAWSQL_STR(...)` / `RAWSQL_INT(...)` / `RAWSQLAGG_*(...)` | The embedded SQL string is sent verbatim to AtScale's SQL layer. Any Hive-specific functions (e.g. `date_format`, `datediff`, `to_date`, `collect_list`) must be replaced with PostgreSQL equivalents (e.g. `to_char`, `age`, `to_date`, `array_agg`) |
+| Custom SQL data sources | Open the custom SQL dialog and review every function call for HiveQL syntax |
+| LOD expressions (FIXED / INCLUDE / EXCLUDE) | LODs themselves are Tableau-level; they do not pass SQL to the database. However, if the LOD expression references a calculated field that itself uses `RAWSQL_*`, that underlying calculation must be reviewed |
+| Database-specific date/time functions | `DATEPART`, `DATEDIFF`, `DATETRUNC` in Tableau are translated by the driver — test these explicitly in UAT |
+
+**How to find affected workbooks:**
+
+```bash
+# On Tableau Server, use the REST API or TSM content migration tool to list
+# all workbooks connected to the legacy AtScale data source by host/port.
+# Alternatively, search Tableau Server's repository database:
+# SELECT w.name, ds.name, dc.dbname, dc.port
+# FROM datasources ds
+# JOIN workbooks w ON ds.project_id = w.project_id
+# JOIN _datasources_stats dc ON ds.id = dc.datasource_id
+# WHERE dc.port = 11111;
+```
+
+Add every workbook identified by this audit to the UAT validation list. A workbook that passes a connection test but contains broken `RAWSQL_*` calculations will appear healthy until a user opens the specific sheet — catching this in UAT is far preferable to a post-cutover incident.
+
+**5. SSO and Tableau Server connector (if required)**
+
+If Tableau Server is configured for SSO pass-through to AtScale (so that the Tableau Server user's identity is forwarded to AtScale for row-level security), the branded AtScale Tableau connector (a `.taco` file) is required. Install it on Tableau Server following the AtScale connector installation guide and reconfigure the data source to use connector-based authentication instead of a shared service account.
 
 #### Go/No-Go Criteria
 
@@ -1355,6 +1435,8 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] Manual deploy to DEV AtScale succeeded without errors
 - [ ] At least one SQL and one XMLA query verified manually per model in DEV AtScale Design Center
 - [ ] BI tool switch-over documents prepared for each tool in scope (Tableau, Power BI, Excel, etc.)
+- [ ] Tableau: PostgreSQL JDBC driver version identified and tested on Desktop; driver package prepared for Tableau Server deployment
+- [ ] Tableau: all workbooks and published data sources using `RAWSQL_*`, custom SQL, or Hive-specific functions identified and flagged for UAT validation
 - [ ] Go/No-Go criteria thresholds agreed with Administrator and Model Administrator
 - [ ] SML committed on `feature/xml-to-sml-migration` branch
 - [ ] Feature PR opened (`feature/xml-to-sml-migration` → `development`); CI validation and DEV deploy passed
@@ -1371,6 +1453,9 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] Aggregate build jobs confirmed complete in Design Center (empty schema after fresh deploy)
 - [ ] Second harness pass run after aggregates are warm; `aggregate_used` column confirms aggregate hits
 - [ ] Harness results artifact downloaded and reviewed by Model Administrator
+- [ ] Tableau: PostgreSQL JDBC driver installed on Tableau Server (all nodes); services restarted
+- [ ] Tableau: all published data sources reconnected from port `11111` (Hive) to port `15432` (PostgreSQL) and republished
+- [ ] Tableau: every workbook flagged in the LOD / `RAWSQL_*` audit opened and validated — no broken calculations, correct results vs legacy
 - [ ] Business stakeholders have formally signed off on the UAT AtScale instance
 - [ ] Sign-off documented (PR comment, linked issue, or equivalent)
 - [ ] Release PR opened (`development` → `main`) with UAT sign-off referenced in the PR body

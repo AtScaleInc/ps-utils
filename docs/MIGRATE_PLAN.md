@@ -160,12 +160,24 @@ The primary change for end users is that **BI tool connections need to be update
 
 | BI Tool | What changes |
 |---|---|
-| **Tableau** | Connection must be updated to use a new port and the PostgreSQL JDBC driver. Tableau Server administrators will need to update the driver and any published data sources. |
+| **Tableau** | The underlying connection protocol changes from Hive thrift (port `11111`) to PostgreSQL/PGWire (port `15432`). This requires: (1) installing the PostgreSQL JDBC driver on Tableau Server and Desktop, (2) updating every published data source and workbook to use the new port and connection type, and (3) republishing to Tableau Server. See the Tableau-specific risk below. |
 | **Power BI** | Connection URL and authentication method change. Users connecting via Power BI Desktop will need to update their data source settings. |
 | **Excel** | Connection URL or plugin configuration changes. |
 | **Other JDBC/API tools** | Connection strings change; in some cases API paths change. |
 
 Switch-over guides will be prepared for each tool before the UAT window opens, showing users the exact before-and-after steps.
+
+### Tableau LOD and Calculated Field Risk
+
+The legacy AtScale Hive thrift endpoint used HiveQL SQL dialect. The new PGWire endpoint uses PostgreSQL dialect. For most Tableau workbooks this is invisible — Tableau translates standard functions automatically. However, workbooks that use **database passthrough calculations** are directly affected:
+
+- `RAWSQL_STR(...)`, `RAWSQL_INT(...)`, `RAWSQLAGG_*(...)` — these embed raw SQL strings that are sent verbatim to AtScale; any Hive-specific functions in those strings (e.g. `date_format`, `datediff`, `to_date`) will fail or return wrong results against the PostgreSQL dialect
+- **Custom SQL data sources** — any Hive-specific syntax in the custom SQL query must be rewritten
+- **LOD expressions** (FIXED / INCLUDE / EXCLUDE) — LODs themselves are Tableau-level and are not affected, but if an LOD references a `RAWSQL_*` calculated field, the underlying calculation must be reviewed
+
+**What this means for the project:** the Tableau developer or BI team must audit all workbooks before UAT begins, identify any that use passthrough SQL, and validate those workbooks explicitly in UAT — a connection test alone is not sufficient. Workbooks with broken passthrough calculations will appear to connect successfully but return errors or wrong data when the affected sheet is opened.
+
+This audit should be completed before the UAT window opens so that any rewriting of passthrough calculations can be included in the migration scope.
 
 ### What BI developers will notice
 
@@ -184,6 +196,7 @@ End users are not impacted until the production go-live (M4). During the migrati
 | **A report returns different results after migration** | Low | High | The automated query harness compares results from the migrated system against the captured baseline; zero discrepancies are required before advancing to PROD |
 | **Performance regression on critical reports** | Low | High | The harness measures query response times; the acceptance threshold (≤10% slower than legacy) is enforced before go-live |
 | **BI tool disruption at cutover** | Medium | Medium | Switch-over guides distributed in advance; UAT window allows BI developers to test connections before PROD |
+| **Tableau LOD / passthrough SQL breaks after dialect change** | Medium | High | Audit all workbooks for `RAWSQL_*` and custom SQL before UAT; explicitly validate flagged workbooks in UAT — a connection test alone does not catch broken passthrough calculations |
 | **Permissions gaps — users lose access** | Medium | High | Permission mapping is a dedicated work stream (not an afterthought); SSO login is verified for every user role in DEV before UAT begins |
 | **UAT sign-off takes longer than planned** | Medium | Medium | Schedule UAT windows per business unit; start with the highest-priority unit to build confidence early |
 | **Infrastructure provisioning delays** | Low | High | Provisioning is the first milestone (M0) and runs in parallel with other early tasks; early start reduces the risk of it becoming a bottleneck |
