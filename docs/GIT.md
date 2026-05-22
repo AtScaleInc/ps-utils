@@ -15,6 +15,7 @@
   - [Designer: Day-to-Day Workflow](#designer-day-to-day-workflow)
   - [Model Administrator: Review and Promote](#model-administrator-review-and-promote)
 - [GitHub Actions Automation](#github-actions-automation)
+- [Shared Package Dependencies](#shared-package-dependencies)
 - [Best Practices](#best-practices)
 
 ---
@@ -1158,6 +1159,222 @@ jobs:
           connection: uat
           sml-root: ./models
 ```
+
+---
+
+## Shared Package Dependencies
+
+When a repository depends on a shared package — such as `@atscale/ps-utils` for CLI operations or `atscaleinc/ps-utils` as a GitHub Actions composite action — the way that dependency is referenced determines how quickly updates are adopted, how much manual coordination a release requires, and whether consumers validate updates before they reach PROD.
+
+### Versioning Strategy Decision
+
+Three reference strategies exist. Choose one per environment tier:
+
+```mermaid
+flowchart TD
+    A([Shared package releases a new version]) --> B{How does the consumer reference it?}
+
+    B -->|"Pinned tag\n(@v1.2.3 or exact npm version)"| PIN[Consumer is unaffected\nuntil manually bumped]
+    B -->|"Major-version tag\n(@v1) or semver range\n(^1.x)"| AUTO[Consumer picks up\npatches and minors automatically]
+    B -->|"Floating branch\n(@main or @next)"| FLOAT[Consumer picks up\nevery commit on that branch]
+
+    PIN --> PIN_USE["PROD-tier workflows and\nany step that deploys to a live environment"]
+    AUTO --> AUTO_USE["Most CI steps where\nstability within a major version is sufficient"]
+    FLOAT --> FLOAT_USE["Development or sandbox only —\nnever use on main-branch workflows"]
+```
+
+| Strategy | Reference form | Consumer control | Update risk | Recommended for |
+|---|---|---|---|---|
+| **Pinned tag** | `@v1.2.3` / `"1.2.3"` exactly | Explicit bump required | None until bumped | PROD deploy steps |
+| **Major-version tag** | `@v1` / `"^1.x"` | Auto within major | Minor/patch breakage possible | Most CI steps |
+| **Floating branch** | `@main` / `@next` | No control | Any commit may break | Dev/sandbox only |
+
+### Branch–Version Alignment
+
+Consumer branches should reference the shared package at a stability level that matches their environment tier:
+
+| Consumer branch | GitHub Actions ref | npm version range | Rationale |
+|---|---|---|---|
+| `main` (→ PROD) | `atscaleinc/ps-utils@v1` | `"@atscale/ps-utils": "1.x.x"` (exact minor) | Predictable; change requires a deliberate PR |
+| `development` (→ UAT) | `atscaleinc/ps-utils@v1` | `"@atscale/ps-utils": "^1"` | Semver range validates updates before PROD adoption |
+| `feature/*` | Same as `development` | Same as `development` | Feature branches inherit the reference from their base |
+
+**Key rule:** `main` and `development` should not diverge in their shared package reference for routine operations. Divergence is acceptable only during a controlled upgrade window where `development` intentionally runs against a newer major version while `main` remains on the previous stable version.
+
+### Workflow: Adopting a New Shared Package Version
+
+#### Step 1 — Shared package releases
+
+The shared package team:
+
+1. Merges changes to the package's `development` branch and validates in their own UAT
+2. Merges to the package's `main` branch and publishes the release
+3. Tags the commit (`v1.2.3`) and force-updates the major floating tag (`v1`):
+   ```bash
+   git tag v1.2.3
+   git tag -f v1
+   git push origin v1.2.3
+   git push --force origin v1
+   ```
+4. Publishes to npm (if applicable): `npm publish`
+5. Notifies consumers via a GitHub Release with a changelog entry
+
+#### Step 2 — Consumer decides how to adopt
+
+```mermaid
+flowchart TD
+    REL([Shared package releases v1.2.3]) --> Q1{Is this a major version bump?}
+
+    Q1 -->|No — patch or minor| Q2{Consumer uses auto-update?}
+    Q1 -->|Yes — new major version| MAJOR[Major-version upgrade workflow - see below]
+
+    Q2 -->|Yes - major-version tag or Dependabot| AUTO_PR[Auto-PR raised or picked up at next workflow run]
+    Q2 -->|No - pinned version| MANUAL[Create a PR with the updated version ref]
+
+    AUTO_PR --> CI[CI runs on the bump PR]
+    MANUAL --> CI
+    CI --> Q3{CI passes?}
+
+    Q3 -->|No| FIX[Review release notes for breaking changes\nFix incompatibilities or defer the update]
+    Q3 -->|Yes| MERGE_DEV[Merge bump PR to development]
+
+    MERGE_DEV --> UAT[UAT auto-deploy validates the update end-to-end]
+    UAT --> SIGN[Model Administrator signs off in UAT]
+    SIGN --> REL_PR[Include bump in next Release PR to main]
+```
+
+#### Step 3 — Validate in UAT before PROD
+
+Never merge a shared package bump directly to `main` without first validating it on `development`. The bump follows the same promotion path as any other change:
+
+```
+feature/bump-ps-utils-v1.3 → development (UAT validates) → main (PROD)
+```
+
+#### Step 4 — Major version upgrades
+
+A major version bump (e.g., `v1` → `v2`) may include breaking API or CLI changes. Treat it as a deliberate project decision with its own feature branch:
+
+1. Read the shared package's migration guide
+2. Create `feature/upgrade-ps-utils-v2` from `development`
+3. Update all references — GitHub Actions `uses:` fields, `package.json` version constraints, and any hard-coded CLI flags that changed
+4. Run CI on the branch and resolve any failures
+5. Validate in UAT against the new major version
+6. Update `main` only after UAT sign-off
+
+### Automated Update Strategies
+
+#### Dependabot (GitHub-native)
+
+Add `.github/dependabot.yml` to the consumer repository to automatically raise PRs when npm or GitHub Actions dependencies have new versions:
+
+```yaml
+version: 2
+updates:
+  # npm dependencies (e.g. @atscale/ps-utils in package.json)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+    open-pull-requests-limit: 5
+    groups:
+      atscale-packages:
+        patterns:
+          - "@atscale/*"
+    ignore:
+      - dependency-name: "@atscale/*"
+        update-types:
+          - version-update:semver-major   # major bumps require manual review
+
+  # GitHub Actions (e.g. uses: atscaleinc/ps-utils@v1)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+    groups:
+      atscale-actions:
+        patterns:
+          - "atscaleinc/*"
+    ignore:
+      - dependency-name: "atscaleinc/*"
+        update-types:
+          - version-update:semver-major
+```
+
+Dependabot raises a PR for each update. CI runs automatically on the PR. The Model Administrator reviews and merges — the same approval process as any other `feature/*` PR.
+
+**Dependabot configuration tips:**
+
+- Use `groups` to bundle related package bumps into one PR rather than one PR per package
+- Use `ignore: update-types: version-update:semver-major` to require manual review for breaking changes
+- Set `open-pull-requests-limit` to prevent stale auto-PRs accumulating in the queue
+
+#### Version drift detection for pinned environments
+
+For repos that pin to exact versions and do not use Dependabot, add a scheduled workflow to alert when the consumer is behind:
+
+```yaml
+name: Shared Package Version Check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"   # Every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-versions:
+    name: Check ps-utils version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get pinned version
+        id: current
+        run: |
+          PINNED=$(node -p "require('./package.json').dependencies['@atscale/ps-utils'] || require('./package.json').devDependencies['@atscale/ps-utils']" | tr -d '^~')
+          echo "version=$PINNED" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest published version
+        id: latest
+        run: |
+          LATEST=$(npm view @atscale/ps-utils version)
+          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Warn if behind
+        if: steps.current.outputs.version != steps.latest.outputs.version
+        run: |
+          echo "::warning::Pinned @atscale/ps-utils ${{ steps.current.outputs.version }} is behind latest ${{ steps.latest.outputs.version }}. Consider opening an update PR."
+```
+
+### Shared Package Release Checklist
+
+For the shared package team to use when publishing a release:
+
+```markdown
+## Release checklist for shared package maintainers
+
+- [ ] All changes merged to `main` and CI green
+- [ ] CHANGELOG updated with new version entry
+- [ ] Version bumped in `package.json` and committed
+- [ ] npm published: `npm publish`
+- [ ] Commit-level tag pushed: `git tag v1.2.3 && git push origin v1.2.3`
+- [ ] Major floating tag force-updated: `git tag -f v1 && git push --force origin v1`
+- [ ] GitHub Release created with changelog body
+- [ ] Consumers notified via release notes or team channel
+- [ ] Migration guide written for any breaking changes (major bumps only)
+```
+
+### Best Practices for Shared Package Consumers
+
+- **Never reference `@main` or `@latest` on `main`-branch workflows.** A breaking commit to the shared package immediately breaks PROD CI. Use tagged versions only on production-tier branches.
+- **Always validate package updates in UAT before PROD.** The bump flows through the same `development → main` promotion path as model changes. Do not skip UAT by merging the bump directly to `main`.
+- **Require CI to pass on bump PRs before merging.** A package update that breaks CI is a signal the update has breaking changes — read the release notes before merging or deferring.
+- **Coordinate major version cutover with the shared package team.** Before bumping a major version on `development`, confirm the release is stable and the migration guide is complete.
+- **Document the minimum required version.** In the consumer repo's `README.md` or `docs/DEVELOPER.md`, note the minimum shared package version and why (e.g., "requires `ps-utils` ≥ 1.3.0 for `--case-insensitive` support in `extract-ddl-from-connection`").
 
 ---
 

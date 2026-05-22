@@ -55,8 +55,8 @@ flowchart LR
     end
 
     USR -->|"HTTPS"| NG
-    TAB & PBI & XL -->|"XMLA / MDX"| NG
-    MISC -->|"SQL :15432"| NG
+    PBI & XL -->|"XMLA / MDX"| NG
+    TAB & MISC -->|"SQL :15432"| NG
 
     NG -->|":443 /ui"| DC
     NG -->|":443 + :15432"| ENG
@@ -244,7 +244,7 @@ flowchart TD
 
 | Entity | Protocol / Interface | Direction |
 |---|---|---|
-| **Tableau Server** | XMLA / MDX over HTTPS | Inbound to Nginx |
+| **Tableau Server** | SQL (pgwire `:15432`) | Inbound to Nginx |
 | **Power BI** | XMLA / MDX over HTTPS | Inbound to Nginx |
 | **Excel / Office** | MDX over OLE DB for OLAP | Inbound to Nginx |
 | **Looker / MicroStrategy / Custom** | XMLA or SQL (`:15432`) | Inbound to Nginx |

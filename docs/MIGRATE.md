@@ -22,7 +22,8 @@ gantt
         Convert XML to SML          :convert, 2026-06-15, 7d
         Permissions and settings    :perms, after convert, 5d
         DEV validation and PR       :devpr, after perms, 5d
-        M2 Clean DEV Conversion     :milestone, m2, after devpr, 0d
+        BI tool validation          :bivalidate, after devpr, 5d
+        M2 Clean DEV Conversion     :milestone, m2, after bivalidate, 0d
 
     section M3 — UAT Validated
         UAT deploy and harness      :uatdep, after m2, 5d
@@ -65,6 +66,7 @@ gantt
   - [4.2 Commit on a Migration Branch](#42-commit-on-a-migration-branch)
   - [4.3 Prepare BI Tool Endpoints and Go/No-Go Criteria](#43-prepare-bi-tool-endpoints-and-gonogo-criteria)
     - [Tableau: Hive Thrift → PGWire Migration](#tableau-hive-thrift--pgwire-migration)
+  - [4.4 BI Tool Dashboard Validation](#44-bi-tool-dashboard-validation)
 - [Phase 5: Promote Through Environments with GitHub Actions](#phase-5-promote-through-environments-with-github-actions)
   - [5.1 Workflow Overview](#51-workflow-overview)
   - [5.2 Feature PR Workflow (DEV)](#52-feature-pr-workflow-dev)
@@ -95,7 +97,7 @@ flowchart TD
     A([Start]) --> B["Phase 1: Environment Setup (DEV / UAT / PROD instances + Git repo)"]
     B --> C["Phase 2: Extract Query Baseline (extract-queries-from-atscale)"]
     C --> D["Phase 3: Convert XML to SML (generate-sml-from-xml)"]
-    D --> E["Phase 4: Validate and Commit (deploy-model to DEV, review)"]
+    D --> E["Phase 4: Validate and Commit (deploy-model to DEV, BI tool validation, review)"]
     E --> F["Phase 5: Set Up Promotion Pipeline (GitHub Actions workflows)"]
     F --> G["Phase 6: Automated Query Harness (execute-atscale-query-harness on each deploy)"]
     G --> H([Migration Complete])
@@ -764,11 +766,98 @@ Define the acceptance thresholds before opening the Release PR. Recommended mini
 
 If any criterion is not met, the Release PR must not be opened until the gap is resolved or formally accepted as a known risk by the Administrator.
 
+### 4.4 BI Tool Dashboard Validation
+
+[↑ Table of Contents](#table-of-contents)
+
+The final step before M2 sign-off is to connect each BI tool in scope to the **DEV** AtScale instance and confirm that existing dashboards, workbooks, and reports produce correct results. The spot-check queries in section 4.1 verify model correctness at the query API level; this step verifies correctness as experienced by actual users — from the BI tool through to the values shown on screen.
+
+Catching BI-level issues in DEV (before the migration PR merges to `development`) is far cheaper than discovering them during the UAT window, when business stakeholders are involved and timelines are tighter.
+
+#### Validation Scope
+
+Use the BI tool inventory from the Pre-Migration Assessment to identify all dashboards, reports, and workbooks to validate. For each tool, prioritise:
+
+1. Reports containing calculated fields or custom SQL (highest risk — see section 4.3 for Tableau-specific risks)
+2. Dashboards used by business stakeholders who will sign off on UAT
+3. High-utilisation reports (cross-reference the query baseline captured in Phase 2)
+
+A sampling approach is acceptable for large inventories: validate 100% of high-priority and high-risk assets, and a representative 20–30% sample of standard reports.
+
+#### Power BI
+
+Connect Power BI Desktop to the DEV AtScale instance and for each in-scope report:
+
+1. Trigger a data refresh and confirm all visuals load without error
+2. Compare key KPI tiles and chart values against the legacy AtScale connection — values must match within the agreed accuracy threshold
+3. Test all report-level filters and slicers — confirm they produce the same subset of results as the legacy system
+4. If the report uses **row-level security (RLS)**: test with at least one user identity that triggers a row filter and confirm the filtered result is correct
+
+**Power BI-specific risks:**
+
+| Risk | What to check |
+|---|---|
+| **DirectQuery mode** | Re-executes queries on every interaction — test under realistic usage, not just an initial page load |
+| **Custom M (Power Query) steps** | Transformations that reference specific column names may break if column names changed during SML conversion |
+
+#### Tableau
+
+Connection migration steps (driver installation, port change to `15432`) are covered in section 4.3. This step covers result validation — which is distinct from confirming the connection succeeds.
+
+For each in-scope workbook, connected to the DEV AtScale instance:
+
+1. Navigate to each sheet and confirm all fields resolve without error and all measures return values matching the legacy system
+2. For any `RAWSQL_*` or custom SQL calculated fields identified in the LOD audit: step through the calculation logic explicitly — a working connection is not sufficient evidence
+3. Confirm all **parameters**, **sets**, and **dashboard actions** still function correctly
+
+**Validation priority order:**
+
+| Priority | Workbook type |
+|---|---|
+| 1 — First | Workbooks using `RAWSQL_*` or custom SQL (highest risk from dialect change) |
+| 2 | Live-connection workbooks (errors are immediately visible on interaction) |
+| 3 | Extract-based workbooks (require a full extract refresh cycle) |
+| 4 | Workbooks with no calculated fields (connection test plus one measure comparison is sufficient) |
+
+#### Excel
+
+For each in-scope workbook connected to the DEV AtScale instance:
+
+1. Click **Data → Refresh All** and confirm PivotTables refresh without error
+2. Compare key cell values against the same view on the legacy AtScale connection
+3. For Power Query workbooks: update the connection string to point to DEV, refresh, and spot-check at least three cells per query
+
+**Excel-specific risks:** older workbooks may have hardcoded connection strings not surfaced in the standard **Data → Connections** dialog; check **Data → Queries & Connections → Properties** for each query.
+
+#### Looker
+
+Update the Looker database connection to point to the DEV AtScale instance (Admin → Database → Connections → Edit), then for each in-scope Explore and dashboard:
+
+1. Run a query with at least one dimension and one measure; confirm results match the legacy system
+2. Load each connected dashboard and confirm all tiles render with data
+3. Test any **user attributes** or **access filters** enforcing row-level security
+4. Trigger a rebuild of any **Persistent Derived Tables (PDTs)** sourcing from AtScale and confirm they complete without error
+
+**Looker-specific risks:** LookML `sql:` blocks and `derived_table` SQL that use HiveQL-specific functions must be updated for PostgreSQL dialect before they will produce correct results.
+
+#### Validation Sign-Off Matrix
+
+Maintain a matrix tracking each dashboard and workbook. The Model Administrator owns the matrix; the asset's business owner confirms results are correct before sign-off.
+
+| Tool | Dashboard / Workbook | Business Owner | Status | Sign-off |
+|---|---|---|---|---|
+| Power BI | _(list each report)_ | _(BU owner)_ | ☐ Not started / ☐ Validated / ☐ Issues found | |
+| Tableau | _(list each workbook)_ | _(BU owner)_ | ☐ Not started / ☐ Validated / ☐ Issues found | |
+| Excel | _(list each workbook)_ | _(BU owner)_ | ☐ Not started / ☐ Validated / ☐ Issues found | |
+| Looker | _(list each Explore)_ | _(BU owner)_ | ☐ Not started / ☐ Validated / ☐ Issues found | |
+
+Any row showing "Issues found" blocks M2 sign-off until the issue is resolved or formally accepted as a known risk. The completed matrix must be included in the `feature/xml-to-sml-migration` PR body.
+
 > **Milestone M2 — Clean DEV Conversion**
 >
-> Phases 3 and 4 are complete when: `generate-sml-from-xml` has run cleanly, all post-conversion issues in the review table (section 3.2) have been resolved, the manual DEV deploy succeeds without errors, spot-check queries return expected results in DEV AtScale, and the `feature/xml-to-sml-migration` PR has been approved by the Model Administrator.
+> Phases 3 and 4 are complete when: `generate-sml-from-xml` has run cleanly, all post-conversion issues in the review table (section 3.2) have been resolved, the manual DEV deploy succeeds without errors, spot-check queries return expected results in DEV AtScale, BI tool dashboard validation (section 4.4) is complete with the validation matrix signed off for all in-scope tools, and the `feature/xml-to-sml-migration` PR has been approved by the Model Administrator.
 >
-> _Exit gate:_ Model Administrator approves the migration PR. At least one SQL and one XMLA query per model must have been verified manually in the DEV AtScale Design Center before approval.
+> _Exit gate:_ Model Administrator approves the migration PR. At least one SQL and one XMLA query per model must have been verified manually in DEV, and the BI tool validation matrix must be attached to the PR before approval.
 
 ---
 
@@ -1211,7 +1300,7 @@ The `aggregate_used` column in the CSV confirms whether aggregates were hit; res
 
 > **Milestone M3 — UAT Validated**
 >
-> This milestone is achieved when: the `feature/xml-to-sml-migration` PR has merged to `development`, the automated UAT deploy has completed without errors, the query harness artifact shows zero failures across all models and protocols, and business stakeholders have formally signed off on the UAT AtScale instance.
+> This milestone is achieved when: the `feature/xml-to-sml-migration` PR has merged to `development`, the automated UAT deploy has completed without errors, the query harness artifact shows zero failures across all models and protocols, BI tools have been re-confirmed working against the UAT AtScale instance (key reports spot-checked), and business stakeholders have formally signed off on the UAT AtScale instance.
 >
 > _Exit gate:_ Model Administrator opens the Release PR (`development` → `main`) and records the UAT sign-off — either as a comment on the PR or as a linked issue — before requesting the two required approvals. No Release PR may be opened while any harness failure is unresolved.
 
@@ -1231,9 +1320,9 @@ A PROD harness failure does not roll back the deploy automatically. The on-call 
 
 > **Milestone M4 — Migration Complete**
 >
-> This milestone is achieved when: the Release PR has merged to `main`, the PROD deploy has completed and been tagged, the PROD query harness artifact shows zero failures across all models and protocols, and the legacy XML-based AtScale installation has been decommissioned.
+> This milestone is achieved when: the Release PR has merged to `main`, the PROD deploy has completed and been tagged, the PROD query harness artifact shows zero failures across all models and protocols, BI developers have spot-checked key dashboards and workbooks against PROD and confirmed correct results, and the legacy XML-based AtScale installation has been decommissioned.
 >
-> _Exit gate:_ Administrator confirms the PROD harness has passed, tags the release commit (`git tag -a vYYYY.MM.DD ...`), and decommissions the legacy instance. Decommissioning must not happen before the PROD harness clears — the legacy instance is the last rollback option if PROD data issues are discovered after go-live.
+> _Exit gate:_ Administrator confirms the PROD harness has passed, BI developers confirm key dashboards are working in PROD, the release commit is tagged (`git tag -a vYYYY.MM.DD ...`), and the legacy instance is decommissioned. Decommissioning must not happen before both the PROD harness and the PROD BI spot-checks clear — the legacy instance is the last rollback option if PROD data issues are discovered after go-live.
 
 ### 6.3 Interpreting Results
 
@@ -1436,7 +1525,17 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] At least one SQL and one XMLA query verified manually per model in DEV AtScale Design Center
 - [ ] BI tool switch-over documents prepared for each tool in scope (Tableau, Power BI, Excel, etc.)
 - [ ] Tableau: PostgreSQL JDBC driver version identified and tested on Desktop; driver package prepared for Tableau Server deployment
-- [ ] Tableau: all workbooks and published data sources using `RAWSQL_*`, custom SQL, or Hive-specific functions identified and flagged for UAT validation
+- [ ] Tableau: all workbooks and published data sources using `RAWSQL_*`, custom SQL, or Hive-specific functions identified and flagged for validation
+- [ ] Power BI: all in-scope reports refreshed against DEV AtScale; all visuals load without error; key KPI values compared against legacy and confirmed matching
+- [ ] Power BI: row-level security (RLS) tested with at least one user identity per access role
+- [ ] Tableau: all in-scope workbooks connected to DEV; all fields resolve; `RAWSQL_*` and custom SQL calculated fields validated explicitly against legacy
+- [ ] Excel: all in-scope PivotTable workbooks refreshed against DEV AtScale; key cell values spot-checked against legacy
+- [ ] Excel: Power Query workbooks refreshed and connection strings updated where needed
+- [ ] Looker: all in-scope Explores queried against DEV; results compared against legacy for at least one dimension and one measure per Explore
+- [ ] Looker: all in-scope dashboards loaded without tile errors; row-level access filters validated
+- [ ] Looker: all PDTs sourcing from AtScale rebuilt successfully against DEV
+- [ ] BI tool validation matrix completed; each row confirmed by the business owner of the asset
+- [ ] Validation matrix (or link) included in the `feature/xml-to-sml-migration` PR body
 - [ ] Go/No-Go criteria thresholds agreed with Administrator and Model Administrator
 - [ ] SML committed on `feature/xml-to-sml-migration` branch
 - [ ] Feature PR opened (`feature/xml-to-sml-migration` → `development`); CI validation and DEV deploy passed
@@ -1455,7 +1554,10 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] Harness results artifact downloaded and reviewed by Model Administrator
 - [ ] Tableau: PostgreSQL JDBC driver installed on Tableau Server (all nodes); services restarted
 - [ ] Tableau: all published data sources reconnected from port `11111` (Hive) to port `15432` (PostgreSQL) and republished
-- [ ] Tableau: every workbook flagged in the LOD / `RAWSQL_*` audit opened and validated — no broken calculations, correct results vs legacy
+- [ ] Power BI: key reports re-confirmed working against UAT AtScale (values match DEV validation results)
+- [ ] Tableau: key workbooks re-confirmed working against UAT AtScale
+- [ ] Excel: key workbooks refreshed against UAT AtScale and confirmed correct
+- [ ] Looker: key Explores and dashboards confirmed working against UAT AtScale
 - [ ] Business stakeholders have formally signed off on the UAT AtScale instance
 - [ ] Sign-off documented (PR comment, linked issue, or equivalent)
 - [ ] Release PR opened (`development` → `main`) with UAT sign-off referenced in the PR body
@@ -1474,6 +1576,10 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] Aggregate build jobs confirmed complete in Design Center (empty schema after fresh deploy)
 - [ ] Second harness pass run after aggregates are warm; `aggregate_used` column confirms aggregate hits
 - [ ] PROD harness results artifact downloaded and reviewed
+- [ ] Power BI: key PROD dashboards opened and confirmed rendering correctly after go-live
+- [ ] Tableau: key PROD workbooks opened; at least one measure per model spot-checked against expected values
+- [ ] Excel: key PROD PivotTable workbooks refreshed and values confirmed correct
+- [ ] Looker: key PROD Explores and dashboards loaded; at least one KPI per Explore confirmed against expected value
 - [ ] Release commit tagged on `main` (e.g. `v2026.05.15-abc1234`)
 - [ ] BI tool switch-over documents distributed to end users and developers
 - [ ] User training sessions (roadshows, developer training) completed

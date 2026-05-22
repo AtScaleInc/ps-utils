@@ -95,7 +95,8 @@ gantt
         Convert and validate models      :convert, 2026-06-15, 7d
         Permissions and settings         :perms, after convert, 5d
         DEV sign-off and PR review       :devpr, after perms, 5d
-        M2 Clean DEV Conversion          :milestone, m2, after devpr, 0d
+        BI tool dashboard validation     :bivalidate, after devpr, 5d
+        M2 Clean DEV Conversion          :milestone, m2, after bivalidate, 0d
 
     section M3 — UAT Validated
         Deploy to UAT and run tests      :uatdep, after m2, 5d
@@ -118,8 +119,8 @@ Five milestones gate the migration. No milestone advances without the explicit s
 |---|---|---|---|
 | **M0** | Foundation Ready | All three environments are running, security is configured, and the automated deployment pipeline is operational | — (technical gate only) |
 | **M1** | Regression Baseline Captured | A representative set of historical business queries has been captured from the legacy system and will be used to verify the migrated models behave identically | — (technical gate only) |
-| **M2** | Clean DEV Conversion | All models have been converted and deploy cleanly to the DEV environment; individual queries have been spot-checked | — (technical gate only) |
-| **M3** | UAT Validated | The migrated models are deployed to UAT, all automated tests pass, and **business stakeholders have confirmed their reports are correct** | ★ Business unit sign-off required before proceeding to PROD |
+| **M2** | Clean DEV Conversion | All models have been converted and deploy cleanly to DEV; individual queries have been spot-checked; and **BI developers have validated all in-scope dashboards and workbooks (Power BI, Tableau, Excel, Looker) against the DEV AtScale instance** | — (technical gate only) |
+| **M3** | UAT Validated | The migrated models are deployed to UAT, all automated query tests pass, BI tools are re-confirmed working against UAT, and **business stakeholders have confirmed their reports are correct** | ★ Business unit sign-off required before proceeding to PROD |
 | **M4** | Migration Complete | Production is live, all automated tests pass, and the legacy system has been decommissioned | ★ Administrator approval required to open the production gate; programme sponsor confirms decommission |
 
 ```mermaid
@@ -178,6 +179,23 @@ The legacy AtScale Hive thrift endpoint used HiveQL SQL dialect. The new PGWire 
 **What this means for the project:** the Tableau developer or BI team must audit all workbooks before UAT begins, identify any that use passthrough SQL, and validate those workbooks explicitly in UAT — a connection test alone is not sufficient. Workbooks with broken passthrough calculations will appear to connect successfully but return errors or wrong data when the affected sheet is opened.
 
 This audit should be completed before the UAT window opens so that any rewriting of passthrough calculations can be included in the migration scope.
+
+### BI Tool Dashboard Validation
+
+BI tool dashboard validation is part of **Milestone M2 (Clean DEV Conversion)**. Before the migration PR is approved, BI developers connect each tool to the **DEV** AtScale instance and confirm that existing dashboards, workbooks, and reports produce correct results. Catching BI-level issues in DEV — before models reach UAT or PROD — avoids disrupting business stakeholders with problems that can be fixed at the technical stage.
+
+Validation covers all four BI tools in scope:
+
+| Tool | What is validated in DEV (M2) | What is re-confirmed in UAT (M3) |
+|---|---|---|
+| **Power BI** | Reports refreshed; KPI values compared against legacy; RLS tested | Key reports spot-checked to confirm results match DEV validation |
+| **Tableau** | Workbooks connected to DEV; `RAWSQL_*` and custom SQL calculated fields tested explicitly; measures compared against legacy | Key workbooks re-confirmed after Tableau Server driver and data source updates |
+| **Excel** | PivotTable workbooks refreshed and spot-checked; Power Query connections updated and verified | Key workbooks refreshed against UAT and confirmed correct |
+| **Looker** | Explores and dashboards queried; PDTs rebuilt; row-level access filters tested | Key Explores and dashboards re-confirmed working |
+
+A validation matrix (tracking each dashboard, its business owner, and sign-off status) must be completed before the migration PR can be approved. The completed matrix is attached to the `feature/xml-to-sml-migration` PR body.
+
+The BI developer team is responsible for the technical validation steps. Business stakeholders confirm the values are correct from a business perspective.
 
 ### What BI developers will notice
 
@@ -262,7 +280,9 @@ These criteria must all be met before the production deployment is approved. The
 | Query performance vs legacy baseline | No query more than 10% slower | Model Administrator |
 | Business unit UAT sign-off | All in-scope business units | Business Stakeholders |
 | Security scan completed | No critical findings open | Administrator |
-| BI tool connections tested in UAT | All tools in scope | BI Developers |
+| BI tool connections updated and tested | All tools in scope — connections pointing to new AtScale instance | BI Developers |
+| BI tool dashboard validation complete (DEV — M2) | All in-scope dashboards and workbooks validated in DEV; validation matrix signed off | Model Administrator + BI Developers |
+| BI tools re-confirmed in UAT (M3) | Key reports spot-checked against UAT AtScale; results consistent with DEV validation | BI Developers |
 | Monitoring active in PROD | Alerts configured and tested | Administrator |
 
 If any criterion is not met, the production deployment does not proceed. The programme sponsor may accept a specific gap as a known risk in writing, but this must be an explicit decision, not an oversight.
@@ -304,6 +324,7 @@ Once monitoring is confirmed active and all stakeholders are satisfied, the lega
 | Communication plan agreed and owner nominated | Programme Sponsor | |
 | Business stakeholder availability confirmed for UAT window | Business Unit Leads | |
 | UAT sign-off — all in-scope business units | Business Unit Leads | |
+| BI tool validation matrix completed and signed off — DEV (M2 gate, Power BI, Tableau, Excel, Looker) | Model Administrator + BI Developers | |
 | All Go/No-Go criteria confirmed met | Model Administrator + Administrator | |
 | Production deployment approved | Programme Sponsor + Administrator | |
 | Monitoring confirmed active in PROD | Administrator | |
