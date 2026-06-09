@@ -340,6 +340,8 @@ export type ExtractDataShapeFromConnectionParams = {
   targetFactRows?:    number;     // default: 100000
   targetColumnRows?:  number;     // default: 10000
   tablesample?:       boolean;    // default: true
+  serial?:            boolean;    // default: false
+  preserveMetadata?:  boolean;    // default: false
 };
 
 export async function extractDataShapeFromConnection(p: ExtractDataShapeFromConnectionParams, o: LibraryOptions = {}) {
@@ -355,15 +357,18 @@ export async function extractDataShapeFromConnection(p: ExtractDataShapeFromConn
       "target-fact-rows":   100_000,
       "target-column-rows": 10_000,
       tablesample:          true,
+      serial:               false,
+      "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type GenerateDDLFromDataShapeParams = {
-  inputFile?:   FileInput;   // default: "data-shape.yaml"
-  dialect?:     string;      // default: "ansi"
-  outputFile?:  FileOutput;
+  inputFile?:        FileInput;  // default: "data-shape.yaml"
+  dialect?:          string;     // default: "ansi"
+  outputFile?:       FileOutput;
+  preserveMetadata?: boolean;    // default: false
 };
 
 export async function generateDDLFromDataShape(p: GenerateDDLFromDataShapeParams, o: LibraryOptions = {}) {
@@ -373,18 +378,20 @@ export async function generateDDLFromDataShape(p: GenerateDDLFromDataShapeParams
   });
   try {
     await run("generate-ddl-from-data-shape", Object.assign({
-      "input-file": "data-shape.yaml",
-      dialect:      "ansi",
+      "input-file":         "data-shape.yaml",
+      dialect:              "ansi",
+      "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type GenerateDataFromDataShapeParams = {
-  inputFile?:   FileInput;  // default: "data-shape.yaml"
-  outputDir?:   DirOutput;  // default: "data"
-  scaleFactor?: number;     // default: 1.0
-  seed?:        number;
+  inputFile?:        FileInput;  // default: "data-shape.yaml"
+  outputDir?:        DirOutput;  // default: "data"
+  scaleFactor?:      number;     // default: 1.0
+  seed?:             number;
+  preserveMetadata?: boolean;    // default: false
 };
 
 export async function generateDataFromDataShape(p: GenerateDataFromDataShapeParams, o: LibraryOptions = {}) {
@@ -394,26 +401,28 @@ export async function generateDataFromDataShape(p: GenerateDataFromDataShapePara
   });
   try {
     await run("generate-data-from-data-shape", Object.assign({
-      "input-file":   "data-shape.yaml",
-      "output-dir":   "data",
-      "scale-factor": 1.0,
+      "input-file":         "data-shape.yaml",
+      "output-dir":         "data",
+      "scale-factor":       1.0,
+      "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type GenerateDataFromDataShapeToConnectionParams = {
-  connectionName:  string;
-  inputFile?:      FileInput;  // default: "data-shape.yaml"
-  connectionFile?: FileInput;  // default: "connections.yaml"
-  scaleFactor?:    number;     // default: 1.0
-  createTables?:   boolean;    // default: false
-  dropIfExists?:   boolean;    // default: false
-  dialect?:        string;     // default: "ansi"
-  batchSize?:      number;     // default: 500
-  reportsDir?:     string;     // default: "_reports"
-  seed?:           number;
-  schema?:         string;
+  connectionName:   string;
+  inputFile?:       FileInput;  // default: "data-shape.yaml"
+  connectionFile?:  FileInput;  // default: "connections.yaml"
+  scaleFactor?:     number;     // default: 1.0
+  createTables?:    boolean;    // default: false
+  dropIfExists?:    boolean;    // default: false
+  dialect?:         string;     // auto-detected from connection config; falls back to "ansi"
+  batchSize?:       number;     // default: 500
+  reportsDir?:      string;     // default: "_reports"
+  seed?:            number;
+  schema?:          string;
+  preserveMetadata?: boolean;   // default: false
 };
 
 export async function generateDataFromDataShapeToConnection(p: GenerateDataFromDataShapeToConnectionParams, o: LibraryOptions = {}) {
@@ -422,14 +431,14 @@ export async function generateDataFromDataShapeToConnection(p: GenerateDataFromD
   });
   try {
     await run("generate-data-from-data-shape-to-connection", Object.assign({
-      "input-file":      "data-shape.yaml",
-      "connection-file": "connections.yaml",
-      "scale-factor":    1.0,
-      "create-tables":   false,
-      "drop-if-exists":  false,
-      dialect:           "ansi",
-      "batch-size":      500,
-      "reports-dir":     "_reports",
+      "input-file":         "data-shape.yaml",
+      "connection-file":    "connections.yaml",
+      "scale-factor":       1.0,
+      "create-tables":      false,
+      "drop-if-exists":     false,
+      "batch-size":         500,
+      "reports-dir":        "_reports",
+      "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }

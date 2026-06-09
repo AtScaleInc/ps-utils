@@ -793,6 +793,8 @@ With sampling tuning:
 | `--target-fact-rows` | No | `100000` | Target row count when sampling large fact tables (0 = no sampling) |
 | `--target-column-rows` | No | `10000` | Target row count for measure column distribution sampling (0 = no sampling) |
 | `--tablesample` / `--no-tablesample` | No | `true` | Use `TABLESAMPLE SYSTEM` for fact sampling. Set `--no-tablesample` for databases that do not support it (e.g. MySQL) |
+| `--serial` | No | `false` | `true` / `false`. Profile dimensions one at a time instead of in parallel. Use when the database enforces a low per-user connection limit |
+| `--preserve-meta-data` | No | `false` | `true` / `false`. Store original table and column names in the fingerprint so that subsequent data generation creates tables whose names and columns match the SML model schema |
 
 **Output:** A `data-shape.yaml` fingerprint file containing:
 - Dimension hierarchy level cardinalities, null key fractions, and rollup ratios (P50/P95/shape)
@@ -800,7 +802,7 @@ With sampling tuning:
 - Measure distributions (null fraction, min/max/mean, percentiles, additivity classification)
 - Pairwise conformed dimension overlap across facts (intersection/union fraction)
 
-All entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`). The mapping from original names to IDs is discarded at the end of each run.
+By default, all entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`) and the mapping is discarded. Pass `--preserve-meta-data` to retain the original physical names in a `metadata:` block so that downstream `generate-data-from-data-shape-to-connection` runs create tables that match the SML model schema.
 
 See [STATISTICS.md](docs/STATISTICS.md) for the full algorithm description.
 
@@ -834,6 +836,7 @@ With dialect selection:
 | `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `--output-file` | No | stdout | Output path for the generated DDL |
 | `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
 **Output:** One `CREATE TABLE` statement per dimension and fact. Dimension tables are emitted first so `FOREIGN KEY` references resolve correctly.
 
@@ -874,6 +877,7 @@ With a scale factor and reproducible seed:
 | `--output-dir` | No | `data` | Directory where CSV files are written |
 | `--scale-factor` | No | `1.0` | Scale row and member counts (e.g. `0.01` = 1% of real size) |
 | `--seed` | No | — | Integer random seed for reproducible output |
+| `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
 **Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
 
@@ -919,11 +923,12 @@ With scale factor and batch tuning:
 | `--seed` | No | — | Integer random seed for reproducible output |
 | `--create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `--drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `--create-tables` |
-| `--dialect` | No | `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `--dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection configuration (`sql.dialect`); falls back to `ansi` |
 | `--batch-size` | No | `500` | Rows per `INSERT` statement |
 | `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
-**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order respects FK constraints throughout.
+**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimensions are inserted in parallel since they have no inter-table FK dependencies. Facts are inserted in parallel after all dimension inserts complete, ensuring FK constraints are respected throughout.
 
 See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
 

@@ -295,9 +295,10 @@ inputs:
       Database dialect.
       For generate-sml-from-ddl: e.g. snowflake, postgresql — auto-detected from filename if omitted;
       when snowflake, dataset table names are uppercased.
-      For generate-ddl-from-data-shape / generate-data-from-data-shape-to-connection:
-      ansi (default), postgresql, snowflake, mysql, or bigquery.
+      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, or bigquery.
       BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
+      For generate-data-from-data-shape-to-connection: when omitted, the dialect is read from
+      the connection configuration (sql.dialect); falls back to ansi.
     required: false
 
   dry-run:
@@ -341,6 +342,23 @@ inputs:
       Used by: extract-data-shape-from-connection.
     required: false
     default: "true"
+  serial:
+    description: >
+      When "true", profile dimensions one at a time instead of in parallel (default: false).
+      Use when the database enforces a low per-user connection limit.
+      Used by: extract-data-shape-from-connection.
+    required: false
+    default: "false"
+  preserve-meta-data:
+    description: >
+      When "true":
+        extract-data-shape-from-connection: stores original table/column names in the fingerprint metadata block.
+        generate-ddl-from-data-shape, generate-data-from-data-shape, generate-data-from-data-shape-to-connection:
+          uses the fingerprint metadata block to recreate tables with their original names.
+      Only has effect on generation operations when the fingerprint was extracted with this flag set to "true".
+      Default: "false".
+    required: false
+    default: "false"
 
   # ── generate-ddl-from-data-shape / generate-data-from-data-shape / generate-data-from-data-shape-to-connection ──
   input-file:
@@ -1220,7 +1238,9 @@ runs:
         [[ -n "${{ inputs.output-file }}"       ]] && ARGS+=(--output-file        "${{ inputs.output-file }}")
         [[ -n "${{ inputs.target-fact-rows }}"  ]] && ARGS+=(--target-fact-rows   "${{ inputs.target-fact-rows }}")
         [[ -n "${{ inputs.target-column-rows }}" ]] && ARGS+=(--target-column-rows "${{ inputs.target-column-rows }}")
-        [[ "${{ inputs.tablesample }}" == "false" ]] && ARGS+=(--no-tablesample)
+        [[ "${{ inputs.tablesample }}"        == "false" ]] && ARGS+=(--tablesample        false)
+        [[ "${{ inputs.serial }}"             == "true"  ]] && ARGS+=(--serial             true)
+        [[ "${{ inputs.preserve-meta-data }}" == "true"  ]] && ARGS+=(--preserve-meta-data true)
         node "${{ github.action_path }}/dist/cli.js" extract-data-shape-from-connection "${ARGS[@]}"
       shell: bash
 
@@ -1233,7 +1253,8 @@ runs:
           --dialect    "${{ inputs.dialect }}"
           --verbose true
         )
-        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.output-file }}" ]]             && ARGS+=(--output-file      "${{ inputs.output-file }}")
+        [[ "${{ inputs.preserve-meta-data }}" == "true" ]] && ARGS+=(--preserve-meta-data true)
         node "${{ github.action_path }}/dist/cli.js" generate-ddl-from-data-shape "${ARGS[@]}"
       shell: bash
 
@@ -1248,6 +1269,7 @@ runs:
         [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
         [[ -n "${{ inputs.scale-factor }}"  ]] && ARGS+=(--scale-factor  "${{ inputs.scale-factor }}")
         [[ -n "${{ inputs.seed }}"          ]] && ARGS+=(--seed          "${{ inputs.seed }}")
+        [[ "${{ inputs.preserve-meta-data }}" == "true" ]] && ARGS+=(--preserve-meta-data true)
         node "${{ github.action_path }}/dist/cli.js" generate-data-from-data-shape "${ARGS[@]}"
       shell: bash
 
@@ -1266,8 +1288,9 @@ runs:
         [[ -n "${{ inputs.seed }}"         ]] && ARGS+=(--seed         "${{ inputs.seed }}")
         [[ -n "${{ inputs.dialect }}"      ]] && ARGS+=(--dialect      "${{ inputs.dialect }}")
         [[ -n "${{ inputs.schema }}"       ]] && ARGS+=(--schema       "${{ inputs.schema }}")
-        [[ "${{ inputs.drop-if-exists }}" == "true"  ]] && ARGS+=(--drop-if-exists true)
-        [[ "${{ inputs.create-tables }}"  == "true"  ]] && ARGS+=(--create-tables  true)
+        [[ "${{ inputs.drop-if-exists }}"     == "true" ]] && ARGS+=(--drop-if-exists     true)
+        [[ "${{ inputs.create-tables }}"      == "true" ]] && ARGS+=(--create-tables      true)
+        [[ "${{ inputs.preserve-meta-data }}" == "true" ]] && ARGS+=(--preserve-meta-data true)
         node "${{ github.action_path }}/dist/cli.js" generate-data-from-data-shape-to-connection "${ARGS[@]}"
       shell: bash
 

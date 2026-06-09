@@ -141,6 +141,30 @@ export type DistributionShape =
   | "bimodal"
   | "unknown";
 
+/**
+ * Optional metadata block that maps opaque IDs back to the original physical
+ * names.  Only present when extraction was run with --preserve-meta-data true.
+ * When present, DDL and data generation use the real names instead of synthetic
+ * ones so the created tables match the original SML model schema.
+ */
+export interface FingerprintMetadata {
+  /** Maps dimension opaque ID (e.g. "D1") → physical source table name. */
+  dimensionTables:   Record<string, string>;
+  /** Maps level opaque ID (e.g. "D1.H1.L2") → physical key column name. */
+  levelKeyColumns:   Record<string, string>;
+  /** Maps level opaque ID → physical label column name (only when a label column exists). */
+  levelLabelColumns: Record<string, string>;
+  /** Maps fact opaque ID (e.g. "F1") → physical source table name. */
+  factTables:        Record<string, string>;
+  /** Maps measure opaque ID (e.g. "F1.M3") → physical source column name. */
+  measureColumns:    Record<string, string>;
+  /**
+   * Maps "${factId}:${joinIndex}" → FK column name on the fact table.
+   * Only populated when the model has relationships with join_columns defined.
+   */
+  joinColumns:       Record<string, string>;
+}
+
 /** Top-level fingerprint output file. All names are replaced by opaque IDs. */
 export interface SchemaFingerprint {
   version:              "2.0";
@@ -149,6 +173,11 @@ export interface SchemaFingerprint {
   dimensions:           DimensionFingerprint[];
   facts:                FactFingerprint[];
   conformedDimensions:  ConformedDimensionFingerprint[];
+  /**
+   * Optional metadata mapping opaque IDs to original physical names.
+   * Present only when extraction ran with --preserve-meta-data true.
+   */
+  metadata?:            FingerprintMetadata;
 }
 
 export interface SamplingMetadata {

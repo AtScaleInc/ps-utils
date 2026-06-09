@@ -1,0 +1,36 @@
+{
+  "operation": "generate-data-from-data-shape-to-connection",
+  "startedAt": "2026-06-09T20:25:06.994Z",
+  "completedAt": "2026-06-09T20:25:16.795Z",
+  "inputs": {
+    "fingerprintFile": "/home/ptoole/atscale/template/example/demo/data-shape.yaml",
+    "fingerprintSha256": "59369d1b15a92af63508362aecad312c8cb5967bde1a2089be09b1dae74cb576",
+    "fingerprintVersion": "2.0"
+  },
+  "outputs": {
+    "path": "snow_adventure_synth:(default)",
+    "kind": "database",
+    "artifacts": [
+      "DATECUSTOM",
+      "DATECUSTOM_LY_TEST",
+      "DATECUSTOM_TEST",
+      "DIM_DATE_DAY",
+      "DIM_DATE_HOUR",
+      "DIM_DATE_MONTH",
+      "DIM_DATE_QUARTER",
+      "DIM_DATE_WEEK",
+      "DIM_DATE_WEEKYEAR",
+      "DIM_GEO_STATE",
+      "REPORTING_DATEDIM",
+      "REPORTING_DATEDIM_COMP_KEYS",
+      "FACT_PARTITIONED"
+    ]
+  },
+  "enforced": {
+    "noRealDataAccessed": true,
+    "outputsResolveWithinScope": true,
+    "generatedKeyShapeOk": true,
+    "fkClosureOk": true
+  },
+  "profileVersion": "1.0.0"
+}

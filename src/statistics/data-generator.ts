@@ -34,6 +34,7 @@ import type {
   SchemaFingerprint,
   DimensionFingerprint,
   FactFingerprint,
+  FingerprintMetadata,
   HierarchyFingerprint,
   LevelFingerprint,
   RollupEdgeFingerprint,
@@ -59,6 +60,12 @@ export interface GenerateOptions {
    * Minimum 1 member per level / 1 fact row regardless of scale.
    */
   scaleFactor?: number;
+  /**
+   * Optional metadata block from the fingerprint (present when the fingerprint
+   * was captured with --preserve-meta-data true).  When supplied, generated
+   * tables and columns use the real physical names from the original schema.
+   */
+  metadata?: FingerprintMetadata;
 }
 
 /** A generated table — column headers + rows stored as value arrays. */
@@ -87,28 +94,44 @@ export function generateData(
   fp:      SchemaFingerprint,
   options: GenerateOptions = {},
 ): GeneratedData {
-  const scale = Math.max(0, options.scaleFactor ?? 1.0);
-  const rand  = mkRand(options.seed ?? Math.floor(Math.random() * 0xFFFFFFFF));
+  const scale    = Math.max(0, options.scaleFactor ?? 1.0);
+  const rand     = mkRand(options.seed ?? Math.floor(Math.random() * 0xFFFFFFFF));
+  // Use caller-supplied metadata when explicitly provided (even undefined means "don't use metadata").
+  // Fall back to fp.metadata only when the caller didn't pass the key at all.
+  const metadata = "metadata" in options ? options.metadata : fp.metadata;
 
   // ── Dimensions ──────────────────────────────────────────────────────────────
   const dimLeaves = new Map<string, number[]>(); // dimId → leaf key array
   const dimensions: GeneratedTable[] = [];
+  // Multiple SML dimensions can reference the same physical dataset; only generate
+  // one table per physical name and share its leaf keys with all alias dim IDs.
+  const seenDimTables = new Map<string, number[]>(); // tableName → leaf keys
 
   for (const dim of fp.dimensions) {
-    const table = generateDimensionTable(dim, scale, rand);
+    const tableName = metadata?.dimensionTables[dim.id] ?? dimIdToTable(dim.id);
+    if (seenDimTables.has(tableName)) {
+      // Re-use the leaf keys from the first occurrence for FK generation
+      dimLeaves.set(dim.id, seenDimTables.get(tableName)!);
+      continue;
+    }
+    const table = generateDimensionTable(dim, scale, rand, metadata);
     dimensions.push(table);
     // Collect leaf keys for fact FK generation
-    const leafColIdx = table.columns.findIndex((c) => c.endsWith("_key") &&
-      !table.columns.some((c2) => c2 > c && c2.endsWith("_key"))); // last key col = leaf
     const lastKeyIdx = table.columns.map((c, i) => c.endsWith("_key") ? i : -1)
       .filter((i) => i >= 0).at(-1) ?? 0;
-    dimLeaves.set(dim.id, table.rows.map((r) => r[lastKeyIdx] as number));
+    const leaves = table.rows.map((r) => r[lastKeyIdx] as number);
+    dimLeaves.set(dim.id, leaves);
+    seenDimTables.set(tableName, leaves);
   }
 
   // ── Facts ────────────────────────────────────────────────────────────────────
   const facts: GeneratedTable[] = [];
+  const seenFactTables = new Set<string>();
   for (const fact of fp.facts) {
-    facts.push(generateFactTable(fact, dimLeaves, fp, scale, rand));
+    const tableName = metadata?.factTables[fact.id] ?? factIdToTable(fact.id);
+    if (seenFactTables.has(tableName)) continue;
+    seenFactTables.add(tableName);
+    facts.push(generateFactTable(fact, dimLeaves, fp, scale, rand, metadata));
   }
 
   // ── Security: generated-key shape (R-15) + FK closure ──────────────────────
@@ -117,7 +140,7 @@ export function generateData(
 
   const dimLeafKeySets = new Map<string, Set<number>>();
   for (const dim of fp.dimensions) {
-    const tableName = dimIdToTable(dim.id);
+    const tableName = metadata?.dimensionTables[dim.id] ?? dimIdToTable(dim.id);
     dimLeafKeySets.set(tableName, new Set(dimLeaves.get(dim.id) ?? []));
   }
   const fkClosure = assertFkClosure(facts, dimLeafKeySets);
@@ -144,11 +167,12 @@ export function writeDataToCsv(data: GeneratedData, outputDir: string): void {
 // ─── Dimension generation ─────────────────────────────────────────────────────
 
 function generateDimensionTable(
-  dim:   DimensionFingerprint,
-  scale: number,
-  rand:  () => number,
+  dim:      DimensionFingerprint,
+  scale:    number,
+  rand:     () => number,
+  metadata?: FingerprintMetadata,
 ): GeneratedTable {
-  const tableName = dimIdToTable(dim.id);
+  const tableName = metadata?.dimensionTables[dim.id] ?? dimIdToTable(dim.id);
   const multiHier = dim.hierarchies.length > 1;
 
   // ── Primary hierarchy: walk top-down to produce leaf-member paths ───────────
@@ -185,14 +209,32 @@ function generateDimensionTable(
     currentPath = nextPath;
   }
 
-  // ── Build columns ────────────────────────────────────────────────────────────
+  // ── Build columns (with deduplication) ───────────────────────────────────────
+  // A degenerate SML hierarchy may assign the same ID to multiple levels,
+  // producing the same physical column name twice.  Track emitted names and
+  // record which (h, l) positions are skipped so row-building stays in sync.
   const columns: string[] = [];
+  const emittedColNames = new Set<string>();
+  // "h:l" pairs whose column was suppressed; row builder must skip these too.
+  const skipPos = new Set<string>();
+
   for (let h = 0; h < dim.hierarchies.length; h++) {
     const hier = dim.hierarchies[h]!;
     for (let l = 0; l < hier.levels.length; l++) {
-      columns.push(levelKeyColName(l, h, multiHier));
-      if (hasLabel(hier.levels[l]!)) {
-        columns.push(levelLabelColName(l, h, multiHier));
+      const level      = hier.levels[l]!;
+      const keyColName = metadata?.levelKeyColumns[level.id] ?? levelKeyColName(l, h, multiHier);
+      if (emittedColNames.has(keyColName)) {
+        skipPos.add(`${h}:${l}`);
+        continue;
+      }
+      emittedColNames.add(keyColName);
+      columns.push(keyColName);
+      if (shouldEmitLabel(level, metadata)) {
+        const lblColName = metadata?.levelLabelColumns[level.id] ?? levelLabelColName(l, h, multiHier);
+        if (!emittedColNames.has(lblColName)) {
+          emittedColNames.add(lblColName);
+          columns.push(lblColName);
+        }
       }
     }
   }
@@ -203,8 +245,9 @@ function generateDimensionTable(
 
     // Primary hierarchy columns
     for (let l = 0; l < primaryHier.levels.length; l++) {
+      if (skipPos.has(`0:${l}`)) continue;
       vals.push(entry.levelKeys[l]);
-      if (hasLabel(primaryHier.levels[l]!)) {
+      if (shouldEmitLabel(primaryHier.levels[l]!, metadata)) {
         vals.push(`lbl_${dim.id}_${l + 1}_${entry.levelKeys[l]}`);
       }
     }
@@ -214,11 +257,12 @@ function generateDimensionTable(
       const secHier    = dim.hierarchies[h]!;
       const leafCount  = currentPath.length;
       for (let l = 0; l < secHier.levels.length; l++) {
+        if (skipPos.has(`${h}:${l}`)) continue;
         const memberCount = clampMin(secHier.levels[l]!.memberCount * scale);
         // Distribute leaf members across this level's members
         const key = Math.floor(rowIdx / Math.max(1, leafCount / memberCount)) + 1;
         vals.push(Math.min(key, memberCount));
-        if (hasLabel(secHier.levels[l]!)) {
+        if (shouldEmitLabel(secHier.levels[l]!, metadata)) {
           vals.push(`lbl_${dim.id}_h${h + 1}_l${l + 1}_${key}`);
         }
       }
@@ -238,8 +282,9 @@ function generateFactTable(
   fp:        SchemaFingerprint,
   scale:     number,
   rand:      () => number,
+  metadata?: FingerprintMetadata,
 ): GeneratedTable {
-  const tableName  = factIdToTable(fact.id);
+  const tableName  = metadata?.factTables[fact.id] ?? factIdToTable(fact.id);
   const totalRows  = clampMin(fact.rowCount * scale);
 
   // ── Column headers ───────────────────────────────────────────────────────────
@@ -252,17 +297,19 @@ function generateFactTable(
   }
   const dimJoinSeen = new Map<string, number>();
 
-  for (const join of fact.joins) {
+  for (let j = 0; j < fact.joins.length; j++) {
+    const join  = fact.joins[j]!;
     const seen  = (dimJoinSeen.get(join.toDimensionId) ?? 0) + 1;
     dimJoinSeen.set(join.toDimensionId, seen);
     const multi = (dimJoinCount.get(join.toDimensionId) ?? 1) > 1;
-    const dName = dimIdToTable(join.toDimensionId);
-    const col   = multi ? `${dName}_key_${seen}` : `${dName}_key`;
+    const dName = metadata?.dimensionTables[join.toDimensionId] ?? dimIdToTable(join.toDimensionId);
+    const col   = metadata?.joinColumns[`${fact.id}:${j}`]
+      ?? (multi ? `${dName}_key_${seen}` : `${dName}_key`);
     columns.push(col);
     dimTableNames.push(join.toDimensionId);
   }
   for (const m of fact.measures) {
-    columns.push(measureIdToCol(m.id));
+    columns.push(metadata?.measureColumns[m.id] ?? measureIdToCol(m.id));
   }
 
   // ── Anchor dimension (first join): density-weighted row assignment ───────────
@@ -612,8 +659,18 @@ function csvVal(v: unknown): string {
   if (v === null || v === undefined) return "";
   return String(v);
 }
-function hasLabel(level: LevelFingerprint): boolean {
-  return (level as LevelFingerprint).labelUniqueness !== undefined;
+/**
+ * Whether a label column should be emitted for this level.
+ *
+ * In metadata mode: only when the metadata explicitly lists a label column
+ * (absence means label == key — no separate physical column).
+ * In synthetic mode: whenever the fingerprint recorded labelUniqueness.
+ */
+function shouldEmitLabel(level: LevelFingerprint, metadata: FingerprintMetadata | undefined): boolean {
+  if (metadata !== undefined) {
+    return metadata.levelLabelColumns[level.id] !== undefined;
+  }
+  return level.labelUniqueness !== undefined;
 }
 
 /**

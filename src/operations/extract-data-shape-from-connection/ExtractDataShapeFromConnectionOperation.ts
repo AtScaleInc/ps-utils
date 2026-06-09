@@ -81,6 +81,12 @@ class ExtractDataShapeParams extends ParameterSet {
       required     = false;
       defaultValue = false;
     })(),
+    new (class extends BooleanParameter {
+      name         = "preserve-meta-data";
+      description  = "Store original table and column names in the fingerprint so data generation uses real names instead of synthetic ones (default: false)";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
@@ -93,6 +99,7 @@ type Params = {
   "target-column-rows": number;
   "tablesample":        boolean;
   "serial":             boolean;
+  "preserve-meta-data": boolean;
 };
 export type ExtractDataShapeFromConnectionParams = Params;
 
@@ -180,8 +187,9 @@ export class ExtractDataShapeFromConnectionOperation extends Operation<Params> {
           supportsTablesample: tablesampleSupported,
           dialect,
         },
-        parallel:   !params["serial"],
-        onProgress: (msg) => this.logger.log(`[${tag}] ${msg}`),
+        parallel:         !params["serial"],
+        preserveMetadata: params["preserve-meta-data"],
+        onProgress:       (msg) => this.logger.log(`[${tag}] ${msg}`),
       });
 
       // ── Write output ────────────────────────────────────────────────────────

@@ -609,6 +609,8 @@ function extractDataShapeFromConnection(
 | `targetFactRows` | `number` | No | `100000` | Target row sample for fact tables |
 | `targetColumnRows` | `number` | No | `10000` | Target row sample for dimension tables |
 | `tablesample` | `boolean` | No | `true` | Use `TABLESAMPLE` for faster sampling |
+| `serial` | `boolean` | No | `false` | Profile dimensions one at a time instead of in parallel |
+| `preserveMetadata` | `boolean` | No | `false` | Store original table and column names in the fingerprint so data generation creates tables matching the SML model schema |
 
 ---
 
@@ -636,6 +638,7 @@ function generateDDLFromDataShape(
 | `inputFile` | `FileInput` | No | `"data-shape.yaml"` | Path to `data-shape.yaml`, or a `Readable` of its contents |
 | `dialect` | `string` | No | `"ansi"` | SQL dialect (e.g. `ansi`, `snowflake`) |
 | `outputFile` | `FileOutput` | No | | Output path for DDL, or a `Writable` to receive it (stdout if omitted) |
+| `preserveMetadata` | `boolean` | No | `false` | Use original table and column names from the fingerprint metadata block |
 
 ---
 
@@ -664,6 +667,7 @@ function generateDataFromDataShape(
 | `outputDir` | `DirOutput` | No | `"data"` | Output directory for CSV files, or a `Writable` to receive a ZIP |
 | `scaleFactor` | `number` | No | `1.0` | Scale factor for row counts |
 | `seed` | `number` | No | | Random seed for reproducible output |
+| `preserveMetadata` | `boolean` | No | `false` | Use original table and column names from the fingerprint metadata block |
 
 ---
 
@@ -696,11 +700,12 @@ function generateDataFromDataShapeToConnection(
 | `scaleFactor` | `number` | No | `1.0` | Scale factor for row counts |
 | `createTables` | `boolean` | No | `false` | Create tables before inserting |
 | `dropIfExists` | `boolean` | No | `false` | Drop existing tables before creating |
-| `dialect` | `string` | No | `"ansi"` | SQL dialect |
+| `dialect` | `string` | No | auto / `"ansi"` | SQL dialect. When omitted, read from the connection config (`sql.dialect`); falls back to `"ansi"` |
 | `batchSize` | `number` | No | `500` | Insert batch size |
 | `reportsDir` | `string` | No | `"_reports"` | Directory for load reports |
 | `seed` | `number` | No | | Random seed for reproducible output |
 | `schema` | `string` | No | | Target schema to qualify table names |
+| `preserveMetadata` | `boolean` | No | `false` | Use original table and column names from the fingerprint metadata block |
 
 ---
 

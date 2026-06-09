@@ -1,0 +1,25 @@
+{
+  "operation": "generate-data-from-data-shape-to-connection",
+  "startedAt": "2026-06-09T20:25:06.994Z",
+  "completedAt": "2026-06-09T20:25:16.795Z",
+  "seed": 42,
+  "scaleFactor": 0.1,
+  "fingerprintSha256": "59369d1b15a92af63508362aecad312c8cb5967bde1a2089be09b1dae74cb576",
+  "outputDigest": "e47c68a282eba5253729bea72cbfb074bca88c779b2e192039477233bfbcb846",
+  "rowCounts": {
+    "DATECUSTOM": 37,
+    "DATECUSTOM_LY_TEST": 37,
+    "DATECUSTOM_TEST": 37,
+    "DIM_DATE_DAY": 444,
+    "DIM_DATE_HOUR": 2,
+    "DIM_DATE_MONTH": 1,
+    "DIM_DATE_QUARTER": 1,
+    "DIM_DATE_WEEK": 63,
+    "DIM_DATE_WEEKYEAR": 1,
+    "DIM_GEO_STATE": 7,
+    "REPORTING_DATEDIM": 950,
+    "REPORTING_DATEDIM_COMP_KEYS": 950,
+    "FACT_PARTITIONED": 0
+  },
+  "profileVersion": "1.0.0"
+}

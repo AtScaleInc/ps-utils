@@ -21,6 +21,7 @@
 import type {
   DimensionFingerprint,
   FactFingerprint,
+  FingerprintMetadata,
   HierarchyFingerprint,
   LevelFingerprint,
   MeasureFingerprint,
@@ -32,7 +33,13 @@ import type {
 export type SqlDialect = "ansi" | "postgresql" | "snowflake" | "mysql" | "bigquery";
 
 export interface DdlOptions {
-  dialect?: SqlDialect;
+  dialect?:  SqlDialect;
+  /**
+   * Optional metadata block from the fingerprint (present when the fingerprint
+   * was captured with --preserve-meta-data true).  When supplied, real table
+   * and column names are used instead of synthetic ones.
+   */
+  metadata?: FingerprintMetadata;
 }
 
 /**
@@ -44,14 +51,24 @@ export interface DdlOptions {
  */
 export function generateDdl(fp: SchemaFingerprint, options: DdlOptions = {}): string {
   const dialect = options.dialect ?? "ansi";
-  const ctx = buildContext(fp, dialect);
+  const ctx = buildContext(fp, dialect, options.metadata);
   const sections: string[] = [fileHeader(fp, dialect)];
+  // Skip dimensions/facts that share a physical table name with an earlier entry.
+  // Multiple SML dimensions can reference the same physical dataset; the physical
+  // table only needs one DDL block.
+  const seenTables = new Set<string>();
 
   for (const dim of fp.dimensions) {
+    const tableName = ctx.dimTableName.get(dim.id) ?? dimIdToTable(dim.id);
+    if (seenTables.has(tableName)) continue;
+    seenTables.add(tableName);
     sections.push(renderDimensionTable(dim, ctx, dialect));
   }
 
   for (const fact of fp.facts) {
+    const tableName = ctx.factTableName.get(fact.id) ?? factIdToTable(fact.id);
+    if (seenTables.has(tableName)) continue;
+    seenTables.add(tableName);
     sections.push(renderFactTable(fact, ctx, dialect));
   }
 
@@ -65,30 +82,58 @@ export function generateDdl(fp: SchemaFingerprint, options: DdlOptions = {}): st
  */
 interface Context {
   dialect:         SqlDialect;
-  /** dimId → synthetic table name */
+  /** True when a metadata block was provided; affects label-column fallback behavior. */
+  usingMetadata:   boolean;
+  /** dimId → table name (real when metadata present, otherwise synthetic) */
   dimTableName:    Map<string, string>;
-  /** factId → synthetic table name */
+  /** factId → table name (real when metadata present, otherwise synthetic) */
   factTableName:   Map<string, string>;
   /** levelId → { colName, colType } — leaf column info for FK generation */
   leafColInfo:     Map<string, { colName: string; colType: string }>;
+  /** levelId → physical key col name for ALL levels */
+  levelColName:    Map<string, string>;
+  /**
+   * levelId → explicit label col name. Only populated when the metadata lists
+   * a separate label column for that level (label ≠ key). When absent and
+   * usingMetadata is false, a synthetic name is used as fallback.
+   */
+  levelLblName:    Map<string, string>;
+  /** measureId → physical col name */
+  measureColName:  Map<string, string>;
+  /** `${factId}:${joinIndex}` → FK col name */
+  joinColName:     Map<string, string>;
 }
 
-function buildContext(fp: SchemaFingerprint, dialect: SqlDialect): Context {
+function buildContext(fp: SchemaFingerprint, dialect: SqlDialect, metadata?: FingerprintMetadata): Context {
   const dimTableName  = new Map<string, string>();
   const factTableName = new Map<string, string>();
   const leafColInfo   = new Map<string, { colName: string; colType: string }>();
+  const levelColName  = new Map<string, string>();
+  const levelLblName  = new Map<string, string>();
+  const measureColName = new Map<string, string>();
+  const joinColName   = new Map<string, string>();
 
   for (const dim of fp.dimensions) {
-    dimTableName.set(dim.id, dimIdToTable(dim.id));
+    dimTableName.set(dim.id, metadata?.dimensionTables[dim.id] ?? dimIdToTable(dim.id));
 
-    // Walk hierarchies to collect leaf column info
+    // Walk hierarchies to collect level col info and leaf col info
     const multiHier = dim.hierarchies.length > 1;
     for (let h = 0; h < dim.hierarchies.length; h++) {
       const hier = dim.hierarchies[h]!;
       for (let l = 0; l < hier.levels.length; l++) {
-        const level = hier.levels[l]!;
+        const level   = hier.levels[l]!;
+        const colName = metadata?.levelKeyColumns[level.id] ?? levelKeyColName(l, h, multiHier);
+        levelColName.set(level.id, colName);
+        // When metadata is present, only set a label entry if the metadata explicitly
+        // lists one for this level. Absence means label == key (no separate label col).
+        // When metadata is absent, always fall back to a synthetic name.
+        const lblName = metadata
+          ? metadata.levelLabelColumns[level.id]
+          : levelLabelColName(l, h, multiHier);
+        if (lblName !== undefined && !levelLblName.has(level.id)) {
+          levelLblName.set(level.id, lblName);
+        }
         if (level.role === "leaf") {
-          const colName = levelKeyColName(l, h, multiHier);
           const colType = mapType(keyBaseType(level.memberCount), dialect);
           leafColInfo.set(level.id, { colName, colType });
         }
@@ -97,10 +142,36 @@ function buildContext(fp: SchemaFingerprint, dialect: SqlDialect): Context {
   }
 
   for (const fact of fp.facts) {
-    factTableName.set(fact.id, factIdToTable(fact.id));
+    factTableName.set(fact.id, metadata?.factTables[fact.id] ?? factIdToTable(fact.id));
+
+    for (const measure of fact.measures) {
+      measureColName.set(
+        measure.id,
+        metadata?.measureColumns[measure.id] ?? measureIdToCol(measure.id),
+      );
+    }
+
+    // Pre-compute join FK column names using zero-based join index as key
+    const dimJoinCount = new Map<string, number>();
+    for (const join of fact.joins) {
+      dimJoinCount.set(join.toDimensionId, (dimJoinCount.get(join.toDimensionId) ?? 0) + 1);
+    }
+    const dimJoinSeen = new Map<string, number>();
+    for (let j = 0; j < fact.joins.length; j++) {
+      const join  = fact.joins[j]!;
+      const seen  = (dimJoinSeen.get(join.toDimensionId) ?? 0) + 1;
+      dimJoinSeen.set(join.toDimensionId, seen);
+      const multi = (dimJoinCount.get(join.toDimensionId) ?? 1) > 1;
+      const dName = metadata?.dimensionTables[join.toDimensionId] ?? dimIdToTable(join.toDimensionId);
+      const defaultFkCol = multi ? `${dName}_key_${seen}` : `${dName}_key`;
+      joinColName.set(
+        `${fact.id}:${j}`,
+        metadata?.joinColumns[`${fact.id}:${j}`] ?? defaultFkCol,
+      );
+    }
   }
 
-  return { dialect, dimTableName, factTableName, leafColInfo };
+  return { dialect, usingMetadata: metadata !== undefined, dimTableName, factTableName, leafColInfo, levelColName, levelLblName, measureColName, joinColName };
 }
 
 // ─── Dimension table renderer ─────────────────────────────────────────────────
@@ -116,6 +187,10 @@ function renderDimensionTable(
   const colLines:         string[] = [];
   const constraintLines:  string[] = [];
   let primaryKeyCol: string | undefined;
+  // Guard against duplicate column names when multiple hierarchy levels share
+  // the same physical column (e.g. a degenerate SML hierarchy where two levels
+  // have the same unique_name and therefore the same key column).
+  const emittedCols = new Set<string>();
 
   for (let h = 0; h < dim.hierarchies.length; h++) {
     const hier = dim.hierarchies[h]!;
@@ -126,18 +201,29 @@ function renderDimensionTable(
 
     for (let l = 0; l < hier.levels.length; l++) {
       const level      = hier.levels[l]!;
-      const colName    = levelKeyColName(l, h, multiHier);
+      const colName    = ctx.levelColName.get(level.id) ?? levelKeyColName(l, h, multiHier);
       const baseType   = keyBaseType(level.memberCount);
       const colType    = mapType(baseType, dialect);
       const roleNote   = level.role === "root"
         ? `root, ${fmt(level.memberCount)} members`
         : `${fmt(level.memberCount)} members`;
 
-      colLines.push(col(colName, colType, "NOT NULL", roleNote));
+      if (!emittedCols.has(colName)) {
+        emittedCols.add(colName);
+        colLines.push(col(colName, colType, "NOT NULL", roleNote));
+      }
 
-      // Label column when fingerprint recorded labelUniqueness
-      if ((level as LevelFingerprint).labelUniqueness !== undefined) {
-        const lblCol  = levelLabelColName(l, h, multiHier);
+      // Label column when fingerprint recorded labelUniqueness.
+      // When using metadata, levelLblName is only set when the metadata explicitly
+      // lists a separate label column — absence means label == key, so skip it.
+      // When not using metadata, fall back to a synthetic label name.
+      const lblCol = ctx.levelLblName.has(level.id)
+        ? ctx.levelLblName.get(level.id)!
+        : (!ctx.usingMetadata && (level as LevelFingerprint).labelUniqueness !== undefined)
+          ? levelLabelColName(l, h, multiHier)
+          : undefined;
+      if (lblCol !== undefined && !emittedCols.has(lblCol)) {
+        emittedCols.add(lblCol);
         const lblType = mapType("VARCHAR(200)", dialect);
         colLines.push(col(lblCol, lblType, null, "label"));
       }
@@ -154,11 +240,10 @@ function renderDimensionTable(
     constraintLines.push(`    PRIMARY KEY (${primaryKeyCol})`);
   }
 
-  const allLines = [...colLines, ...constraintLines];
   return [
     `-- Dimension ${dim.id} (~${fmt(dim.rowCount)} rows)`,
     `CREATE TABLE ${tableName} (`,
-    allLines.join(",\n"),
+    buildColumnBody(colLines, constraintLines),
     `);`,
   ].join("\n");
 }
@@ -183,16 +268,20 @@ function renderFactTable(
   const dimJoinSeen = new Map<string, number>();
 
   // FK columns
+  let joinIdx = 0;
   for (const join of fact.joins) {
     const dimTable   = ctx.dimTableName.get(join.toDimensionId) ?? dimIdToTable(join.toDimensionId);
     const leafInfo   = ctx.leafColInfo.get(join.toLeafLevelId);
     const leafColRef = leafInfo?.colName ?? "id";
     const leafType   = leafInfo?.colType ?? mapType("BIGINT", dialect);
 
-    const seen  = (dimJoinSeen.get(join.toDimensionId) ?? 0) + 1;
-    dimJoinSeen.set(join.toDimensionId, seen);
-    const multi = (dimJoinCount.get(join.toDimensionId) ?? 1) > 1;
-    const fkCol = multi ? `${dimTable}_key_${seen}` : `${dimTable}_key`;
+    dimJoinSeen.set(join.toDimensionId, (dimJoinSeen.get(join.toDimensionId) ?? 0) + 1);
+    const fkCol = ctx.joinColName.get(`${fact.id}:${joinIdx}`) ?? (() => {
+      const seen  = dimJoinSeen.get(join.toDimensionId)!;
+      const multi = (dimJoinCount.get(join.toDimensionId) ?? 1) > 1;
+      return multi ? `${dimTable}_key_${seen}` : `${dimTable}_key`;
+    })();
+    joinIdx++;
 
     const nullNote = join.nullFkFraction > 0.01
       ? `${(join.nullFkFraction * 100).toFixed(1)}% null`
@@ -206,17 +295,16 @@ function renderFactTable(
 
   // Measure columns
   for (const measure of fact.measures) {
-    const mCol  = measureIdToCol(measure.id);
+    const mCol  = ctx.measureColName.get(measure.id) ?? measureIdToCol(measure.id);
     const mType = mapType(measureBaseType(measure), dialect);
     const note  = `${measure.additivity} ${measure.aggregation}`;
     colLines.push(col(mCol, mType, null, note));
   }
 
-  const allLines = [...colLines, ...constraintLines];
   return [
     `-- Fact ${fact.id} (~${fmt(fact.rowCount)} rows, ${fact.joins.length} join(s), ${fact.measures.length} measure(s))`,
     `CREATE TABLE ${tableName} (`,
-    allLines.join(",\n"),
+    buildColumnBody(colLines, constraintLines),
     `);`,
   ].join("\n");
 }
@@ -300,6 +388,44 @@ function col(name: string, type: string, constraint: string | null, comment: str
   const typePad = type.padEnd(COL_TYPE_WIDTH);
   const cnstr   = constraint ? `${constraint.padEnd(10)} ` : " ".repeat(11);
   return `    ${namePad} ${typePad} ${cnstr}-- ${comment}`;
+}
+
+/**
+ * Join column definition lines and constraint lines into a valid SQL column
+ * list body (everything between the outer parentheses of CREATE TABLE).
+ *
+ * The naive `lines.join(",\n")` is wrong: each col() line ends with a
+ * `-- inline comment`, so the separator comma lands inside the comment and is
+ * silently ignored by the SQL parser.  This helper inserts the comma BEFORE
+ * the trailing ` --` on each column line, leaving pure comment lines
+ * (hierarchy section headers) unchanged and comma-free.
+ */
+function buildColumnBody(colLines: string[], constraintLines: string[]): string {
+  const out: string[] = [];
+
+  for (let i = 0; i < colLines.length; i++) {
+    const line        = colLines[i]!;
+    const isComment   = /^\s*--/.test(line);
+    const needsComma  = !isComment && (i < colLines.length - 1 || constraintLines.length > 0);
+
+    if (!needsComma) {
+      out.push(line);
+    } else {
+      // Insert comma before the trailing inline comment so it stays outside `--`
+      const commentStart = line.indexOf(" --");
+      out.push(commentStart !== -1
+        ? `${line.slice(0, commentStart)},${line.slice(commentStart)}`
+        : `${line},`);
+    }
+  }
+
+  for (let i = 0; i < constraintLines.length; i++) {
+    const line   = constraintLines[i]!;
+    const isLast = i === constraintLines.length - 1;
+    out.push(isLast ? line : `${line},`);
+  }
+
+  return out.join("\n");
 }
 
 function fmt(n: number): string {

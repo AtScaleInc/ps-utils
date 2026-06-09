@@ -18,6 +18,7 @@ import type {
   DatabaseQueryRunner,
   DimensionFingerprint,
   FactFingerprint,
+  FingerprintMetadata,
   HierarchyFingerprint,
   LevelFingerprint,
   SamplingConfig,
@@ -60,6 +61,14 @@ export interface ExtractOptions {
    * or when the database enforces a low per-user connection limit).
    */
   parallel?: boolean;
+
+  /**
+   * When true, store the original physical table and column names alongside
+   * the opaque IDs in the fingerprint's `metadata` block.  Generation
+   * operations automatically use these names when present so the created tables
+   * match the original SML model schema.  Default: false.
+   */
+  preserveMetadata?: boolean;
 }
 
 /**
@@ -176,6 +185,12 @@ export async function extractFingerprint(
   log("Applying security hardening…");
   const hardened = hardenFingerprint(assembled);
   for (const w of smallTableWarnings(hardened)) log(`  ⚠ ${w}`);
+
+  // ── Step 8: Attach metadata when requested ───────────────────────────────────
+  if (options.preserveMetadata) {
+    hardened.metadata = buildMetadata(graph, idMapper);
+  }
+
   return hardened;
 }
 
@@ -201,6 +216,56 @@ function applyCold(
       }
     }
   }
+}
+
+// ─── Metadata builder ─────────────────────────────────────────────────────────
+
+/**
+ * Walk the ModelGraph and IdMapper to build a FingerprintMetadata block that
+ * maps every opaque ID back to the original physical name.
+ */
+function buildMetadata(graph: ModelGraph, idMapper: IdMapper): FingerprintMetadata {
+  const dimensionTables:   Record<string, string> = {};
+  const levelKeyColumns:   Record<string, string> = {};
+  const levelLabelColumns: Record<string, string> = {};
+  const factTables:        Record<string, string> = {};
+  const measureColumns:    Record<string, string> = {};
+  const joinColumns:       Record<string, string> = {};
+
+  for (const dim of graph.dimensions) {
+    const dimId = idMapper.dimensionId(dim.uniqueName);
+    dimensionTables[dimId] = dim.sourceTable;
+    for (const hier of dim.hierarchies) {
+      for (const level of hier.levels) {
+        const levelId  = idMapper.levelId(dim.uniqueName, hier.uniqueName, level.uniqueName);
+        const keyCol   = level.keyColumns[0] ?? level.uniqueName;
+        levelKeyColumns[levelId] = keyCol;
+        // Only store a label column when it differs from the key column — if they
+        // are the same physical column, adding a separate label would duplicate the
+        // column in the generated DDL.
+        if (level.labelColumn && level.labelColumn !== keyCol) {
+          levelLabelColumns[levelId] = level.labelColumn;
+        }
+      }
+    }
+  }
+
+  for (const fact of graph.facts) {
+    const factId = idMapper.factId(fact.uniqueName);
+    factTables[factId] = fact.sourceTable;
+    for (const measure of fact.measures) {
+      const measureId = idMapper.measureIdFor(fact.uniqueName, measure.uniqueName);
+      measureColumns[measureId] = measure.sourceColumn;
+    }
+    for (let i = 0; i < fact.joins.length; i++) {
+      const join = fact.joins[i]!;
+      if (join.fromColumns.length > 0) {
+        joinColumns[`${factId}:${i}`] = join.fromColumns[0]!;
+      }
+    }
+  }
+
+  return { dimensionTables, levelKeyColumns, levelLabelColumns, factTables, measureColumns, joinColumns };
 }
 
 // ─── Re-export for convenience ────────────────────────────────────────────────

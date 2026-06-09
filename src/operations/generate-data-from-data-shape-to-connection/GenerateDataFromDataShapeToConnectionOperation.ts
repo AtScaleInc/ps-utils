@@ -88,10 +88,9 @@ class GenerateDataToConnectionParams extends ParameterSet {
       defaultValue = false;
     })(),
     new (class extends StringParameter {
-      name         = "dialect";
-      description  = "SQL dialect for CREATE TABLE: ansi (default), postgresql, snowflake, mysql, bigquery";
-      required     = false;
-      defaultValue = "ansi";
+      name        = "dialect";
+      description = "SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.";
+      required    = false;
     })(),
     new (class extends NumberParameter {
       name         = "batch-size";
@@ -110,21 +109,28 @@ class GenerateDataToConnectionParams extends ParameterSet {
       required     = false;
       defaultValue = "_reports";
     })(),
+    new (class extends BooleanParameter {
+      name         = "preserve-meta-data";
+      description  = "Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true.";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
 type Params = {
-  "input-file":    string;
-  "connection-file": string;
-  "connection-name": string;
-  "scale-factor":  number;
-  "seed"?:         number;
-  "create-tables": boolean;
-  "drop-if-exists": boolean;
-  "dialect":       string;
-  "batch-size":    number;
-  "schema"?:       string;
-  "reports-dir":   string;
+  "input-file":         string;
+  "connection-file":    string;
+  "connection-name":    string;
+  "scale-factor":       number;
+  "seed"?:              number;
+  "create-tables":      boolean;
+  "drop-if-exists":     boolean;
+  "dialect"?:           string;
+  "batch-size":         number;
+  "schema"?:            string;
+  "reports-dir":        string;
+  "preserve-meta-data": boolean;
 };
 export type GenerateDataFromDataShapeToConnectionParams = Params;
 
@@ -140,15 +146,14 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
   }
 
   async run(params: Params): Promise<void> {
-    const tag         = "GenerateDataToConnection";
-    const inputFile   = path.resolve(params["input-file"]);
-    const reportsDir  = path.resolve(params["reports-dir"]);
-    const dialect     = params["dialect"] as SqlDialect;
-    const batchSize   = Math.max(1, params["batch-size"]);
+    const tag          = "GenerateDataToConnection";
+    const inputFile    = path.resolve(params["input-file"]);
+    const reportsDir   = path.resolve(params["reports-dir"]);
+    const batchSize    = Math.max(1, params["batch-size"]);
     const schemaPrefix = params["schema"] ? `${params["schema"]}.` : "";
-    const doCreate    = params["create-tables"] || params["drop-if-exists"];
-    const doDrop      = params["drop-if-exists"];
-    const startedAt   = new Date().toISOString();
+    const doCreate     = params["create-tables"] || params["drop-if-exists"];
+    const doDrop       = params["drop-if-exists"];
+    const startedAt    = new Date().toISOString();
 
     const yaml = this.services.get<YamlService>("yaml");
     const sql  = this.services.get<SqlService>("sql");
@@ -168,20 +173,31 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
 
     // ── Generate data ─────────────────────────────────────────────────────────
     this.logger.log(`[${tag}] Generating synthetic data (scale: ${params["scale-factor"]})…`);
+    const useMetadata = params["preserve-meta-data"] ? fp.metadata : undefined;
     const data = generateData(fp, {
       scaleFactor: params["scale-factor"],
       seed:        params["seed"],
+      metadata:    useMetadata,
     });
 
     // ── Connect ───────────────────────────────────────────────────────────────
     const config = yaml.readFromFile<ConnectionConfig>(params["connection-file"]);
-    const conn   = await sql.connect(config, params["connection-name"]);
+
+    // Resolve dialect: explicit flag → connection config → ansi fallback
+    const connectionDialect =
+      config.connections?.[params["connection-name"]]?.sql?.dialect as string | undefined;
+    const dialect = (params["dialect"] || connectionDialect || "ansi") as SqlDialect;
+    if (!params["dialect"] && connectionDialect) {
+      this.logger.log(`[${tag}] Using dialect from connection config: ${connectionDialect}`);
+    }
+
+    const conn = await sql.connect(config, params["connection-name"]);
     this.logger.log(`[${tag}] Connected to "${params["connection-name"]}"`);
 
     try {
       // ── DDL phase ─────────────────────────────────────────────────────────────
       if (doCreate) {
-        const ddlStatements = parseDdlStatements(generateDdl(fp, { dialect }));
+        const ddlStatements = parseDdlStatements(generateDdl(fp, { dialect, metadata: useMetadata }));
 
         if (doDrop) {
           // Drop in reverse FK order: facts first, then dims
@@ -196,10 +212,9 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
           }
         }
 
-        // Create dims first, then facts
+        // Create dims first, then facts (serial — respects FK ordering)
         for (const stmt of ddlStatements) {
           this.logger.log(`  CREATE: ${extractTableName(stmt) ?? "table"}`);
-          // Qualify table name with schema if provided
           const qualified = schemaPrefix
             ? stmt.replace(/^CREATE TABLE (\S+)/i, `CREATE TABLE ${schemaPrefix}$1`)
             : stmt;
@@ -208,11 +223,20 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
       }
 
       // ── Insert phase ──────────────────────────────────────────────────────────
+      // Dimensions have no inter-table dependencies — insert in parallel.
+      // Facts may have FK constraints to dimensions — wait for all dims first.
+      await Promise.all(
+        data.dimensions
+          .filter((t) => t.rows.length > 0)
+          .map((t) => insertTable(sql, conn, t, schemaPrefix, batchSize, this.logger, tag)),
+      );
+      await Promise.all(
+        data.facts
+          .filter((t) => t.rows.length > 0)
+          .map((t) => insertTable(sql, conn, t, schemaPrefix, batchSize, this.logger, tag)),
+      );
+
       const allTables = [...data.dimensions, ...data.facts];
-      for (const table of allTables) {
-        if (table.rows.length === 0) continue;
-        await insertTable(sql, conn, table, schemaPrefix, batchSize, this.logger, tag);
-      }
 
       const totalRows = allTables.reduce((s, t) => s + t.rows.length, 0);
       const completedAt = new Date().toISOString();

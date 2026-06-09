@@ -22,7 +22,7 @@
 import fs   from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter } from "../../Parameters.js";
+import { ParameterSet, StringParameter, BooleanParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger }          from "../../logging.js";
 import { readFingerprintFile }  from "../../statistics/fingerprint.js";
@@ -49,13 +49,20 @@ class GenerateDDLFromDataShapeParamsSet extends ParameterSet {
       required     = false;
       defaultValue = "ansi";
     })(),
+    new (class extends BooleanParameter {
+      name         = "preserve-meta-data";
+      description  = "Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true.";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
 type Params = {
-  "input-file":   string;
-  "output-file"?: string;
-  "dialect":      string;
+  "input-file":         string;
+  "output-file"?:       string;
+  "dialect":            string;
+  "preserve-meta-data": boolean;
 };
 export type GenerateDDLFromDataShapeParams = Params;
 
@@ -90,7 +97,10 @@ export class GenerateDDLFromDataShapeOperation extends Operation<Params> {
 
     // ── Generate DDL ───────────────────────────────────────────────────────────
     this.logger.log(`[${tag}] Generating DDL (dialect: ${dialect})…`);
-    const ddl = generateDdl(fingerprint, { dialect });
+    const ddl = generateDdl(fingerprint, {
+      dialect,
+      metadata: params["preserve-meta-data"] ? fingerprint.metadata : undefined,
+    });
 
     // ── Write output ───────────────────────────────────────────────────────────
     if (params["output-file"]) {

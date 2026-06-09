@@ -723,8 +723,10 @@ With sampling tuning and MySQL (`--no-tablesample`):
 | `target-fact-rows` | No | `100000` | Target row count for fact table sampling (0 = no limit) |
 | `target-column-rows` | No | `10000` | Target row count for measure column sampling (0 = no limit) |
 | `tablesample` | No | `true` | Set to `"false"` to disable `TABLESAMPLE SYSTEM` (required for MySQL/MariaDB) |
+| `serial` | No | `"false"` | Set to `"true"` to profile dimensions one at a time instead of in parallel. Use when the database enforces a low per-user connection limit |
+| `preserve-meta-data` | No | `"false"` | Set to `"true"` to store original table and column names in the fingerprint so that subsequent data generation creates tables matching the SML model schema |
 
-**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
+**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. Pass `preserve-meta-data: "true"` to also embed a `metadata:` block containing the original physical names. See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
 
 ---
 
@@ -773,6 +775,7 @@ With Snowflake dialect:
 | `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `output-file` | No | stdout | Output path for the generated DDL |
 | `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
 **Dialect notes:** `bigquery` omits `PRIMARY KEY`/`FOREIGN KEY` constraints. `snowflake` maps integers to `NUMBER(n,0)`. All others use standard ANSI types.
 
@@ -815,6 +818,7 @@ With scale factor and seed:
 | `scale-factor` | No | `1.0` | Scale row and member counts |
 | `seed` | No | — | Integer seed for reproducible output |
 | `reports-dir` | No | `<output-dir>/_reports` | Directory for security audit artifacts |
+| `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
 **Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls)).
 
@@ -874,12 +878,13 @@ Full pipeline — extract shape, generate DDL, populate:
 | `seed` | No | — | Integer seed for reproducible output |
 | `create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `create-tables` |
-| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
 | `batch-size` | No | `500` | Rows per `INSERT` statement |
 | `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
 | `reports-dir` | No | `_reports` | Directory for security audit artifacts |
+| `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
-**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims → INSERT facts. This order ensures FK constraints are respected throughout.
+**Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimension inserts run in parallel; fact inserts run in parallel after all dimensions complete, ensuring FK constraints are respected throughout.
 
 **Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls) for the full list.
 

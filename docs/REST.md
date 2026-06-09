@@ -633,6 +633,7 @@ curl -X POST http://localhost:4000/rest/generate-metrics-from-model \
 | `targetColumnRows` | `Int` | No | Target row count for measure column distribution sampling (default: 10000; 0 = no sampling) |
 | `tablesample` | `Boolean` | No | Use TABLESAMPLE SYSTEM for fact sampling when true (default: true). Set to false for databases that do not support TABLESAMPLE (e.g. MySQL). |
 | `serial` | `Boolean` | No | Profile dimensions one at a time instead of in parallel (default: false). Use when the database enforces a low per-user connection limit. |
+| `preserveMetaData` | `Boolean` | No | Store original table and column names in the fingerprint so data generation uses real names instead of synthetic ones (default: false) |
 
 **curl (JSON):**
 
@@ -671,6 +672,7 @@ curl -X POST http://localhost:4000/rest/extract-data-shape-from-connection \
 | `inputFileContent` | `String` | No | Raw string content — alternative to `inputFile` |
 | `inputFileUpload` | file field | No | Multipart upload — alternative to `inputFile` |
 | `dialect` | `String` | No | SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery |
+| `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 
 **curl (JSON):**
 
@@ -707,6 +709,7 @@ curl -X POST http://localhost:4000/rest/generate-ddl-from-data-shape \
 | `scaleFactor` | `Int` | No | Scale row/member counts by this factor (default: 1.0; use < 1 for smaller datasets) |
 | `seed` | `Int` | No | Random seed for reproducible output (omit for non-deterministic) |
 | `reportsDir` | `String` | No | Directory where security reports are written (default: <output-dir>/_reports) |
+| `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 
 **curl (JSON):**
 
@@ -747,10 +750,11 @@ curl -X POST http://localhost:4000/rest/generate-data-from-data-shape \
 | `seed` | `Int` | No | Random seed for reproducible output |
 | `createTables` | `Boolean` | No | Emit CREATE TABLE statements before inserting (default: false) |
 | `dropIfExists` | `Boolean` | No | DROP TABLE IF EXISTS before creating tables — implies --create-tables (default: false) |
-| `dialect` | `String` | No | SQL dialect for CREATE TABLE: ansi (default), postgresql, snowflake, mysql, bigquery |
+| `dialect` | `String` | No | SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi. |
 | `batchSize` | `Int` | No | Rows per INSERT statement (default: 500) |
 | `schema` | `String` | No | Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default. |
 | `reportsDir` | `String` | No | Directory where security reports are written (default: ./_reports) |
+| `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 
 **curl (JSON):**
 

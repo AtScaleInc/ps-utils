@@ -18,7 +18,7 @@
 import fs   from "fs";
 import path from "path";
 import { Operation }        from "../Operation.js";
-import { ParameterSet, StringParameter, NumberParameter } from "../../Parameters.js";
+import { ParameterSet, StringParameter, NumberParameter, BooleanParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger }           from "../../logging.js";
 import { readFingerprintFile }   from "../../statistics/fingerprint.js";
@@ -64,15 +64,22 @@ class GenerateDataFromDataShapeParamsSet extends ParameterSet {
       description  = "Directory where security reports are written (default: <output-dir>/_reports)";
       required     = false;
     })(),
+    new (class extends BooleanParameter {
+      name         = "preserve-meta-data";
+      description  = "Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true.";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
 type Params = {
-  "input-file":    string;
-  "output-dir":    string;
-  "scale-factor":  number;
-  "seed"?:         number;
-  "reports-dir"?:  string;
+  "input-file":         string;
+  "output-dir":         string;
+  "scale-factor":       number;
+  "seed"?:              number;
+  "reports-dir"?:       string;
+  "preserve-meta-data": boolean;
 };
 export type GenerateDataFromDataShapeParams = Params;
 
@@ -116,7 +123,11 @@ export class GenerateDataFromDataShapeOperation extends Operation<Params> {
     }
 
     this.logger.log(`[${tag}] Generating data…`);
-    const data = generateData(fp, { scaleFactor, seed });
+    const data = generateData(fp, {
+      scaleFactor,
+      seed,
+      metadata: params["preserve-meta-data"] ? fp.metadata : undefined,
+    });
 
     this.logger.log(`[${tag}] Writing CSV files to: ${outputDir}`);
     writeDataToCsv(data, outputDir);
