@@ -313,9 +313,11 @@ function generateFactTable(
   }
 
   // ── Anchor dimension (first join): density-weighted row assignment ───────────
-  const anchorJoin    = fact.joins[0];
-  const anchorLeaves  = anchorJoin ? (dimLeaves.get(anchorJoin.toDimensionId) ?? []) : [];
-  const leafCount     = anchorLeaves.length || 1;
+  const anchorJoin = fact.joins[0];
+  // When the fact has no dimension joins, use a single synthetic leaf so the
+  // density budget still distributes totalRows across one virtual "member".
+  const anchorLeaves = anchorJoin ? (dimLeaves.get(anchorJoin.toDimensionId) ?? []) : [1];
+  const leafCount    = anchorLeaves.length || 1;
 
   // Determine cold members (cold = will receive 0 fact rows)
   const coldFraction  = anchorJoin ? (1 - anchorJoin.coverageFraction) : 0;
@@ -477,7 +479,11 @@ function sampleMeasures(
   }
 
   return measures.map((m, i) => {
-    if (m.distribution.shape === "unknown") return null;
+    if (m.distribution.shape === "unknown") {
+      // All distribution stats are zero (security-hardened fingerprint): emit 0
+      // rather than null so INSERT succeeds for NOT NULL measure columns.
+      return 0;
+    }
     const u   = normalCdf(zCorr[i]!);
     const val = sampleFromShape(
       () => u,

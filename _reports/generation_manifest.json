@@ -1,11 +1,11 @@
 {
   "operation": "generate-data-from-data-shape-to-connection",
-  "startedAt": "2026-06-09T20:50:22.886Z",
-  "completedAt": "2026-06-09T20:50:33.454Z",
+  "startedAt": "2026-06-09T21:06:28.040Z",
+  "completedAt": "2026-06-09T21:06:48.846Z",
   "seed": 42,
   "scaleFactor": 0.1,
   "fingerprintSha256": "e2b092c6a116e5a57dc0f66e412511815bd1adf98f21a778f97fd72c6758f373",
-  "outputDigest": "7a5f14db9e84e78c3c46bf3c8083218b6990f9c62de0c9be03104671b54ea67b",
+  "outputDigest": "bd302bfc4257b60fecb783b6ba52e9abc98e92c0a741e23147e9d6ff8c4d2649",
   "rowCounts": {
     "DATECUSTOM": 37,
     "DATECUSTOM_LY_TEST": 37,
@@ -19,7 +19,7 @@
     "DIM_GEO_STATE": 7,
     "REPORTING_DATEDIM": 950,
     "REPORTING_DATEDIM_COMP_KEYS": 950,
-    "FACTINTERNETSALES": 0
+    "FACTINTERNETSALES": 6040
   },
   "profileVersion": "1.0.0"
 }

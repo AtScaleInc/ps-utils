@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-06-09T20:50:33.454Z",
+  "checkedAt": "2026-06-09T21:06:48.846Z",
   "tables": [
     {
       "name": "DATECUSTOM",
@@ -63,7 +63,7 @@
     },
     {
       "name": "FACTINTERNETSALES",
-      "rowCount": 0,
+      "rowCount": 6040,
       "columnCount": 10
     }
   ],

@@ -1,7 +1,7 @@
 {
   "operation": "generate-data-from-data-shape-to-connection",
-  "startedAt": "2026-06-09T20:50:22.886Z",
-  "completedAt": "2026-06-09T20:50:33.454Z",
+  "startedAt": "2026-06-09T21:06:28.040Z",
+  "completedAt": "2026-06-09T21:06:48.846Z",
   "inputs": {
     "fingerprintFile": "/home/ptoole/atscale/template/example/demo/data-shape.yaml",
     "fingerprintSha256": "e2b092c6a116e5a57dc0f66e412511815bd1adf98f21a778f97fd72c6758f373",
