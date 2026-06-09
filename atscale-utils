@@ -63,7 +63,7 @@ needs_build() {
 }
 
 if [ "${ATSCALE_SKIP_BUILD:-0}" != "1" ] && needs_build; then
-  (cd "$SCRIPT_DIR" && npm run build)
+  (cd "$SCRIPT_DIR" && [ ! -d node_modules ] && npm install; npm run build)
 fi
 
 if [ "$#" -ge 1 ] && [ "$1" = "--completion" ]; then

@@ -31,8 +31,17 @@ export interface SmlStyleConfig {
   "catalog-name"?:        string;
   /** Use camelCase for SML filenames.  Default: false (raw table name). */
   "camel-case-files"?:    boolean;
-  /** Use camelCase for metric labels.  Default: false (raw column name). */
+  /** Use camelCase for metric labels.  Default: false (raw column name).
+   * @deprecated Prefer `label-style` for a unified label style across all objects. */
   "camel-case-measures"?: boolean;
+  /**
+   * Label style applied to all SML object labels (datasets, dimensions, hierarchies,
+   * level attributes, secondary attributes, metrics).
+   *   "title-case" — strip affixes, apply Title Case (default)
+   *   "camel-case" — strip affixes, apply lowerCamelCase
+   *   "none"       — use raw source names without transformation
+   */
+  "label-style"?: "title-case" | "camel-case" | "none";
   /** Max rows to sample per table for column type inference.  0 to disable.  Default: 250.
    *  Only applies to generate-sml-from-connection — DDL operations always use 0. */
   "sample-size"?:         number;
@@ -59,6 +68,7 @@ export interface MergedSmlStyle {
   "catalog-name":       string | undefined;   // undefined → caller applies model-name fallback
   "camel-case-files":   boolean;
   "camel-case-measures": boolean;
+  "label-style": "title-case" | "camel-case" | "none";
   "sample-size":        number;
   "max-suggestions":    number;
   "min-score":          number;
@@ -75,6 +85,7 @@ export const SML_STYLE_DEFAULTS: Omit<MergedSmlStyle, "catalog-name"> & { "catal
   "catalog-name":        undefined,
   "camel-case-files":    false,
   "camel-case-measures": false,
+  "label-style":         "title-case",
   "sample-size":         250,
   "max-suggestions":     25,
   "min-score":           0.5,
@@ -116,6 +127,7 @@ export function mergeSmlStyle(
     "catalog-name":        cliValues["catalog-name"]        ?? styleConfig["catalog-name"]        ?? SML_STYLE_DEFAULTS["catalog-name"],
     "camel-case-files":    cliValues["camel-case-files"]    ?? styleConfig["camel-case-files"]    ?? SML_STYLE_DEFAULTS["camel-case-files"],
     "camel-case-measures": cliValues["camel-case-measures"] ?? styleConfig["camel-case-measures"] ?? SML_STYLE_DEFAULTS["camel-case-measures"],
+    "label-style":         cliValues["label-style"]         ?? styleConfig["label-style"]         ?? SML_STYLE_DEFAULTS["label-style"],
     "sample-size":         cliValues["sample-size"]         ?? styleConfig["sample-size"]         ?? SML_STYLE_DEFAULTS["sample-size"],
     "max-suggestions":     cliValues["max-suggestions"]     ?? styleConfig["max-suggestions"]     ?? SML_STYLE_DEFAULTS["max-suggestions"],
     "min-score":           cliValues["min-score"]           ?? styleConfig["min-score"]           ?? SML_STYLE_DEFAULTS["min-score"],

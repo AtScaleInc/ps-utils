@@ -2,11 +2,18 @@
 
 CLI tool for extracting AtScale models, generating SML semantic models, and generating BI workbooks (Tableau, Excel, Power BI).
 
-Upcoming features:
+  Upcoming features:
 - Google Sheets
 - Rudy's aggregate util
-- Complete GitActions
-- SSO
+- Perspectives
+- -- apply plan should show command
+- graphql output not going to output
+- web interface better + REST
+- tableau, mstr, ssas conversion
+  - find Hive dialect in a workbook
+- Apply style to SML
+- Add kubectl management commands; for example reading log files, updating passwords
+
 
 
 ### Model Extraction
@@ -36,6 +43,7 @@ flowchart LR
     PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
+    SML --> J["apply-style-to-sml"] --> SML
 ```
 
 ### Synthetic Data Generation
@@ -133,6 +141,7 @@ flowchart LR
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
+    - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -186,6 +195,8 @@ flowchart LR
 - **macOS only:** Xcode Command Line Tools (required for native module compilation):
   ```bash
   xcode-select --install
+  brew install npm 
+  brew install tsc
   ```
 
 **Install globally from npm:**
@@ -345,7 +356,8 @@ Extract only specific tables or wildcard patterns:
 | `--connection-name` | Yes | | Connection name in the file |
 | `--schema` | Yes | | Database schema to introspect |
 | `--connection-file` | No | `connections.yaml` | Path to connections file |
-| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-insensitive. |
+| `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-sensitive by default. |
+| `--case-insensitive` | No | `false` | Match table names case-insensitively |
 | `--output-file` | No | stdout | Output path for the DDL |
 
 ---
@@ -390,7 +402,7 @@ With optional overrides:
   --camel-case-measures true
 ```
 
-Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--sample-size`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--sample-size`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
@@ -405,7 +417,8 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--sample-size` | No | `250` | Rows to sample per table for type inference (`0` to disable) |
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
 | `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
-| `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
+| `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name (deprecated — use `--label-style`) |
+| `--label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names). Overrides `--camel-case-measures`. |
 | `--min-hierarchies-per-dim` | No | `1` | Minimum hierarchies a dimension must have to be included; dimensions with fewer are dropped |
 | `--max-hierarchies-per-dim` | No | `4` | Maximum hierarchies kept per dimension; extras are truncated |
 
@@ -454,7 +467,7 @@ With optional overrides:
   --camel-case-measures true
 ```
 
-Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
@@ -470,7 +483,8 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
 | `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
-| `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name |
+| `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name (deprecated — use `--label-style`) |
+| `--label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names). Overrides `--camel-case-measures`. |
 | `--min-hierarchies-per-dim` | No | `1` | Minimum hierarchies a dimension must have to be included; dimensions with fewer are dropped |
 | `--max-hierarchies-per-dim` | No | `4` | Maximum hierarchies kept per dimension; extras are truncated |
 
@@ -620,6 +634,38 @@ Preview without touching disk:
 | `--dry-run` | No | `false` | Print all actions without writing or deleting any files |
 
 An `APPLY_REPORT.md` is written to `<shared-dir>` summarising every action taken and the deployment steps required.
+
+---
+
+### `apply-style-to-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Re-applies display labels to an existing SML directory using a style config. Reads datasets, dimensions, and metrics YAML files in-place and rewrites their `label` fields according to the active style, then writes `STYLE.md` and `STYLE_CHANGES.md` summarising the conventions and every label change made.
+
+```bash
+./atscale-utils apply-style-to-sml \
+  --sml-dir "./sml-output"
+```
+
+With optional overrides:
+
+```bash
+./atscale-utils apply-style-to-sml \
+  --sml-dir "./sml-output" \
+  --sml-config-file "./sml-output/sml.style.yaml" \
+  --label-style camel-case \
+  --catalog-name "Sales Analytics"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML output directory to update |
+| `--sml-config-file` | No | `<sml-dir>/sml.style.yaml` | Path to the SML style config to read settings from |
+| `--label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names). Overrides `--camel-case-measures`. |
+| `--catalog-name` | No | | Catalog display name for `STYLE.md` |
+
+**Output:** Updates `datasets/*.yml`, `dimensions/*.yml`, and `metrics/*.yml` labels in-place; writes `STYLE.md` and `STYLE_CHANGES.md` to `<sml-dir>`.
 
 ---
 
@@ -2364,7 +2410,8 @@ fact-tables:                  # force-classify tables as facts (list or empty)
   - FactOrders
 catalog-name: My Catalog      # display name; omit to default to model-name
 camel-case-files: false       # camelCase SML filenames
-camel-case-measures: false    # camelCase metric labels
+camel-case-measures: false    # camelCase metric labels (deprecated — use label-style)
+label-style: title-case       # label style for all SML labels (title-case/camel-case/none)
 sample-size: 250              # rows per table for type inference (0 to disable)
                               # note: always 0 for generate-sml-from-ddl
 min-hierarchies-per-dim: 1   # drop dimensions with fewer than this many hierarchies

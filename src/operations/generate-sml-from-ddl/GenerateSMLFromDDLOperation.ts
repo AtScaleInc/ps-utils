@@ -100,6 +100,11 @@ class GenerateSMLFromDDLParamsSet extends ParameterSet {
       description = "When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml.";
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "label-style";
+      description = 'Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml.';
+      required    = false;
+    })(),
     new (class extends NumberParameter {
       name        = "min-hierarchies-per-dim";
       description = "Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml.";
@@ -127,6 +132,7 @@ type Params = {
   "fact-tables"?:         string;
   "camel-case-files"?:          boolean;
   "camel-case-measures"?:       boolean;
+  "label-style"?:               "title-case" | "camel-case" | "none";
   "min-hierarchies-per-dim"?:   number;
   "max-hierarchies-per-dim"?:   number;
 };
@@ -193,6 +199,7 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
         "catalog-name":            params["catalog-name"],
         "camel-case-files":        params["camel-case-files"],
         "camel-case-measures":     params["camel-case-measures"],
+        "label-style":             params["label-style"],
         "min-hierarchies-per-dim": params["min-hierarchies-per-dim"],
         "max-hierarchies-per-dim": params["max-hierarchies-per-dim"],
       },
@@ -220,6 +227,7 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
           dialect:           params.dialect ?? detectDialectFromFilename(ddlFile),
           camelCaseFiles:    style["camel-case-files"],
           camelCaseMeasures: style["camel-case-measures"],
+          labelStyle:        style["label-style"],
         },
       },
       outputDir,
@@ -232,6 +240,7 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
         "catalog-name":        catalogName,
         "camel-case-files":          style["camel-case-files"],
         "camel-case-measures":       style["camel-case-measures"],
+        "label-style":               style["label-style"],
         "sample-size":               0,
         "min-hierarchies-per-dim":   style["min-hierarchies-per-dim"],
         "max-hierarchies-per-dim":   style["max-hierarchies-per-dim"],

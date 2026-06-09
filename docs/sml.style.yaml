@@ -41,7 +41,16 @@ camel-case-files: false
 
 # When true, metric labels use lowerCamelCase (e.g. "primaryQuantitySum").
 # When false (default), metric labels use Title Case (e.g. "Primary Quantity Sum").
+# Deprecated: prefer label-style for a unified label style across all objects.
 camel-case-measures: false
+
+# Label style applied to ALL SML object labels: datasets, dimensions, hierarchies,
+# level attributes, secondary attributes, and metrics.
+#   "title-case" (default) — strip dim_/_dimension/_key etc., then Title Case
+#   "camel-case"           — strip same affixes, then lowerCamelCase
+#   "none"                 — use raw source table/column name with no transformation
+# When label-style is set, it overrides camel-case-measures.
+label-style: title-case
 
 # Maximum rows to sample per table for column type inference.
 # Set to 0 to disable sampling (always 0 for generate-sml-from-ddl).

@@ -145,6 +145,7 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
               "generate-sml-from-connection",
               "generate-sml-from-ddl",
               "generate-sml-from-xml",
+              "apply-style-to-sml",
               "generate-shared-model-plan",
               "apply-shared-model-plan-option",
               "generate-ddl-from-atscale",

@@ -134,10 +134,14 @@ inputs:
   camel-case-measures:
     description: >
       Set to "true" to use camelCase of the source column name for metric labels.
-      Default: raw column name.
+      Default: raw column name. Deprecated — use label-style instead.
       Used by: generate-sml-from-connection, generate-sml-from-ddl.
     required: false
     default: "false"
+  label-style:
+    description: 'Label style for all SML labels: title-case (default), camel-case, or none'
+    required: false
+    default: ''
   min-hierarchies-per-dim:
     description: >
       Minimum number of hierarchies a dimension must have to be included in the
@@ -571,6 +575,11 @@ inputs:
       Comma-separated table names or wildcard patterns to extract (e.g. "Dim*,FactSales").
       Omit to extract all tables in the schema.
     required: false
+  case-insensitive:
+    description: >
+      When "true", match table names case-insensitively. Default is case-sensitive matching.
+      Used by: extract-ddl-from-connection.
+    required: false
 
   # ── generate-atscale-install-yaml ────────────────────────────────────────
   hostname:
@@ -855,6 +864,7 @@ runs:
         [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
         [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
         [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
+        [[ -n "${{ inputs.label-style }}" ]] && ARGS+=(--label-style "${{ inputs.label-style }}")
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-connection "${ARGS[@]}"
@@ -880,6 +890,7 @@ runs:
         [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
         [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
         [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
+        [[ -n "${{ inputs.label-style }}" ]] && ARGS+=(--label-style "${{ inputs.label-style }}")
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
@@ -900,6 +911,20 @@ runs:
         [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── apply-style-to-sml ──────────────────────────────────────────────
+    - name: Apply style to SML
+      if: inputs.operation == 'apply-style-to-sml'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
+        [[ -n "${{ inputs.label-style }}" ]]     && ARGS+=(--label-style     "${{ inputs.label-style }}")
+        [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
+        node "${{ github.action_path }}/dist/cli.js" apply-style-to-sml "${ARGS[@]}"
       shell: bash
 
     # ── apply-shared-model-plan-option ──────────────────────────────────
@@ -1036,8 +1061,9 @@ runs:
           --schema          "${{ inputs.schema }}"
           --verbose true
         )
-        [[ -n "${{ inputs.tables }}" ]]      && ARGS+=(--tables      "${{ inputs.tables }}")
-        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.tables }}" ]]            && ARGS+=(--tables           "${{ inputs.tables }}")
+        [[ "${{ inputs.case-insensitive }}" == "true" ]] && ARGS+=(--case-insensitive true)
+        [[ -n "${{ inputs.output-file }}" ]]       && ARGS+=(--output-file      "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
       shell: bash
 

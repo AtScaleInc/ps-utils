@@ -97,8 +97,38 @@ export interface SmlSerializerOptions {
   /**
    * When true, metric labels use the source column name converted to camelCase
    * (e.g. "totalRevenue").  When false (default), the raw column name is used.
+   * @deprecated Prefer `labelStyle` for a unified label style across all objects.
    */
   camelCaseMeasures?: boolean;
+
+  /**
+   * Controls how display labels are derived from source table / column names for
+   * all SML objects: datasets, dimensions, hierarchies, level attributes,
+   * secondary attributes, and metrics.
+   *
+   * - `"title-case"` (default) — strip affixes (dim_, _dimension, _key, …),
+   *   then apply Title Case.  e.g. `dim_customer_dimension` → `"Customer"`.
+   * - `"camel-case"` — strip affixes then apply lowerCamelCase.
+   *   e.g. `dim_customer_dimension` → `"customer"`.
+   * - `"none"` — use the raw source name with no transformation.
+   *   e.g. `dim_customer_dimension` → `"dim_customer_dimension"`.
+   *
+   * When `labelStyle` is set, it overrides `camelCaseMeasures` for metric labels.
+   */
+  labelStyle?: LabelStyle;
+}
+
+/** Controls how display labels are derived from source names. */
+export type LabelStyle = "title-case" | "camel-case" | "none";
+
+/**
+ * Apply the requested label style to a pre-stripped raw name string.
+ * Use `dimensionLabel` / `levelLabel` for names that require affix stripping first.
+ */
+export function applyLabelStyle(rawName: string, style: LabelStyle = "title-case"): string {
+  if (style === "camel-case") return toCamelCase(rawName);
+  if (style === "none") return rawName;
+  return toTitleCase(rawName);
 }
 
 /** Map of relative file path → YAML content. */
@@ -210,11 +240,11 @@ function toKebab(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function toTitleCase(s: string): string {
+export function toTitleCase(s: string): string {
   return s.replace(/(^|[\s_-])(\w)/g, (_, sep, ch) => (sep ? " " : "") + ch.toUpperCase()).trim();
 }
 
-function toCamelCase(s: string): string {
+export function toCamelCase(s: string): string {
   const words = s
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
@@ -247,13 +277,15 @@ function factTableAbbrev(tableName: string): string {
 
 /**
  * Derive a human-readable label for a dimension from its source table name.
- * Strips the `dim_` prefix and `_dimension` suffix, then applies Title Case.
+ * Strips the `dim_` prefix and `_dimension` suffix, then applies the label style.
  */
-function dimensionLabel(sourceTable: string): string {
-  return toTitleCase(
+export function dimensionLabel(sourceTable: string, style: LabelStyle = "title-case"): string {
+  if (style === "none") return sourceTable;
+  return applyLabelStyle(
     sourceTable
       .replace(/^dim_/i, "")
       .replace(/_dimension$/i, ""),
+    style,
   );
 }
 
@@ -473,7 +505,7 @@ function buildDataset(
   return yamlDoc({
     unique_name: datasetUniqueName(tableName),
     object_type: "dataset",
-    label: toTitleCase(tableName),
+    label: applyLabelStyle(tableName, opts.labelStyle ?? "title-case"),
     connection_id: opts.connectionName,
     table: physicalTableName,
     columns,
@@ -507,16 +539,19 @@ interface LevelAttributeDef {
 }
 
 /**
- * Human-readable label for a level attribute column.
- * Strips surrogate-key suffixes (_key, _id, _sk) and dimension affixes.
+ * Human-readable label for a level attribute / secondary attribute column.
+ * Strips surrogate-key suffixes (_key, _id, _sk) and dimension affixes,
+ * then applies the label style.
  */
-function levelLabel(columnName: string): string {
-  return toTitleCase(
+export function levelLabel(columnName: string, style: LabelStyle = "title-case"): string {
+  if (style === "none") return columnName;
+  return applyLabelStyle(
     columnName
       .replace(/^dim_/i, "")
       .replace(/_dimension$/i, "")
       .replace(/_(key|id|sk)$/i, "")
       .replace(/_level$/i, ""),
+    style,
   );
 }
 
@@ -605,7 +640,7 @@ function buildDimensionFile(
         const colUniqueName = col.columnName.toLowerCase();
         return {
           unique_name: colUniqueName === leafUniqueName ? `${col.columnName}_sa` : col.columnName,
-          label: toTitleCase(col.columnName),
+          label: levelLabel(col.columnName, opts.labelStyle ?? "title-case"),
           contains_unique_names: false,
           dataset: datasetUniqueName(dim.sourceTable),
           is_unique_key: false,
@@ -655,7 +690,7 @@ function buildDimensionFile(
 
       const la: LevelAttributeDef = {
         unique_name: laName(l.sourceColumn),
-        label: levelLabel(l.sourceColumn),
+        label: levelLabel(l.sourceColumn, opts.labelStyle ?? "title-case"),
         dataset: datasetUniqueName(dim.sourceTable),
         name_column: nameColName ?? l.sourceColumn,
         key_columns: [l.sourceColumn],
@@ -720,7 +755,7 @@ function buildDimensionFile(
 
     const la: LevelAttributeDef = {
       unique_name: laName(attr.sourceColumn),
-      label: levelLabel(attr.sourceColumn),
+      label: levelLabel(attr.sourceColumn, opts.labelStyle ?? "title-case"),
       dataset: datasetUniqueName(dim.sourceTable),
       name_column: nameColName ?? attr.sourceColumn,
       key_columns: [attr.sourceColumn],
@@ -784,7 +819,7 @@ function buildDimensionFile(
         unique_name: uniqueKeyCollides
           ? laName(`${dim.sourceTable}_key`)
           : laName(firstPk),
-        label: levelLabel(firstPk),
+        label: levelLabel(firstPk, opts.labelStyle ?? "title-case"),
         dataset: datasetUniqueName(dim.sourceTable),
         name_column: nameColName ?? firstPk,
         // Composite PKs: include all key columns; AtScale supports multi-column
@@ -847,10 +882,11 @@ function buildDimensionFile(
 
   // Build hierarchy definitions (emitted before level_attributes to match
   // the reference SML structure).
+  const ls = opts.labelStyle ?? "title-case";
   const hierarchies: Array<Record<string, YamlValue>> = dim.hierarchies.map(
     (h) => ({
       unique_name: h.name.toLowerCase().replace(/\s+/g, "_"),
-      label: h.name,
+      label: ls === "none" ? h.name.toLowerCase().replace(/\s+/g, "_") : applyLabelStyle(h.name, ls),
       // filter_empty is only meaningful on time hierarchies (avoids blank rows)
       ...(isTime ? { filter_empty: "yes" } : {}),
       ...(isTime ? { folder: "Date Attributes" } : {}),
@@ -908,9 +944,10 @@ function buildDimensionFile(
       const synthName = existingHierNames.has(baseName)
         ? `${dim.sourceTable}_key_hierarchy`
         : baseName;
+      const dimLbl = dimensionLabel(dim.sourceTable, ls);
       const synthLabel = existingHierNames.has(baseName)
-        ? `${dimensionLabel(dim.sourceTable)} Key Hierarchy`
-        : `${dimensionLabel(dim.sourceTable)} Hierarchy`;
+        ? `${dimLbl} Key Hierarchy`
+        : `${dimLbl} Hierarchy`;
       // When the composite-key LA was renamed to <table>_key due to collision,
       // the single-column FK LA (laName(firstPk)) is still needed as a hierarchy
       // level so that snowflake relationships can use it as their `to.level`
@@ -981,7 +1018,7 @@ function buildDimensionFile(
   const dimObj: Record<string, YamlValue> = {
     unique_name: dimUniqueName(dim.name),
     object_type: "dimension",
-    label: dimensionLabel(dim.sourceTable),
+    label: dimensionLabel(dim.sourceTable, ls),
     ...(dim.description ? { description: dim.description } : {}),
     type: isTime ? "time" : "standard",
     hierarchies: hierarchies as unknown as YamlValue,
@@ -1014,9 +1051,13 @@ function buildMetricFile(
   opts: SmlSerializerOptions,
 ): string {
   const prefix = opts.metricPrefix ?? "m_";
-  // measure.name is "<Column Title Case> <Agg suffix>" (e.g. "Primary Quantity Sum").
-  // With camelCaseMeasures, convert to lowerCamelCase (e.g. "primaryQuantitySum").
-  const label = opts.camelCaseMeasures ? toCamelCase(measure.name) : measure.name;
+  // Resolve effective label style for metrics.
+  // labelStyle takes precedence; camelCaseMeasures is a legacy fallback.
+  const metricLabelStyle = opts.labelStyle ?? (opts.camelCaseMeasures ? "camel-case" : "title-case");
+  const label =
+    metricLabelStyle === "camel-case" ? toCamelCase(measure.name) :
+    metricLabelStyle === "none"       ? `${measure.sourceColumn}_${measure.aggregation.toLowerCase()}` :
+    measure.name;
 
   // Format: #,##0 for columns that support SUM/COUNT; #,##0.00 for rate/ratio-only columns.
   const siblingsHaveSumOrCount = fact.measures
