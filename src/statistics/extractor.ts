@@ -108,10 +108,22 @@ export async function extractFingerprint(
 
   log(`Profiling ${graph.dimensions.length} dimension(s)…`);
 
+  // Multiple SML dimensions can reference the same physical table. Track the
+  // first profiled result for each sourceTable so duplicates can reuse it rather
+  // than re-querying the database.  We still emit a fingerprint entry for every
+  // dimension ID so that fact join references (toDimensionId) remain valid.
+  const seenDimTables = new Map<string, { rowCount: number; hierarchies: HierarchyFingerprint[] }>();
+
   async function profileOneDimension(dim: (typeof graph.dimensions)[number]): Promise<DimensionFingerprint> {
+    if (seenDimTables.has(dim.sourceTable)) {
+      log(`  Dimension: ${dim.sourceTable} (duplicate — reusing profile)`);
+      const cached = seenDimTables.get(dim.sourceTable)!;
+      return { id: idMapper.dimensionId(dim.uniqueName), ...cached };
+    }
     log(`  Dimension: ${dim.sourceTable}`);
     const rowCount    = await countRows(runner, dim.sourceSchema, dim.sourceTable);
     const hierarchies = await profileHierarchies(runner, dim, config, idMapper);
+    seenDimTables.set(dim.sourceTable, { rowCount, hierarchies });
     return { id: idMapper.dimensionId(dim.uniqueName), rowCount, hierarchies };
   }
 
@@ -123,14 +135,29 @@ export async function extractFingerprint(
       );
 
   // ── Step 3: Profile facts ────────────────────────────────────────────────────
-  log(`Profiling ${graph.facts.length} fact table(s)…`);
+  // Deduplicate by physical table — multiple SML facts can share the same source
+  // table (e.g. two catalog entries for the same physical table).  Keep only the
+  // first occurrence; subsequent ones are identical from a profiling perspective
+  // and must not appear as separate fingerprint or metadata entries.
+  const _seenFactTables = new Set<string>();
+  const uniqueFacts = graph.facts.filter((f) => {
+    const key = `${f.sourceSchema ?? ""}.${f.sourceTable}`;
+    if (_seenFactTables.has(key)) return false;
+    _seenFactTables.add(key);
+    return true;
+  });
+  if (uniqueFacts.length < graph.facts.length) {
+    log(`  (${graph.facts.length - uniqueFacts.length} duplicate fact table(s) skipped)`);
+  }
+
+  log(`Profiling ${uniqueFacts.length} fact table(s)…`);
   const factFingerprints: FactFingerprint[] = [];
 
   // Accumulate cold-member fractions from all density passes
   // Key: leafLevelId, Value: coldMemberFraction (last writer wins — typically only one fact joins to a given leaf)
   const coldMembersByLevel = new Map<string, number>();
 
-  for (const fact of graph.facts) {
+  for (const fact of uniqueFacts) {
     log(`  Fact: ${fact.sourceTable}`);
     const rowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable);
 
@@ -162,7 +189,7 @@ export async function extractFingerprint(
   // ── Step 5: Conformed dimension overlap ──────────────────────────────────────
   log("Profiling conformed dimension overlap…");
   const conformedFps = await profileConformedDimensions(
-    runner, graph.facts, graph.dimensions, config, idMapper,
+    runner, uniqueFacts, graph.dimensions, config, idMapper,
   );
 
   // ── Step 6: Assemble fingerprint ─────────────────────────────────────────────
@@ -188,7 +215,7 @@ export async function extractFingerprint(
 
   // ── Step 8: Attach metadata when requested ───────────────────────────────────
   if (options.preserveMetadata) {
-    hardened.metadata = buildMetadata(graph, idMapper);
+    hardened.metadata = buildMetadata(graph, idMapper, uniqueFacts);
   }
 
   return hardened;
@@ -224,7 +251,11 @@ function applyCold(
  * Walk the ModelGraph and IdMapper to build a FingerprintMetadata block that
  * maps every opaque ID back to the original physical name.
  */
-function buildMetadata(graph: ModelGraph, idMapper: IdMapper): FingerprintMetadata {
+function buildMetadata(
+  graph:       ModelGraph,
+  idMapper:    IdMapper,
+  uniqueFacts: ModelGraph["facts"],
+): FingerprintMetadata {
   const dimensionTables:   Record<string, string> = {};
   const levelKeyColumns:   Record<string, string> = {};
   const levelLabelColumns: Record<string, string> = {};
@@ -250,7 +281,7 @@ function buildMetadata(graph: ModelGraph, idMapper: IdMapper): FingerprintMetada
     }
   }
 
-  for (const fact of graph.facts) {
+  for (const fact of uniqueFacts) {
     const factId = idMapper.factId(fact.uniqueName);
     factTables[factId] = fact.sourceTable;
     for (const measure of fact.measures) {

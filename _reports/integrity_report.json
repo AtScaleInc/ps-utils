@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-06-09T20:25:16.795Z",
+  "checkedAt": "2026-06-09T20:50:33.454Z",
   "tables": [
     {
       "name": "DATECUSTOM",
@@ -62,9 +62,9 @@
       "columnCount": 5
     },
     {
-      "name": "FACT_PARTITIONED",
+      "name": "FACTINTERNETSALES",
       "rowCount": 0,
-      "columnCount": 8
+      "columnCount": 10
     }
   ],
   "fkClosure": {

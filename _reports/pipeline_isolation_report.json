@@ -1,10 +1,10 @@
 {
   "operation": "generate-data-from-data-shape-to-connection",
-  "startedAt": "2026-06-09T20:25:06.994Z",
-  "completedAt": "2026-06-09T20:25:16.795Z",
+  "startedAt": "2026-06-09T20:50:22.886Z",
+  "completedAt": "2026-06-09T20:50:33.454Z",
   "inputs": {
     "fingerprintFile": "/home/ptoole/atscale/template/example/demo/data-shape.yaml",
-    "fingerprintSha256": "59369d1b15a92af63508362aecad312c8cb5967bde1a2089be09b1dae74cb576",
+    "fingerprintSha256": "e2b092c6a116e5a57dc0f66e412511815bd1adf98f21a778f97fd72c6758f373",
     "fingerprintVersion": "2.0"
   },
   "outputs": {
@@ -23,7 +23,7 @@
       "DIM_GEO_STATE",
       "REPORTING_DATEDIM",
       "REPORTING_DATEDIM_COMP_KEYS",
-      "FACT_PARTITIONED"
+      "FACTINTERNETSALES"
     ]
   },
   "enforced": {
