@@ -53,7 +53,9 @@ interface SmlModelFile extends SmlBase {
 interface SmlLevelAttribute {
   unique_name:   string;
   label?:        string;
+  dataset?:      string;      // reference to dataset unique_name (actual SML format)
   key_columns?:  string[];
+  name_column?:  string;      // display/label column (actual SML format)
   is_unique_key?: boolean;
   attributes?: Array<{
     unique_name:   string;
@@ -71,6 +73,9 @@ interface SmlDimensionFile extends SmlBase {
       is_unique_key?: boolean;
     }>;
   }>;
+  // Actual SML format: level_attributes at dimension top level, each with a dataset reference
+  level_attributes?: SmlLevelAttribute[];
+  // Legacy: embedded datasets array
   datasets?: Array<{
     unique_name:       string;
     label?:            string;
@@ -83,10 +88,20 @@ interface SmlDimensionFile extends SmlBase {
 }
 
 interface SmlDatasetFile extends SmlBase {
+  // Actual SML format: table at top level
+  table?: string;
+  connection_id?: string;
+  // Actual SML format: columns array
+  columns?: Array<{
+    name:       string;
+    data_type?: string;
+  }>;
+  // Legacy: source.table
   source?: {
     schema?: string;
     table?:  string;
   };
+  // Legacy: measures array
   measures?: Array<{
     unique_name:    string;
     label?:         string;
@@ -123,27 +138,40 @@ export function readModelGraph(smlPathOrFile: string): ModelGraph {
   const modelName = modelFile.unique_name;
 
   const datasetByName = new Map(dsFiles.map((d) => [d.unique_name, d]));
-  const dimByName     = new Map(dimFiles.map((d) => [d.unique_name, d]));
 
-  // Collect fact dataset names from relationships
-  const factDatasetNames = new Set(
-    (modelFile.relationships ?? []).map((r) => r.from.dataset),
+  // Collect dataset names referenced by dimensions (to distinguish facts from dims)
+  const dimDatasetNames = new Set<string>();
+  for (const dimFile of dimFiles) {
+    for (const la of (dimFile.level_attributes ?? [])) {
+      if (la.dataset) dimDatasetNames.add(la.dataset);
+    }
+    for (const emb of (dimFile.datasets ?? [])) {
+      dimDatasetNames.add(emb.unique_name);
+    }
+  }
+
+  // Collect fact dataset names from relationships; fall back to any dataset not
+  // referenced by a dimension when the model has no relationships defined.
+  const explicitFacts = (modelFile.relationships ?? []).map((r) => r.from.dataset);
+  const factDatasetNames = new Set<string>(
+    explicitFacts.length > 0
+      ? explicitFacts
+      : dsFiles.map((d) => d.unique_name).filter((n) => !dimDatasetNames.has(n)),
   );
 
   // Build dimension nodes
   const dimensions: DimensionNode[] = [];
   for (const dimFile of dimFiles) {
-    const node = buildDimension(dimFile);
+    const node = buildDimension(dimFile, datasetByName);
     if (node) dimensions.push(node);
   }
 
   // Build fact nodes
   const facts: FactNode[] = [];
   for (const dsName of factDatasetNames) {
-    // Fact dataset may be in a standalone datasets/ file
     const ds = datasetByName.get(dsName);
     if (ds) {
-      const node = buildFact(ds, modelFile, dsName, dimByName);
+      const node = buildFact(ds, modelFile, dsName);
       if (node) facts.push(node);
     }
   }
@@ -153,23 +181,55 @@ export function readModelGraph(smlPathOrFile: string): ModelGraph {
 
 // ─── Builders ─────────────────────────────────────────────────────────────────
 
-function buildDimension(f: SmlDimensionFile): DimensionNode | null {
-  const embedded = f.datasets?.[0];
-  const source   = embedded?.source;
-  if (!embedded || !source?.table) return null;
+function buildDimension(
+  f: SmlDimensionFile,
+  datasetByName: Map<string, SmlDatasetFile>,
+): DimensionNode | null {
+  // Resolve source table and level_attributes.
+  // Actual SML format: level_attributes at dimension top level, each with a dataset reference.
+  // Legacy format: level_attributes embedded inside datasets[0].
+  const topLevelAttrs  = f.level_attributes;
+  const embeddedDataset = f.datasets?.[0];
+
+  let sourceTable:  string | undefined;
+  let sourceSchema  = "";
+  let levelAttrs:   SmlLevelAttribute[];
+
+  if (topLevelAttrs && topLevelAttrs.length > 0) {
+    // Actual SML format: look up the dataset referenced by the first level_attribute
+    const firstDatasetRef = topLevelAttrs.find((la) => la.dataset)?.dataset;
+    const ds = firstDatasetRef ? datasetByName.get(firstDatasetRef) : undefined;
+    sourceTable  = ds?.table ?? ds?.source?.table;
+    sourceSchema = ds?.source?.schema ?? "";
+    levelAttrs   = topLevelAttrs;
+  } else if (embeddedDataset) {
+    // Legacy format: source embedded in datasets[0]
+    sourceTable  = embeddedDataset.source?.table;
+    sourceSchema = embeddedDataset.source?.schema ?? "";
+    levelAttrs   = embeddedDataset.level_attributes ?? [];
+  } else {
+    return null;
+  }
+
+  if (!sourceTable) return null;
 
   // Map level unique_name → key columns (from level_attributes)
   const keyColMap   = new Map<string, string[]>();
   const labelColMap = new Map<string, string>();
 
-  for (const la of (embedded.level_attributes ?? [])) {
+  for (const la of levelAttrs) {
     const keys = la.key_columns?.length ? la.key_columns : [la.unique_name];
     keyColMap.set(la.unique_name, keys);
 
-    // Look for a companion attribute whose name suggests it carries a display value
-    const labelAttr = la.attributes?.find((a) => /name|label|desc/i.test(a.unique_name));
-    if (labelAttr?.source_column) {
-      labelColMap.set(la.unique_name, labelAttr.source_column);
+    if (la.name_column) {
+      // Actual SML format: name_column is the display/label column
+      labelColMap.set(la.unique_name, la.name_column);
+    } else {
+      // Legacy format: look for a companion attribute whose name suggests a display value
+      const labelAttr = la.attributes?.find((a) => /name|label|desc/i.test(a.unique_name));
+      if (labelAttr?.source_column) {
+        labelColMap.set(la.unique_name, labelAttr.source_column);
+      }
     }
   }
 
@@ -197,8 +257,8 @@ function buildDimension(f: SmlDimensionFile): DimensionNode | null {
 
   return {
     uniqueName:   f.unique_name,
-    sourceTable:  source.table,
-    sourceSchema: source.schema ?? "",
+    sourceTable,
+    sourceSchema,
     hierarchies,
   };
 }
@@ -207,16 +267,28 @@ function buildFact(
   ds: SmlDatasetFile,
   model: SmlModelFile,
   dsName: string,
-  dimByName: Map<string, SmlDimensionFile>,
 ): FactNode | null {
-  if (!ds.source?.table) return null;
+  // Support actual SML format (ds.table) and legacy format (ds.source.table)
+  const sourceTable = ds.table ?? ds.source?.table;
+  if (!sourceTable) return null;
+  const sourceSchema = ds.source?.schema ?? "";
 
-  const measures: MeasureNode[] = (ds.measures ?? []).map((m) => ({
-    uniqueName:   m.unique_name,
-    sourceColumn: m.sql_expression ?? m.unique_name,
-    dataType:     normaliseDataType(m.data_type),
-    aggregations: m.aggregations ?? ["SUM"],
-  }));
+  // Prefer explicit measures; fall back to numeric columns as candidate measures
+  const measures: MeasureNode[] = ds.measures && ds.measures.length > 0
+    ? ds.measures.map((m) => ({
+        uniqueName:   m.unique_name,
+        sourceColumn: m.sql_expression ?? m.unique_name,
+        dataType:     normaliseDataType(m.data_type),
+        aggregations: m.aggregations ?? ["SUM"],
+      }))
+    : (ds.columns ?? [])
+        .filter((c) => normaliseDataType(c.data_type) !== "unknown")
+        .map((c) => ({
+          uniqueName:   c.name,
+          sourceColumn: c.name,
+          dataType:     normaliseDataType(c.data_type),
+          aggregations: ["SUM"],
+        }));
 
   // Resolve leaf level key column from the dimension's level_attributes
   const joins: JoinEdge[] = (model.relationships ?? [])
@@ -228,9 +300,9 @@ function buildFact(
     }));
 
   return {
-    uniqueName:   dsName,
-    sourceTable:  ds.source.table,
-    sourceSchema: ds.source.schema ?? "",
+    uniqueName: dsName,
+    sourceTable,
+    sourceSchema,
     measures,
     joins,
   };

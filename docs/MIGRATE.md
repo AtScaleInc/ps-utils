@@ -64,8 +64,9 @@ gantt
 - [Phase 4: Validate and Commit the SML](#phase-4-validate-and-commit-the-sml)
   - [4.1 Deploy to DEV and Verify](#41-deploy-to-dev-and-verify)
   - [4.2 Commit on a Migration Branch](#42-commit-on-a-migration-branch)
-  - [4.3 Prepare BI Tool Endpoints and Go/No-Go Criteria](#43-prepare-bi-tool-endpoints-and-gonogo-criteria)
+  - [4.3 Prepare BI Tool Endpoints and Go/No-Go Criteria](#43-prepare-bi-tool-endpoints-and-gono-go-criteria)
     - [Tableau: Hive Thrift → PGWire Migration](#tableau-hive-thrift--pgwire-migration)
+    - [HiveQL vs PostgreSQL Dialect Reference](#hiveql-vs-postgresql-dialect-reference)
   - [4.4 BI Tool Dashboard Validation](#44-bi-tool-dashboard-validation)
 - [Phase 5: Promote Through Environments with GitHub Actions](#phase-5-promote-through-environments-with-github-actions)
   - [5.1 Workflow Overview](#51-workflow-overview)
@@ -748,6 +749,55 @@ Add every workbook identified by this audit to the UAT validation list. A workbo
 **5. SSO and Tableau Server connector (if required)**
 
 If Tableau Server is configured for SSO pass-through to AtScale (so that the Tableau Server user's identity is forwarded to AtScale for row-level security), the branded AtScale Tableau connector (a `.taco` file) is required. Install it on Tableau Server following the AtScale connector installation guide and reconfigure the data source to use connector-based authentication instead of a shared service account.
+
+#### HiveQL vs PostgreSQL Dialect Reference
+
+[↑ Table of Contents](#table-of-contents)
+
+Use this reference when migrating custom SQL, `RAWSQL_*` expressions, or any SQL that passes through directly to AtScale's SQL layer after switching from Hive thrift (port `11111`) to PGWire (port `15432`).
+
+**Data Types**
+
+| Concept | HiveQL | PostgreSQL |
+|---|---|---|
+| Complex types | `ARRAY<T>`, `MAP<K,V>`, `STRUCT<...>` | Arrays (`T[]`), `JSON`/`JSONB`, composite types |
+
+**String Functions**
+
+| Operation | HiveQL | PostgreSQL |
+|---|---|---|
+| Substring | `SUBSTR(s, pos, len)` | `SUBSTRING(s FROM pos FOR len)` |
+| Regex extract | `REGEXP_EXTRACT(s, pat, idx)` | `REGEXP_MATCHES(s, pat)` or `~` operator |
+| Split | `SPLIT(s, delim)` → array | `STRING_TO_ARRAY(s, delim)` |
+
+**Date/Time**
+
+| Operation | HiveQL | PostgreSQL |
+|---|---|---|
+| Date arithmetic | `DATE_ADD(d, n)`, `DATE_SUB(d, n)` | `d + INTERVAL 'n days'` |
+| Extract part | `YEAR(d)`, `MONTH(d)`, `DAY(d)` | `EXTRACT(YEAR FROM d)` |
+| Date diff | `DATEDIFF(end, start)` | `end - start` |
+| Format date | `DATE_FORMAT(d, 'fmt')` | `TO_CHAR(d, 'fmt')` |
+
+**Quoting and Identifiers**
+
+| Thing | HiveQL | PostgreSQL |
+|---|---|---|
+| Identifier quoting | Backticks `` `col` `` | Double quotes `"col"` |
+| String literals | Single or double quotes | Single quotes only |
+
+**NULL Handling**
+
+| Operation | HiveQL | PostgreSQL |
+|---|---|---|
+| Null coalesce | `NVL(x, default)` | `COALESCE(x, default)` |
+| Null-safe equals | `x <=> y` | `x IS NOT DISTINCT FROM y` |
+
+**Aggregation / Analytics**
+
+| Operation | HiveQL | PostgreSQL |
+|---|---|---|
+| Percentile | `PERCENTILE_APPROX(col, p)` | `PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY col)` |
 
 #### Go/No-Go Criteria
 

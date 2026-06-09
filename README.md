@@ -13,6 +13,7 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
   - find Hive dialect in a workbook
 - Apply style to SML
 - Add kubectl management commands; for example reading log files, updating passwords
+- Calculation groups as shared objects
 
 
 

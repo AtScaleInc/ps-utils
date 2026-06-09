@@ -75,6 +75,12 @@ class ExtractDataShapeParams extends ParameterSet {
       required     = false;
       defaultValue = true;
     })(),
+    new (class extends BooleanParameter {
+      name         = "serial";
+      description  = "Profile dimensions one at a time instead of in parallel (default: false). Use when the database enforces a low per-user connection limit.";
+      required     = false;
+      defaultValue = false;
+    })(),
   ];
 }
 
@@ -86,6 +92,7 @@ type Params = {
   "target-fact-rows":   number;
   "target-column-rows": number;
   "tablesample":        boolean;
+  "serial":             boolean;
 };
 export type ExtractDataShapeFromConnectionParams = Params;
 
@@ -173,6 +180,7 @@ export class ExtractDataShapeFromConnectionOperation extends Operation<Params> {
           supportsTablesample: tablesampleSupported,
           dialect,
         },
+        parallel:   !params["serial"],
         onProgress: (msg) => this.logger.log(`[${tag}] ${msg}`),
       });
 

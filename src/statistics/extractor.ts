@@ -53,6 +53,13 @@ export interface ExtractOptions {
 
   /** Optional progress callback called before each major step. */
   onProgress?: (message: string) => void;
+
+  /**
+   * When true (default), dimension tables are profiled concurrently.
+   * Set to false to profile dimensions one at a time (useful for debugging
+   * or when the database enforces a low per-user connection limit).
+   */
+  parallel?: boolean;
 }
 
 /**
@@ -65,8 +72,9 @@ export async function extractFingerprint(
   runner:  DatabaseQueryRunner,
   options: ExtractOptions,
 ): Promise<SchemaFingerprint> {
-  const config: SamplingConfig = { ...DEFAULT_SAMPLING_CONFIG, ...(options.sampling ?? {}) };
-  const log = options.onProgress ?? (() => undefined);
+  const config:    SamplingConfig = { ...DEFAULT_SAMPLING_CONFIG, ...(options.sampling ?? {}) };
+  const log      = options.onProgress ?? (() => undefined);
+  const parallel = options.parallel ?? true;
 
   // ── Step 1: Parse SML model ─────────────────────────────────────────────────
   log("Parsing SML model…");
@@ -77,20 +85,33 @@ export async function extractFingerprint(
   const dimByName = new Map(graph.dimensions.map((d) => [d.uniqueName, d]));
 
   // ── Step 2: Profile dimensions ──────────────────────────────────────────────
-  log(`Profiling ${graph.dimensions.length} dimension(s)…`);
-  const dimFingerprints: DimensionFingerprint[] = [];
-
+  // Pre-assign all dimension / hierarchy / level IDs in deterministic order so
+  // parallel tasks can call idMapper freely without racing on the counters.
   for (const dim of graph.dimensions) {
-    log(`  Dimension: ${dim.sourceTable}`);
-    const rowCount   = await countRows(runner, dim.sourceSchema, dim.sourceTable);
-    const hierarchies = await profileHierarchies(runner, dim, config, idMapper);
-
-    dimFingerprints.push({
-      id:         idMapper.dimensionId(dim.uniqueName),
-      rowCount,
-      hierarchies,
-    });
+    idMapper.dimensionId(dim.uniqueName);
+    for (const hier of dim.hierarchies) {
+      idMapper.hierarchyId(dim.uniqueName, hier.uniqueName);
+      for (const level of hier.levels) {
+        idMapper.levelId(dim.uniqueName, hier.uniqueName, level.uniqueName);
+      }
+    }
   }
+
+  log(`Profiling ${graph.dimensions.length} dimension(s)…`);
+
+  async function profileOneDimension(dim: (typeof graph.dimensions)[number]): Promise<DimensionFingerprint> {
+    log(`  Dimension: ${dim.sourceTable}`);
+    const rowCount    = await countRows(runner, dim.sourceSchema, dim.sourceTable);
+    const hierarchies = await profileHierarchies(runner, dim, config, idMapper);
+    return { id: idMapper.dimensionId(dim.uniqueName), rowCount, hierarchies };
+  }
+
+  const dimFingerprints: DimensionFingerprint[] = parallel
+    ? await Promise.all(graph.dimensions.map(profileOneDimension))
+    : await graph.dimensions.reduce<Promise<DimensionFingerprint[]>>(
+        async (accP, dim) => { const acc = await accP; acc.push(await profileOneDimension(dim)); return acc; },
+        Promise.resolve([]),
+      );
 
   // ── Step 3: Profile facts ────────────────────────────────────────────────────
   log(`Profiling ${graph.facts.length} fact table(s)…`);

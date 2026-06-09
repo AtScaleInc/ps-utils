@@ -752,6 +752,7 @@ curl -X POST http://localhost:4000/graphql \
 | `targetFactRows` | `Int` | No | Target row count when sampling large fact tables for density profiling (default: 100000; 0 = no sampling) |
 | `targetColumnRows` | `Int` | No | Target row count for measure column distribution sampling (default: 10000; 0 = no sampling) |
 | `tablesample` | `Boolean` | No | Use TABLESAMPLE SYSTEM for fact sampling when true (default: true). Set to false for databases that do not support TABLESAMPLE (e.g. MySQL). |
+| `serial` | `Boolean` | No | Profile dimensions one at a time instead of in parallel (default: false). Use when the database enforces a low per-user connection limit. |
 
 **GraphQL:**
 
@@ -3065,6 +3066,8 @@ input ExtractDataShapeFromConnectionInput {
   targetColumnRows: Int
   """Use TABLESAMPLE SYSTEM for fact sampling when true (default: true). Set to false for databases that do not support TABLESAMPLE (e.g. MySQL)."""
   tablesample: Boolean
+  """Profile dimensions one at a time instead of in parallel (default: false). Use when the database enforces a low per-user connection limit."""
+  serial: Boolean
 }
 
 """Generate CREATE TABLE DDL from a data-shape.yaml statistical fingerprint"""
