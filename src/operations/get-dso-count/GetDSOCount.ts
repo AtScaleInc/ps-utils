@@ -49,49 +49,53 @@ export class GetDSOCount extends Operation<DSOParams> {
     super(services, logger);
   }
 
-    async run(params: DSOParams): Promise<void> {
-        const yaml = this.services.get<YamlService>("yaml");
-        const sql = this.services.get<SqlService>("sql");
+  async run(params: DSOParams): Promise<void> {
+    const yaml = this.services.get<YamlService>("yaml");
+    const sql = this.services.get<SqlService>("sql");
 
-        const connectionFile = params["connection-file"] ?? "connections.yaml";
-        const connectionName = params["connection-name"];
+    const connectionFile = params["connection-file"] ?? "connections.yaml";
+    const connectionName = params["connection-name"];
 
-        const config = yaml.readFromFile(connectionFile) as ConnectionConfig;
-      
-        const conn = await sql.connect(config, connectionName);
-        var modelRows = [] as any[];
-        try {
-            modelRows = await sql.query(conn, "SELECT table_schema, table_name FROM information_schema.tables");
-        } catch (err) {
-            this.logger.error(`Failed to pull models`);
-            if (conn) {
-                try { sql.close(conn); } catch { /* ignore */ }
-            }
-            return
+    const config = yaml.readFromFile(connectionFile) as ConnectionConfig;
+
+    const conn = await sql.connect(config, connectionName);
+    var modelRows = [] as any[];
+    try {
+      modelRows = await sql.query(conn, "SELECT table_schema, table_name FROM information_schema.tables");
+    } catch (err) {
+      this.logger.error(`Failed to pull models`);
+      if (conn) {
+        try { sql.close(conn); } catch { /* ignore */ }
+      }
+      return
+    }
+
+    const models: any[] = modelRows.map(
+      (r) => ({
+        catalogName: String(r["TABLE_SCHEMA"] ?? r["table_schema"] ?? ""),
+        modelName: String(r["TABLE_NAME"] ?? r["table_name"] ?? "")
+      }));
+
+    var dso = 0
+    var objectSet = new Set();
+    for (const model of models) {
+      if (!params["catalog"] || params["catalog"] == model.catalogName) {
+        if (!params["model"] || params["model"] == model.modelName) {
+          try {
+            const objectRows = await sql.query(conn, `SELECT column_name FROM information_schema.columns WHERE table_schema = '${model.catalogName}' AND table_name   = '${model.modelName}';`);
+            this.logger.info(`${objectRows.length} objects in Catalog: ${model.catalogName} Model: ${model.modelName}`);
+            dso = dso + objectRows.length
+            objectRows.forEach(item => objectSet.add(item["column_name"]));
+          } catch (err) {
+            this.logger.error(`Failed to pull DSOs for Catalog: ${model.catalogName} Model: ${model.modelName}`);
+          }
         }
-      
-        const models: any[] = modelRows.map(
-            (r) => ({ catalogName:  String(r["TABLE_SCHEMA"] ?? r["table_schema"] ?? ""),
-                      modelName: String(r["TABLE_NAME"] ?? r["table_name"] ?? "")
-        }));
-      
-        var dso = 0
-        for (const model of models) {
-        if (!params["catalog"] || params["catalog"] == model.catalogName) {
-            if (!params["model"] || params["model"] == model.modelName) {
-                try {
-                    const objectRows = await sql.query(conn, `SELECT column_name FROM information_schema.columns WHERE table_schema = '${model.catalogName}' AND table_name   = '${model.modelName}';`);
-                    this.logger.info(`${objectRows.length} objects in Catalog: ${model.catalogName} Model: ${model.modelName}`);
-                    dso = dso + objectRows.length
-                } catch (err) {
-                    this.logger.error(`Failed to pull DSOs for Catalog: ${model.catalogName} Model: ${model.modelName}`);
-                }
-            }
-        }
-        }
-        this.logger.info(`Total DSO Count: ${dso}`);
-        if (conn) {
-                try { sql.close(conn); } catch { /* ignore */ }
-            }
+      }
+    }
+    this.logger.info(`Total DSO Count: ${dso}`);
+    this.logger.info(`Unique DSO Count: ${objectSet.size}`);
+    if (conn) {
+      try { sql.close(conn); } catch { /* ignore */ }
+    }
   }
 }
