@@ -1,0 +1,8 @@
+unique_name: m_num_transactions_sum
+object_type: metric
+label: num_transactions
+calculation_method: sum
+dataset: government_budget_fact
+column: num_transactions
+is_hidden: false
+unrelated_dimensions_handling: empty

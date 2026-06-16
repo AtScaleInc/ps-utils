@@ -1,0 +1,8 @@
+unique_name: m_ytm_max
+object_type: metric
+label: ytm
+calculation_method: maximum
+dataset: financial_securities_fact
+column: ytm
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_bonus_amount_min
+object_type: metric
+label: bonus_amount
+calculation_method: minimum
+dataset: hr_workforce_fact
+column: bonus_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

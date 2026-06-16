@@ -1,0 +1,8 @@
+unique_name: m_enacted_amount_max
+object_type: metric
+label: enacted_amount
+calculation_method: maximum
+dataset: government_budget_fact
+column: enacted_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

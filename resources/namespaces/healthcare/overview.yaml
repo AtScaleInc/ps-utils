@@ -1,0 +1,564 @@
+version: 1
+title: healthcare Analysis
+description: Auto-generated analysis namespace for the healthcare model
+worksheets:
+  visit_id:
+    title: visit_id
+    model: healthcare
+    graphType: text
+    measures:
+      - m_visit_id_sum
+    description: "Summary statistic: visit_id"
+    format: integer
+  visit_id_2:
+    title: visit_id
+    model: healthcare
+    graphType: text
+    measures:
+      - m_visit_id_avg
+    description: "Summary statistic: visit_id"
+    format: integer
+  visit_id_3:
+    title: visit_id
+    model: healthcare
+    graphType: text
+    measures:
+      - m_visit_id_min
+    description: "Summary statistic: visit_id"
+    format: integer
+  visit_id_4:
+    title: visit_id
+    model: healthcare
+    graphType: text
+    measures:
+      - m_visit_id_max
+    description: "Summary statistic: visit_id"
+    format: integer
+  claim_id:
+    title: claim_id
+    model: healthcare
+    graphType: text
+    measures:
+      - m_claim_id_sum
+    description: "Summary statistic: claim_id"
+    format: integer
+  claim_id_2:
+    title: claim_id
+    model: healthcare
+    graphType: text
+    measures:
+      - m_claim_id_avg
+    description: "Summary statistic: claim_id"
+    format: integer
+  total_charges_by_week:
+    title: total_charges by Week
+    model: healthcare
+    graphType: line
+    xAxis: service_year
+    xAxisGranularity: week
+    yAxis: m_total_charges_sum
+    description: >-
+      Track how total_charges changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  total_charges_by_icd_diagnosis_hierarchy_by_week:
+    title: total_charges by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_total_charges_sum
+    description: >-
+      Cross-analyse total_charges by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  total_charges_by_cpt_hierarchy_by_week:
+    title: total_charges by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_total_charges_sum
+    description: >-
+      Cross-analyse total_charges by **Cpt Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  total_payments_by_week:
+    title: total_payments by Week
+    model: healthcare
+    graphType: line
+    xAxis: service_year
+    xAxisGranularity: week
+    yAxis: m_total_payments_sum
+    description: >-
+      Track how total_payments changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  total_payments_by_icd_diagnosis_hierarchy_by_week:
+    title: total_payments by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_total_payments_sum
+    description: >-
+      Cross-analyse total_payments by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  total_payments_by_cpt_hierarchy_by_week:
+    title: total_payments by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_total_payments_sum
+    description: >-
+      Cross-analyse total_payments by **Cpt Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  allowed_amount_by_week:
+    title: allowed_amount by Week
+    model: healthcare
+    graphType: line
+    xAxis: service_year
+    xAxisGranularity: week
+    yAxis: m_allowed_amount_sum
+    description: >-
+      Track how allowed_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  allowed_amount_by_icd_diagnosis_hierarchy_by_week:
+    title: allowed_amount by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_allowed_amount_sum
+    description: >-
+      Cross-analyse allowed_amount by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  allowed_amount_by_cpt_hierarchy_by_week:
+    title: allowed_amount by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_allowed_amount_sum
+    description: >-
+      Cross-analyse allowed_amount by **Cpt Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  paid_amount_by_week:
+    title: paid_amount by Week
+    model: healthcare
+    graphType: line
+    xAxis: service_year
+    xAxisGranularity: week
+    yAxis: m_paid_amount_sum
+    description: >-
+      Track how paid_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  paid_amount_by_icd_diagnosis_hierarchy_by_week:
+    title: paid_amount by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_paid_amount_sum
+    description: >-
+      Cross-analyse paid_amount by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  paid_amount_by_cpt_hierarchy_by_week:
+    title: paid_amount by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_paid_amount_sum
+    description: >-
+      Cross-analyse paid_amount by **Cpt Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  denial_amount_by_week:
+    title: denial_amount by Week
+    model: healthcare
+    graphType: line
+    xAxis: service_year
+    xAxisGranularity: week
+    yAxis: m_denial_amount_sum
+    description: >-
+      Track how denial_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  denial_amount_by_icd_diagnosis_hierarchy_by_week:
+    title: denial_amount by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_denial_amount_sum
+    description: >-
+      Cross-analyse denial_amount by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  denial_amount_by_cpt_hierarchy_by_week:
+    title: denial_amount by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_denial_amount_sum
+    description: >-
+      Cross-analyse denial_amount by **Cpt Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  er_visits_count_by_icd_diagnosis_hierarchy_by_week:
+    title: er_visits_count by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_er_visits_count_sum
+    description: >-
+      Cross-analyse er_visits_count by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  er_visits_count_by_cpt_hierarchy_by_week:
+    title: er_visits_count by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_er_visits_count_sum
+    description: >-
+      Cross-analyse er_visits_count by **Cpt Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  procedure_count_by_icd_diagnosis_hierarchy_by_week:
+    title: procedure_count by ICD Diagnosis Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: icd_chapter
+    xAxisGranularity: week
+    yAxis: m_procedure_count_sum
+    description: >-
+      Cross-analyse procedure_count by **ICD Diagnosis Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: service_year
+  procedure_count_by_cpt_hierarchy_by_week:
+    title: procedure_count by Cpt Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: cpt_category
+    xAxisGranularity: week
+    yAxis: m_procedure_count_sum
+    description: >-
+      Cross-analyse procedure_count by **Cpt Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  total_charges_by_drg_hierarchy_by_week:
+    title: total_charges by DRG Hierarchy by Week
+    model: healthcare
+    graphType: line
+    xAxis: drg_type
+    xAxisGranularity: week
+    yAxis: m_total_charges_sum
+    description: >-
+      Cross-analyse total_charges by **DRG Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: service_year
+  total_charges_by_icd_diagnosis_hierarchy_and_cpt_hierarchy:
+    title: total_charges by ICD Diagnosis Hierarchy and Cpt Hierarchy
+    model: healthcare
+    graphType: bar
+    xAxis: m_total_charges_sum
+    yAxis: icd_chapter
+    description: >-
+      Rank members of **ICD Diagnosis Hierarchy** and **Cpt Hierarchy** by their
+      total_charges to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: cpt_category
+  total_payments_by_icd_diagnosis_hierarchy_and_cpt_hierarchy:
+    title: total_payments by ICD Diagnosis Hierarchy and Cpt Hierarchy
+    model: healthcare
+    graphType: bar
+    xAxis: m_total_payments_sum
+    yAxis: icd_chapter
+    description: >-
+      Rank members of **ICD Diagnosis Hierarchy** and **Cpt Hierarchy** by their
+      total_payments to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: cpt_category
+  allowed_amount_by_icd_diagnosis_hierarchy_and_cpt_hierarchy:
+    title: allowed_amount by ICD Diagnosis Hierarchy and Cpt Hierarchy
+    model: healthcare
+    graphType: bar
+    xAxis: m_allowed_amount_sum
+    yAxis: icd_chapter
+    description: >-
+      Rank members of **ICD Diagnosis Hierarchy** and **Cpt Hierarchy** by their
+      allowed_amount to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: cpt_category
+  paid_amount_by_icd_diagnosis_hierarchy_and_cpt_hierarchy:
+    title: paid_amount by ICD Diagnosis Hierarchy and Cpt Hierarchy
+    model: healthcare
+    graphType: bar
+    xAxis: m_paid_amount_sum
+    yAxis: icd_chapter
+    description: >-
+      Rank members of **ICD Diagnosis Hierarchy** and **Cpt Hierarchy** by their
+      paid_amount to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: cpt_category
+  denial_amount_by_icd_diagnosis_hierarchy_and_cpt_hierarchy:
+    title: denial_amount by ICD Diagnosis Hierarchy and Cpt Hierarchy
+    model: healthcare
+    graphType: bar
+    xAxis: m_denial_amount_sum
+    yAxis: icd_chapter
+    description: >-
+      Rank members of **ICD Diagnosis Hierarchy** and **Cpt Hierarchy** by their
+      denial_amount to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: cpt_category
+dashboards:
+  healthcare_dashboard:
+    title: healthcare Analysis Dashboard
+    description: Auto-generated dashboard for healthcare
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: visit_id
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: visit_id_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: visit_id_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: visit_id_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: claim_id
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: claim_id_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: total_charges_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_charges_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_charges_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_payments_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_payments_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_payments_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allowed_amount_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allowed_amount_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: allowed_amount_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: paid_amount_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: paid_amount_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: paid_amount_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: denial_amount_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: denial_amount_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: denial_amount_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: er_visits_count_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: er_visits_count_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: procedure_count_by_icd_diagnosis_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: procedure_count_by_cpt_hierarchy_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_charges_by_drg_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_charges_by_icd_diagnosis_hierarchy_and_cpt_hierarchy
+        x: 0
+        "y": 107
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: total_payments_by_icd_diagnosis_hierarchy_and_cpt_hierarchy
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: allowed_amount_by_icd_diagnosis_hierarchy_and_cpt_hierarchy
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: paid_amount_by_icd_diagnosis_hierarchy_and_cpt_hierarchy
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: denial_amount_by_icd_diagnosis_hierarchy_and_cpt_hierarchy
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

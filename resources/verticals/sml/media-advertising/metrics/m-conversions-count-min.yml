@@ -1,0 +1,8 @@
+unique_name: m_conversions_count_min
+object_type: metric
+label: conversions_count
+calculation_method: minimum
+dataset: media_ad_performance_fact
+column: conversions_count
+is_hidden: false
+unrelated_dimensions_handling: empty

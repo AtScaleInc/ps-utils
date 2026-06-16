@@ -1,0 +1,8 @@
+unique_name: m_labor_cost_sum
+object_type: metric
+label: labor_cost
+calculation_method: sum
+dataset: manufacturing_production_fact
+column: labor_cost
+is_hidden: false
+unrelated_dimensions_handling: empty

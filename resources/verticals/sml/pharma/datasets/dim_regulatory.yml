@@ -1,0 +1,16 @@
+unique_name: dim_regulatory
+object_type: dataset
+label: dim_regulatory
+connection_id: my_connection
+table: dim_regulatory
+columns:
+  -     name: regulatory_id
+        data_type: bigint
+  -     name: regulatory_agency
+        data_type: string
+  -     name: regulatory_pathway
+        data_type: string
+  -     name: application_type
+        data_type: string
+  -     name: approval_status
+        data_type: string

@@ -1,0 +1,8 @@
+unique_name: m_vacancy_rate_avg
+object_type: metric
+label: vacancy_rate
+calculation_method: average
+dataset: real_estate_transaction_fact
+column: vacancy_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

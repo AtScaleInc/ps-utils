@@ -1,0 +1,113 @@
+unique_name: media-advertising
+object_type: model
+label: media-advertising
+relationships:
+  -     unique_name: media_ad_performance_fact_dim-campaign_campaign_id
+        from:
+          dataset: media_ad_performance_fact
+          join_columns:
+            - campaign_id
+        to:
+          dimension: Dim Campaign
+          level: la_campaign_id
+  -     unique_name: media_ad_performance_fact_dim-creative_creative_id
+        from:
+          dataset: media_ad_performance_fact
+          join_columns:
+            - creative_id
+        to:
+          dimension: Dim Creative
+          level: la_creative_id
+  -     unique_name: media_ad_performance_fact_dim-placement_placement_id
+        from:
+          dataset: media_ad_performance_fact
+          join_columns:
+            - placement_id
+        to:
+          dimension: Dim Placement
+          level: la_placement_id
+  -     unique_name: media_ad_performance_fact_dim-audience_audience_id
+        from:
+          dataset: media_ad_performance_fact
+          join_columns:
+            - audience_id
+        to:
+          dimension: Dim Audience
+          level: la_audience_id
+  -     unique_name: media_ad_performance_fact_dim-report-date_report_date_id
+        from:
+          dataset: media_ad_performance_fact
+          join_columns:
+            - report_date_id
+        to:
+          dimension: Dim Report Date
+          level: la_report_date_id
+metrics:
+  -     unique_name: m_impressions_sum
+  -     unique_name: m_impressions_avg
+  -     unique_name: m_impressions_min
+  -     unique_name: m_impressions_max
+  -     unique_name: m_clicks_sum
+  -     unique_name: m_clicks_avg
+  -     unique_name: m_clicks_min
+  -     unique_name: m_clicks_max
+  -     unique_name: m_ctr_avg
+  -     unique_name: m_ctr_min
+  -     unique_name: m_ctr_max
+  -     unique_name: m_cpm_avg
+  -     unique_name: m_cpm_min
+  -     unique_name: m_cpm_max
+  -     unique_name: m_cpc_avg
+  -     unique_name: m_cpc_min
+  -     unique_name: m_cpc_max
+  -     unique_name: m_cpa_avg
+  -     unique_name: m_cpa_min
+  -     unique_name: m_cpa_max
+  -     unique_name: m_roas_avg
+  -     unique_name: m_roas_min
+  -     unique_name: m_roas_max
+  -     unique_name: m_spend_sum
+  -     unique_name: m_spend_avg
+  -     unique_name: m_spend_min
+  -     unique_name: m_spend_max
+  -     unique_name: m_media_cost_sum
+  -     unique_name: m_media_cost_avg
+  -     unique_name: m_media_cost_min
+  -     unique_name: m_media_cost_max
+  -     unique_name: m_data_cost_sum
+  -     unique_name: m_data_cost_avg
+  -     unique_name: m_data_cost_min
+  -     unique_name: m_data_cost_max
+  -     unique_name: m_revenue_sum
+  -     unique_name: m_revenue_avg
+  -     unique_name: m_revenue_min
+  -     unique_name: m_revenue_max
+  -     unique_name: m_conversions_count_sum
+  -     unique_name: m_conversions_count_avg
+  -     unique_name: m_conversions_count_min
+  -     unique_name: m_conversions_count_max
+  -     unique_name: m_conversion_value_avg
+  -     unique_name: m_conversion_value_min
+  -     unique_name: m_conversion_value_max
+  -     unique_name: m_video_views_sum
+  -     unique_name: m_video_views_avg
+  -     unique_name: m_video_views_min
+  -     unique_name: m_video_views_max
+  -     unique_name: m_video_completions_sum
+  -     unique_name: m_video_completions_avg
+  -     unique_name: m_video_completions_min
+  -     unique_name: m_video_completions_max
+  -     unique_name: m_video_25_pct_avg
+  -     unique_name: m_video_25_pct_min
+  -     unique_name: m_video_25_pct_max
+  -     unique_name: m_reach_sum
+  -     unique_name: m_reach_avg
+  -     unique_name: m_reach_min
+  -     unique_name: m_reach_max
+  -     unique_name: m_frequency_avg
+  -     unique_name: m_frequency_min
+  -     unique_name: m_frequency_max
+  -     unique_name: m_engagement_count_sum
+  -     unique_name: m_engagement_count_avg
+  -     unique_name: m_engagement_count_min
+  -     unique_name: m_engagement_count_max

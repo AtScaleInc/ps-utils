@@ -1,0 +1,572 @@
+version: 1
+title: retail-ecommerce Analysis
+description: Auto-generated analysis namespace for the retail-ecommerce model
+worksheets:
+  net_sales:
+    title: net_sales
+    model: retail-ecommerce
+    graphType: text
+    measures:
+      - m_net_sales_sum
+    description: "Summary statistic: net_sales"
+    format: decimal:2
+  net_sales_2:
+    title: net_sales
+    model: retail-ecommerce
+    graphType: text
+    measures:
+      - m_net_sales_avg
+    description: "Summary statistic: net_sales"
+    format: decimal:2
+  net_sales_3:
+    title: net_sales
+    model: retail-ecommerce
+    graphType: text
+    measures:
+      - m_net_sales_min
+    description: "Summary statistic: net_sales"
+    format: decimal:2
+  net_sales_4:
+    title: net_sales
+    model: retail-ecommerce
+    graphType: text
+    measures:
+      - m_net_sales_max
+    description: "Summary statistic: net_sales"
+    format: decimal:2
+  gross_sales:
+    title: gross_sales
+    model: retail-ecommerce
+    graphType: text
+    measures:
+      - m_gross_sales_sum
+    description: "Summary statistic: gross_sales"
+    format: decimal:2
+  gross_sales_2:
+    title: gross_sales
+    model: retail-ecommerce
+    graphType: text
+    measures:
+      - m_gross_sales_avg
+    description: "Summary statistic: gross_sales"
+    format: decimal:2
+  net_sales_by_week:
+    title: net_sales by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_net_sales_sum
+    description: >-
+      Track how net_sales changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  net_sales_by_product_hierarchy_by_week:
+    title: net_sales by Product Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: department_name
+    xAxisGranularity: week
+    yAxis: m_net_sales_sum
+    description: >-
+      Cross-analyse net_sales by **Product Hierarchy** and **Fiscal Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  net_sales_by_product_taxonomy_hierarchy_by_week:
+    title: net_sales by Product Taxonomy Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: category_name
+    xAxisGranularity: week
+    yAxis: m_net_sales_sum
+    description: >-
+      Cross-analyse net_sales by **Product Taxonomy Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  net_sales_by_geography_hierarchy_by_week:
+    title: net_sales by Geography Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: region_name
+    xAxisGranularity: week
+    yAxis: m_net_sales_sum
+    description: >-
+      Cross-analyse net_sales by **Geography Hierarchy** and **Fiscal Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  net_sales_by_store_geography_hierarchy_by_week:
+    title: net_sales by Store Geography Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: market_name
+    xAxisGranularity: week
+    yAxis: m_net_sales_sum
+    description: >-
+      Cross-analyse net_sales by **Store Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  gross_sales_by_week:
+    title: gross_sales by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_gross_sales_sum
+    description: >-
+      Track how gross_sales changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  gross_sales_by_product_hierarchy_by_week:
+    title: gross_sales by Product Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: department_name
+    xAxisGranularity: week
+    yAxis: m_gross_sales_sum
+    description: >-
+      Cross-analyse gross_sales by **Product Hierarchy** and **Fiscal Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  gross_sales_by_product_taxonomy_hierarchy_by_week:
+    title: gross_sales by Product Taxonomy Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: category_name
+    xAxisGranularity: week
+    yAxis: m_gross_sales_sum
+    description: >-
+      Cross-analyse gross_sales by **Product Taxonomy Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  gross_sales_by_geography_hierarchy_by_week:
+    title: gross_sales by Geography Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: region_name
+    xAxisGranularity: week
+    yAxis: m_gross_sales_sum
+    description: >-
+      Cross-analyse gross_sales by **Geography Hierarchy** and **Fiscal Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  gross_sales_by_store_geography_hierarchy_by_week:
+    title: gross_sales by Store Geography Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: market_name
+    xAxisGranularity: week
+    yAxis: m_gross_sales_sum
+    description: >-
+      Cross-analyse gross_sales by **Store Geography Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  cost_of_goods_by_week:
+    title: cost_of_goods by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: fiscal_year
+    xAxisGranularity: week
+    yAxis: m_cost_of_goods_sum
+    description: >-
+      Track how cost_of_goods changes over time using the **Fiscal Calendar
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  cost_of_goods_by_product_hierarchy_by_week:
+    title: cost_of_goods by Product Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: department_name
+    xAxisGranularity: week
+    yAxis: m_cost_of_goods_sum
+    description: >-
+      Cross-analyse cost_of_goods by **Product Hierarchy** and **Fiscal Calendar
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  cost_of_goods_by_product_taxonomy_hierarchy_by_week:
+    title: cost_of_goods by Product Taxonomy Hierarchy by Week
+    model: retail-ecommerce
+    graphType: line
+    xAxis: category_name
+    xAxisGranularity: week
+    yAxis: m_cost_of_goods_sum
+    description: >-
+      Cross-analyse cost_of_goods by **Product Taxonomy Hierarchy** and **Fiscal
+      Calendar Hierarchy** to see how performance differs across segments at
+      each point in time — supports period-over-period comparisons.
+    colorField: fiscal_year
+  net_sales_by_product_hierarchy_and_geography_hierarchy:
+    title: net_sales by Product Hierarchy and Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_net_sales_sum
+    yAxis: department_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      net_sales to surface top performers and identify areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: region_name
+  net_sales_by_product_hierarchy_and_store_geography_hierarchy:
+    title: net_sales by Product Hierarchy and Store Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_net_sales_sum
+    yAxis: department_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Store Geography Hierarchy** by
+      their net_sales to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: market_name
+  net_sales_by_product_taxonomy_hierarchy_and_geography_hierar:
+    title: net_sales by Product Taxonomy Hierarchy and Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_net_sales_sum
+    yAxis: category_name
+    description: >-
+      Rank members of **Product Taxonomy Hierarchy** and **Geography Hierarchy**
+      by their net_sales to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: region_name
+  net_sales_by_product_taxonomy_hierarchy_and_store_geography_:
+    title: net_sales by Product Taxonomy Hierarchy and Store Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_net_sales_sum
+    yAxis: category_name
+    description: >-
+      Rank members of **Product Taxonomy Hierarchy** and **Store Geography
+      Hierarchy** by their net_sales to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: market_name
+  gross_sales_by_product_hierarchy_and_geography_hierarchy:
+    title: gross_sales by Product Hierarchy and Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_gross_sales_sum
+    yAxis: department_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      gross_sales to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: region_name
+  gross_sales_by_product_hierarchy_and_store_geography_hierarc:
+    title: gross_sales by Product Hierarchy and Store Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_gross_sales_sum
+    yAxis: department_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Store Geography Hierarchy** by
+      their gross_sales to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: market_name
+  gross_sales_by_product_taxonomy_hierarchy_and_geography_hier:
+    title: gross_sales by Product Taxonomy Hierarchy and Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_gross_sales_sum
+    yAxis: category_name
+    description: >-
+      Rank members of **Product Taxonomy Hierarchy** and **Geography Hierarchy**
+      by their gross_sales to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: region_name
+  gross_sales_by_product_taxonomy_hierarchy_and_store_geograph:
+    title: gross_sales by Product Taxonomy Hierarchy and Store Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_gross_sales_sum
+    yAxis: category_name
+    description: >-
+      Rank members of **Product Taxonomy Hierarchy** and **Store Geography
+      Hierarchy** by their gross_sales to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: market_name
+  cost_of_goods_by_product_hierarchy_and_geography_hierarchy:
+    title: cost_of_goods by Product Hierarchy and Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_cost_of_goods_sum
+    yAxis: department_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      cost_of_goods to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: region_name
+  cost_of_goods_by_product_hierarchy_and_store_geography_hiera:
+    title: cost_of_goods by Product Hierarchy and Store Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_cost_of_goods_sum
+    yAxis: department_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Store Geography Hierarchy** by
+      their cost_of_goods to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: market_name
+  cost_of_goods_by_product_taxonomy_hierarchy_and_geography_hi:
+    title: cost_of_goods by Product Taxonomy Hierarchy and Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_cost_of_goods_sum
+    yAxis: category_name
+    description: >-
+      Rank members of **Product Taxonomy Hierarchy** and **Geography Hierarchy**
+      by their cost_of_goods to surface top performers and identify areas
+      needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: region_name
+  cost_of_goods_by_product_taxonomy_hierarchy_and_store_geogra:
+    title: cost_of_goods by Product Taxonomy Hierarchy and Store Geography Hierarchy
+    model: retail-ecommerce
+    graphType: bar
+    xAxis: m_cost_of_goods_sum
+    yAxis: category_name
+    description: >-
+      Rank members of **Product Taxonomy Hierarchy** and **Store Geography
+      Hierarchy** by their cost_of_goods to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: market_name
+dashboards:
+  retailecommerce_dashboard:
+    title: retail-ecommerce Analysis Dashboard
+    description: Auto-generated dashboard for retail-ecommerce
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: net_sales
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: net_sales_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: net_sales_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: net_sales_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: gross_sales
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: gross_sales_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: net_sales_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_sales_by_product_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_sales_by_product_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_sales_by_geography_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_sales_by_store_geography_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sales_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sales_by_product_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sales_by_product_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sales_by_geography_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sales_by_store_geography_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_of_goods_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_of_goods_by_product_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_of_goods_by_product_taxonomy_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_sales_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 72
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: net_sales_by_product_hierarchy_and_store_geography_hierarchy
+        x: 0
+        "y": 77
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: net_sales_by_product_taxonomy_hierarchy_and_geography_hierar
+        x: 0
+        "y": 82
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: net_sales_by_product_taxonomy_hierarchy_and_store_geography_
+        x: 0
+        "y": 87
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: gross_sales_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 92
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: gross_sales_by_product_hierarchy_and_store_geography_hierarc
+        x: 0
+        "y": 97
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: gross_sales_by_product_taxonomy_hierarchy_and_geography_hier
+        x: 0
+        "y": 102
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: gross_sales_by_product_taxonomy_hierarchy_and_store_geograph
+        x: 0
+        "y": 107
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: cost_of_goods_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: cost_of_goods_by_product_hierarchy_and_store_geography_hiera
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: cost_of_goods_by_product_taxonomy_hierarchy_and_geography_hi
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: cost_of_goods_by_product_taxonomy_hierarchy_and_store_geogra
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

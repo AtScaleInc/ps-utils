@@ -1,0 +1,8 @@
+unique_name: m_patient_count_min
+object_type: metric
+label: patient_count
+calculation_method: minimum
+dataset: pharma_clinical_fact
+column: patient_count
+is_hidden: false
+unrelated_dimensions_handling: empty

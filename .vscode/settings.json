@@ -1,0 +1,27 @@
+{
+  "files.associations": {
+    "*.ejs": "plaintext"
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true
+  },
+  "typescript.tsserver.exclude": [
+    "**/node_modules/**"
+  ],
+  "javascript.tsserver.exclude": [
+    "**/node_modules/**"
+  ],
+  "search.exclude": {
+    "**/node_modules/**": true
+  },
+  "typescript.tsserver.watchOptions": {
+    "excludeDirectories": [
+      "**/node_modules"
+    ]
+  },
+  "javascript.tsserver.watchOptions": {
+    "excludeDirectories": [
+      "**/node_modules"
+    ]
+  }
+}

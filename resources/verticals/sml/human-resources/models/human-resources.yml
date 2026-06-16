@@ -1,0 +1,126 @@
+unique_name: human-resources
+object_type: model
+label: human-resources
+relationships:
+  -     unique_name: hr_workforce_fact_dim-employee_employee_id
+        from:
+          dataset: hr_workforce_fact
+          join_columns:
+            - employee_id
+        to:
+          dimension: Dim Employee
+          level: la_employee_id
+  -     unique_name: hr_workforce_fact_dim-organization_organization_id
+        from:
+          dataset: hr_workforce_fact
+          join_columns:
+            - organization_id
+        to:
+          dimension: Dim Organization
+          level: la_organization_id
+  -     unique_name: hr_workforce_fact_dim-job_job_id
+        from:
+          dataset: hr_workforce_fact
+          join_columns:
+            - job_id
+        to:
+          dimension: Dim Job
+          level: la_job_id
+  -     unique_name: hr_workforce_fact_dim-location_location_id
+        from:
+          dataset: hr_workforce_fact
+          join_columns:
+            - location_id
+        to:
+          dimension: Dim Location
+          level: la_location_id
+  -     unique_name: hr_workforce_fact_dim-snapshot-date_snapshot_date_id
+        from:
+          dataset: hr_workforce_fact
+          join_columns:
+            - snapshot_date_id
+        to:
+          dimension: Dim Snapshot Date
+          level: la_snapshot_date_id
+metrics:
+  -     unique_name: m_requisition_id_sum
+  -     unique_name: m_requisition_id_avg
+  -     unique_name: m_requisition_id_min
+  -     unique_name: m_requisition_id_max
+  -     unique_name: m_base_salary_sum
+  -     unique_name: m_base_salary_avg
+  -     unique_name: m_base_salary_min
+  -     unique_name: m_base_salary_max
+  -     unique_name: m_bonus_amount_sum
+  -     unique_name: m_bonus_amount_avg
+  -     unique_name: m_bonus_amount_min
+  -     unique_name: m_bonus_amount_max
+  -     unique_name: m_equity_value_avg
+  -     unique_name: m_equity_value_min
+  -     unique_name: m_equity_value_max
+  -     unique_name: m_benefits_cost_sum
+  -     unique_name: m_benefits_cost_avg
+  -     unique_name: m_benefits_cost_min
+  -     unique_name: m_benefits_cost_max
+  -     unique_name: m_total_compensation_sum
+  -     unique_name: m_total_compensation_avg
+  -     unique_name: m_total_compensation_min
+  -     unique_name: m_total_compensation_max
+  -     unique_name: m_total_cash_sum
+  -     unique_name: m_total_cash_avg
+  -     unique_name: m_total_cash_min
+  -     unique_name: m_total_cash_max
+  -     unique_name: m_total_target_comp_sum
+  -     unique_name: m_total_target_comp_avg
+  -     unique_name: m_total_target_comp_min
+  -     unique_name: m_total_target_comp_max
+  -     unique_name: m_compa_ratio_avg
+  -     unique_name: m_compa_ratio_min
+  -     unique_name: m_compa_ratio_max
+  -     unique_name: m_pay_equity_ratio_avg
+  -     unique_name: m_pay_equity_ratio_min
+  -     unique_name: m_pay_equity_ratio_max
+  -     unique_name: m_headcount_sum
+  -     unique_name: m_headcount_avg
+  -     unique_name: m_headcount_min
+  -     unique_name: m_headcount_max
+  -     unique_name: m_turnover_rate_avg
+  -     unique_name: m_turnover_rate_min
+  -     unique_name: m_turnover_rate_max
+  -     unique_name: m_attrition_rate_avg
+  -     unique_name: m_attrition_rate_min
+  -     unique_name: m_attrition_rate_max
+  -     unique_name: m_performance_rating_avg
+  -     unique_name: m_performance_rating_min
+  -     unique_name: m_performance_rating_max
+  -     unique_name: m_engagement_score_avg
+  -     unique_name: m_engagement_score_min
+  -     unique_name: m_engagement_score_max
+  -     unique_name: m_overtime_hours_sum
+  -     unique_name: m_overtime_hours_avg
+  -     unique_name: m_overtime_hours_min
+  -     unique_name: m_overtime_hours_max
+  -     unique_name: m_training_hours_sum
+  -     unique_name: m_training_hours_avg
+  -     unique_name: m_training_hours_min
+  -     unique_name: m_training_hours_max
+  -     unique_name: m_time_to_fill_sum
+  -     unique_name: m_time_to_fill_avg
+  -     unique_name: m_time_to_fill_min
+  -     unique_name: m_time_to_fill_max
+  -     unique_name: m_time_to_hire_sum
+  -     unique_name: m_time_to_hire_avg
+  -     unique_name: m_time_to_hire_min
+  -     unique_name: m_time_to_hire_max
+  -     unique_name: m_new_hires_count_sum
+  -     unique_name: m_new_hires_count_avg
+  -     unique_name: m_new_hires_count_min
+  -     unique_name: m_new_hires_count_max
+  -     unique_name: m_terminations_count_sum
+  -     unique_name: m_terminations_count_avg
+  -     unique_name: m_terminations_count_min
+  -     unique_name: m_terminations_count_max
+  -     unique_name: m_promotions_count_sum
+  -     unique_name: m_promotions_count_avg
+  -     unique_name: m_promotions_count_min
+  -     unique_name: m_promotions_count_max

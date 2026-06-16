@@ -1,0 +1,8 @@
+unique_name: m_overtime_hours_max
+object_type: metric
+label: overtime_hours
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: overtime_hours
+is_hidden: false
+unrelated_dimensions_handling: empty

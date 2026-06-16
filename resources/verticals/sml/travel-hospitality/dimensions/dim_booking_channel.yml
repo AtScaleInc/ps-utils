@@ -1,0 +1,61 @@
+unique_name: Dim Booking Channel
+object_type: dimension
+label: Dim Booking Channel
+type: standard
+level_attributes:
+  -     unique_name: la_booking_window
+        label: Booking Window
+        dataset: dim_booking_channel
+        name_column: booking_window
+        key_columns:
+          - booking_window
+  -     unique_name: la_alliance_name
+        label: Alliance Name
+        dataset: dim_booking_channel
+        name_column: alliance_name
+        key_columns:
+          - alliance_name
+  -     unique_name: la_carrier_code
+        label: Carrier Code
+        dataset: dim_booking_channel
+        name_column: carrier_code
+        key_columns:
+          - carrier_code
+  -     unique_name: la_hub_code
+        label: Hub Code
+        dataset: dim_booking_channel
+        name_column: hub_code
+        key_columns:
+          - hub_code
+  -     unique_name: la_route_code
+        label: Route Code
+        dataset: dim_booking_channel
+        name_column: route_code
+        key_columns:
+          - route_code
+  -     unique_name: la_cabin_class
+        label: Cabin Class
+        dataset: dim_booking_channel
+        name_column: cabin_class
+        key_columns:
+          - cabin_class
+  -     unique_name: la_fare_class
+        label: Fare Class
+        dataset: dim_booking_channel
+        name_column: fare_class
+        key_columns:
+          - fare_class
+  -     unique_name: la_booking_class
+        label: Booking Class
+        dataset: dim_booking_channel
+        name_column: booking_class
+        key_columns:
+          - booking_class
+  -     unique_name: la_channel_id
+        label: channel_id
+        dataset: dim_booking_channel
+        name_column: channel_id
+        key_columns:
+          - channel_id
+        is_unique_key: true
+hierarchies: []

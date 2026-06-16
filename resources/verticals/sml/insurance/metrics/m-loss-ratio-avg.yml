@@ -1,0 +1,8 @@
+unique_name: m_loss_ratio_avg
+object_type: metric
+label: loss_ratio
+calculation_method: average
+dataset: insurance_policy_fact
+column: loss_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,63 @@
+unique_name: Dim Audience
+object_type: dimension
+label: Dim Audience
+type: standard
+level_attributes:
+  -     unique_name: la_country_name
+        label: Country Name
+        dataset: dim_audience
+        name_column: country_name
+        key_columns:
+          - country_name
+  -     unique_name: la_state_name
+        label: State Name
+        dataset: dim_audience
+        name_column: state_name
+        key_columns:
+          - state_name
+  -     unique_name: la_city_name
+        label: City Name
+        dataset: dim_audience
+        name_column: city_name
+        key_columns:
+          - city_name
+  -     unique_name: la_zip_code
+        label: Zip Code
+        dataset: dim_audience
+        name_column: zip_code
+        key_columns:
+          - zip_code
+  -     unique_name: la_audience_category
+        label: Audience Category
+        dataset: dim_audience
+        name_column: audience_category
+        key_columns:
+          - audience_category
+  -     unique_name: la_sub_segment
+        label: Sub Segment
+        dataset: dim_audience
+        name_column: sub_segment
+        key_columns:
+          - sub_segment
+  -     unique_name: la_dma_code
+        label: Dma Code
+        dataset: dim_audience
+        name_column: dma_code
+        key_columns:
+          - dma_code
+  -     unique_name: la_audience_id
+        label: audience_id
+        dataset: dim_audience
+        name_column: audience_id
+        key_columns:
+          - audience_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_country_name
+          -         unique_name: la_state_name
+          -         unique_name: la_city_name
+          -         unique_name: la_zip_code

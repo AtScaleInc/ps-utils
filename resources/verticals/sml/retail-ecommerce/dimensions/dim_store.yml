@@ -1,0 +1,82 @@
+unique_name: Dim Store
+object_type: dimension
+label: Dim Store
+type: standard
+level_attributes:
+  -     unique_name: la_region_name
+        label: Region Name
+        dataset: dim_store
+        name_column: region_name
+        key_columns:
+          - region_name
+  -     unique_name: la_district_name
+        label: District Name
+        dataset: dim_store
+        name_column: district_name
+        key_columns:
+          - district_name
+  -     unique_name: la_market_name
+        label: Market Name
+        dataset: dim_store
+        name_column: market_name
+        key_columns:
+          - market_name
+  -     unique_name: la_store_number
+        label: Store Number
+        dataset: dim_store
+        name_column: store_number
+        key_columns:
+          - store_number
+  -     unique_name: la_pos_terminal_id
+        label: Pos Terminal Id
+        dataset: dim_store
+        name_column: pos_terminal_id
+        key_columns:
+          - pos_terminal_id
+  -     unique_name: la_store_name
+        label: Store Name
+        dataset: dim_store
+        name_column: store_name
+        key_columns:
+          - store_name
+        sort_column: store_id
+  -     unique_name: la_register_id
+        label: Register Id
+        dataset: dim_store
+        name_column: register_id
+        key_columns:
+          - register_id
+  -     unique_name: la_sales_channel
+        label: Sales Channel
+        dataset: dim_store
+        name_column: sales_channel
+        key_columns:
+          - sales_channel
+  -     unique_name: la_channel_type
+        label: Channel Type
+        dataset: dim_store
+        name_column: channel_type
+        key_columns:
+          - channel_type
+  -     unique_name: la_store_id
+        label: store_id
+        dataset: dim_store
+        name_column: store_name
+        key_columns:
+          - store_id
+        is_unique_key: true
+        sort_column: store_id
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_region_name
+          -         unique_name: la_district_name
+  -     unique_name: Store Geography Hierarchy
+        label: Store Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_market_name
+          -         unique_name: la_store_number
+          -         unique_name: la_pos_terminal_id

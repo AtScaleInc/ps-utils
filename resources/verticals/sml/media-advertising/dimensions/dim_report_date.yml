@@ -1,0 +1,64 @@
+unique_name: Dim Report Date
+object_type: dimension
+label: Dim Report Date
+type: time
+level_attributes:
+  -     unique_name: la_report_year
+        label: Report Year
+        dataset: dim_report_date
+        name_column: report_year
+        key_columns:
+          - report_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_report_quarter
+        label: Report Quarter
+        dataset: dim_report_date
+        name_column: report_quarter
+        key_columns:
+          - report_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_report_month
+        label: Report Month
+        dataset: dim_report_date
+        name_column: report_month
+        key_columns:
+          - report_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_report_week
+        label: Report Week
+        dataset: dim_report_date
+        name_column: report_week
+        key_columns:
+          - report_week
+        folder: Date Attributes
+        time_unit: week
+  -     unique_name: la_report_date
+        label: Report Date
+        dataset: dim_report_date
+        name_column: report_date
+        key_columns:
+          - report_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_report_date_id
+        label: report_date_id
+        dataset: dim_report_date
+        name_column: report_date_id
+        key_columns:
+          - report_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_report_year
+          -         unique_name: la_report_quarter
+          -         unique_name: la_report_month
+          -         unique_name: la_report_week

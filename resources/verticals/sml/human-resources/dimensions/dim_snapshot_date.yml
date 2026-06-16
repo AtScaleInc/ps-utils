@@ -1,0 +1,55 @@
+unique_name: Dim Snapshot Date
+object_type: dimension
+label: Dim Snapshot Date
+type: time
+level_attributes:
+  -     unique_name: la_snapshot_year
+        label: Snapshot Year
+        dataset: dim_snapshot_date
+        name_column: snapshot_year
+        key_columns:
+          - snapshot_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_snapshot_quarter
+        label: Snapshot Quarter
+        dataset: dim_snapshot_date
+        name_column: snapshot_quarter
+        key_columns:
+          - snapshot_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_snapshot_month
+        label: Snapshot Month
+        dataset: dim_snapshot_date
+        name_column: snapshot_month
+        key_columns:
+          - snapshot_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_snapshot_date
+        label: Snapshot Date
+        dataset: dim_snapshot_date
+        name_column: snapshot_date
+        key_columns:
+          - snapshot_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_snapshot_date_id
+        label: snapshot_date_id
+        dataset: dim_snapshot_date
+        name_column: snapshot_date_id
+        key_columns:
+          - snapshot_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_snapshot_year
+          -         unique_name: la_snapshot_quarter
+          -         unique_name: la_snapshot_month

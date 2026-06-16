@@ -1,0 +1,85 @@
+unique_name: Dim Academic Calendar
+object_type: dimension
+label: Dim Academic Calendar
+type: time
+level_attributes:
+  -     unique_name: la_academic_year
+        label: Academic Year
+        dataset: dim_academic_calendar
+        name_column: academic_year
+        key_columns:
+          - academic_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_school_year
+        label: School Year
+        dataset: dim_academic_calendar
+        name_column: school_year
+        key_columns:
+          - school_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_semester_name
+        label: Semester Name
+        dataset: dim_academic_calendar
+        name_column: semester_name
+        key_columns:
+          - semester_name
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_term_name
+        label: Term Name
+        dataset: dim_academic_calendar
+        name_column: term_name
+        key_columns:
+          - term_name
+        folder: Date Attributes
+  -     unique_name: la_calendar_date
+        label: Calendar Date
+        dataset: dim_academic_calendar
+        name_column: calendar_date
+        key_columns:
+          - calendar_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_enrollment_date
+        label: Enrollment Date
+        dataset: dim_academic_calendar
+        name_column: enrollment_date
+        key_columns:
+          - enrollment_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_week_number
+        label: Week Number
+        dataset: dim_academic_calendar
+        name_column: week_number
+        key_columns:
+          - week_number
+        folder: Date Attributes
+        time_unit: week
+  -     unique_name: la_academic_calendar_id
+        label: academic_calendar_id
+        dataset: dim_academic_calendar
+        name_column: academic_calendar_id
+        key_columns:
+          - academic_calendar_id
+        is_unique_key: true
+        folder: Date Attributes
+hierarchies:
+  -     unique_name: Academic Calendar Hierarchy
+        label: Academic Calendar Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_academic_year
+          -         unique_name: la_school_year
+          -         unique_name: la_semester_name
+          -         unique_name: la_term_name
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_calendar_date
+          -         unique_name: la_enrollment_date

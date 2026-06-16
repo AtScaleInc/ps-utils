@@ -1,0 +1,8 @@
+unique_name: m_fuel_consumed_mmbtu_min
+object_type: metric
+label: fuel_consumed_mmbtu
+calculation_method: minimum
+dataset: energy_interval_fact
+column: fuel_consumed_mmbtu
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,63 @@
+unique_name: Dim Transaction Date
+object_type: dimension
+label: Dim Transaction Date
+type: time
+level_attributes:
+  -     unique_name: la_close_year
+        label: Close Year
+        dataset: dim_transaction_date
+        name_column: close_year
+        key_columns:
+          - close_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_close_quarter
+        label: Close Quarter
+        dataset: dim_transaction_date
+        name_column: close_quarter
+        key_columns:
+          - close_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_close_month
+        label: Close Month
+        dataset: dim_transaction_date
+        name_column: close_month
+        key_columns:
+          - close_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_close_date
+        label: Close Date
+        dataset: dim_transaction_date
+        name_column: close_date
+        key_columns:
+          - close_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_list_date
+        label: List Date
+        dataset: dim_transaction_date
+        name_column: list_date
+        key_columns:
+          - list_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_transaction_date_id
+        label: transaction_date_id
+        dataset: dim_transaction_date
+        name_column: transaction_date_id
+        key_columns:
+          - transaction_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_close_year
+          -         unique_name: la_close_quarter
+          -         unique_name: la_close_month

@@ -1,0 +1,8 @@
+unique_name: m_total_compensation_max
+object_type: metric
+label: total_compensation
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: total_compensation
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_otif_min
+object_type: metric
+label: otif
+calculation_method: minimum
+dataset: manufacturing_production_fact
+column: otif
+is_hidden: false
+unrelated_dimensions_handling: empty

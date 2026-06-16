@@ -1,0 +1,8 @@
+unique_name: m_sell_through_rate_min
+object_type: metric
+label: sell_through_rate
+calculation_method: minimum
+dataset: retail_sales_fact
+column: sell_through_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

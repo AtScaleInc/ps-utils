@@ -1,0 +1,578 @@
+version: 1
+title: telecom Analysis
+description: Auto-generated analysis namespace for the telecom model
+worksheets:
+  call_duration:
+    title: call_duration
+    model: telecom
+    graphType: text
+    measures:
+      - m_call_duration_avg
+    description: "Summary statistic: call_duration"
+    format: decimal:2
+  call_duration_2:
+    title: call_duration
+    model: telecom
+    graphType: text
+    measures:
+      - m_call_duration_min
+    description: "Summary statistic: call_duration"
+    format: decimal:2
+  call_duration_3:
+    title: call_duration
+    model: telecom
+    graphType: text
+    measures:
+      - m_call_duration_max
+    description: "Summary statistic: call_duration"
+    format: decimal:2
+  duration_seconds:
+    title: duration_seconds
+    model: telecom
+    graphType: text
+    measures:
+      - m_duration_seconds_avg
+    description: "Summary statistic: duration_seconds"
+    format: decimal:2
+  duration_seconds_2:
+    title: duration_seconds
+    model: telecom
+    graphType: text
+    measures:
+      - m_duration_seconds_min
+    description: "Summary statistic: duration_seconds"
+    format: decimal:2
+  duration_seconds_3:
+    title: duration_seconds
+    model: telecom
+    graphType: text
+    measures:
+      - m_duration_seconds_max
+    description: "Summary statistic: duration_seconds"
+    format: decimal:2
+  voice_revenue_by_week:
+    title: voice_revenue by Week
+    model: telecom
+    graphType: line
+    xAxis: event_year
+    xAxisGranularity: week
+    yAxis: m_voice_revenue_sum
+    description: >-
+      Track how voice_revenue changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  voice_revenue_by_network_topology_hierarchy_by_week:
+    title: voice_revenue by Network Topology Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: network_region
+    xAxisGranularity: week
+    yAxis: m_voice_revenue_sum
+    description: >-
+      Cross-analyse voice_revenue by **Network Topology Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  voice_revenue_by_subscriber_account_hierarchy_by_week:
+    title: voice_revenue by Subscriber Account Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: enterprise_account
+    xAxisGranularity: week
+    yAxis: m_voice_revenue_sum
+    description: >-
+      Cross-analyse voice_revenue by **Subscriber Account Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  voice_revenue_by_product_hierarchy_by_week:
+    title: voice_revenue by Product Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_voice_revenue_sum
+    description: >-
+      Cross-analyse voice_revenue by **Product Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  voice_revenue_by_geography_hierarchy_by_week:
+    title: voice_revenue by Geography Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: country_code
+    xAxisGranularity: week
+    yAxis: m_voice_revenue_sum
+    description: >-
+      Cross-analyse voice_revenue by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  data_revenue_by_week:
+    title: data_revenue by Week
+    model: telecom
+    graphType: line
+    xAxis: event_year
+    xAxisGranularity: week
+    yAxis: m_data_revenue_sum
+    description: >-
+      Track how data_revenue changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  data_revenue_by_network_topology_hierarchy_by_week:
+    title: data_revenue by Network Topology Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: network_region
+    xAxisGranularity: week
+    yAxis: m_data_revenue_sum
+    description: >-
+      Cross-analyse data_revenue by **Network Topology Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  data_revenue_by_subscriber_account_hierarchy_by_week:
+    title: data_revenue by Subscriber Account Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: enterprise_account
+    xAxisGranularity: week
+    yAxis: m_data_revenue_sum
+    description: >-
+      Cross-analyse data_revenue by **Subscriber Account Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  data_revenue_by_product_hierarchy_by_week:
+    title: data_revenue by Product Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_data_revenue_sum
+    description: >-
+      Cross-analyse data_revenue by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: event_year
+  data_revenue_by_geography_hierarchy_by_week:
+    title: data_revenue by Geography Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: country_code
+    xAxisGranularity: week
+    yAxis: m_data_revenue_sum
+    description: >-
+      Cross-analyse data_revenue by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  sms_revenue_by_week:
+    title: sms_revenue by Week
+    model: telecom
+    graphType: line
+    xAxis: event_year
+    xAxisGranularity: week
+    yAxis: m_sms_revenue_sum
+    description: >-
+      Track how sms_revenue changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  sms_revenue_by_network_topology_hierarchy_by_week:
+    title: sms_revenue by Network Topology Hierarchy by Week
+    model: telecom
+    graphType: line
+    xAxis: network_region
+    xAxisGranularity: week
+    yAxis: m_sms_revenue_sum
+    description: >-
+      Cross-analyse sms_revenue by **Network Topology Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: event_year
+  voice_revenue_by_network_topology_hierarchy_and_subscriber_a:
+    title: >-
+      voice_revenue by Network Topology Hierarchy and Subscriber Account
+      Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_voice_revenue_sum
+    yAxis: network_region
+    description: >-
+      Rank members of **Network Topology Hierarchy** and **Subscriber Account
+      Hierarchy** by their voice_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: enterprise_account
+  voice_revenue_by_network_topology_hierarchy_and_product_hier:
+    title: voice_revenue by Network Topology Hierarchy and Product Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_voice_revenue_sum
+    yAxis: network_region
+    description: >-
+      Rank members of **Network Topology Hierarchy** and **Product Hierarchy**
+      by their voice_revenue to surface top performers and identify areas
+      needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+  voice_revenue_by_subscriber_account_hierarchy_and_product_hi:
+    title: voice_revenue by Subscriber Account Hierarchy and Product Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_voice_revenue_sum
+    yAxis: enterprise_account
+    description: >-
+      Rank members of **Subscriber Account Hierarchy** and **Product Hierarchy**
+      by their voice_revenue to surface top performers and identify areas
+      needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+  voice_revenue_by_subscriber_account_hierarchy_and_geography_:
+    title: voice_revenue by Subscriber Account Hierarchy and Geography Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_voice_revenue_sum
+    yAxis: enterprise_account
+    description: >-
+      Rank members of **Subscriber Account Hierarchy** and **Geography
+      Hierarchy** by their voice_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_code
+  voice_revenue_by_product_hierarchy_and_geography_hierarchy:
+    title: voice_revenue by Product Hierarchy and Geography Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_voice_revenue_sum
+    yAxis: product_line
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      voice_revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_code
+  data_revenue_by_network_topology_hierarchy_and_subscriber_ac:
+    title: >-
+      data_revenue by Network Topology Hierarchy and Subscriber Account
+      Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_data_revenue_sum
+    yAxis: network_region
+    description: >-
+      Rank members of **Network Topology Hierarchy** and **Subscriber Account
+      Hierarchy** by their data_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: enterprise_account
+  data_revenue_by_network_topology_hierarchy_and_product_hiera:
+    title: data_revenue by Network Topology Hierarchy and Product Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_data_revenue_sum
+    yAxis: network_region
+    description: >-
+      Rank members of **Network Topology Hierarchy** and **Product Hierarchy**
+      by their data_revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+  data_revenue_by_subscriber_account_hierarchy_and_product_hie:
+    title: data_revenue by Subscriber Account Hierarchy and Product Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_data_revenue_sum
+    yAxis: enterprise_account
+    description: >-
+      Rank members of **Subscriber Account Hierarchy** and **Product Hierarchy**
+      by their data_revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+  data_revenue_by_subscriber_account_hierarchy_and_geography_h:
+    title: data_revenue by Subscriber Account Hierarchy and Geography Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_data_revenue_sum
+    yAxis: enterprise_account
+    description: >-
+      Rank members of **Subscriber Account Hierarchy** and **Geography
+      Hierarchy** by their data_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_code
+  data_revenue_by_product_hierarchy_and_geography_hierarchy:
+    title: data_revenue by Product Hierarchy and Geography Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_data_revenue_sum
+    yAxis: product_line
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      data_revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: country_code
+  sms_revenue_by_network_topology_hierarchy_and_subscriber_acc:
+    title: sms_revenue by Network Topology Hierarchy and Subscriber Account Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_sms_revenue_sum
+    yAxis: network_region
+    description: >-
+      Rank members of **Network Topology Hierarchy** and **Subscriber Account
+      Hierarchy** by their sms_revenue to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: enterprise_account
+  sms_revenue_by_network_topology_hierarchy_and_product_hierar:
+    title: sms_revenue by Network Topology Hierarchy and Product Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_sms_revenue_sum
+    yAxis: network_region
+    description: >-
+      Rank members of **Network Topology Hierarchy** and **Product Hierarchy**
+      by their sms_revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+  sms_revenue_by_subscriber_account_hierarchy_and_product_hier:
+    title: sms_revenue by Subscriber Account Hierarchy and Product Hierarchy
+    model: telecom
+    graphType: bar
+    xAxis: m_sms_revenue_sum
+    yAxis: enterprise_account
+    description: >-
+      Rank members of **Subscriber Account Hierarchy** and **Product Hierarchy**
+      by their sms_revenue to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+dashboards:
+  telecom_dashboard:
+    title: telecom Analysis Dashboard
+    description: Auto-generated dashboard for telecom
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: call_duration
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: call_duration_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: call_duration_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: duration_seconds
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: duration_seconds_2
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: duration_seconds_3
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: voice_revenue_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: voice_revenue_by_network_topology_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: voice_revenue_by_subscriber_account_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: voice_revenue_by_product_hierarchy_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: voice_revenue_by_geography_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_revenue_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_revenue_by_network_topology_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_revenue_by_subscriber_account_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_revenue_by_product_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: data_revenue_by_geography_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sms_revenue_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sms_revenue_by_network_topology_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: voice_revenue_by_network_topology_hierarchy_and_subscriber_a
+        x: 0
+        "y": 67
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: voice_revenue_by_network_topology_hierarchy_and_product_hier
+        x: 0
+        "y": 72
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: voice_revenue_by_subscriber_account_hierarchy_and_product_hi
+        x: 0
+        "y": 77
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: voice_revenue_by_subscriber_account_hierarchy_and_geography_
+        x: 0
+        "y": 82
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: voice_revenue_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 87
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_revenue_by_network_topology_hierarchy_and_subscriber_ac
+        x: 0
+        "y": 92
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_revenue_by_network_topology_hierarchy_and_product_hiera
+        x: 0
+        "y": 97
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_revenue_by_subscriber_account_hierarchy_and_product_hie
+        x: 0
+        "y": 102
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_revenue_by_subscriber_account_hierarchy_and_geography_h
+        x: 0
+        "y": 107
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: data_revenue_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: sms_revenue_by_network_topology_hierarchy_and_subscriber_acc
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: sms_revenue_by_network_topology_hierarchy_and_product_hierar
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: sms_revenue_by_subscriber_account_hierarchy_and_product_hier
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

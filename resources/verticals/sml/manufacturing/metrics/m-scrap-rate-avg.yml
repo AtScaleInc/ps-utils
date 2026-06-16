@@ -1,0 +1,8 @@
+unique_name: m_scrap_rate_avg
+object_type: metric
+label: scrap_rate
+calculation_method: average
+dataset: manufacturing_production_fact
+column: scrap_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

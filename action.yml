@@ -1,0 +1,1505 @@
+name: AtScale PS Template
+description: >
+  Run any AtScale PS Template operation as a GitHub Actions composite step.
+  Set the `operation` input to the operation name (e.g. extract-model-from-atscale).
+
+inputs:
+
+  # ── Dispatch ──────────────────────────────────────────────────────────────
+  operation:
+    description: >
+      Name of the operation to run. One of:
+        extract-model-from-atscale
+        extract-model-from-sml
+        generate-sml-from-connection
+        generate-sml-from-ddl
+        generate-namespace-from-model
+        generate-metrics-from-model
+        generate-tableau-from-namespace
+        generate-excel-from-namespace
+        generate-powerbi-from-namespace
+        execute-sql-on-connection
+        extract-ddl-from-connection
+        generate-atscale-install-yaml
+        atscale-list-data-sources
+        atscale-create-data-source
+        atscale-list-repos
+        atscale-create-repo
+        atscale-list-deployments
+        atscale-deploy-catalog
+        atscale-list-model-errors
+        generate-ddl-from-atscale
+        extract-data-shape-from-connection
+        generate-ddl-from-data-shape
+        generate-data-from-data-shape
+        generate-data-from-data-shape-to-connection
+        extract-queries-from-atscale
+        execute-atscale-query-harness
+        execute-query-on-connection
+        generate-enhanced-query-results
+        execute-run-analysis
+        generate-queries-from-sml
+        generate-queries-from-model
+        extract-query-stats-from-atscale
+        generate-sml-from-xml
+        generate-shared-model-plan
+        apply-shared-model-plan-option
+        deploy-atscale-microk8s
+        execute-web-services
+    required: true
+
+  # ── Shared ────────────────────────────────────────────────────────────────
+  connection-file:
+    description: >
+      Contents of the connections YAML file (store as a secret).
+      Used by: extract-model-from-atscale, generate-sml-from-connection,
+               generate-tableau-from-namespace, execute-sql-on-connection,
+               extract-ddl-from-connection, extract-data-shape-from-connection,
+               generate-data-from-data-shape-to-connection.
+    required: false
+  connection-name:
+    description: >
+      Name of the connection within the connections file.
+      Used by: extract-model-from-atscale, generate-sml-from-connection,
+               generate-sml-from-ddl, generate-tableau-from-namespace,
+               execute-sql-on-connection, extract-ddl-from-connection,
+               extract-data-shape-from-connection,
+               generate-data-from-data-shape-to-connection.
+    required: false
+
+  # ── extract-model-from-atscale ────────────────────────────────────────────
+  model:
+    description: AtScale model identifier (cube name).
+    required: false
+
+  # ── extract-model-from-sml / generate-sml-from-connection / generate-sml-from-ddl / atscale-list-model-errors
+  model-name:
+    description: >
+      Model name used when reading or generating an SML project, or the model
+      label/unique_name to validate.
+      Used by: extract-model-from-sml, generate-sml-from-connection,
+               generate-sml-from-ddl, atscale-list-model-errors.
+    required: false
+
+  # ── extract-model-from-atscale / extract-model-from-sml ──────────────────
+  output-model-file:
+    description: "Output path for the extracted model YAML (default: model.yaml)."
+    required: false
+    default: model.yaml
+
+  # ── extract-model-from-sml / atscale-list-model-errors ───────────────────
+  sml-dir:
+    description: >
+      Path to the SML project directory.
+      Used by: extract-model-from-sml,
+               atscale-deploy-catalog (required),
+               atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
+    required: false
+
+  # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
+  output-dir:
+    description: >
+      Output directory.
+      For generate-sml-from-connection / generate-sml-from-ddl: SML output directory (default: sml/).
+      For generate-data-from-data-shape: CSV output directory (default: data/).
+    required: false
+  schema:
+    description: Database schema to scope SML generation to.
+    required: false
+  catalog-name:
+    description: Catalog (database) name for the SML project.
+    required: false
+  pii-severity:
+    description: Minimum PII severity level to tag in generated SML (none/low/medium/high).
+    required: false
+
+  # ── generate-sml-from-connection ─────────────────────────────────────────
+  sample-size:
+    description: Number of rows to sample per table for PII detection.
+    required: false
+
+  # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
+  fact-tables:
+    description: >
+      Comma-separated list of table names to treat as fact tables, overriding
+      automatic classification. Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+  camel-case-files:
+    description: >
+      Set to "true" to use camelCase of the source table name for dataset and
+      dimension filenames. Default: raw table name.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+    default: "false"
+  camel-case-measures:
+    description: >
+      Set to "true" to use camelCase of the source column name for metric labels.
+      Default: raw column name. Deprecated — use label-style instead.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+    default: "false"
+  label-style:
+    description: 'Label style for all SML labels: title-case (default), camel-case, or none'
+    required: false
+    default: ''
+  min-hierarchies-per-dim:
+    description: >
+      Minimum number of hierarchies a dimension must have to be included in the
+      generated model.  Dimensions below this threshold are dropped.  Default: 1.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+    default: "1"
+  max-hierarchies-per-dim:
+    description: >
+      Maximum number of hierarchies to keep per dimension.  Extra hierarchies
+      beyond this limit are truncated.  Default: 4.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+    default: "4"
+
+  # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
+  sml-config-file:
+    description: >
+      Path to an SML style config file (sml.style.yaml) to read settings from.
+      CLI inputs take priority over the file. Effective settings are always written
+      to <output-dir>/sml.style.yaml after generation.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl.
+    required: false
+
+  # ── generate-sml-from-ddl ────────────────────────────────────────────────
+  ddl-file:
+    description: Path to the DDL SQL file to parse for SML generation.
+    required: false
+
+  # ── generate-sml-from-xml ────────────────────────────────────────────────
+  xml-file:
+    description: Path to the AtScale XML project file (project_2_0 format) to convert.
+    required: false
+  connection-type:
+    description: >
+      Database dialect for the connection file (e.g. "snowflake", "bigquery").
+      Used by: generate-sml-from-xml.
+    required: false
+  connection-db:
+    description: >
+      Database or project name written into the connection file. When set, individual
+      datasets use a plain table name instead of a nested db/schema/name object.
+      Used by: generate-sml-from-xml.
+    required: false
+  connection-schema:
+    description: >
+      Schema or dataset name written into the connection file. When set, individual
+      datasets use a plain table name instead of a nested db/schema/name object.
+      Used by: generate-sml-from-xml.
+    required: false
+
+  # ── apply-shared-model-plan-option ──────────────────────────────────
+  plan-file:
+    description: >
+      Path to the option YAML file produced by generate-shared-model-plan.
+      Used by: apply-shared-model-plan-option.
+    required: false
+  shared-dir:
+    description: >
+      Directory where shared SML files (dimensions, datasets, models) will be written.
+      Used by: apply-shared-model-plan-option.
+    required: false
+  remove-sources:
+    description: >
+      When "true", delete local source copies after writing the shared file.
+      Used by: apply-shared-model-plan-option.
+    required: false
+
+  # ── generate-shared-model-plan ───────────────────────────────────────────
+  input-dirs:
+    description: >
+      Comma-separated list of SML output directories to analyse for sharing opportunities.
+      Used by: generate-shared-model-plan.
+    required: false
+  threshold:
+    description: >
+      Similarity threshold 0–1 for generate-shared-model-plan; lower values surface more
+      options (default 0.5). Used by: generate-shared-model-plan.
+    required: false
+  max-per-subject:
+    description: >
+      Maximum number of recommendations to emit per subject entity (dataset, dimension, or
+      model pair). Prevents flooding output with near-duplicate options for the same entity
+      (default 3). Used by: generate-shared-model-plan.
+    required: false
+
+  # ── generate-namespace-from-model / generate-metrics-from-model / generate-queries-from-model ──
+  model-file:
+    description: >
+      Path to the model YAML file (output of extract-model-from-atscale or extract-model-from-sml).
+      Used by: generate-namespace-from-model, generate-metrics-from-model,
+               generate-tableau-from-namespace, generate-queries-from-model.
+    required: false
+  title:
+    description: Title for the generated namespace / Tableau workbook.
+    required: false
+  max-suggestions:
+    description: "Maximum number of analysis suggestions to generate (default: 25)."
+    required: false
+    default: "25"
+  min-score:
+    description: "Minimum relevance score for included suggestions (default: 0.5)."
+    required: false
+    default: "0.5"
+  include-tuples:
+    description: >
+      Include multi-dimension suggestions (true/false, default: true).
+      Used by: generate-metrics-from-model.
+    required: false
+    default: "true"
+  output-file:
+    description: >
+      Output file path.
+      For generate-namespace-from-model: namespace YAML output (omit to print to stdout).
+      For generate-metrics-from-model: suggestions output (omit to print to stdout).
+      For extract-ddl-from-connection: DDL output (omit to print to stdout).
+      For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
+      For execute-query-on-connection: path to write query results (CSV for SQL, XML for XMLA).
+    required: false
+
+  # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
+  namespace-file:
+    description: Path to the namespace YAML file.
+    required: false
+  aliases-file:
+    description: >
+      Path to an optional aliases YAML file mapping friendly names to model columns.
+      Used by: generate-tableau-from-namespace, generate-excel-from-namespace,
+               generate-powerbi-from-namespace.
+    required: false
+  tableau-version:
+    description: "Target Tableau version — 2024 or 2025 (default: 2025)."
+    required: false
+    default: "2025"
+  target-file:
+    description: "Output path for the generated Tableau or Excel workbook."
+    required: false
+  target-folder:
+    description: >
+      Output folder name for the generated Power BI project (written under output/).
+      Used by: generate-powerbi-from-namespace.
+    required: false
+    default: powerbi
+
+  # ── generate-sml-from-ddl (additional) ───────────────────────────────────
+  database:
+    description: Database (catalog) name to embed in the SML connection file.
+    required: false
+  dialect:
+    description: >
+      Database dialect.
+      For generate-sml-from-ddl: e.g. snowflake, postgresql — auto-detected from filename if omitted;
+      when snowflake, dataset table names are uppercased.
+      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, or bigquery.
+      BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
+      For generate-data-from-data-shape-to-connection: when omitted, the dialect is read from
+      the connection configuration (sql.dialect); falls back to ansi.
+    required: false
+
+  dry-run:
+    description: >
+      When "true", skips all side effects.
+      - apply-shared-model-plan-option: no files written or deleted, actions are only logged.
+      - execute-sql-on-connection: prints statements without executing them.
+    required: false
+
+  # ── execute-sql-on-connection ────────────────────────────────────────────
+  sql-file:
+    description: Path to the SQL file to execute.
+    required: false
+  on-error:
+    description: Behaviour when a statement fails — stop (default) or continue.
+    required: false
+    default: stop
+
+  # ── extract-data-shape-from-connection ───────────────────────────────────
+  sml-path:
+    description: >
+      Path to the SML output directory or a model.yml file.
+      Used by: extract-data-shape-from-connection.
+    required: false
+  target-fact-rows:
+    description: >
+      Target row count when sampling large fact tables (default: 100000; 0 = no sampling).
+      Used by: extract-data-shape-from-connection.
+    required: false
+    default: "100000"
+  target-column-rows:
+    description: >
+      Target row count for measure column distribution sampling (default: 10000; 0 = no sampling).
+      Used by: extract-data-shape-from-connection.
+    required: false
+    default: "10000"
+  tablesample:
+    description: >
+      Use TABLESAMPLE SYSTEM for fact sampling (default: true). Set to false for
+      databases that do not support TABLESAMPLE (e.g. MySQL).
+      Used by: extract-data-shape-from-connection.
+    required: false
+    default: "true"
+  serial:
+    description: >
+      When "true", profile dimensions one at a time instead of in parallel (default: false).
+      Use when the database enforces a low per-user connection limit.
+      Used by: extract-data-shape-from-connection.
+    required: false
+    default: "false"
+  preserve-meta-data:
+    description: >
+      When "true":
+        extract-data-shape-from-connection: stores original table/column names in the fingerprint metadata block.
+        generate-ddl-from-data-shape, generate-data-from-data-shape, generate-data-from-data-shape-to-connection:
+          uses the fingerprint metadata block to recreate tables with their original names.
+      Only has effect on generation operations when the fingerprint was extracted with this flag set to "true".
+      Default: "false".
+    required: false
+    default: "false"
+
+  # ── generate-ddl-from-data-shape / generate-data-from-data-shape / generate-data-from-data-shape-to-connection ──
+  input-file:
+    description: >
+      Path to the data-shape.yaml fingerprint file.
+      Used by: generate-ddl-from-data-shape, generate-data-from-data-shape,
+               generate-data-from-data-shape-to-connection.
+    required: false
+    default: "data-shape.yaml"
+  scale-factor:
+    description: >
+      Scale row and member counts by this factor (default: 1.0; use < 1 for smaller datasets).
+      Used by: generate-data-from-data-shape, generate-data-from-data-shape-to-connection.
+    required: false
+    default: "1.0"
+  seed:
+    description: >
+      Integer random seed for reproducible synthetic data output.
+      Used by: generate-data-from-data-shape, generate-data-from-data-shape-to-connection.
+    required: false
+  create-tables:
+    description: >
+      Emit CREATE TABLE statements before inserting data (default: false).
+      Used by: generate-data-from-data-shape-to-connection.
+    required: false
+    default: "false"
+  drop-if-exists:
+    description: >
+      DROP TABLE IF EXISTS before creating tables — implies create-tables (default: false).
+      Used by: generate-data-from-data-shape-to-connection.
+    required: false
+    default: "false"
+  batch-size:
+    description: >
+      Number of rows per INSERT statement (default: 500).
+      Used by: generate-data-from-data-shape-to-connection.
+    required: false
+    default: "500"
+
+  # ── extract-queries-from-atscale / execute-atscale-query-harness / execute-query-on-connection ──
+  query-file:
+    description: >
+      JSON file produced by extract-queries-from-atscale, or a Gatling ingest CSV.
+      Used by: execute-atscale-query-harness, execute-query-on-connection.
+    required: false
+  ingest-file:
+    description: >
+      Ingest CSV (sampler_name,sql_text or sampler_name,atscale_query_id,sql_text).
+      Used by: execute-atscale-query-harness.
+    required: false
+  task-file:
+    description: >
+      Executor task YAML or JSON file (executor_tasks/*.yaml schema).
+      Used by: execute-atscale-query-harness.
+    required: false
+  protocol:
+    description: >
+      Query protocol: xmla or sql (default: xmla). Ignored in task-file mode.
+      Used by: execute-atscale-query-harness, execute-query-on-connection.
+    required: false
+    default: "xmla"
+  query-name:
+    description: >
+      Name of the specific query to execute from the query file (matches
+      queryName / sampler_name). Used by: execute-query-on-connection.
+    required: false
+  concurrent-users:
+    description: >
+      Number of parallel query workers (default: 1). Ignored in task-file mode.
+      Used by: execute-atscale-query-harness.
+    required: false
+    default: "1"
+  throttle-ms:
+    description: >
+      Minimum milliseconds between query dispatches per worker (default: 5).
+      Used by: execute-atscale-query-harness.
+    required: false
+    default: "5"
+  run-id:
+    description: >
+      Label stamped on every output row. Auto-generated (YYYY-MM-DD-XXXXXXXXXX) if omitted.
+      Used by: execute-atscale-query-harness.
+    required: false
+  duration-minutes:
+    description: >
+      Run for this many minutes cycling the query list (0 = one pass, default: 0).
+      Used by: execute-atscale-query-harness.
+    required: false
+    default: "0"
+  redact:
+    description: >
+      When "true", omits inbound query text from the output CSV (default: false).
+      Used by: execute-atscale-query-harness.
+    required: false
+    default: "false"
+  annotate-queries:
+    description: >
+      When "true" (default), prepends a /* {run_query_uuid, original_text_hash} */ comment
+      to each executed query so AtScale's query log carries correlation fields.
+      Set to "false" to send queries unmodified.
+      Used by: execute-atscale-query-harness.
+    required: false
+    default: "true"
+
+  # ── extract-query-stats-from-atscale ─────────────────────────────────────
+  window-days:
+    description: >
+      Number of days to look back in AtScale query history (default: 7).
+      Used by: extract-query-stats-from-atscale.
+    required: false
+    default: "7"
+  start-date:
+    description: >
+      Explicit window start in ISO-8601 format (e.g. 2025-01-01T00:00:00Z). Overrides window-days.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+  end-date:
+    description: >
+      Explicit window end in ISO-8601 format. Defaults to now when start-date is set.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+  monthly:
+    description: >
+      When "true", also generates a month-by-month breakdown CSV.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+    default: "false"
+  monthly-year:
+    description: >
+      Calendar year for the monthly breakdown (e.g. 2025). Defaults to current year.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+  limit:
+    description: >
+      Page size for the AtScale query history API.
+      Used by: extract-query-stats-from-atscale.
+    required: false
+
+  # ── generate-enhanced-query-results ──────────────────────────────────────
+  db-schema:
+    description: >
+      Database schema used when fetching execution plans from the target data source.
+      Used by: generate-enhanced-query-results.
+    required: false
+  results-file:
+    description: >
+      Path to the run-results CSV produced by execute-atscale-query-harness.
+      Used by: generate-enhanced-query-results.
+    required: false
+  days:
+    description: >
+      Look-back window in days when searching the AtScale query log (default: 7).
+      Used by: generate-enhanced-query-results.
+    required: false
+    default: "7"
+  target-connection-name:
+    description: >
+      Connection name within the connections file for the target data source.
+      When provided, generate-enhanced-query-results connects to the target
+      database and fetches an execution plan (EXPLAIN) for each outbound query,
+      stored in the 'run_outbound_execution_plan' column.
+      Supported dialects: snowflake (SYSTEM$EXPLAIN_PLAN_JSON), postgres
+      (EXPLAIN FORMAT JSON), redshift (EXPLAIN).
+      Used by: generate-enhanced-query-results.
+    required: false
+
+  # ── execute-run-analysis ─────────────────────────────────────────────────
+  file-a:
+    description: >
+      Path to the first run log (execute-atscale-query-harness CSV) or enhanced
+      output (generate-enhanced-query-results CSV).
+      Used by: execute-run-analysis.
+    required: false
+  file-b:
+    description: >
+      Path to the second run log or enhanced output to compare against file-a.
+      Used by: execute-run-analysis.
+    required: false
+  join-key:
+    description: >
+      Column to join queries across the two files: 'original_text_hash' (default)
+      or 'original_atscale_query_id'.
+      Used by: execute-run-analysis.
+    required: false
+    default: "original_text_hash"
+  duration-variance-pct:
+    description: >
+      Percentage threshold for flagging duration differences. Pairs where
+      |(b−a)/a|×100 exceeds this value are flagged. Default: 20.
+      Used by: execute-run-analysis.
+    required: false
+    default: "20"
+  summary-file:
+    description: >
+      Path to write the plain-text summary report.
+      Used by: execute-run-analysis.
+    required: false
+  comparison-file:
+    description: >
+      Path to write the row-by-row comparison CSV.
+      Used by: execute-run-analysis.
+    required: false
+  outliers-file:
+    description: >
+      Path to write the filtered outliers CSV containing only pairs flagged for
+      a row-count mismatch or a duration outside the variance threshold.
+      Same schema as comparison-file.
+      Used by: execute-run-analysis.
+    required: false
+
+  # ── generate-queries-from-sml / generate-queries-from-model ──────────────
+  xmla-output-file:
+    description: >
+      Path to write the generated XMLA (MDX) query JSON file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+  sql-output-file:
+    description: >
+      Path to write the generated SQL query JSON file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+  cube-name:
+    description: >
+      Override the cube name used in MDX FROM and SQL FROM clauses.
+      Defaults to the model label from the SML model file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+
+  # ── extract-ddl-from-connection ───────────────────────────────────────────
+  tables:
+    description: >
+      Comma-separated table names or wildcard patterns to extract (e.g. "Dim*,FactSales").
+      Omit to extract all tables in the schema.
+    required: false
+  case-insensitive:
+    description: >
+      When "true", match table names case-insensitively. Default is case-sensitive matching.
+      Used by: extract-ddl-from-connection.
+    required: false
+
+  # ── generate-atscale-install-yaml ────────────────────────────────────────
+  hostname:
+    description: >
+      Fully-qualified domain name (or IP) for the AtScale ingress and TLS certificate.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  tls-cert-file:
+    description: >
+      Path to an existing PEM certificate file. When omitted a self-signed
+      certificate is generated automatically.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  tls-key-file:
+    description: >
+      Path to an existing PEM private key file. Required when tls-cert-file is set.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  license-key:
+    description: >
+      AtScale license key to embed in values.yaml (atscale-entitlement.entitlement.licenseKey).
+      If omitted the field is left blank; the key can be uploaded via the UI after install.
+      Store as a secret and pass via secrets.ATSCALE_LICENSE_KEY.
+      Used by: generate-atscale-install-yaml.
+    required: false
+  enable-mcp:
+    description: >
+      Enable the AtScale MCP server sub-chart (atscale-mcp.enabled).
+      Accepts true/false, yes/no, 1/0, on/off. Defaults to false.
+      Used by: generate-atscale-install-yaml.
+    required: false
+    default: "false"
+  minimal:
+    description: >
+      Emit additional Helm values that reduce the hardware footprint:
+      disables telemetry, removes the Redis replica, and shrinks default PVC sizes.
+      Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.
+      Used by: generate-atscale-install-yaml.
+    required: false
+    default: "false"
+
+  # ── atscale-* operations (all that talk to AtScale) ──────────────────────
+  atscale-connection-name:
+    description: >
+      Name of the AtScale connection entry in the connections file (must have an atscale: block).
+      Used by: atscale-list-data-sources, atscale-create-data-source,
+               atscale-list-repos, atscale-create-repo,
+               atscale-list-deployments, atscale-deploy-catalog,
+               atscale-list-model-errors, generate-ddl-from-atscale.
+    required: false
+  data-source-name:
+    description: >
+      Name of the data source as registered in AtScale (matches the display name or connectionId).
+      Used to resolve the connection ID for metadata queries.
+      Used by: generate-ddl-from-atscale.
+    required: false
+  new-connection-name:
+    description: >
+      Name of the SQL connection entry to register as a data source (must have a sql: block).
+      Used by: atscale-create-data-source.
+    required: false
+  aggregate-schema:
+    description: >
+      Schema (or BigQuery dataset) for aggregate table storage.
+      Used by: atscale-create-data-source.
+    required: false
+  dw-name:
+    description: >
+      Display name for the data warehouse in AtScale (max 128 chars).
+      Defaults to new-connection-name when omitted.
+      Used by: atscale-create-data-source.
+    required: false
+  connection-id:
+    description: >
+      Logical connection ID embedded in SML files.
+      Defaults to new-connection-name when omitted.
+      Used by: atscale-create-data-source.
+    required: false
+  access-users:
+    description: >
+      Comma-separated AtScale usernames to grant access to the data warehouse.
+      Omit or pass empty string to grant access to the built-in 'everyone' group instead.
+      Used by: atscale-create-data-source.
+    required: false
+    default: ""
+  aggregate-project-id:
+    description: >
+      BigQuery only: GCP project ID for aggregate storage.
+      Defaults to sql.project from the connection config.
+      Used by: atscale-create-data-source.
+    required: false
+  insecure:
+    description: >
+      Skip TLS certificate verification. Overrides the value in the connections file.
+      Accepts true/false, yes/no, 1/0, on/off. Defaults to true.
+      Used by: atscale-list-data-sources, atscale-create-data-source,
+               atscale-list-repos, atscale-create-repo,
+               atscale-list-deployments, atscale-deploy-catalog,
+               atscale-list-model-errors, generate-ddl-from-atscale.
+    required: false
+    default: "true"
+
+  # ── atscale-create-repo / atscale-list-model-errors ──────────────────────
+  repo-name:
+    description: >
+      Human-readable name for the git repository, or name of an AtScale-connected
+      git repository.
+      Used by: atscale-create-repo,
+               atscale-deploy-catalog (provide this OR repo-id),
+               atscale-list-model-errors (remote mode — provide this OR sml-dir/repo-id).
+    required: false
+  repo-url:
+    description: >
+      Git remote URL (HTTPS or SSH) for the repository.
+      Used by: atscale-create-repo.
+    required: false
+  repo-type:
+    description: >
+      Repository type: 'catalog' (default) or 'global_settings'.
+      Used by: atscale-create-repo.
+    required: false
+    default: "catalog"
+  visible-branches-pattern:
+    description: >
+      Glob pattern controlling which branches are visible in the AtScale UI.
+      Used by: atscale-create-repo.
+    required: false
+  default-branch:
+    description: >
+      Default branch name (e.g. 'main').
+      Used by: atscale-create-repo.
+    required: false
+
+  # ── atscale-deploy-catalog ───────────────────────────────────────────────────
+  project-name:
+    description: >
+      Catalog project name to deploy as. Defaults to {catalog.unique_name}_{repo.defaultBranch}.
+      Used by: atscale-deploy-catalog.
+    required: false
+  tableau-servers:
+    description: >
+      Optional JSON array of Tableau servers to publish to after deployment.
+      Example: '[{"name":"my-ts","sites":["Default"]}]'
+      Used by: atscale-deploy-catalog.
+    required: false
+
+  # ── atscale-deploy-catalog / atscale-list-model-errors ───────────────────────
+  repo-id:
+    description: >
+      UUID of an AtScale-connected git repository.
+      Used by: atscale-deploy-catalog (provide this OR repo-name),
+               atscale-list-model-errors (remote mode — provide this OR sml-dir/repo-name).
+    required: false
+  branch:
+    description: >
+      Branch name to check out when cloning in remote mode (defaults to repo default branch).
+      Used by: atscale-list-model-errors.
+    required: false
+
+  # ── deploy-atscale-microk8s ───────────────────────────────────────────────
+  microk8s-hostname:
+    description: IP address or hostname of the MicroK8s server.
+    required: false
+  vm-admin-password:
+    description: >
+      Password for the 'atscale' OS user on the MicroK8s server.
+      Pass as a secret — supply via secrets.VM_ADMIN_PASSWORD in the caller workflow.
+    required: false
+  atscale-version:
+    description: "AtScale Helm chart version to deploy (default: 2026.1.0)."
+    required: false
+    default: "2026.1.0"
+
+  # ── execute-web-services ─────────────────────────────────────────────────────
+  port:
+    description: >
+      Port for the GraphQL HTTP server.
+      Used by: execute-web-services.
+    required: false
+    default: "4000"
+  host:
+    description: >
+      Bind address for the GraphQL HTTP server.
+      Used by: execute-web-services.
+    required: false
+    default: "localhost"
+
+runs:
+  using: composite
+  steps:
+
+    # ── Setup (CLI operations only — not needed for deploy-atscale-microk8s) ──
+    - uses: actions/setup-node@v4
+      if: inputs.operation != 'deploy-atscale-microk8s'
+      with:
+        node-version: 18
+        cache: npm
+
+    - name: Install dependencies
+      if: inputs.operation != 'deploy-atscale-microk8s'
+      run: npm install
+      shell: bash
+      working-directory: ${{ github.action_path }}
+
+    - name: Build
+      if: inputs.operation != 'deploy-atscale-microk8s'
+      run: npm run build
+      shell: bash
+      working-directory: ${{ github.action_path }}
+
+    # ── Write connection file (operations that need credentials) ────────
+    - name: Write connection file
+      if: >-
+        inputs.connection-file != '' &&
+        (inputs.operation == 'extract-model-from-atscale' ||
+         inputs.operation == 'generate-sml-from-connection' ||
+         inputs.operation == 'generate-tableau-from-namespace' ||
+         inputs.operation == 'generate-excel-from-namespace' ||
+         inputs.operation == 'generate-powerbi-from-namespace' ||
+         inputs.operation == 'execute-sql-on-connection' ||
+         inputs.operation == 'extract-ddl-from-connection' ||
+         inputs.operation == 'atscale-list-data-sources' ||
+         inputs.operation == 'atscale-create-data-source' ||
+         inputs.operation == 'atscale-list-repos' ||
+         inputs.operation == 'atscale-create-repo' ||
+         inputs.operation == 'atscale-list-deployments' ||
+         inputs.operation == 'atscale-deploy-catalog' ||
+         inputs.operation == 'atscale-list-model-errors' ||
+         inputs.operation == 'generate-ddl-from-atscale' ||
+         inputs.operation == 'extract-data-shape-from-connection' ||
+         inputs.operation == 'generate-data-from-data-shape-to-connection' ||
+         inputs.operation == 'extract-query-stats-from-atscale' ||
+         inputs.operation == 'extract-queries-from-atscale' ||
+         inputs.operation == 'execute-atscale-query-harness' ||
+         inputs.operation == 'execute-query-on-connection' ||
+         inputs.operation == 'generate-enhanced-query-results')
+      run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
+      shell: bash
+
+    # ── extract-model-from-atscale ───────────────────────────────────────────
+    - name: Extract AtScale model
+      if: inputs.operation == 'extract-model-from-atscale'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" extract-model-from-atscale \
+          --model "${{ inputs.model }}" \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --connection-name "${{ inputs.connection-name }}" \
+          --output-model-file "${{ inputs.output-model-file }}" \
+          --verbose true
+      shell: bash
+
+    # ── extract-model-from-sml ───────────────────────────────────────────────
+    - name: Extract model from SML
+      if: inputs.operation == 'extract-model-from-sml'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --output-model-file "${{ inputs.output-model-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]]      && ARGS+=(--model-name      "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.connection-name }}" ]] && ARGS+=(--connection-name "${{ inputs.connection-name }}")
+        node "${{ github.action_path }}/dist/cli.js" extract-model-from-sml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-connection ─────────────────────────────────────────
+    - name: Generate SML from connection
+      if: inputs.operation == 'generate-sml-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --output-dir      "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]]    && ARGS+=(--model-name    "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.schema }}" ]]        && ARGS+=(--schema        "${{ inputs.schema }}")
+        [[ -n "${{ inputs.catalog-name }}" ]]  && ARGS+=(--catalog-name  "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.pii-severity }}" ]]  && ARGS+=(--pii-severity  "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.sample-size }}" ]]     && ARGS+=(--sample-size     "${{ inputs.sample-size }}")
+        [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
+        [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
+        [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
+        [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
+        [[ -n "${{ inputs.label-style }}" ]] && ARGS+=(--label-style "${{ inputs.label-style }}")
+        [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
+        [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-ddl ────────────────────────────────────────────────
+    - name: Generate SML from DDL
+      if: inputs.operation == 'generate-sml-from-ddl'
+      run: |
+        ARGS=(
+          --ddl-file   "${{ inputs.ddl-file }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]]      && ARGS+=(--model-name      "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.connection-name }}" ]] && ARGS+=(--connection-name "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.schema }}" ]]          && ARGS+=(--schema          "${{ inputs.schema }}")
+        [[ -n "${{ inputs.database }}" ]]        && ARGS+=(--database        "${{ inputs.database }}")
+        [[ -n "${{ inputs.dialect }}" ]]         && ARGS+=(--dialect         "${{ inputs.dialect }}")
+        [[ -n "${{ inputs.pii-severity }}" ]]    && ARGS+=(--pii-severity    "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
+        [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
+        [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
+        [[ "${{ inputs.camel-case-measures }}" == "true" ]] && ARGS+=(--camel-case-measures true)
+        [[ -n "${{ inputs.label-style }}" ]] && ARGS+=(--label-style "${{ inputs.label-style }}")
+        [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
+        [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-xml ────────────────────────────────────────────────
+    - name: Generate SML from XML
+      if: inputs.operation == 'generate-sml-from-xml'
+      run: |
+        ARGS=(
+          --xml-file   "${{ inputs.xml-file }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.connection-name }}"   ]] && ARGS+=(--connection-name   "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}"   ]] && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]] && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── apply-style-to-sml ──────────────────────────────────────────────
+    - name: Apply style to SML
+      if: inputs.operation == 'apply-style-to-sml'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
+        [[ -n "${{ inputs.label-style }}" ]]     && ARGS+=(--label-style     "${{ inputs.label-style }}")
+        [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
+        node "${{ github.action_path }}/dist/cli.js" apply-style-to-sml "${ARGS[@]}"
+      shell: bash
+
+    # ── apply-shared-model-plan-option ──────────────────────────────────
+    - name: Generate SML From Shared Model Plan
+      if: inputs.operation == 'apply-shared-model-plan-option'
+      run: |
+        ARGS=(
+          --plan-file  "${{ inputs.plan-file }}"
+          --shared-dir "${{ inputs.shared-dir }}"
+          --verbose true
+        )
+        [[ "${{ inputs.remove-sources }}" == "true" ]] && ARGS+=(--remove-sources)
+        [[ "${{ inputs.dry-run }}"        == "true" ]] && ARGS+=(--dry-run)
+        node "${{ github.action_path }}/dist/cli.js" apply-shared-model-plan-option "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-shared-model-plan ───────────────────────────────────────────
+    - name: Generate Shared Model Plan
+      if: inputs.operation == 'generate-shared-model-plan'
+      run: |
+        ARGS=(
+          --input-dirs "${{ inputs.input-dirs }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.threshold }}" ]]       && ARGS+=(--threshold       "${{ inputs.threshold }}")
+        [[ -n "${{ inputs.max-per-subject }}" ]] && ARGS+=(--max-per-subject "${{ inputs.max-per-subject }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-shared-model-plan "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-namespace-from-model ────────────────────────────────────────
+    - name: Generate namespace from model
+      if: inputs.operation == 'generate-namespace-from-model'
+      run: |
+        ARGS=(
+          --model-file      "${{ inputs.model-file }}"
+          --max-suggestions "${{ inputs.max-suggestions }}"
+          --min-score       "${{ inputs.min-score }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name  "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.title }}" ]]      && ARGS+=(--title       "${{ inputs.title }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-namespace-from-model "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-metrics-from-model ──────────────────────────────────────────
+    - name: Generate metrics from model
+      if: inputs.operation == 'generate-metrics-from-model'
+      run: |
+        ARGS=(
+          --model-file      "${{ inputs.model-file }}"
+          --max-suggestions "${{ inputs.max-suggestions }}"
+          --min-score       "${{ inputs.min-score }}"
+          --include-tuples  "${{ inputs.include-tuples }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]]  && ARGS+=(--model-name  "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-metrics-from-model "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-tableau-from-namespace ──────────────────────────────────────
+    - name: Generate Tableau workbook from namespace
+      if: inputs.operation == 'generate-tableau-from-namespace'
+      run: |
+        ARGS=(
+          --namespace-file   "${{ inputs.namespace-file }}"
+          --model-file       "${{ inputs.model-file }}"
+          --connection-file  "${{ github.action_path }}/connection.yml"
+          --connection-name  "${{ inputs.connection-name }}"
+          --tableau-version  "${{ inputs.tableau-version }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.aliases-file }}" ]] && ARGS+=(--aliases-file "${{ inputs.aliases-file }}")
+        [[ -n "${{ inputs.target-file }}"  ]] && ARGS+=(--target-file  "${{ inputs.target-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-tableau-from-namespace "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-excel-from-namespace ────────────────────────────────────────
+    - name: Generate Excel workbook from namespace
+      if: inputs.operation == 'generate-excel-from-namespace'
+      run: |
+        ARGS=(
+          --namespace-file  "${{ inputs.namespace-file }}"
+          --model-file      "${{ inputs.model-file }}"
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.aliases-file }}" ]] && ARGS+=(--aliases-file "${{ inputs.aliases-file }}")
+        [[ -n "${{ inputs.target-file }}"  ]] && ARGS+=(--target-file  "${{ inputs.target-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-excel-from-namespace "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-powerbi-from-namespace ──────────────────────────────────────
+    - name: Generate Power BI project from namespace
+      if: inputs.operation == 'generate-powerbi-from-namespace'
+      run: |
+        ARGS=(
+          --namespace-file  "${{ inputs.namespace-file }}"
+          --model-file      "${{ inputs.model-file }}"
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --target-folder   "${{ inputs.target-folder }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.aliases-file }}" ]] && ARGS+=(--aliases-file "${{ inputs.aliases-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-powerbi-from-namespace "${ARGS[@]}"
+      shell: bash
+
+    # ── execute-sql-on-connection ─────────────────────────────────────────────
+    - name: Execute SQL on connection
+      if: inputs.operation == 'execute-sql-on-connection'
+      run: |
+        ARGS=(
+          --sql-file        "${{ inputs.sql-file }}"
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --on-error        "${{ inputs.on-error }}"
+          --verbose true
+        )
+        [[ "${{ inputs.dry-run }}" == "true" ]] && ARGS+=(--dry-run true)
+        node "${{ github.action_path }}/dist/cli.js" execute-sql-on-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── extract-ddl-from-connection ───────────────────────────────────────────
+    - name: Extract DDL from connection
+      if: inputs.operation == 'extract-ddl-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --schema          "${{ inputs.schema }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.tables }}" ]]            && ARGS+=(--tables           "${{ inputs.tables }}")
+        [[ "${{ inputs.case-insensitive }}" == "true" ]] && ARGS+=(--case-insensitive true)
+        [[ -n "${{ inputs.output-file }}" ]]       && ARGS+=(--output-file      "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-atscale-install-yaml ────────────────────────────────────────
+    - name: Generate AtScale install values.yaml
+      if: inputs.operation == 'generate-atscale-install-yaml'
+      run: |
+        ARGS=(
+          --hostname "${{ inputs.hostname }}"
+        )
+        [[ -n "${{ inputs.tls-cert-file }}" ]] && ARGS+=(--cert-file   "${{ inputs.tls-cert-file }}")
+        [[ -n "${{ inputs.tls-key-file }}"  ]] && ARGS+=(--key-file    "${{ inputs.tls-key-file }}")
+        [[ -n "${{ inputs.license-key }}"   ]] && ARGS+=(--license-key "${{ inputs.license-key }}")
+        [[ -n "${{ inputs.output-file }}"   ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        ARGS+=(--enable-mcp "${{ inputs.enable-mcp }}")
+        [[ "${{ inputs.minimal }}" == "true" ]] && ARGS+=(--minimal)
+        node "${{ github.action_path }}/dist/cli.js" generate-atscale-install-yaml "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-data-sources ────────────────────────────────────────────
+    - name: List AtScale data sources
+      if: inputs.operation == 'atscale-list-data-sources'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-data-sources \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
+          --insecure "${{ inputs.insecure }}" \
+          --verbose true
+      shell: bash
+
+    # ── atscale-create-data-source ───────────────────────────────────────────
+    - name: Create AtScale data source
+      if: inputs.operation == 'atscale-create-data-source'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --new-connection-name     "${{ inputs.new-connection-name }}"
+          --aggregate-schema        "${{ inputs.aggregate-schema }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.dw-name }}" ]]             && ARGS+=(--name                 "${{ inputs.dw-name }}")
+        [[ -n "${{ inputs.connection-id }}" ]]        && ARGS+=(--connection-id        "${{ inputs.connection-id }}")
+        [[ -n "${{ inputs.access-users }}" ]]         && ARGS+=(--access-users         "${{ inputs.access-users }}")
+        [[ -n "${{ inputs.aggregate-project-id }}" ]] && ARGS+=(--aggregate-project-id "${{ inputs.aggregate-project-id }}")
+        ARGS+=(--insecure "${{ inputs.insecure }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-create-data-source "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-repos ───────────────────────────────────────────────────
+    - name: List AtScale repos
+      if: inputs.operation == 'atscale-list-repos'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-repos \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
+          --insecure "${{ inputs.insecure }}" \
+          --verbose true
+      shell: bash
+
+    # ── atscale-create-repo ───────────────────────────────────────────────────
+    - name: Create AtScale repo
+      if: inputs.operation == 'atscale-create-repo'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --name                    "${{ inputs.repo-name }}"
+          --url                     "${{ inputs.repo-url }}"
+          --type                    "${{ inputs.repo-type }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.visible-branches-pattern }}" ]] && ARGS+=(--visible-branches-pattern "${{ inputs.visible-branches-pattern }}")
+        [[ -n "${{ inputs.default-branch }}" ]]           && ARGS+=(--default-branch           "${{ inputs.default-branch }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-create-repo "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-deployments ───────────────────────────────────────────────────
+    - name: List AtScale deployments
+      if: inputs.operation == 'atscale-list-deployments'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-deployments \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
+          --insecure "${{ inputs.insecure }}" \
+          --verbose true
+      shell: bash
+
+    # ── atscale-deploy-catalog ───────────────────────────────────────────────────
+    - name: Deploy AtScale catalog
+      if: inputs.operation == 'atscale-deploy-catalog'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --sml-dir                 "${{ inputs.sml-dir }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.repo-id }}"         ]] && ARGS+=(--repo-id         "${{ inputs.repo-id }}")
+        [[ -n "${{ inputs.repo-name }}"       ]] && ARGS+=(--repo-name       "${{ inputs.repo-name }}")
+        [[ -n "${{ inputs.project-name }}"    ]] && ARGS+=(--project-name    "${{ inputs.project-name }}")
+        [[ -n "${{ inputs.tableau-servers }}" ]] && ARGS+=(--tableau-servers "${{ inputs.tableau-servers }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-deploy-catalog "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-model-errors ─────────────────────────────────────────────
+    - name: List AtScale model errors
+      if: inputs.operation == 'atscale-list-model-errors'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.sml-dir }}"    ]] && ARGS+=(--sml-dir    "${{ inputs.sml-dir }}")
+        [[ -n "${{ inputs.repo-name }}"  ]] && ARGS+=(--repo-name  "${{ inputs.repo-name }}")
+        [[ -n "${{ inputs.repo-id }}"    ]] && ARGS+=(--repo-id    "${{ inputs.repo-id }}")
+        [[ -n "${{ inputs.branch }}"     ]] && ARGS+=(--branch     "${{ inputs.branch }}")
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-ddl-from-atscale ────────────────────────────────────────────
+    - name: Generate DDL from AtScale data source
+      if: inputs.operation == 'generate-ddl-from-atscale'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --data-source-name        "${{ inputs.data-source-name }}"
+          --database                "${{ inputs.database }}"
+          --schema                  "${{ inputs.schema }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.tables }}" ]]      && ARGS+=(--tables      "${{ inputs.tables }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-ddl-from-atscale "${ARGS[@]}"
+      shell: bash
+
+    # ── extract-data-shape-from-connection ───────────────────────────────────
+    - name: Extract data shape fingerprint from connection
+      if: inputs.operation == 'extract-data-shape-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --sml-path        "${{ inputs.sml-path }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}"       ]] && ARGS+=(--output-file        "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.target-fact-rows }}"  ]] && ARGS+=(--target-fact-rows   "${{ inputs.target-fact-rows }}")
+        [[ -n "${{ inputs.target-column-rows }}" ]] && ARGS+=(--target-column-rows "${{ inputs.target-column-rows }}")
+        [[ "${{ inputs.tablesample }}"        == "false" ]] && ARGS+=(--tablesample        false)
+        [[ "${{ inputs.serial }}"             == "true"  ]] && ARGS+=(--serial             true)
+        [[ "${{ inputs.preserve-meta-data }}" == "true"  ]] && ARGS+=(--preserve-meta-data true)
+        node "${{ github.action_path }}/dist/cli.js" extract-data-shape-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-ddl-from-data-shape ─────────────────────────────────────────
+    - name: Generate DDL from data shape fingerprint
+      if: inputs.operation == 'generate-ddl-from-data-shape'
+      run: |
+        ARGS=(
+          --input-file "${{ inputs.input-file }}"
+          --dialect    "${{ inputs.dialect }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}" ]]             && ARGS+=(--output-file      "${{ inputs.output-file }}")
+        [[ "${{ inputs.preserve-meta-data }}" == "true" ]] && ARGS+=(--preserve-meta-data true)
+        node "${{ github.action_path }}/dist/cli.js" generate-ddl-from-data-shape "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-data-from-data-shape ────────────────────────────────────────
+    - name: Generate synthetic data from data shape fingerprint
+      if: inputs.operation == 'generate-data-from-data-shape'
+      run: |
+        ARGS=(
+          --input-file "${{ inputs.input-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
+        [[ -n "${{ inputs.scale-factor }}"  ]] && ARGS+=(--scale-factor  "${{ inputs.scale-factor }}")
+        [[ -n "${{ inputs.seed }}"          ]] && ARGS+=(--seed          "${{ inputs.seed }}")
+        [[ "${{ inputs.preserve-meta-data }}" == "true" ]] && ARGS+=(--preserve-meta-data true)
+        node "${{ github.action_path }}/dist/cli.js" generate-data-from-data-shape "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-data-from-data-shape-to-connection ───────────────────────────
+    - name: Generate synthetic data and load into database
+      if: inputs.operation == 'generate-data-from-data-shape-to-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --input-file      "${{ inputs.input-file }}"
+          --batch-size      "${{ inputs.batch-size }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.scale-factor }}" ]] && ARGS+=(--scale-factor "${{ inputs.scale-factor }}")
+        [[ -n "${{ inputs.seed }}"         ]] && ARGS+=(--seed         "${{ inputs.seed }}")
+        [[ -n "${{ inputs.dialect }}"      ]] && ARGS+=(--dialect      "${{ inputs.dialect }}")
+        [[ -n "${{ inputs.schema }}"       ]] && ARGS+=(--schema       "${{ inputs.schema }}")
+        [[ "${{ inputs.drop-if-exists }}"     == "true" ]] && ARGS+=(--drop-if-exists     true)
+        [[ "${{ inputs.create-tables }}"      == "true" ]] && ARGS+=(--create-tables      true)
+        [[ "${{ inputs.preserve-meta-data }}" == "true" ]] && ARGS+=(--preserve-meta-data true)
+        node "${{ github.action_path }}/dist/cli.js" generate-data-from-data-shape-to-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── extract-query-stats-from-atscale ────────────────────────────────────
+    - name: Extract query stats from AtScale
+      if: inputs.operation == 'extract-query-stats-from-atscale'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --model           "${{ inputs.model }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
+        [[ -n "${{ inputs.window-days }}"   ]] && ARGS+=(--window-days   "${{ inputs.window-days }}")
+        [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")
+        [[ -n "${{ inputs.end-date }}"      ]] && ARGS+=(--end-date      "${{ inputs.end-date }}")
+        [[ -n "${{ inputs.limit }}"         ]] && ARGS+=(--limit         "${{ inputs.limit }}")
+        [[ "${{ inputs.monthly }}" == "true" ]] && ARGS+=(--monthly true)
+        [[ -n "${{ inputs.monthly-year }}"  ]] && ARGS+=(--monthly-year  "${{ inputs.monthly-year }}")
+        node "${{ github.action_path }}/dist/cli.js" extract-query-stats-from-atscale "${ARGS[@]}"
+      shell: bash
+
+    # ── extract-queries-from-atscale ─────────────────────────────────────────
+    - name: Extract queries from AtScale
+      if: inputs.operation == 'extract-queries-from-atscale'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" extract-queries-from-atscale \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --connection-name "${{ inputs.connection-name }}" \
+          --verbose true
+      shell: bash
+
+    # ── execute-atscale-query-harness ─────────────────────────────────────────
+    - name: Execute AtScale query harness
+      if: inputs.operation == 'execute-atscale-query-harness'
+      run: |
+        ARGS=(
+          --connection-file   "${{ github.action_path }}/connection.yml"
+          --connection-name   "${{ inputs.connection-name }}"
+          --protocol          "${{ inputs.protocol }}"
+          --concurrent-users  "${{ inputs.concurrent-users }}"
+          --throttle-ms       "${{ inputs.throttle-ms }}"
+          --duration-minutes  "${{ inputs.duration-minutes }}"
+          --redact            "${{ inputs.redact }}"
+          --annotate-queries  "${{ inputs.annotate-queries }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.query-file }}"  ]] && ARGS+=(--query-file  "${{ inputs.query-file }}")
+        [[ -n "${{ inputs.ingest-file }}" ]] && ARGS+=(--ingest-file "${{ inputs.ingest-file }}")
+        [[ -n "${{ inputs.task-file }}"   ]] && ARGS+=(--task-file   "${{ inputs.task-file }}")
+        [[ -n "${{ inputs.run-id }}"      ]] && ARGS+=(--run-id      "${{ inputs.run-id }}")
+        [[ -n "${{ inputs.output-dir }}"  ]] && ARGS+=(--output-dir  "${{ inputs.output-dir }}")
+        node "${{ github.action_path }}/dist/cli.js" execute-atscale-query-harness "${ARGS[@]}"
+      shell: bash
+
+    # ── execute-query-on-connection ───────────────────────────────────────────
+    - name: Execute query on connection
+      if: inputs.operation == 'execute-query-on-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --query-file      "${{ inputs.query-file }}"
+          --protocol        "${{ inputs.protocol }}"
+          --query-name      "${{ inputs.query-name }}"
+          --output-file     "${{ inputs.output-file }}"
+          --verbose true
+        )
+        node "${{ github.action_path }}/dist/cli.js" execute-query-on-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-enhanced-query-results ──────────────────────────────────────
+    - name: Generate enhanced query results
+      if: inputs.operation == 'generate-enhanced-query-results'
+      run: |
+        ARGS=(
+          --results-file    "${{ inputs.results-file }}"
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --days            "${{ inputs.days }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}"           ]] && ARGS+=(--output-file           "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.db-schema }}"            ]] && ARGS+=(--db-schema            "${{ inputs.db-schema }}")
+        [[ -n "${{ inputs.target-connection-name }}" ]] && ARGS+=(--target-connection-name "${{ inputs.target-connection-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-enhanced-query-results "${ARGS[@]}"
+      shell: bash
+
+    # ── execute-run-analysis ─────────────────────────────────────────────────
+    - name: Execute run analysis
+      if: inputs.operation == 'execute-run-analysis'
+      run: |
+        ARGS=(
+          --file-a                 "${{ inputs.file-a }}"
+          --file-b                 "${{ inputs.file-b }}"
+          --join-key               "${{ inputs.join-key }}"
+          --duration-variance-pct  "${{ inputs.duration-variance-pct }}"
+          --summary-file           "${{ inputs.summary-file }}"
+          --comparison-file        "${{ inputs.comparison-file }}"
+          --outliers-file          "${{ inputs.outliers-file }}"
+          --verbose true
+        )
+        node "${{ github.action_path }}/dist/cli.js" execute-run-analysis "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-queries-from-sml ────────────────────────────────────────────
+    - name: Generate queries from SML
+      if: inputs.operation == 'generate-queries-from-sml'
+      run: |
+        ARGS=(
+          --sml-dir              "${{ inputs.sml-dir }}"
+          --xmla-output-file     "${{ inputs.xmla-output-file }}"
+          --sql-output-file      "${{ inputs.sql-output-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-queries-from-sml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-queries-from-model ──────────────────────────────────────────
+    - name: Generate queries from model
+      if: inputs.operation == 'generate-queries-from-model'
+      run: |
+        ARGS=(
+          --model-file           "${{ inputs.model-file }}"
+          --xmla-output-file     "${{ inputs.xmla-output-file }}"
+          --sql-output-file      "${{ inputs.sql-output-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-queries-from-model "${ARGS[@]}"
+      shell: bash
+
+    # ── deploy-atscale-microk8s ───────────────────────────────────────────────
+    - name: Copy files to MicroK8s server
+      if: inputs.operation == 'deploy-atscale-microk8s'
+      uses: appleboy/scp-action@v1
+      with:
+        host:     ${{ inputs.microk8s-hostname }}
+        username: atscale
+        password: ${{ inputs.vm-admin-password }}
+        source:   "genCerts.sh,values.yaml"
+        target:   "/home/atscale/"
+
+    - name: Install MicroK8s toolchain
+      if: inputs.operation == 'deploy-atscale-microk8s'
+      uses: appleboy/ssh-action@master
+      with:
+        host:     ${{ inputs.microk8s-hostname }}
+        username: atscale
+        password: ${{ inputs.vm-admin-password }}
+        script: |
+          sudo snap install microk8s --classic
+          sudo snap install kubectl --classic
+          sudo snap install helm --classic
+          sudo snap install yq
+          sudo apt install net-tools
+
+          echo ${{ inputs.microk8s-hostname }} > hostname
+
+          sudo groupadd microk8s
+          sudo usermod -a -G microk8s atscale
+
+    - name: Configure MicroK8s and deploy AtScale
+      if: inputs.operation == 'deploy-atscale-microk8s'
+      uses: appleboy/ssh-action@master
+      with:
+        host:     ${{ inputs.microk8s-hostname }}
+        username: atscale
+        password: ${{ inputs.vm-admin-password }}
+        script: |
+          chmod +x genCerts.sh
+          ./genCerts.sh
+
+          microk8s kubectl get pods
+          microk8s enable hostpath-storage
+          microk8s enable metallb:10.0.0.4/32
+          microk8s status --wait-ready
+
+          microk8s config --use-loopback > kube.config
+          microk8s config --use-loopback > .kube/config
+          export ATSCALE_HOSTNAME=`cat hostname`
+          yq -i '.clusters.[0].cluster.server="https://"+strenv(ATSCALE_HOSTNAME)+":16443"' kube.config
+          yq -i '.clusters.[0].cluster.insecure-skip-tls-verify=true' kube.config
+          yq -i 'del(.clusters.[0].cluster.certificate-authority-data)' kube.config
+
+          helm install atscale oci://registry-1.docker.io/atscaleinc/atscale \
+            --version ${{ inputs.atscale-version }} \
+            -n atscale --create-namespace \
+            --values ./values.yaml
+          sleep 10
+          microk8s kubectl patch svc atscale-ingress-gateway -n atscale \
+            -p '{"spec": {"type": "LoadBalancer"}}'
+
+    # ── execute-web-services ─────────────────────────────────────────────────
+    - name: Start GraphQL web server
+      if: inputs.operation == 'execute-web-services'
+      run: |
+        ARGS=(--verbose true)
+        [[ -n "${{ inputs.port }}" ]] && ARGS+=(--port "${{ inputs.port }}")
+        [[ -n "${{ inputs.host }}" ]] && ARGS+=(--host "${{ inputs.host }}")
+        node "${{ github.action_path }}/dist/cli.js" execute-web-services "${ARGS[@]}"
+      shell: bash
+
+    # ── version ──────────────────────────────────────────────────────────────
+    - name: Print version
+      if: inputs.operation == 'version'
+      run: node "${{ github.action_path }}/dist/cli.js" version
+      shell: bash

@@ -1,0 +1,8 @@
+unique_name: m_arpu_max
+object_type: metric
+label: arpu
+calculation_method: maximum
+dataset: telecom_cdr_fact
+column: arpu
+is_hidden: false
+unrelated_dimensions_handling: empty

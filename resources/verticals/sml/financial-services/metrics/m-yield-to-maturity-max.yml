@@ -1,0 +1,8 @@
+unique_name: m_yield_to_maturity_max
+object_type: metric
+label: yield_to_maturity
+calculation_method: maximum
+dataset: financial_securities_fact
+column: yield_to_maturity
+is_hidden: false
+unrelated_dimensions_handling: empty

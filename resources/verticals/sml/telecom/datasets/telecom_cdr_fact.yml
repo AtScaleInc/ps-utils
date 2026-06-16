@@ -1,0 +1,48 @@
+unique_name: telecom_cdr_fact
+object_type: dataset
+label: telecom_cdr_fact
+connection_id: my_connection
+table: telecom_cdr_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: network_id
+        data_type: bigint
+  -     name: subscriber_id
+        data_type: bigint
+  -     name: plan_id
+        data_type: bigint
+  -     name: geography_id
+        data_type: bigint
+  -     name: event_time_id
+        data_type: bigint
+  -     name: call_duration
+        data_type: decimal
+  -     name: duration_seconds
+        data_type: decimal
+  -     name: data_usage_mb
+        data_type: decimal
+  -     name: data_usage_gb
+        data_type: decimal
+  -     name: arpu
+        data_type: decimal
+  -     name: mou
+        data_type: decimal
+  -     name: voice_revenue
+        data_type: decimal
+  -     name: data_revenue
+        data_type: decimal
+  -     name: sms_revenue
+        data_type: decimal
+  -     name: total_revenue
+        data_type: decimal
+  -     name: sms_count
+        data_type: int
+  -     name: voice_calls_count
+        data_type: int
+  -     name: dropped_calls
+        data_type: int
+  -     name: failed_calls
+        data_type: int
+  -     name: churn_flag
+        data_type: boolean

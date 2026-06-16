@@ -1,0 +1,18 @@
+unique_name: dim_service_date
+object_type: dataset
+label: dim_service_date
+connection_id: my_connection
+table: dim_service_date
+columns:
+  -     name: service_date_id
+        data_type: bigint
+  -     name: admit_date
+        data_type: date
+  -     name: discharge_date
+        data_type: date
+  -     name: service_year
+        data_type: int
+  -     name: service_month
+        data_type: int
+  -     name: service_quarter
+        data_type: string

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "<%= visualName %>",
+  <%
+    const segmentWidth = dashboard.size.width / dashboard.size.hSegments;
+    const segmentHeight = dashboard.size.height / dashboard.size.vSegments;
+    const colSpan = categoryHeader.colSpan || 1;
+    const rowSpan = categoryHeader.rowSpan || 1;
+  %>
+  "position": {
+    "x": <%= categoryHeader.x * segmentWidth %>,
+    "y": <%= categoryHeader.y * segmentHeight %>,
+    "z": 0,
+    "height": <%= colSpan * segmentHeight %>,
+    "width": <%= rowSpan * segmentWidth %>,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "<%= categoryHeader.label %>",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "40pt"
+                    }
+                  }
+                ],
+                "horizontalTextAlignment": "center"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

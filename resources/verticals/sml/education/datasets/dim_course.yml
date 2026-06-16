@@ -1,0 +1,30 @@
+unique_name: dim_course
+object_type: dataset
+label: dim_course
+connection_id: my_connection
+table: dim_course
+columns:
+  -     name: course_id
+        data_type: bigint
+  -     name: course_code
+        data_type: string
+  -     name: course_name
+        data_type: string
+  -     name: credit_hours
+        data_type: decimal
+  -     name: section_id
+        data_type: bigint
+  -     name: class_id
+        data_type: bigint
+  -     name: section_name
+        data_type: string
+  -     name: subject_area
+        data_type: string
+  -     name: department_name
+        data_type: string
+  -     name: instructor_id
+        data_type: bigint
+  -     name: teacher_id
+        data_type: bigint
+  -     name: faculty_id
+        data_type: bigint

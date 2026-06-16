@@ -1,0 +1,8 @@
+unique_name: m_volume_sum
+object_type: metric
+label: volume
+calculation_method: sum
+dataset: financial_securities_fact
+column: volume
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_absences_count_avg
+object_type: metric
+label: absences_count
+calculation_method: average
+dataset: education_enrollment_fact
+column: absences_count
+is_hidden: false
+unrelated_dimensions_handling: empty

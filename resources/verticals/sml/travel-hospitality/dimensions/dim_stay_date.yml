@@ -1,0 +1,71 @@
+unique_name: Dim Stay Date
+object_type: dimension
+label: Dim Stay Date
+type: time
+level_attributes:
+  -     unique_name: la_stay_year
+        label: Stay Year
+        dataset: dim_stay_date
+        name_column: stay_year
+        key_columns:
+          - stay_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_stay_quarter
+        label: Stay Quarter
+        dataset: dim_stay_date
+        name_column: stay_quarter
+        key_columns:
+          - stay_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_stay_month
+        label: Stay Month
+        dataset: dim_stay_date
+        name_column: stay_month
+        key_columns:
+          - stay_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_arrival_date
+        label: Arrival Date
+        dataset: dim_stay_date
+        name_column: arrival_date
+        key_columns:
+          - arrival_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_departure_date
+        label: Departure Date
+        dataset: dim_stay_date
+        name_column: departure_date
+        key_columns:
+          - departure_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_booking_date
+        label: Booking Date
+        dataset: dim_stay_date
+        name_column: booking_date
+        key_columns:
+          - booking_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_stay_date_id
+        label: stay_date_id
+        dataset: dim_stay_date
+        name_column: stay_date_id
+        key_columns:
+          - stay_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_stay_year
+          -         unique_name: la_stay_quarter
+          -         unique_name: la_stay_month

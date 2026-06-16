@@ -1,0 +1,567 @@
+version: 1
+title: manufacturing Analysis
+description: Auto-generated analysis namespace for the manufacturing model
+worksheets:
+  work_order_id:
+    title: work_order_id
+    model: manufacturing
+    graphType: text
+    measures:
+      - m_work_order_id_sum
+    description: "Summary statistic: work_order_id"
+    format: integer
+  work_order_id_2:
+    title: work_order_id
+    model: manufacturing
+    graphType: text
+    measures:
+      - m_work_order_id_avg
+    description: "Summary statistic: work_order_id"
+    format: integer
+  work_order_id_3:
+    title: work_order_id
+    model: manufacturing
+    graphType: text
+    measures:
+      - m_work_order_id_min
+    description: "Summary statistic: work_order_id"
+    format: integer
+  work_order_id_4:
+    title: work_order_id
+    model: manufacturing
+    graphType: text
+    measures:
+      - m_work_order_id_max
+    description: "Summary statistic: work_order_id"
+    format: integer
+  planned_qty:
+    title: planned_qty
+    model: manufacturing
+    graphType: text
+    measures:
+      - m_planned_qty_sum
+    description: "Summary statistic: planned_qty"
+    format: decimal:2
+  planned_qty_2:
+    title: planned_qty
+    model: manufacturing
+    graphType: text
+    measures:
+      - m_planned_qty_avg
+    description: "Summary statistic: planned_qty"
+    format: decimal:2
+  planned_qty_by_manufacturing_facility_hierarchy_by_week:
+    title: planned_qty by Manufacturing Facility Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: enterprise_name
+    xAxisGranularity: week
+    yAxis: m_planned_qty_sum
+    description: >-
+      Cross-analyse planned_qty by **Manufacturing Facility Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: production_year
+  planned_qty_by_product_hierarchy_by_week:
+    title: planned_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_planned_qty_sum
+    description: >-
+      Cross-analyse planned_qty by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  planned_qty_by_product_bom_hierarchy_by_week:
+    title: planned_qty by Product BOM Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: model_name
+    xAxisGranularity: week
+    yAxis: m_planned_qty_sum
+    description: >-
+      Cross-analyse planned_qty by **Product BOM Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  planned_qty_by_product_hierarchy_by_week_2:
+    title: planned_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_planned_qty_sum
+    description: >-
+      Cross-analyse planned_qty by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  actual_qty_by_manufacturing_facility_hierarchy_by_week:
+    title: actual_qty by Manufacturing Facility Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: enterprise_name
+    xAxisGranularity: week
+    yAxis: m_actual_qty_sum
+    description: >-
+      Cross-analyse actual_qty by **Manufacturing Facility Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: production_year
+  actual_qty_by_product_hierarchy_by_week:
+    title: actual_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_actual_qty_sum
+    description: >-
+      Cross-analyse actual_qty by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  actual_qty_by_product_bom_hierarchy_by_week:
+    title: actual_qty by Product BOM Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: model_name
+    xAxisGranularity: week
+    yAxis: m_actual_qty_sum
+    description: >-
+      Cross-analyse actual_qty by **Product BOM Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  actual_qty_by_product_hierarchy_by_week_2:
+    title: actual_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_actual_qty_sum
+    description: >-
+      Cross-analyse actual_qty by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  scrap_qty_by_manufacturing_facility_hierarchy_by_week:
+    title: scrap_qty by Manufacturing Facility Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: enterprise_name
+    xAxisGranularity: week
+    yAxis: m_scrap_qty_sum
+    description: >-
+      Cross-analyse scrap_qty by **Manufacturing Facility Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  scrap_qty_by_product_hierarchy_by_week:
+    title: scrap_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_scrap_qty_sum
+    description: >-
+      Cross-analyse scrap_qty by **Product Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  scrap_qty_by_product_bom_hierarchy_by_week:
+    title: scrap_qty by Product BOM Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: model_name
+    xAxisGranularity: week
+    yAxis: m_scrap_qty_sum
+    description: >-
+      Cross-analyse scrap_qty by **Product BOM Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  scrap_qty_by_product_hierarchy_by_week_2:
+    title: scrap_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_scrap_qty_sum
+    description: >-
+      Cross-analyse scrap_qty by **Product Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  rework_qty_by_manufacturing_facility_hierarchy_by_week:
+    title: rework_qty by Manufacturing Facility Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: enterprise_name
+    xAxisGranularity: week
+    yAxis: m_rework_qty_sum
+    description: >-
+      Cross-analyse rework_qty by **Manufacturing Facility Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: production_year
+  rework_qty_by_product_hierarchy_by_week:
+    title: rework_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_rework_qty_sum
+    description: >-
+      Cross-analyse rework_qty by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  rework_qty_by_product_bom_hierarchy_by_week:
+    title: rework_qty by Product BOM Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: model_name
+    xAxisGranularity: week
+    yAxis: m_rework_qty_sum
+    description: >-
+      Cross-analyse rework_qty by **Product BOM Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  rework_qty_by_product_hierarchy_by_week_2:
+    title: rework_qty by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_rework_qty_sum
+    description: >-
+      Cross-analyse rework_qty by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: production_year
+  material_cost_by_week:
+    title: material_cost by Week
+    model: manufacturing
+    graphType: line
+    xAxis: production_year
+    xAxisGranularity: week
+    yAxis: m_material_cost_sum
+    description: >-
+      Track how material_cost changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  material_cost_by_manufacturing_facility_hierarchy_by_week:
+    title: material_cost by Manufacturing Facility Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: enterprise_name
+    xAxisGranularity: week
+    yAxis: m_material_cost_sum
+    description: >-
+      Cross-analyse material_cost by **Manufacturing Facility Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: production_year
+  material_cost_by_product_hierarchy_by_week:
+    title: material_cost by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: product_line
+    xAxisGranularity: week
+    yAxis: m_material_cost_sum
+    description: >-
+      Cross-analyse material_cost by **Product Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  material_cost_by_product_bom_hierarchy_by_week:
+    title: material_cost by Product BOM Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: model_name
+    xAxisGranularity: week
+    yAxis: m_material_cost_sum
+    description: >-
+      Cross-analyse material_cost by **Product BOM Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  material_cost_by_product_hierarchy_by_week_2:
+    title: material_cost by Product Hierarchy by Week
+    model: manufacturing
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_material_cost_sum
+    description: >-
+      Cross-analyse material_cost by **Product Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: production_year
+  labor_cost_by_week:
+    title: labor_cost by Week
+    model: manufacturing
+    graphType: line
+    xAxis: production_year
+    xAxisGranularity: week
+    yAxis: m_labor_cost_sum
+    description: >-
+      Track how labor_cost changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  material_cost_by_manufacturing_facility_hierarchy_and_produc:
+    title: material_cost by Manufacturing Facility Hierarchy and Product Hierarchy
+    model: manufacturing
+    graphType: bar
+    xAxis: m_material_cost_sum
+    yAxis: enterprise_name
+    description: >-
+      Rank members of **Manufacturing Facility Hierarchy** and **Product
+      Hierarchy** by their material_cost to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: product_line
+  material_cost_by_manufacturing_facility_hierarchy_and_produc_2:
+    title: >-
+      material_cost by Manufacturing Facility Hierarchy and Product BOM
+      Hierarchy
+    model: manufacturing
+    graphType: bar
+    xAxis: m_material_cost_sum
+    yAxis: enterprise_name
+    description: >-
+      Rank members of **Manufacturing Facility Hierarchy** and **Product BOM
+      Hierarchy** by their material_cost to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: model_name
+  material_cost_by_manufacturing_facility_hierarchy_and_produc_3:
+    title: material_cost by Manufacturing Facility Hierarchy and Product Hierarchy
+    model: manufacturing
+    graphType: bar
+    xAxis: m_material_cost_sum
+    yAxis: enterprise_name
+    description: >-
+      Rank members of **Manufacturing Facility Hierarchy** and **Product
+      Hierarchy** by their material_cost to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: division_name
+dashboards:
+  manufacturing_dashboard:
+    title: manufacturing Analysis Dashboard
+    description: Auto-generated dashboard for manufacturing
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: work_order_id
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: work_order_id_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: work_order_id_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: work_order_id_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: planned_qty
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: planned_qty_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: planned_qty_by_manufacturing_facility_hierarchy_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: planned_qty_by_product_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: planned_qty_by_product_bom_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: planned_qty_by_product_hierarchy_by_week_2
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: actual_qty_by_manufacturing_facility_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: actual_qty_by_product_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: actual_qty_by_product_bom_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: actual_qty_by_product_hierarchy_by_week_2
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: scrap_qty_by_manufacturing_facility_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: scrap_qty_by_product_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: scrap_qty_by_product_bom_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: scrap_qty_by_product_hierarchy_by_week_2
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: rework_qty_by_manufacturing_facility_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: rework_qty_by_product_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: rework_qty_by_product_bom_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: rework_qty_by_product_hierarchy_by_week_2
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: material_cost_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: material_cost_by_manufacturing_facility_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: material_cost_by_product_hierarchy_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: material_cost_by_product_bom_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: material_cost_by_product_hierarchy_by_week_2
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: labor_cost_by_week
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: material_cost_by_manufacturing_facility_hierarchy_and_produc
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: material_cost_by_manufacturing_facility_hierarchy_and_produc_2
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: material_cost_by_manufacturing_facility_hierarchy_and_produc_3
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

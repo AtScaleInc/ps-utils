@@ -1,0 +1,8 @@
+unique_name: m_cost_of_goods_sum
+object_type: metric
+label: cost_of_goods
+calculation_method: sum
+dataset: retail_sales_fact
+column: cost_of_goods
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_sale_price_sum
+object_type: metric
+label: sale_price
+calculation_method: sum
+dataset: real_estate_transaction_fact
+column: sale_price
+is_hidden: false
+unrelated_dimensions_handling: empty

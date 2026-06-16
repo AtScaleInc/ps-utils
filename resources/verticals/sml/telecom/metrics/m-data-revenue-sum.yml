@@ -1,0 +1,8 @@
+unique_name: m_data_revenue_sum
+object_type: metric
+label: data_revenue
+calculation_method: sum
+dataset: telecom_cdr_fact
+column: data_revenue
+is_hidden: false
+unrelated_dimensions_handling: empty

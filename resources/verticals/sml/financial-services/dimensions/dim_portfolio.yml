@@ -1,0 +1,51 @@
+unique_name: Dim Portfolio
+object_type: dimension
+label: Dim Portfolio
+type: standard
+level_attributes:
+  -     unique_name: la_fund_id
+        label: Fund Id
+        dataset: dim_portfolio
+        name_column: fund_name
+        key_columns:
+          - fund_id
+        sort_column: fund_id
+  -     unique_name: la_strategy_id
+        label: Strategy Id
+        dataset: dim_portfolio
+        name_column: strategy_name
+        key_columns:
+          - strategy_id
+        sort_column: strategy_id
+  -     unique_name: la_firm_name
+        label: Firm Name
+        dataset: dim_portfolio
+        name_column: firm_name
+        key_columns:
+          - firm_name
+  -     unique_name: la_division_name
+        label: Division Name
+        dataset: dim_portfolio
+        name_column: division_name
+        key_columns:
+          - division_name
+  -     unique_name: la_fund_family
+        label: Fund Family
+        dataset: dim_portfolio
+        name_column: fund_family
+        key_columns:
+          - fund_family
+  -     unique_name: la_sleeve_name
+        label: Sleeve Name
+        dataset: dim_portfolio
+        name_column: sleeve_name
+        key_columns:
+          - sleeve_name
+  -     unique_name: la_portfolio_id
+        label: portfolio_id
+        dataset: dim_portfolio
+        name_column: portfolio_id
+        key_columns:
+          - portfolio_id
+        is_unique_key: true
+hierarchies: []

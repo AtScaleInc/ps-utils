@@ -1,0 +1,63 @@
+unique_name: Dim Warehouse
+object_type: dimension
+label: Dim Warehouse
+type: standard
+level_attributes:
+  -     unique_name: la_warehouse_region
+        label: Warehouse Region
+        dataset: dim_warehouse
+        name_column: warehouse_region
+        key_columns:
+          - warehouse_region
+  -     unique_name: la_warehouse_name
+        label: Warehouse Name
+        dataset: dim_warehouse
+        name_column: warehouse_name
+        key_columns:
+          - warehouse_name
+        sort_column: warehouse_id
+  -     unique_name: la_dc_id
+        label: Dc Id
+        dataset: dim_warehouse
+        name_column: dc_id
+        key_columns:
+          - dc_id
+  -     unique_name: la_fulfillment_center_id
+        label: Fulfillment Center Id
+        dataset: dim_warehouse
+        name_column: fulfillment_center_id
+        key_columns:
+          - fulfillment_center_id
+  -     unique_name: la_warehouse_zone
+        label: Warehouse Zone
+        dataset: dim_warehouse
+        name_column: warehouse_zone
+        key_columns:
+          - warehouse_zone
+  -     unique_name: la_aisle_id
+        label: Aisle Id
+        dataset: dim_warehouse
+        name_column: aisle_id
+        key_columns:
+          - aisle_id
+  -     unique_name: la_dock_id
+        label: Dock Id
+        dataset: dim_warehouse
+        name_column: dock_id
+        key_columns:
+          - dock_id
+  -     unique_name: la_dock_door
+        label: Dock Door
+        dataset: dim_warehouse
+        name_column: dock_door
+        key_columns:
+          - dock_door
+  -     unique_name: la_warehouse_id
+        label: warehouse_id
+        dataset: dim_warehouse
+        name_column: warehouse_name
+        key_columns:
+          - warehouse_id
+        is_unique_key: true
+        sort_column: warehouse_id
+hierarchies: []

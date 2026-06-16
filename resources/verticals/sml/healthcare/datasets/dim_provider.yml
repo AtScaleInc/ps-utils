@@ -1,0 +1,20 @@
+unique_name: dim_provider
+object_type: dataset
+label: dim_provider
+connection_id: my_connection
+table: dim_provider
+columns:
+  -     name: provider_id
+        data_type: bigint
+  -     name: npi
+        data_type: string
+  -     name: npi_number
+        data_type: string
+  -     name: provider_name
+        data_type: string
+  -     name: specialty_name
+        data_type: string
+  -     name: medical_group_name
+        data_type: string
+  -     name: health_system_name
+        data_type: string

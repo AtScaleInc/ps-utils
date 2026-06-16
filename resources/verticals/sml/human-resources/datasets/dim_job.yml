@@ -1,0 +1,30 @@
+unique_name: dim_job
+object_type: dataset
+label: dim_job
+connection_id: my_connection
+table: dim_job
+columns:
+  -     name: job_id
+        data_type: bigint
+  -     name: job_code
+        data_type: string
+  -     name: job_title
+        data_type: string
+  -     name: job_family
+        data_type: string
+  -     name: job_function
+        data_type: string
+  -     name: job_family_group
+        data_type: string
+  -     name: job_level
+        data_type: string
+  -     name: pay_grade
+        data_type: string
+  -     name: salary_band
+        data_type: string
+  -     name: band_group
+        data_type: string
+  -     name: band_name
+        data_type: string
+  -     name: band_step
+        data_type: string

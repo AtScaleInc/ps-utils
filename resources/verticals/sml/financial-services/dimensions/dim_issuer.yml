@@ -1,0 +1,136 @@
+unique_name: Dim Issuer
+object_type: dimension
+label: Dim Issuer
+type: standard
+level_attributes:
+  -     unique_name: la_listing_country
+        label: Listing Country
+        dataset: dim_issuer
+        name_column: listing_country
+        key_columns:
+          - listing_country
+  -     unique_name: la_listing_region
+        label: Listing Region
+        dataset: dim_issuer
+        name_column: listing_region
+        key_columns:
+          - listing_region
+  -     unique_name: la_market_segment
+        label: Market Segment
+        dataset: dim_issuer
+        name_column: market_segment
+        key_columns:
+          - market_segment
+  -     unique_name: la_gics_industry_group
+        label: Gics Industry Group
+        dataset: dim_issuer
+        name_column: gics_industry_group
+        key_columns:
+          - gics_industry_group
+  -     unique_name: la_gics_sector
+        label: Gics Sector
+        dataset: dim_issuer
+        name_column: gics_sector
+        key_columns:
+          - gics_sector
+  -     unique_name: la_gics_industry
+        label: Gics Industry
+        dataset: dim_issuer
+        name_column: gics_industry
+        key_columns:
+          - gics_industry
+  -     unique_name: la_gics_sub_industry
+        label: Gics Sub Industry
+        dataset: dim_issuer
+        name_column: gics_sub_industry
+        key_columns:
+          - gics_sub_industry
+  -     unique_name: la_sic_division
+        label: Sic Division
+        dataset: dim_issuer
+        name_column: sic_division
+        key_columns:
+          - sic_division
+  -     unique_name: la_sic_major_group
+        label: Sic Major Group
+        dataset: dim_issuer
+        name_column: sic_major_group
+        key_columns:
+          - sic_major_group
+  -     unique_name: la_sic_industry_group
+        label: Sic Industry Group
+        dataset: dim_issuer
+        name_column: sic_industry_group
+        key_columns:
+          - sic_industry_group
+  -     unique_name: la_sic_code
+        label: Sic Code
+        dataset: dim_issuer
+        name_column: sic_code
+        key_columns:
+          - sic_code
+  -     unique_name: la_rating_agency
+        label: Rating Agency
+        dataset: dim_issuer
+        name_column: rating_agency
+        key_columns:
+          - rating_agency
+  -     unique_name: la_credit_rating
+        label: Credit Rating
+        dataset: dim_issuer
+        name_column: credit_rating
+        key_columns:
+          - credit_rating
+  -     unique_name: la_exchange_code
+        label: Exchange Code
+        dataset: dim_issuer
+        name_column: exchange_code
+        key_columns:
+          - exchange_code
+  -     unique_name: la_exchange_mic
+        label: Exchange Mic
+        dataset: dim_issuer
+        name_column: exchange_mic
+        key_columns:
+          - exchange_mic
+  -     unique_name: la_issuer_id
+        label: issuer_id
+        dataset: dim_issuer
+        name_column: issuer_id
+        key_columns:
+          - issuer_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Geography Hierarchy
+        label: Geography Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_listing_country
+          -         unique_name: la_listing_region
+  -     unique_name: Account Hierarchy
+        label: Account Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_market_segment
+          -         unique_name: la_gics_industry_group
+  -     unique_name: GICS Industry Hierarchy
+        label: GICS Industry Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_gics_sector
+          -         unique_name: la_gics_industry
+          -         unique_name: la_gics_sub_industry
+  -     unique_name: SIC Industry Hierarchy
+        label: SIC Industry Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_sic_division
+          -         unique_name: la_sic_major_group
+          -         unique_name: la_sic_industry_group
+          -         unique_name: la_sic_code
+  -     unique_name: Credit Rating Hierarchy
+        label: Credit Rating Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_rating_agency
+          -         unique_name: la_credit_rating

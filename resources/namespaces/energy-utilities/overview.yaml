@@ -1,0 +1,571 @@
+version: 1
+title: energy-utilities Analysis
+description: Auto-generated analysis namespace for the energy-utilities model
+worksheets:
+  consumption_kwh:
+    title: consumption_kwh
+    model: energy-utilities
+    graphType: text
+    measures:
+      - m_consumption_kwh_avg
+    description: "Summary statistic: consumption_kwh"
+    format: decimal:2
+  consumption_kwh_2:
+    title: consumption_kwh
+    model: energy-utilities
+    graphType: text
+    measures:
+      - m_consumption_kwh_min
+    description: "Summary statistic: consumption_kwh"
+    format: decimal:2
+  consumption_kwh_3:
+    title: consumption_kwh
+    model: energy-utilities
+    graphType: text
+    measures:
+      - m_consumption_kwh_max
+    description: "Summary statistic: consumption_kwh"
+    format: decimal:2
+  consumption_mwh:
+    title: consumption_mwh
+    model: energy-utilities
+    graphType: text
+    measures:
+      - m_consumption_mwh_avg
+    description: "Summary statistic: consumption_mwh"
+    format: decimal:2
+  consumption_mwh_2:
+    title: consumption_mwh
+    model: energy-utilities
+    graphType: text
+    measures:
+      - m_consumption_mwh_min
+    description: "Summary statistic: consumption_mwh"
+    format: decimal:2
+  consumption_mwh_3:
+    title: consumption_mwh
+    model: energy-utilities
+    graphType: text
+    measures:
+      - m_consumption_mwh_max
+    description: "Summary statistic: consumption_mwh"
+    format: decimal:2
+  outage_count_by_service_territory_hierarchy_by_week:
+    title: outage_count by Service Territory Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: service_territory
+    xAxisGranularity: week
+    yAxis: m_outage_count_sum
+    description: >-
+      Cross-analyse outage_count by **Service Territory Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  outage_count_by_iso_market_hierarchy_by_week:
+    title: outage_count by ISO Market Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: iso_id
+    xAxisGranularity: week
+    yAxis: m_outage_count_sum
+    description: >-
+      Cross-analyse outage_count by **ISO Market Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  outage_count_by_energy_source_hierarchy_by_week:
+    title: outage_count by Energy Source Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: fuel_category
+    xAxisGranularity: week
+    yAxis: m_outage_count_sum
+    description: >-
+      Cross-analyse outage_count by **Energy Source Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  net_generation_mwh_by_week:
+    title: net_generation_mwh by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: interval_year
+    xAxisGranularity: week
+    yAxis: m_net_generation_mwh_sum
+    description: >-
+      Track how net_generation_mwh changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  net_generation_mwh_by_service_territory_hierarchy_by_week:
+    title: net_generation_mwh by Service Territory Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: service_territory
+    xAxisGranularity: week
+    yAxis: m_net_generation_mwh_sum
+    description: >-
+      Cross-analyse net_generation_mwh by **Service Territory Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: interval_year
+  net_generation_mwh_by_iso_market_hierarchy_by_week:
+    title: net_generation_mwh by ISO Market Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: iso_id
+    xAxisGranularity: week
+    yAxis: m_net_generation_mwh_sum
+    description: >-
+      Cross-analyse net_generation_mwh by **ISO Market Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  net_generation_mwh_by_energy_source_hierarchy_by_week:
+    title: net_generation_mwh by Energy Source Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: fuel_category
+    xAxisGranularity: week
+    yAxis: m_net_generation_mwh_sum
+    description: >-
+      Cross-analyse net_generation_mwh by **Energy Source Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  revenue_amount_by_week:
+    title: revenue_amount by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: interval_year
+    xAxisGranularity: week
+    yAxis: m_revenue_amount_sum
+    description: >-
+      Track how revenue_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  revenue_amount_by_service_territory_hierarchy_by_week:
+    title: revenue_amount by Service Territory Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: service_territory
+    xAxisGranularity: week
+    yAxis: m_revenue_amount_sum
+    description: >-
+      Cross-analyse revenue_amount by **Service Territory Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  revenue_amount_by_iso_market_hierarchy_by_week:
+    title: revenue_amount by ISO Market Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: iso_id
+    xAxisGranularity: week
+    yAxis: m_revenue_amount_sum
+    description: >-
+      Cross-analyse revenue_amount by **ISO Market Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  revenue_amount_by_energy_source_hierarchy_by_week:
+    title: revenue_amount by Energy Source Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: fuel_category
+    xAxisGranularity: week
+    yAxis: m_revenue_amount_sum
+    description: >-
+      Cross-analyse revenue_amount by **Energy Source Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  cost_per_kwh_by_week:
+    title: cost_per_kwh by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: interval_year
+    xAxisGranularity: week
+    yAxis: m_cost_per_kwh_sum
+    description: >-
+      Track how cost_per_kwh changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  cost_per_kwh_by_service_territory_hierarchy_by_week:
+    title: cost_per_kwh by Service Territory Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: service_territory
+    xAxisGranularity: week
+    yAxis: m_cost_per_kwh_sum
+    description: >-
+      Cross-analyse cost_per_kwh by **Service Territory Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  cost_per_kwh_by_iso_market_hierarchy_by_week:
+    title: cost_per_kwh by ISO Market Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: iso_id
+    xAxisGranularity: week
+    yAxis: m_cost_per_kwh_sum
+    description: >-
+      Cross-analyse cost_per_kwh by **ISO Market Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  cost_per_kwh_by_energy_source_hierarchy_by_week:
+    title: cost_per_kwh by Energy Source Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: fuel_category
+    xAxisGranularity: week
+    yAxis: m_cost_per_kwh_sum
+    description: >-
+      Cross-analyse cost_per_kwh by **Energy Source Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  net_generation_mwh_by_energy_source_hierarchy_by_week_2:
+    title: net_generation_mwh by Energy Source Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: fuel_category
+    xAxisGranularity: week
+    yAxis: m_net_generation_mwh_avg
+    description: >-
+      Cross-analyse net_generation_mwh by **Energy Source Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  heat_rate_by_energy_source_hierarchy_by_week:
+    title: heat_rate by Energy Source Hierarchy by Week
+    model: energy-utilities
+    graphType: line
+    xAxis: fuel_category
+    xAxisGranularity: week
+    yAxis: m_heat_rate_avg
+    description: >-
+      Cross-analyse heat_rate by **Energy Source Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: interval_year
+  net_generation_mwh_by_service_territory_hierarchy_and_energy:
+    title: >-
+      net_generation_mwh by Service Territory Hierarchy and Energy Source
+      Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_net_generation_mwh_sum
+    yAxis: service_territory
+    description: >-
+      Rank members of **Service Territory Hierarchy** and **Energy Source
+      Hierarchy** by their net_generation_mwh to surface top performers and
+      identify areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  net_generation_mwh_by_iso_market_hierarchy_and_energy_source:
+    title: net_generation_mwh by ISO Market Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_net_generation_mwh_sum
+    yAxis: iso_id
+    description: >-
+      Rank members of **ISO Market Hierarchy** and **Energy Source Hierarchy**
+      by their net_generation_mwh to surface top performers and identify areas
+      needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  revenue_amount_by_service_territory_hierarchy_and_energy_sou:
+    title: revenue_amount by Service Territory Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_revenue_amount_sum
+    yAxis: service_territory
+    description: >-
+      Rank members of **Service Territory Hierarchy** and **Energy Source
+      Hierarchy** by their revenue_amount to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  revenue_amount_by_iso_market_hierarchy_and_energy_source_hie:
+    title: revenue_amount by ISO Market Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_revenue_amount_sum
+    yAxis: iso_id
+    description: >-
+      Rank members of **ISO Market Hierarchy** and **Energy Source Hierarchy**
+      by their revenue_amount to surface top performers and identify areas
+      needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  cost_per_kwh_by_service_territory_hierarchy_and_energy_sourc:
+    title: cost_per_kwh by Service Territory Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_cost_per_kwh_sum
+    yAxis: service_territory
+    description: >-
+      Rank members of **Service Territory Hierarchy** and **Energy Source
+      Hierarchy** by their cost_per_kwh to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  cost_per_kwh_by_iso_market_hierarchy_and_energy_source_hiera:
+    title: cost_per_kwh by ISO Market Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_cost_per_kwh_sum
+    yAxis: iso_id
+    description: >-
+      Rank members of **ISO Market Hierarchy** and **Energy Source Hierarchy**
+      by their cost_per_kwh to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  outage_count_by_service_territory_hierarchy_and_energy_sourc:
+    title: outage_count by Service Territory Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_outage_count_sum
+    yAxis: service_territory
+    description: >-
+      Rank members of **Service Territory Hierarchy** and **Energy Source
+      Hierarchy** by their outage_count to surface top performers and identify
+      areas needing attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+  outage_count_by_iso_market_hierarchy_and_energy_source_hiera:
+    title: outage_count by ISO Market Hierarchy and Energy Source Hierarchy
+    model: energy-utilities
+    graphType: bar
+    xAxis: m_outage_count_sum
+    yAxis: iso_id
+    description: >-
+      Rank members of **ISO Market Hierarchy** and **Energy Source Hierarchy**
+      by their outage_count to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: fuel_category
+dashboards:
+  energyutilities_dashboard:
+    title: energy-utilities Analysis Dashboard
+    description: Auto-generated dashboard for energy-utilities
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: consumption_kwh
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: consumption_kwh_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: consumption_kwh_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: consumption_mwh
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: consumption_mwh_2
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: consumption_mwh_3
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: outage_count_by_service_territory_hierarchy_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: outage_count_by_iso_market_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: outage_count_by_energy_source_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_generation_mwh_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_generation_mwh_by_service_territory_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_generation_mwh_by_iso_market_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_generation_mwh_by_energy_source_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_amount_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_amount_by_service_territory_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_amount_by_iso_market_hierarchy_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: revenue_amount_by_energy_source_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_per_kwh_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_per_kwh_by_service_territory_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_per_kwh_by_iso_market_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: cost_per_kwh_by_energy_source_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_generation_mwh_by_energy_source_hierarchy_by_week_2
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: heat_rate_by_energy_source_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_generation_mwh_by_service_territory_hierarchy_and_energy
+        x: 0
+        "y": 92
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: net_generation_mwh_by_iso_market_hierarchy_and_energy_source
+        x: 0
+        "y": 97
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: revenue_amount_by_service_territory_hierarchy_and_energy_sou
+        x: 0
+        "y": 102
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: revenue_amount_by_iso_market_hierarchy_and_energy_source_hie
+        x: 0
+        "y": 107
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: cost_per_kwh_by_service_territory_hierarchy_and_energy_sourc
+        x: 0
+        "y": 112
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: cost_per_kwh_by_iso_market_hierarchy_and_energy_source_hiera
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: outage_count_by_service_territory_hierarchy_and_energy_sourc
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: outage_count_by_iso_market_hierarchy_and_energy_source_hiera
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

@@ -1,0 +1,8 @@
+unique_name: m_net_generation_mwh_max
+object_type: metric
+label: net_generation_mwh
+calculation_method: maximum
+dataset: energy_interval_fact
+column: net_generation_mwh
+is_hidden: false
+unrelated_dimensions_handling: empty

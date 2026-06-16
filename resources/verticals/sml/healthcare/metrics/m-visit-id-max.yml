@@ -1,0 +1,8 @@
+unique_name: m_visit_id_max
+object_type: metric
+label: visit_id
+calculation_method: maximum
+dataset: healthcare_encounter_fact
+column: visit_id
+is_hidden: false
+unrelated_dimensions_handling: empty

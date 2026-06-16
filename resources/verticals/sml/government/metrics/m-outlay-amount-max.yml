@@ -1,0 +1,8 @@
+unique_name: m_outlay_amount_max
+object_type: metric
+label: outlay_amount
+calculation_method: maximum
+dataset: government_budget_fact
+column: outlay_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

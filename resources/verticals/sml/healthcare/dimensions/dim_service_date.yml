@@ -1,0 +1,55 @@
+unique_name: Dim Service Date
+object_type: dimension
+label: Dim Service Date
+type: time
+level_attributes:
+  -     unique_name: la_service_year
+        label: Service Year
+        dataset: dim_service_date
+        name_column: service_year
+        key_columns:
+          - service_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_service_quarter
+        label: Service Quarter
+        dataset: dim_service_date
+        name_column: service_quarter
+        key_columns:
+          - service_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_service_month
+        label: Service Month
+        dataset: dim_service_date
+        name_column: service_month
+        key_columns:
+          - service_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_admit_date
+        label: Admit Date
+        dataset: dim_service_date
+        name_column: admit_date
+        key_columns:
+          - admit_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_service_date_id
+        label: service_date_id
+        dataset: dim_service_date
+        name_column: service_date_id
+        key_columns:
+          - service_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_service_year
+          -         unique_name: la_service_quarter
+          -         unique_name: la_service_month

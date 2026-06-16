@@ -1,0 +1,8 @@
+unique_name: m_gpa_max
+object_type: metric
+label: gpa
+calculation_method: maximum
+dataset: education_enrollment_fact
+column: gpa
+is_hidden: false
+unrelated_dimensions_handling: empty

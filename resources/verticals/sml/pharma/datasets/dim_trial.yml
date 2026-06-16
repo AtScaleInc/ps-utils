@@ -1,0 +1,30 @@
+unique_name: dim_trial
+object_type: dataset
+label: dim_trial
+connection_id: my_connection
+table: dim_trial
+columns:
+  -     name: trial_id
+        data_type: bigint
+  -     name: clinical_trial_id
+        data_type: bigint
+  -     name: study_id
+        data_type: bigint
+  -     name: protocol_id
+        data_type: string
+  -     name: ind_number
+        data_type: string
+  -     name: nda_number
+        data_type: string
+  -     name: phase_name
+        data_type: string
+  -     name: study_type
+        data_type: string
+  -     name: trial_status
+        data_type: string
+  -     name: cohort_id
+        data_type: bigint
+  -     name: arm_id
+        data_type: bigint
+  -     name: treatment_group
+        data_type: string

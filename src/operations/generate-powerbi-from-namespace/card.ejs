@@ -1,0 +1,102 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.5.0/schema.json",
+  "name": "<%= visualName %>",
+  <%
+    const segmentWidth = dashboard.size.width / dashboard.size.hSegments;
+    const segmentHeight = dashboard.size.height / dashboard.size.vSegments;
+    const colSpan = tile.colSpan || 1;
+    const rowSpan = tile.rowSpan || 1;
+  %>
+  "position": {
+    "x": <%= tile.x * segmentWidth %>,
+    "y": <%= tile.y * segmentHeight %>,
+    "z": 0,
+    "height": <%= colSpan * segmentHeight %>,
+    "width": <%= rowSpan * segmentWidth %>,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "CubeMeasures"
+                    }
+                  },
+                  "Property": "<%= worksheet.measures[0] %>"
+                }
+              },
+              "queryRef": "CubeMeasures.<%= worksheet.measures[0] %>",
+              "nativeQueryRef": "<%= worksheet.measures[0] %>"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "CubeMeasures"
+                  }
+                },
+                "Property": "<%= worksheet.measures[0] %>"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'<%= worksheet.title %>'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "fcbe1876ee306c22187e",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "CubeMeasures"
+              }
+            },
+            "Property": "<%= worksheet.measures[0] %>"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

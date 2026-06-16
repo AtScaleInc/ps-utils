@@ -1,0 +1,56 @@
+unique_name: manufacturing_production_fact
+object_type: dataset
+label: manufacturing_production_fact
+connection_id: my_connection
+table: manufacturing_production_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: facility_id
+        data_type: bigint
+  -     name: product_id
+        data_type: bigint
+  -     name: supplier_id
+        data_type: bigint
+  -     name: cost_center_id
+        data_type: bigint
+  -     name: quality_id
+        data_type: bigint
+  -     name: production_calendar_id
+        data_type: bigint
+  -     name: work_order_id
+        data_type: bigint
+  -     name: batch_number
+        data_type: string
+  -     name: lot_number
+        data_type: string
+  -     name: planned_qty
+        data_type: decimal
+  -     name: actual_qty
+        data_type: decimal
+  -     name: scrap_qty
+        data_type: decimal
+  -     name: rework_qty
+        data_type: decimal
+  -     name: oee
+        data_type: decimal
+  -     name: first_pass_yield
+        data_type: decimal
+  -     name: scrap_rate
+        data_type: decimal
+  -     name: otif
+        data_type: decimal
+  -     name: on_time_delivery
+        data_type: decimal
+  -     name: downtime_minutes
+        data_type: decimal
+  -     name: cycle_time_seconds
+        data_type: decimal
+  -     name: material_cost
+        data_type: decimal
+  -     name: labor_cost
+        data_type: decimal
+  -     name: overhead_cost
+        data_type: decimal
+  -     name: total_cost
+        data_type: decimal

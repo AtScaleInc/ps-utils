@@ -1,0 +1,8 @@
+unique_name: m_base_salary_min
+object_type: metric
+label: base_salary
+calculation_method: minimum
+dataset: hr_workforce_fact
+column: base_salary
+is_hidden: false
+unrelated_dimensions_handling: empty

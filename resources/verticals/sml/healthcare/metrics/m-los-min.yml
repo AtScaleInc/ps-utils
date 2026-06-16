@@ -1,0 +1,8 @@
+unique_name: m_los_min
+object_type: metric
+label: los
+calculation_method: minimum
+dataset: healthcare_encounter_fact
+column: los
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_sharpe_ratio_max
+object_type: metric
+label: sharpe_ratio
+calculation_method: maximum
+dataset: financial_securities_fact
+column: sharpe_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

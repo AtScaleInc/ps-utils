@@ -1,0 +1,63 @@
+unique_name: Dim Ship Date
+object_type: dimension
+label: Dim Ship Date
+type: time
+level_attributes:
+  -     unique_name: la_ship_year
+        label: Ship Year
+        dataset: dim_ship_date
+        name_column: ship_year
+        key_columns:
+          - ship_year
+        folder: Date Attributes
+        time_unit: year
+  -     unique_name: la_ship_quarter
+        label: Ship Quarter
+        dataset: dim_ship_date
+        name_column: ship_quarter
+        key_columns:
+          - ship_quarter
+        folder: Date Attributes
+        time_unit: quarter
+  -     unique_name: la_ship_month
+        label: Ship Month
+        dataset: dim_ship_date
+        name_column: ship_month
+        key_columns:
+          - ship_month
+        folder: Date Attributes
+        time_unit: month
+  -     unique_name: la_ship_date
+        label: Ship Date
+        dataset: dim_ship_date
+        name_column: ship_date
+        key_columns:
+          - ship_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_delivery_date
+        label: Delivery Date
+        dataset: dim_ship_date
+        name_column: delivery_date
+        key_columns:
+          - delivery_date
+        folder: Date Attributes
+        time_unit: day
+  -     unique_name: la_ship_date_id
+        label: ship_date_id
+        dataset: dim_ship_date
+        name_column: ship_date_id
+        key_columns:
+          - ship_date_id
+        is_unique_key: true
+        folder: Date Attributes
+        time_unit: day
+hierarchies:
+  -     unique_name: Date Hierarchy
+        label: Date Hierarchy
+        filter_empty: "yes"
+        folder: Date Attributes
+        levels:
+          -         unique_name: la_ship_year
+          -         unique_name: la_ship_quarter
+          -         unique_name: la_ship_month

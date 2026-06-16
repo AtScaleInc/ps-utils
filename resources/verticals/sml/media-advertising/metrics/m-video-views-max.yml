@@ -1,0 +1,8 @@
+unique_name: m_video_views_max
+object_type: metric
+label: video_views
+calculation_method: maximum
+dataset: media_ad_performance_fact
+column: video_views
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_food_beverage_revenue_min
+object_type: metric
+label: food_beverage_revenue
+calculation_method: minimum
+dataset: travel_reservation_fact
+column: food_beverage_revenue
+is_hidden: false
+unrelated_dimensions_handling: empty

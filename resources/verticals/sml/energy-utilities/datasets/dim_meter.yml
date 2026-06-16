@@ -1,0 +1,24 @@
+unique_name: dim_meter
+object_type: dataset
+label: dim_meter
+connection_id: my_connection
+table: dim_meter
+columns:
+  -     name: meter_id
+        data_type: bigint
+  -     name: meter_number
+        data_type: string
+  -     name: smart_meter_id
+        data_type: string
+  -     name: meter_serial_number
+        data_type: string
+  -     name: service_point_id
+        data_type: string
+  -     name: premise_id
+        data_type: bigint
+  -     name: utility_account
+        data_type: string
+  -     name: read_type
+        data_type: string
+  -     name: estimated_flag
+        data_type: boolean

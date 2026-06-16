@@ -1,0 +1,8 @@
+unique_name: m_gross_sqft_sum
+object_type: metric
+label: gross_sqft
+calculation_method: sum
+dataset: real_estate_transaction_fact
+column: gross_sqft
+is_hidden: false
+unrelated_dimensions_handling: empty

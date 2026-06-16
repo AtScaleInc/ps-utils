@@ -1,0 +1,8 @@
+unique_name: m_serious_ae_count_max
+object_type: metric
+label: serious_ae_count
+calculation_method: maximum
+dataset: pharma_clinical_fact
+column: serious_ae_count
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,550 @@
+version: 1
+title: real-estate Analysis
+description: Auto-generated analysis namespace for the real-estate model
+worksheets:
+  sale_price:
+    title: sale_price
+    model: real-estate
+    graphType: text
+    measures:
+      - m_sale_price_sum
+    description: "Summary statistic: sale_price"
+    format: decimal:2
+  sale_price_2:
+    title: sale_price
+    model: real-estate
+    graphType: text
+    measures:
+      - m_sale_price_avg
+    description: "Summary statistic: sale_price"
+    format: decimal:2
+  sale_price_3:
+    title: sale_price
+    model: real-estate
+    graphType: text
+    measures:
+      - m_sale_price_min
+    description: "Summary statistic: sale_price"
+    format: decimal:2
+  sale_price_4:
+    title: sale_price
+    model: real-estate
+    graphType: text
+    measures:
+      - m_sale_price_max
+    description: "Summary statistic: sale_price"
+    format: decimal:2
+  list_price:
+    title: list_price
+    model: real-estate
+    graphType: text
+    measures:
+      - m_list_price_sum
+    description: "Summary statistic: list_price"
+    format: decimal:2
+  list_price_2:
+    title: list_price
+    model: real-estate
+    graphType: text
+    measures:
+      - m_list_price_avg
+    description: "Summary statistic: list_price"
+    format: decimal:2
+  sale_price_by_week:
+    title: sale_price by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_sale_price_sum
+    description: >-
+      Track how sale_price changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  sale_price_by_property_type_hierarchy_by_week:
+    title: sale_price by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_sale_price_sum
+    description: >-
+      Cross-analyse sale_price by **Property Type Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  sale_price_by_geography_hierarchy_by_week:
+    title: sale_price by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_sale_price_sum
+    description: >-
+      Cross-analyse sale_price by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: close_year
+  list_price_by_week:
+    title: list_price by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_list_price_sum
+    description: >-
+      Track how list_price changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  list_price_by_property_type_hierarchy_by_week:
+    title: list_price by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_list_price_sum
+    description: >-
+      Cross-analyse list_price by **Property Type Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  list_price_by_geography_hierarchy_by_week:
+    title: list_price by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_list_price_sum
+    description: >-
+      Cross-analyse list_price by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: close_year
+  original_list_price_by_week:
+    title: original_list_price by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_original_list_price_sum
+    description: >-
+      Track how original_list_price changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  original_list_price_by_property_type_hierarchy_by_week:
+    title: original_list_price by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_original_list_price_sum
+    description: >-
+      Cross-analyse original_list_price by **Property Type Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: close_year
+  original_list_price_by_geography_hierarchy_by_week:
+    title: original_list_price by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_original_list_price_sum
+    description: >-
+      Cross-analyse original_list_price by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  price_per_sqft_by_week:
+    title: price_per_sqft by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_price_per_sqft_sum
+    description: >-
+      Track how price_per_sqft changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  price_per_sqft_by_property_type_hierarchy_by_week:
+    title: price_per_sqft by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_price_per_sqft_sum
+    description: >-
+      Cross-analyse price_per_sqft by **Property Type Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  price_per_sqft_by_geography_hierarchy_by_week:
+    title: price_per_sqft by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_price_per_sqft_sum
+    description: >-
+      Cross-analyse price_per_sqft by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  sale_price_per_sqft_by_week:
+    title: sale_price_per_sqft by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_sale_price_per_sqft_sum
+    description: >-
+      Track how sale_price_per_sqft changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  sale_price_per_sqft_by_property_type_hierarchy_by_week:
+    title: sale_price_per_sqft by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_sale_price_per_sqft_sum
+    description: >-
+      Cross-analyse sale_price_per_sqft by **Property Type Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: close_year
+  sale_price_per_sqft_by_geography_hierarchy_by_week:
+    title: sale_price_per_sqft by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_sale_price_per_sqft_sum
+    description: >-
+      Cross-analyse sale_price_per_sqft by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  gross_sqft_by_week:
+    title: gross_sqft by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_gross_sqft_sum
+    description: >-
+      Track how gross_sqft changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  gross_sqft_by_property_type_hierarchy_by_week:
+    title: gross_sqft by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_gross_sqft_sum
+    description: >-
+      Cross-analyse gross_sqft by **Property Type Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  gross_sqft_by_geography_hierarchy_by_week:
+    title: gross_sqft by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_gross_sqft_sum
+    description: >-
+      Cross-analyse gross_sqft by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: close_year
+  net_operating_income_by_week:
+    title: net_operating_income by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_net_operating_income_sum
+    description: >-
+      Track how net_operating_income changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  net_operating_income_by_property_type_hierarchy_by_week:
+    title: net_operating_income by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_net_operating_income_sum
+    description: >-
+      Cross-analyse net_operating_income by **Property Type Hierarchy** and
+      **Date Hierarchy** to see how performance differs across segments at each
+      point in time — supports period-over-period comparisons.
+    colorField: close_year
+  net_operating_income_by_geography_hierarchy_by_week:
+    title: net_operating_income by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_net_operating_income_sum
+    description: >-
+      Cross-analyse net_operating_income by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  gross_rent_by_week:
+    title: gross_rent by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_gross_rent_sum
+    description: >-
+      Track how gross_rent changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  gross_rent_by_property_type_hierarchy_by_week:
+    title: gross_rent by Property Type Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: asset_class
+    xAxisGranularity: week
+    yAxis: m_gross_rent_sum
+    description: >-
+      Cross-analyse gross_rent by **Property Type Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: close_year
+  gross_rent_by_geography_hierarchy_by_week:
+    title: gross_rent by Geography Hierarchy by Week
+    model: real-estate
+    graphType: line
+    xAxis: mls_region
+    xAxisGranularity: week
+    yAxis: m_gross_rent_sum
+    description: >-
+      Cross-analyse gross_rent by **Geography Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: close_year
+  operating_expenses_by_week:
+    title: operating_expenses by Week
+    model: real-estate
+    graphType: line
+    xAxis: close_year
+    xAxisGranularity: week
+    yAxis: m_operating_expenses_sum
+    description: >-
+      Track how operating_expenses changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+dashboards:
+  realestate_dashboard:
+    title: real-estate Analysis Dashboard
+    description: Auto-generated dashboard for real-estate
+    size:
+      width: 1800
+      height: 13100
+      hSegments: 3
+      vSegments: 131
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: sale_price
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: sale_price_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: sale_price_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: sale_price_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: list_price
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: list_price_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: sale_price_by_week
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sale_price_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sale_price_by_geography_hierarchy_by_week
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: list_price_by_week
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: list_price_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: list_price_by_geography_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: original_list_price_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: original_list_price_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: original_list_price_by_geography_hierarchy_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_per_sqft_by_week
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_per_sqft_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: price_per_sqft_by_geography_hierarchy_by_week
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sale_price_per_sqft_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sale_price_per_sqft_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: sale_price_per_sqft_by_geography_hierarchy_by_week
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sqft_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sqft_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_sqft_by_geography_hierarchy_by_week
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_operating_income_by_week
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_operating_income_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: net_operating_income_by_geography_hierarchy_by_week
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_rent_by_week
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_rent_by_property_type_hierarchy_by_week
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: gross_rent_by_geography_hierarchy_by_week
+        x: 0
+        "y": 121
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: operating_expenses_by_week
+        x: 0
+        "y": 126
+        colSpan: 3
+        rowSpan: 5
+        category: Trends

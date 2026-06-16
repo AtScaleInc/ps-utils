@@ -1,0 +1,8 @@
+unique_name: m_basket_value_max
+object_type: metric
+label: basket_value
+calculation_method: maximum
+dataset: retail_sales_fact
+column: basket_value
+is_hidden: false
+unrelated_dimensions_handling: empty

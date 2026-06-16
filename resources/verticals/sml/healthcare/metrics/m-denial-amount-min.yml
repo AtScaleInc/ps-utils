@@ -1,0 +1,8 @@
+unique_name: m_denial_amount_min
+object_type: metric
+label: denial_amount
+calculation_method: minimum
+dataset: healthcare_encounter_fact
+column: denial_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

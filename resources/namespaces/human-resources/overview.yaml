@@ -1,0 +1,560 @@
+version: 1
+title: human-resources Analysis
+description: Auto-generated analysis namespace for the human-resources model
+worksheets:
+  requisition_id:
+    title: requisition_id
+    model: human-resources
+    graphType: text
+    measures:
+      - m_requisition_id_sum
+    description: "Summary statistic: requisition_id"
+    format: integer
+  requisition_id_2:
+    title: requisition_id
+    model: human-resources
+    graphType: text
+    measures:
+      - m_requisition_id_avg
+    description: "Summary statistic: requisition_id"
+    format: integer
+  requisition_id_3:
+    title: requisition_id
+    model: human-resources
+    graphType: text
+    measures:
+      - m_requisition_id_min
+    description: "Summary statistic: requisition_id"
+    format: integer
+  requisition_id_4:
+    title: requisition_id
+    model: human-resources
+    graphType: text
+    measures:
+      - m_requisition_id_max
+    description: "Summary statistic: requisition_id"
+    format: integer
+  base_salary:
+    title: base_salary
+    model: human-resources
+    graphType: text
+    measures:
+      - m_base_salary_sum
+    description: "Summary statistic: base_salary"
+    format: decimal:2
+  base_salary_2:
+    title: base_salary
+    model: human-resources
+    graphType: text
+    measures:
+      - m_base_salary_avg
+    description: "Summary statistic: base_salary"
+    format: decimal:2
+  base_salary_by_day:
+    title: base_salary by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_base_salary_sum
+    description: >-
+      Track how base_salary changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  base_salary_by_week:
+    title: base_salary by Week
+    model: human-resources
+    graphType: line
+    xAxis: snapshot_year
+    xAxisGranularity: week
+    yAxis: m_base_salary_sum
+    description: >-
+      Track how base_salary changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  base_salary_by_product_hierarchy_by_day:
+    title: base_salary by Product Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_base_salary_sum
+    description: >-
+      Cross-analyse base_salary by **Date Hierarchy** and **Product Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: division_name
+  base_salary_by_geography_hierarchy_by_day:
+    title: base_salary by Geography Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_base_salary_sum
+    description: >-
+      Cross-analyse base_salary by **Date Hierarchy** and **Geography
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: work_country
+  base_salary_by_date_hierarchy_and_date_hierarchy_by_day:
+    title: base_salary by Date Hierarchy and Date Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_base_salary_sum
+    description: >-
+      Cross-analyse base_salary by **Date Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: snapshot_year
+  base_salary_by_product_hierarchy_by_week:
+    title: base_salary by Product Hierarchy by Week
+    model: human-resources
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_base_salary_sum
+    description: >-
+      Cross-analyse base_salary by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: snapshot_year
+  base_salary_by_geography_hierarchy_by_week:
+    title: base_salary by Geography Hierarchy by Week
+    model: human-resources
+    graphType: line
+    xAxis: work_country
+    xAxisGranularity: week
+    yAxis: m_base_salary_sum
+    description: >-
+      Cross-analyse base_salary by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: snapshot_year
+  bonus_amount_by_day:
+    title: bonus_amount by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Track how bonus_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  bonus_amount_by_week:
+    title: bonus_amount by Week
+    model: human-resources
+    graphType: line
+    xAxis: snapshot_year
+    xAxisGranularity: week
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Track how bonus_amount changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  bonus_amount_by_product_hierarchy_by_day:
+    title: bonus_amount by Product Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Cross-analyse bonus_amount by **Date Hierarchy** and **Product Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: division_name
+  bonus_amount_by_geography_hierarchy_by_day:
+    title: bonus_amount by Geography Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Cross-analyse bonus_amount by **Date Hierarchy** and **Geography
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: work_country
+  bonus_amount_by_date_hierarchy_and_date_hierarchy_by_day:
+    title: bonus_amount by Date Hierarchy and Date Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Cross-analyse bonus_amount by **Date Hierarchy** and **Date Hierarchy** to
+      see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: snapshot_year
+  bonus_amount_by_product_hierarchy_by_week:
+    title: bonus_amount by Product Hierarchy by Week
+    model: human-resources
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Cross-analyse bonus_amount by **Product Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: snapshot_year
+  bonus_amount_by_geography_hierarchy_by_week:
+    title: bonus_amount by Geography Hierarchy by Week
+    model: human-resources
+    graphType: line
+    xAxis: work_country
+    xAxisGranularity: week
+    yAxis: m_bonus_amount_sum
+    description: >-
+      Cross-analyse bonus_amount by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: snapshot_year
+  benefits_cost_by_day:
+    title: benefits_cost by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Track how benefits_cost changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  benefits_cost_by_week:
+    title: benefits_cost by Week
+    model: human-resources
+    graphType: line
+    xAxis: snapshot_year
+    xAxisGranularity: week
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Track how benefits_cost changes over time using the **Date Hierarchy**
+      hierarchy. Useful for identifying seasonality, growth trends, and
+      forecasting.
+  benefits_cost_by_product_hierarchy_by_day:
+    title: benefits_cost by Product Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Cross-analyse benefits_cost by **Date Hierarchy** and **Product
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: division_name
+  benefits_cost_by_geography_hierarchy_by_day:
+    title: benefits_cost by Geography Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Cross-analyse benefits_cost by **Date Hierarchy** and **Geography
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: work_country
+  benefits_cost_by_date_hierarchy_and_date_hierarchy_by_day:
+    title: benefits_cost by Date Hierarchy and Date Hierarchy by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Cross-analyse benefits_cost by **Date Hierarchy** and **Date Hierarchy**
+      to see how performance differs across segments at each point in time —
+      supports period-over-period comparisons.
+    colorField: snapshot_year
+  benefits_cost_by_product_hierarchy_by_week:
+    title: benefits_cost by Product Hierarchy by Week
+    model: human-resources
+    graphType: line
+    xAxis: division_name
+    xAxisGranularity: week
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Cross-analyse benefits_cost by **Product Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: snapshot_year
+  benefits_cost_by_geography_hierarchy_by_week:
+    title: benefits_cost by Geography Hierarchy by Week
+    model: human-resources
+    graphType: line
+    xAxis: work_country
+    xAxisGranularity: week
+    yAxis: m_benefits_cost_sum
+    description: >-
+      Cross-analyse benefits_cost by **Geography Hierarchy** and **Date
+      Hierarchy** to see how performance differs across segments at each point
+      in time — supports period-over-period comparisons.
+    colorField: snapshot_year
+  total_compensation_by_day:
+    title: total_compensation by Day
+    model: human-resources
+    graphType: line
+    xAxis: hire_date
+    xAxisGranularity: day
+    yAxis: m_total_compensation_sum
+    description: >-
+      Track how total_compensation changes over time using the **Date
+      Hierarchy** hierarchy. Useful for identifying seasonality, growth trends,
+      and forecasting.
+  base_salary_by_product_hierarchy_and_geography_hierarchy:
+    title: base_salary by Product Hierarchy and Geography Hierarchy
+    model: human-resources
+    graphType: bar
+    xAxis: m_base_salary_sum
+    yAxis: division_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      base_salary to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: work_country
+  bonus_amount_by_product_hierarchy_and_geography_hierarchy:
+    title: bonus_amount by Product Hierarchy and Geography Hierarchy
+    model: human-resources
+    graphType: bar
+    xAxis: m_bonus_amount_sum
+    yAxis: division_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      bonus_amount to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: work_country
+  benefits_cost_by_product_hierarchy_and_geography_hierarchy:
+    title: benefits_cost by Product Hierarchy and Geography Hierarchy
+    model: human-resources
+    graphType: bar
+    xAxis: m_benefits_cost_sum
+    yAxis: division_name
+    description: >-
+      Rank members of **Product Hierarchy** and **Geography Hierarchy** by their
+      benefits_cost to surface top performers and identify areas needing
+      attention.
+    limit: 10
+    sortDirection: desc
+    colorField: work_country
+dashboards:
+  humanresources_dashboard:
+    title: human-resources Analysis Dashboard
+    description: Auto-generated dashboard for human-resources
+    size:
+      width: 1800
+      height: 13200
+      hSegments: 3
+      vSegments: 132
+    categoryHeaders:
+      - label: Summary Statistics
+        x: 0
+        "y": 0
+        colSpan: 3
+        rowSpan: 1
+      - label: Trends
+        x: 0
+        "y": 5
+        colSpan: 3
+        rowSpan: 1
+      - label: Rankings & Breakdowns
+        x: 0
+        "y": 116
+        colSpan: 3
+        rowSpan: 1
+    tiles:
+      - worksheet: requisition_id
+        x: 0
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: requisition_id_2
+        x: 1
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: requisition_id_3
+        x: 2
+        "y": 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: requisition_id_4
+        x: 0
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: base_salary
+        x: 1
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: base_salary_2
+        x: 2
+        "y": 3
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: base_salary_by_day
+        x: 0
+        "y": 6
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_week
+        x: 0
+        "y": 11
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_product_hierarchy_by_day
+        x: 0
+        "y": 16
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_geography_hierarchy_by_day
+        x: 0
+        "y": 21
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_date_hierarchy_and_date_hierarchy_by_day
+        x: 0
+        "y": 26
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_product_hierarchy_by_week
+        x: 0
+        "y": 31
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_geography_hierarchy_by_week
+        x: 0
+        "y": 36
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_day
+        x: 0
+        "y": 41
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_week
+        x: 0
+        "y": 46
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_product_hierarchy_by_day
+        x: 0
+        "y": 51
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_geography_hierarchy_by_day
+        x: 0
+        "y": 56
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_date_hierarchy_and_date_hierarchy_by_day
+        x: 0
+        "y": 61
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_product_hierarchy_by_week
+        x: 0
+        "y": 66
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: bonus_amount_by_geography_hierarchy_by_week
+        x: 0
+        "y": 71
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_day
+        x: 0
+        "y": 76
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_week
+        x: 0
+        "y": 81
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_product_hierarchy_by_day
+        x: 0
+        "y": 86
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_geography_hierarchy_by_day
+        x: 0
+        "y": 91
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_date_hierarchy_and_date_hierarchy_by_day
+        x: 0
+        "y": 96
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_product_hierarchy_by_week
+        x: 0
+        "y": 101
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: benefits_cost_by_geography_hierarchy_by_week
+        x: 0
+        "y": 106
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: total_compensation_by_day
+        x: 0
+        "y": 111
+        colSpan: 3
+        rowSpan: 5
+        category: Trends
+      - worksheet: base_salary_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 117
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: bonus_amount_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 122
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns
+      - worksheet: benefits_cost_by_product_hierarchy_and_geography_hierarchy
+        x: 0
+        "y": 127
+        colSpan: 3
+        rowSpan: 5
+        category: Rankings & Breakdowns

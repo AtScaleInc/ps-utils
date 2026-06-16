@@ -1,0 +1,8 @@
+unique_name: m_clicks_max
+object_type: metric
+label: clicks
+calculation_method: maximum
+dataset: media_ad_performance_fact
+column: clicks
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_assessment_score_avg
+object_type: metric
+label: assessment_score
+calculation_method: average
+dataset: education_enrollment_fact
+column: assessment_score
+is_hidden: false
+unrelated_dimensions_handling: empty

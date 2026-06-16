@@ -1,0 +1,8 @@
+unique_name: m_gross_sales_max
+object_type: metric
+label: gross_sales
+calculation_method: maximum
+dataset: retail_sales_fact
+column: gross_sales
+is_hidden: false
+unrelated_dimensions_handling: empty

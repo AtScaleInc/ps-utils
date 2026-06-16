@@ -1,0 +1,8 @@
+unique_name: m_ibnr_reserve_max
+object_type: metric
+label: ibnr_reserve
+calculation_method: maximum
+dataset: insurance_policy_fact
+column: ibnr_reserve
+is_hidden: false
+unrelated_dimensions_handling: empty

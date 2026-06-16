@@ -1,0 +1,603 @@
+<?xml version='1.0' encoding='utf-8' ?>
+
+<!-- build 20252.25.0818.1050                     -->
+<workbook original-version='18.1' source-build='2025.2.2 (20252.25.0818.1050)' source-platform='mac' version='18.1' xmlns:user='http://www.tableausoftware.com/xml/user'>
+  <document-format-change-manifest>
+    <AccessibleZoneTabOrder />
+    <AnimationOnByDefault />
+    <MarkAnimation />
+    <ObjectModelEncapsulateLegacy />
+    <ObjectModelTableType />
+    <SchemaViewerObjectModel />
+    <SetMembershipControl />
+    <SheetIdentifierTracking />
+    <SortTagCleanup />
+    <WindowsPersistSimpleIdentifiers />
+  </document-format-change-manifest>
+  <preferences>
+    <preference name='ui.encoding.shelf.height' value='24' />
+    <preference name='ui.shelf.height' value='26' />
+  </preferences>
+  <%
+    // --- Preamble: build per-model datasource map ---
+    const modelDatasourceMap = {};
+    let dsIndex = 0;
+    Object.entries(models).forEach(([modelName, model]) => {
+      const tn = model.sql.table_name;
+      modelDatasourceMap[modelName] = {
+        datasourceName: `federated.${dsIndex}`,
+        connectionName: `postgres.${dsIndex}`,
+        objectId: crypto.randomUUID().replace(/-/g, '').toUpperCase(),
+        caption: `${tn} (${tn}.${tn}) (${modelName})`,
+      };
+      dsIndex++;
+    });
+
+    // Parse namespace format string → Tableau default-format attribute value
+    function toTableauFormat(format) {
+      if (!format) return null;
+      const [type, decs] = format.split(':');
+      const dp = parseInt(decs || '0');
+      const dpStr = dp > 0 ? '.' + '0'.repeat(dp) : '';
+      if (type === 'integer') return 'd';
+      if (type === 'decimal') return `#,##0${dpStr}`;
+      if (type === 'percent') return `0${dpStr}%`;
+      if (type === 'currency') return `$#,##0${dpStr}`;
+      return null;
+    }
+
+    // Time grain derivation map for line chart x-axis (namespace: xAxisGranularity)
+    const granularityMap = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' };
+  %>
+  <datasources>
+    <% Object.entries(models).forEach(([modelName, model]) => {
+      const ds = modelDatasourceMap[modelName];
+      const table_name = model.sql.table_name;
+    %>
+    <datasource caption='<%= ds.caption %>' inline='true' name='<%= ds.datasourceName %>' version='18.1'>
+      <connection class='federated'>
+        <named-connections>
+          <named-connection caption='<%= connection.sql.server %>' name='<%= ds.connectionName %>'>
+            <connection authentication='username-password' class='postgres'
+                dbname='<%= connection.sql.schema %>' one-time-sql=''
+                port='<%= connection.sql.port %>' server='<%= connection.sql.server %>'
+                username='<%= connection.user.username %>' />
+          </named-connection>
+        </named-connections>
+        <relation connection='<%= ds.connectionName %>' name='<%= table_name %>' table='[<%= table_name %>].[<%= table_name %>]' type='table' />
+        <metadata-records>
+          <% let ordinal = 0;
+             Object.entries(model.sql.columns).forEach(([columnName, column]) => {
+               ordinal++;
+          %>
+          <metadata-record class='column'>
+            <remote-name><%= columnName %></remote-name>
+            <remote-type><%= functions.toRemoteType(column.data_type) %></remote-type>
+            <local-name>[<%= columnName %>]</local-name>
+            <parent-name>[<%= table_name %>]</parent-name>
+            <remote-alias><%= columnName %></remote-alias>
+            <ordinal><%= ordinal %></ordinal>
+            <local-type><%= functions.toTableauType(column.data_type) %></local-type>
+            <aggregation><%= functions.toMetadataAggregation(column.data_type) %></aggregation>
+            <% if (['WSTR', 'STRING', 'BSTR', 'GUID'].includes(column.data_type)) { %>
+            <width>2147483647</width>
+            <% } else if (['INT4', 'INT2', 'INT1'].includes(column.data_type)) { %>
+            <precision>10</precision>
+            <% } else if (['INT8'].includes(column.data_type)) { %>
+            <precision>19</precision>
+            <% } else if (['FLOAT32', 'FLOAT64'].includes(column.data_type)) { %>
+            <precision>17</precision>
+            <% } else if (['DATE_DOUBLE'].includes(column.data_type)) { %>
+            <precision>10</precision>
+            <% } else if (['DATETIME'].includes(column.data_type)) { %>
+            <precision>22</precision>
+            <% } %>
+            <contains-null>true</contains-null>
+            <% if (['WSTR', 'STRING', 'BSTR', 'GUID'].includes(column.data_type)) { %>
+            <collation flag='0' name='LEN_RUS' />
+            <attributes>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+            <% } %>
+            <object-id>[<%= ds.objectId %>]</object-id>
+          </metadata-record>
+          <% }) %>
+        </metadata-records>
+      </connection>
+      <aliases enabled='yes' />
+      <% Object.entries(model.sql.columns).forEach(([columnName, column]) => { %>
+      <column caption='<%= column.label %>' datatype='<%= functions.toTableauType(column.data_type) %>' name='[<%= columnName %>]' role='<%= column.role %>' type='<%= column.type %>' />
+      <% }) %>
+      <layout dim-ordering='alphabetic' measure-ordering='alphabetic' show-structure='true' />
+      <semantic-values>
+        <semantic-value key='[Country].[Name]' value='&quot;United States&quot;' />
+      </semantic-values>
+      <object-graph>
+        <objects>
+          <object caption='<%= table_name %>' id='<%= ds.objectId %>'>
+            <properties context=''>
+              <relation connection='<%= ds.connectionName %>' name='<%= table_name %>' table='[<%= table_name %>].[<%= table_name %>]' type='table' />
+            </properties>
+          </object>
+        </objects>
+      </object-graph>
+    </datasource>
+    <% }) %>
+  </datasources>
+  <worksheets>
+    <%
+      Object.entries(namespace.worksheets).forEach(([worksheetName, worksheet]) => {
+        const ds = modelDatasourceMap[worksheet.model];
+        const dsName = ds.datasourceName;
+        const dsCap = ds.caption;
+
+        // =============================================
+        // BAR CHART WORKSHEETS
+        // =============================================
+        if (worksheet.graphType === 'bar') {
+          const yCol = models[worksheet.model].sql.columns[worksheet.yAxis];
+          const xCol = models[worksheet.model].sql.columns[worksheet.xAxis];
+          const yDeriv = functions.toTableauDerivation(yCol.aggregation);
+          const xDeriv = functions.toTableauDerivation(xCol.aggregation);
+          const yInstName = functions.toColumnInstanceName(yDeriv, worksheet.yAxis, yCol.type);
+          const xInstName = functions.toColumnInstanceName(xDeriv, worksheet.xAxis, xCol.type);
+          const fmt = toTableauFormat(worksheet.format);
+          const sortDir = worksheet.sortDirection || 'desc';
+          const colorFieldName = worksheet.colorField || null;
+          const colorCol = colorFieldName ? models[worksheet.model].sql.columns[colorFieldName] : null;
+          const colorDeriv = colorCol ? (colorCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(colorCol.aggregation)) : null;
+          const colorInstName = colorCol ? functions.toColumnInstanceName(colorDeriv, colorFieldName, colorCol.type) : null;
+    %>
+      <worksheet name='<%= worksheet.title %>'>
+        <table>
+          <view>
+            <datasources>
+              <datasource caption='<%= dsCap %>' name='<%= dsName %>' />
+            </datasources>
+            <datasource-dependencies datasource='<%= dsName %>'>
+              <column-instance column='[<%= worksheet.yAxis %>]'
+                derivation='<%= yDeriv %>'
+                name='[<%= yInstName %>]' pivot='key'
+                type='<%= yCol.type %>' />
+              <column-instance column='[<%= worksheet.xAxis %>]'
+                derivation='<%= xDeriv %>'
+                name='[<%= xInstName %>]' pivot='key'
+                type='<%= xCol.type %>' />
+              <% if (colorCol) { %>
+              <column-instance column='[<%= colorFieldName %>]'
+                derivation='<%= colorDeriv %>'
+                name='[<%= colorInstName %>]' pivot='key'
+                type='<%= colorCol.type %>' />
+              <% } %>
+              <column caption='<%= yCol.label %>'
+                datatype='<%= functions.toTableauType(yCol.data_type) %>'
+                name='[<%= worksheet.yAxis %>]'
+                role='<%= yCol.role %>'
+                type='<%= yCol.type %>' />
+              <column caption='<%= xCol.label %>'
+                datatype='<%= functions.toTableauType(xCol.data_type) %>'
+                name='[<%= worksheet.xAxis %>]'
+                role='<%= xCol.role %>'
+                type='<%= xCol.type %>'<% if (fmt) { %> default-format='<%= fmt %>'<% } %> />
+              <% if (colorCol) { %>
+              <column caption='<%= colorCol.label %>'
+                datatype='<%= functions.toTableauType(colorCol.data_type) %>'
+                name='[<%= colorFieldName %>]'
+                role='<%= colorCol.role %>'
+                type='<%= colorCol.type %>' />
+              <% } %>
+              <% if (worksheet.filters) {
+                worksheet.filters.forEach((f) => {
+                  const fCol = models[worksheet.model].sql.columns[f.field];
+                  const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+                  const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+                  if (![worksheet.yAxis, worksheet.xAxis, colorFieldName].filter(Boolean).includes(f.field)) { %>
+              <column-instance column='[<%= f.field %>]'
+                derivation='<%= fDeriv %>'
+                name='[<%= fInstName %>]' pivot='key'
+                type='<%= fCol.type %>' />
+              <column caption='<%= fCol.label %>'
+                datatype='<%= functions.toTableauType(fCol.data_type) %>'
+                name='[<%= f.field %>]'
+                role='<%= fCol.role %>'
+                type='<%= fCol.type %>' />
+              <% } }) } %>
+            </datasource-dependencies>
+            <% if (worksheet.sortDirection) { %>
+            <natural-sort column='[<%= dsName %>].[<%= yInstName %>]' direction='<%= worksheet.sortDirection.toUpperCase() %>' />
+            <% } %>
+            <% if (worksheet.filters) { worksheet.filters.forEach((f) => {
+              const fCol = models[worksheet.model].sql.columns[f.field];
+              const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+              const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+              if (f.excludeNull) { %>
+            <filter class='categorical' column='[<%= dsName %>].[<%= fInstName %>]'>
+              <groupfilter function='except' user:ui-domain='relevant' user:ui-enumeration='exclusive' user:ui-marker='enumerate'>
+                <groupfilter function='level-members' level='[<%= fInstName %>]' />
+                <groupfilter function='member' level='[<%= fInstName %>]' member='%null%' />
+              </groupfilter>
+            </filter>
+            <% } }) } %>
+            <% if (worksheet.filters && worksheet.filters.length > 0) { %>
+            <slices>
+              <% worksheet.filters.forEach((f) => {
+                const fCol = models[worksheet.model].sql.columns[f.field];
+                const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+                const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+              %>
+              <column>[<%= dsName %>].[<%= fInstName %>]</column>
+              <% }) %>
+            </slices>
+            <% } %>
+            <aggregation value='true' />
+          </view>
+          <style />
+          <panes>
+            <pane selection-relaxation-option='selection-relaxation-allow'>
+              <view>
+                <breakdown value='auto' />
+              </view>
+              <mark class='Bar' />
+              <% if (colorCol) { %>
+              <encodings>
+                <color column='[<%= dsName %>].[<%= colorInstName %>]' />
+              </encodings>
+              <% } %>
+            </pane>
+          </panes>
+          <rows>[<%= dsName %>].[<%= yInstName %>]</rows>
+          <cols>[<%= dsName %>].[<%= xInstName %>]</cols>
+        </table>
+        <simple-id uuid='{<%= crypto.randomUUID() %>}' />
+      </worksheet>
+    <% }
+        // =============================================
+        // LINE CHART WORKSHEETS
+        // xAxisGranularity: day | week | month | quarter | year (default: week for DATETIME)
+        // =============================================
+        else if (worksheet.graphType === 'line') {
+          const xAxisCol = models[worksheet.model].sql.columns[worksheet.xAxis];
+          const yAxisCol = models[worksheet.model].sql.columns[worksheet.yAxis];
+          const granularity = granularityMap[worksheet.xAxisGranularity] || 'Week';
+          const xAxisDerivation = xAxisCol.data_type === 'DATETIME' ? granularity : functions.toTableauDerivation(xAxisCol.aggregation);
+          const yAxisDerivation = functions.toTableauDerivation(yAxisCol.aggregation);
+          const xInstName = functions.toColumnInstanceName(xAxisDerivation, worksheet.xAxis, xAxisCol.type);
+          const yInstName = functions.toColumnInstanceName(yAxisDerivation, worksheet.yAxis, yAxisCol.type);
+          const colorFieldName = worksheet.colorField || null;
+          const colorCol = colorFieldName ? models[worksheet.model].sql.columns[colorFieldName] : null;
+          const colorDeriv = colorCol ? (colorCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(colorCol.aggregation)) : null;
+          const colorInstName = colorCol ? functions.toColumnInstanceName(colorDeriv, colorFieldName, colorCol.type) : null;
+    %>
+      <worksheet name='<%= worksheet.title %>'>
+        <table>
+          <view>
+            <datasources>
+              <datasource caption='<%= dsCap %>' name='<%= dsName %>' />
+            </datasources>
+            <datasource-dependencies datasource='<%= dsName %>'>
+              <column-instance column='[<%= worksheet.xAxis %>]'
+                derivation='<%= xAxisDerivation %>'
+                name='[<%= xInstName %>]' pivot='key'
+                type='<%= xAxisCol.type %>' />
+              <column-instance column='[<%= worksheet.yAxis %>]'
+                derivation='<%= yAxisDerivation %>'
+                name='[<%= yInstName %>]' pivot='key'
+                type='<%= yAxisCol.type %>' />
+              <% if (colorCol) { %>
+              <column-instance column='[<%= colorFieldName %>]'
+                derivation='<%= colorDeriv %>'
+                name='[<%= colorInstName %>]' pivot='key'
+                type='<%= colorCol.type %>' />
+              <% } %>
+              <column caption='<%= xAxisCol.label %>'
+                datatype='<%= functions.toTableauType(xAxisCol.data_type) %>'
+                name='[<%= worksheet.xAxis %>]'
+                role='<%= xAxisCol.role %>'
+                type='<%= xAxisCol.type %>' />
+              <column caption='<%= yAxisCol.label %>'
+                datatype='<%= functions.toTableauType(yAxisCol.data_type) %>'
+                name='[<%= worksheet.yAxis %>]'
+                role='<%= yAxisCol.role %>'
+                type='<%= yAxisCol.type %>' />
+              <% if (colorCol) { %>
+              <column caption='<%= colorCol.label %>'
+                datatype='<%= functions.toTableauType(colorCol.data_type) %>'
+                name='[<%= colorFieldName %>]'
+                role='<%= colorCol.role %>'
+                type='<%= colorCol.type %>' />
+              <% } %>
+              <% if (worksheet.filters) {
+                worksheet.filters.forEach((f) => {
+                  const fCol = models[worksheet.model].sql.columns[f.field];
+                  const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+                  const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+                  if (![worksheet.xAxis, worksheet.yAxis, colorFieldName].filter(Boolean).includes(f.field)) { %>
+              <column-instance column='[<%= f.field %>]'
+                derivation='<%= fDeriv %>'
+                name='[<%= fInstName %>]' pivot='key'
+                type='<%= fCol.type %>' />
+              <column caption='<%= fCol.label %>'
+                datatype='<%= functions.toTableauType(fCol.data_type) %>'
+                name='[<%= f.field %>]'
+                role='<%= fCol.role %>'
+                type='<%= fCol.type %>' />
+              <% } }) } %>
+            </datasource-dependencies>
+            <% if (worksheet.filters) { worksheet.filters.forEach((f) => {
+              const fCol = models[worksheet.model].sql.columns[f.field];
+              const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+              const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+              if (f.excludeNull) { %>
+            <filter class='categorical' column='[<%= dsName %>].[<%= fInstName %>]'>
+              <groupfilter function='except' user:ui-domain='relevant' user:ui-enumeration='exclusive' user:ui-marker='enumerate'>
+                <groupfilter function='level-members' level='[<%= fInstName %>]' />
+                <groupfilter function='member' level='[<%= fInstName %>]' member='%null%' />
+              </groupfilter>
+            </filter>
+            <% } }) } %>
+            <% if (worksheet.filters && worksheet.filters.length > 0) { %>
+            <slices>
+              <% worksheet.filters.forEach((f) => {
+                const fCol = models[worksheet.model].sql.columns[f.field];
+                const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+                const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+              %>
+              <column>[<%= dsName %>].[<%= fInstName %>]</column>
+              <% }) %>
+            </slices>
+            <% } %>
+            <aggregation value='true' />
+          </view>
+          <style />
+          <panes>
+            <pane selection-relaxation-option='selection-relaxation-allow'>
+              <view>
+                <breakdown value='auto' />
+              </view>
+              <mark class='Line' />
+              <% if (colorCol) { %>
+              <encodings>
+                <color column='[<%= dsName %>].[<%= colorInstName %>]' />
+              </encodings>
+              <% } %>
+            </pane>
+          </panes>
+          <rows>[<%= dsName %>].[<%= yInstName %>]</rows>
+          <cols>[<%= dsName %>].[<%= xInstName %>]</cols>
+        </table>
+        <simple-id uuid='{<%= crypto.randomUUID() %>}' />
+      </worksheet>
+    <% }
+        // =============================================
+        // TEXT WORKSHEETS (Summary Statistics / KPI scorecards)
+        // format: integer | decimal:N | percent:N | currency:N
+        // =============================================
+        else if (worksheet.graphType === 'text') {
+          const fmt = toTableauFormat(worksheet.format);
+    %>
+      <worksheet name='<%= worksheet.title %>'>
+        <table>
+          <view>
+            <datasources>
+              <datasource caption='<%= dsCap %>' name='<%= dsName %>' />
+            </datasources>
+            <datasource-dependencies datasource='<%= dsName %>'>
+              <% if (worksheet.xAxis && worksheet.yAxis) {
+                const xCol = models[worksheet.model].sql.columns[worksheet.xAxis];
+                const yCol = models[worksheet.model].sql.columns[worksheet.yAxis];
+                const xDeriv = functions.toTableauDerivation(xCol.aggregation);
+                const yDeriv = functions.toTableauDerivation(yCol.aggregation);
+              %>
+              <column-instance column='[<%= worksheet.xAxis %>]'
+                derivation='<%= xDeriv %>'
+                name='[<%= functions.toColumnInstanceName(xDeriv, worksheet.xAxis, xCol.type) %>]' pivot='key'
+                type='<%= xCol.type %>' />
+              <column caption='<%= xCol.label %>'
+                datatype='<%= functions.toTableauType(xCol.data_type) %>'
+                name='[<%= worksheet.xAxis %>]'
+                role='<%= xCol.role %>'
+                type='<%= xCol.type %>' />
+              <column-instance column='[<%= worksheet.yAxis %>]'
+                derivation='<%= yDeriv %>'
+                name='[<%= functions.toColumnInstanceName(yDeriv, worksheet.yAxis, yCol.type) %>]' pivot='key'
+                type='<%= yCol.type %>' />
+              <column caption='<%= yCol.label %>'
+                datatype='<%= functions.toTableauType(yCol.data_type) %>'
+                name='[<%= worksheet.yAxis %>]'
+                role='<%= yCol.role %>'
+                type='<%= yCol.type %>'<% if (fmt) { %> default-format='<%= fmt %>'<% } %> />
+              <% } else if (worksheet.measures) {
+                worksheet.measures.forEach((measure) => {
+                  const mCol = models[worksheet.model].sql.columns[measure];
+                  const mDeriv = functions.toTableauDerivation(mCol.aggregation);
+              %>
+              <column-instance column='[<%= measure %>]'
+                derivation='<%= mDeriv %>'
+                name='[<%= functions.toColumnInstanceName(mDeriv, measure, mCol.type) %>]' pivot='key'
+                type='<%= mCol.type %>' />
+              <column caption='<%= mCol.label %>'
+                datatype='<%= functions.toTableauType(mCol.data_type) %>'
+                name='[<%= measure %>]'
+                role='<%= mCol.role %>'
+                type='<%= mCol.type %>'<% if (fmt) { %> default-format='<%= fmt %>'<% } %> />
+              <% })} %>
+              <% if (worksheet.filters) {
+                worksheet.filters.forEach((f) => {
+                  const fCol = models[worksheet.model].sql.columns[f.field];
+                  const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+                  const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+                  const alreadyDeclared = [worksheet.xAxis, worksheet.yAxis, ...(worksheet.measures || [])].filter(Boolean);
+                  if (!alreadyDeclared.includes(f.field)) { %>
+              <column-instance column='[<%= f.field %>]'
+                derivation='<%= fDeriv %>'
+                name='[<%= fInstName %>]' pivot='key'
+                type='<%= fCol.type %>' />
+              <column caption='<%= fCol.label %>'
+                datatype='<%= functions.toTableauType(fCol.data_type) %>'
+                name='[<%= f.field %>]'
+                role='<%= fCol.role %>'
+                type='<%= fCol.type %>' />
+              <% } }) } %>
+            </datasource-dependencies>
+            <% if (worksheet.filters) { worksheet.filters.forEach((f) => {
+              const fCol = models[worksheet.model].sql.columns[f.field];
+              const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+              const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+              if (f.excludeNull) { %>
+            <filter class='categorical' column='[<%= dsName %>].[<%= fInstName %>]'>
+              <groupfilter function='except' user:ui-domain='relevant' user:ui-enumeration='exclusive' user:ui-marker='enumerate'>
+                <groupfilter function='level-members' level='[<%= fInstName %>]' />
+                <groupfilter function='member' level='[<%= fInstName %>]' member='%null%' />
+              </groupfilter>
+            </filter>
+            <% } }) } %>
+            <% if (worksheet.filters && worksheet.filters.length > 0) { %>
+            <slices>
+              <% worksheet.filters.forEach((f) => {
+                const fCol = models[worksheet.model].sql.columns[f.field];
+                const fDeriv = fCol.role === 'dimension' ? 'None' : functions.toTableauDerivation(fCol.aggregation);
+                const fInstName = functions.toColumnInstanceName(fDeriv, f.field, fCol.type);
+              %>
+              <column>[<%= dsName %>].[<%= fInstName %>]</column>
+              <% }) %>
+            </slices>
+            <% } %>
+            <aggregation value='true' />
+          </view>
+          <style>
+            <style-rule element='cell'>
+              <format attr='text-align' value='center' />
+              <format attr='font-size' value='14' />
+            </style-rule>
+            <style-rule element='label'>
+              <format attr='font-size' value='9' />
+              <format attr='font-weight' value='bold' />
+            </style-rule>
+          </style>
+          <panes>
+            <pane selection-relaxation-option='selection-relaxation-allow'>
+              <view>
+                <breakdown value='auto' />
+              </view>
+              <mark class='Text' />
+              <encodings>
+                <% if (worksheet.yAxis) {
+                  const yCol = models[worksheet.model].sql.columns[worksheet.yAxis];
+                  const yDeriv = functions.toTableauDerivation(yCol.aggregation);
+                %>
+                <text column='[<%= dsName %>].[<%= functions.toColumnInstanceName(yDeriv, worksheet.yAxis, yCol.type) %>]' />
+                <% } else if (worksheet.measures) {
+                  const mCol = models[worksheet.model].sql.columns[worksheet.measures[0]];
+                  const mDeriv = functions.toTableauDerivation(mCol.aggregation);
+                %>
+                <text column='[<%= dsName %>].[<%= functions.toColumnInstanceName(mDeriv, worksheet.measures[0], mCol.type) %>]' />
+                <% } %>
+              </encodings>
+            </pane>
+          </panes>
+          <rows></rows>
+          <cols><% if (worksheet.xAxis) {
+            const xCol = models[worksheet.model].sql.columns[worksheet.xAxis];
+            const xDeriv = functions.toTableauDerivation(xCol.aggregation);
+          %>[<%= dsName %>].[<%= functions.toColumnInstanceName(xDeriv, worksheet.xAxis, xCol.type) %>]<% } %></cols>
+        </table>
+        <simple-id uuid='{<%= crypto.randomUUID() %>}' />
+      </worksheet>
+    <% } %>
+    <% }) %>
+  </worksheets>
+
+  <dashboards>
+    <% Object.entries(namespace.dashboards).forEach(([dashboardName, dashboard]) => {
+      const segmentWidth = dashboard.size.width / dashboard.size.hSegments;
+      const segmentHeight = dashboard.size.height / dashboard.size.vSegments;
+      const categoryHeaders = dashboard.categoryHeaders || [];
+      let zoneId = 0;
+    %>
+      <dashboard enable-sort-zone-taborder='true' name='<%= dashboard.title %>'>
+        <style>
+          <style-rule element='title'>
+            <format attr='font-weight' value='bold' />
+            <format attr='font-size' value='14' />
+          </style-rule>
+        </style>
+        <size maxheight='<%= dashboard.size.height %>' maxwidth='<%= dashboard.size.width %>'
+            minheight='<%= dashboard.size.height %>' minwidth='<%= dashboard.size.width %>' />
+        <zones>
+          <zone h='100000' id='<%= zoneId++ %>' type-v2='layout-basic' w='100000' x='0' y='0'>
+            <% categoryHeaders.forEach((header) => {
+              const hColSpan = header.colSpan || dashboard.size.hSegments;
+              const hRowSpan = header.rowSpan || 1;
+            %>
+            <zone id='<%= zoneId++ %>'
+              type-v2='title'
+              w='<%= hColSpan * segmentWidth %>'
+              h='<%= hRowSpan * segmentHeight %>'
+              x='<%= (header.x || 0) * segmentWidth %>'
+              y='<%= header.y * segmentHeight %>'>
+              <formatted-text>
+                <run bold='true' fontsize='12'><%= header.label %></run>
+              </formatted-text>
+            </zone>
+            <% }) %>
+            <% dashboard.tiles.forEach((tile) => {
+              const colSpan = tile.colSpan || 1;
+              const rowSpan = tile.rowSpan || 1;
+            %>
+            <zone
+              id='<%= zoneId++ %>'
+              name='<%= namespace.worksheets[tile.worksheet].title %>'
+              w='<%= colSpan * segmentWidth %>'
+              h='<%= rowSpan * segmentHeight %>'
+              x='<%= tile.x * segmentWidth %>'
+              y='<%= tile.y * segmentHeight %>'/>
+            <% }) %>
+          </zone>
+        </zones>
+        <simple-id uuid='{<%= crypto.randomUUID() %>}' />
+      </dashboard>
+    <% }) %>
+  </dashboards>
+
+  <windows>
+    <% Object.entries(namespace.worksheets).forEach(([worksheetName, worksheet]) => { %>
+      <window class='worksheet' name='<%= worksheet.title %>'>
+        <cards>
+          <edge name='left'>
+            <strip size='160'>
+              <card type='pages' />
+              <card type='filters' />
+              <card type='marks' />
+            </strip>
+          </edge>
+          <edge name='top'>
+            <strip size='2147483647'>
+              <card type='columns' />
+            </strip>
+            <strip size='2147483647'>
+              <card type='rows' />
+            </strip>
+            <strip size='31'>
+              <card type='title' />
+            </strip>
+          </edge>
+        </cards>
+        <simple-id uuid='{<%= crypto.randomUUID() %>}' />
+      </window>
+    <% }) %>
+
+    <% Object.entries(namespace.dashboards).forEach(([dashboardName, dashboard]) => { %>
+      <window class='dashboard' maximized='true' name='<%= dashboard.title %>'>
+        <viewpoints>
+          <% dashboard.tiles.forEach((tile) => { %>
+            <viewpoint name='<%= namespace.worksheets[tile.worksheet].title %>' />
+          <% }) %>
+        </viewpoints>
+        <active id='-1' />
+        <simple-id uuid='{<%= crypto.randomUUID() %>}' />
+      </window>
+    <% }) %>
+  </windows>
+
+  <thumbnails/>
+</workbook>

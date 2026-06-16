@@ -1,0 +1,8 @@
+unique_name: m_engagement_score_max
+object_type: metric
+label: engagement_score
+calculation_method: maximum
+dataset: hr_workforce_fact
+column: engagement_score
+is_hidden: false
+unrelated_dimensions_handling: empty

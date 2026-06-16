@@ -1,0 +1,112 @@
+unique_name: manufacturing
+object_type: model
+label: manufacturing
+relationships:
+  -     unique_name: manufacturing_production_fact_dim-facility_facility_id
+        from:
+          dataset: manufacturing_production_fact
+          join_columns:
+            - facility_id
+        to:
+          dimension: Dim Facility
+          level: la_facility_id
+  -     unique_name: manufacturing_production_fact_dim-product_product_id
+        from:
+          dataset: manufacturing_production_fact
+          join_columns:
+            - product_id
+        to:
+          dimension: Dim Product
+          level: la_product_id
+  -     unique_name: manufacturing_production_fact_dim-supplier_supplier_id
+        from:
+          dataset: manufacturing_production_fact
+          join_columns:
+            - supplier_id
+        to:
+          dimension: Dim Supplier
+          level: la_supplier_id
+  -     unique_name: manufacturing_production_fact_dim-cost-center_cost_center_id
+        from:
+          dataset: manufacturing_production_fact
+          join_columns:
+            - cost_center_id
+        to:
+          dimension: Dim Cost Center
+          level: la_cost_center_id
+  -     unique_name: manufacturing_production_fact_dim-quality_quality_id
+        from:
+          dataset: manufacturing_production_fact
+          join_columns:
+            - quality_id
+        to:
+          dimension: Dim Quality
+          level: la_quality_id
+  -     unique_name: manufacturing_production_fact_dim-production-calendar_production_calendar_id
+        from:
+          dataset: manufacturing_production_fact
+          join_columns:
+            - production_calendar_id
+        to:
+          dimension: Dim Production Calendar
+          level: la_production_calendar_id
+metrics:
+  -     unique_name: m_work_order_id_sum
+  -     unique_name: m_work_order_id_avg
+  -     unique_name: m_work_order_id_min
+  -     unique_name: m_work_order_id_max
+  -     unique_name: m_planned_qty_sum
+  -     unique_name: m_planned_qty_avg
+  -     unique_name: m_planned_qty_min
+  -     unique_name: m_planned_qty_max
+  -     unique_name: m_actual_qty_sum
+  -     unique_name: m_actual_qty_avg
+  -     unique_name: m_actual_qty_min
+  -     unique_name: m_actual_qty_max
+  -     unique_name: m_scrap_qty_sum
+  -     unique_name: m_scrap_qty_avg
+  -     unique_name: m_scrap_qty_min
+  -     unique_name: m_scrap_qty_max
+  -     unique_name: m_rework_qty_sum
+  -     unique_name: m_rework_qty_avg
+  -     unique_name: m_rework_qty_min
+  -     unique_name: m_rework_qty_max
+  -     unique_name: m_oee_avg
+  -     unique_name: m_oee_min
+  -     unique_name: m_oee_max
+  -     unique_name: m_first_pass_yield_avg
+  -     unique_name: m_first_pass_yield_min
+  -     unique_name: m_first_pass_yield_max
+  -     unique_name: m_scrap_rate_avg
+  -     unique_name: m_scrap_rate_min
+  -     unique_name: m_scrap_rate_max
+  -     unique_name: m_otif_avg
+  -     unique_name: m_otif_min
+  -     unique_name: m_otif_max
+  -     unique_name: m_on_time_delivery_avg
+  -     unique_name: m_on_time_delivery_min
+  -     unique_name: m_on_time_delivery_max
+  -     unique_name: m_downtime_minutes_sum
+  -     unique_name: m_downtime_minutes_avg
+  -     unique_name: m_downtime_minutes_min
+  -     unique_name: m_downtime_minutes_max
+  -     unique_name: m_cycle_time_seconds_sum
+  -     unique_name: m_cycle_time_seconds_avg
+  -     unique_name: m_cycle_time_seconds_min
+  -     unique_name: m_cycle_time_seconds_max
+  -     unique_name: m_material_cost_sum
+  -     unique_name: m_material_cost_avg
+  -     unique_name: m_material_cost_min
+  -     unique_name: m_material_cost_max
+  -     unique_name: m_labor_cost_sum
+  -     unique_name: m_labor_cost_avg
+  -     unique_name: m_labor_cost_min
+  -     unique_name: m_labor_cost_max
+  -     unique_name: m_overhead_cost_sum
+  -     unique_name: m_overhead_cost_avg
+  -     unique_name: m_overhead_cost_min
+  -     unique_name: m_overhead_cost_max
+  -     unique_name: m_total_cost_sum
+  -     unique_name: m_total_cost_avg
+  -     unique_name: m_total_cost_min
+  -     unique_name: m_total_cost_max

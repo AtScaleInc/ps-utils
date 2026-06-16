@@ -1,0 +1,8 @@
+unique_name: m_cpa_max
+object_type: metric
+label: cpa
+calculation_method: maximum
+dataset: media_ad_performance_fact
+column: cpa
+is_hidden: false
+unrelated_dimensions_handling: empty

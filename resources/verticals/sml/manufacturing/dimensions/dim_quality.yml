@@ -1,0 +1,37 @@
+unique_name: Dim Quality
+object_type: dimension
+label: Dim Quality
+type: standard
+level_attributes:
+  -     unique_name: la_defect_category
+        label: Defect Category
+        dataset: dim_quality
+        name_column: defect_category
+        key_columns:
+          - defect_category
+  -     unique_name: la_defect_code
+        label: Defect Code
+        dataset: dim_quality
+        name_column: defect_code
+        key_columns:
+          - defect_code
+  -     unique_name: la_reject_reason
+        label: Reject Reason
+        dataset: dim_quality
+        name_column: reject_reason
+        key_columns:
+          - reject_reason
+  -     unique_name: la_scrap_code
+        label: Scrap Code
+        dataset: dim_quality
+        name_column: scrap_code
+        key_columns:
+          - scrap_code
+  -     unique_name: la_quality_id
+        label: quality_id
+        dataset: dim_quality
+        name_column: quality_id
+        key_columns:
+          - quality_id
+        is_unique_key: true
+hierarchies: []

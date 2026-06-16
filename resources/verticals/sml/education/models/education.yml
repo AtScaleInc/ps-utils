@@ -1,0 +1,81 @@
+unique_name: education
+object_type: model
+label: education
+relationships:
+  -     unique_name: education_enrollment_fact_dim-student_student_id
+        from:
+          dataset: education_enrollment_fact
+          join_columns:
+            - student_id
+        to:
+          dimension: Dim Student
+          level: la_student_id
+  -     unique_name: education_enrollment_fact_dim-course_course_id
+        from:
+          dataset: education_enrollment_fact
+          join_columns:
+            - course_id
+        to:
+          dimension: Dim Course
+          level: la_course_id
+  -     unique_name: education_enrollment_fact_dim-institution_institution_id
+        from:
+          dataset: education_enrollment_fact
+          join_columns:
+            - institution_id
+        to:
+          dimension: Dim Institution
+          level: la_institution_id
+  -     unique_name: education_enrollment_fact_dim-academic-calendar_academic_calendar_id
+        from:
+          dataset: education_enrollment_fact
+          join_columns:
+            - academic_calendar_id
+        to:
+          dimension: Dim Academic Calendar
+          level: la_academic_calendar_id
+metrics:
+  -     unique_name: m_gpa_avg
+  -     unique_name: m_gpa_min
+  -     unique_name: m_gpa_max
+  -     unique_name: m_grade_point_average_sum
+  -     unique_name: m_grade_point_average_avg
+  -     unique_name: m_grade_point_average_min
+  -     unique_name: m_grade_point_average_max
+  -     unique_name: m_attendance_rate_avg
+  -     unique_name: m_attendance_rate_min
+  -     unique_name: m_attendance_rate_max
+  -     unique_name: m_attendance_pct_avg
+  -     unique_name: m_attendance_pct_min
+  -     unique_name: m_attendance_pct_max
+  -     unique_name: m_test_score_avg
+  -     unique_name: m_test_score_min
+  -     unique_name: m_test_score_max
+  -     unique_name: m_assessment_score_avg
+  -     unique_name: m_assessment_score_min
+  -     unique_name: m_assessment_score_max
+  -     unique_name: m_pass_rate_avg
+  -     unique_name: m_pass_rate_min
+  -     unique_name: m_pass_rate_max
+  -     unique_name: m_completion_rate_avg
+  -     unique_name: m_completion_rate_min
+  -     unique_name: m_completion_rate_max
+  -     unique_name: m_graduation_rate_avg
+  -     unique_name: m_graduation_rate_min
+  -     unique_name: m_graduation_rate_max
+  -     unique_name: m_enrollment_count_sum
+  -     unique_name: m_enrollment_count_avg
+  -     unique_name: m_enrollment_count_min
+  -     unique_name: m_enrollment_count_max
+  -     unique_name: m_headcount_sum
+  -     unique_name: m_headcount_avg
+  -     unique_name: m_headcount_min
+  -     unique_name: m_headcount_max
+  -     unique_name: m_absences_count_sum
+  -     unique_name: m_absences_count_avg
+  -     unique_name: m_absences_count_min
+  -     unique_name: m_absences_count_max
+  -     unique_name: m_disciplinary_incidents_sum
+  -     unique_name: m_disciplinary_incidents_avg
+  -     unique_name: m_disciplinary_incidents_min
+  -     unique_name: m_disciplinary_incidents_max

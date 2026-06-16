@@ -1,0 +1,8 @@
+unique_name: m_total_cash_avg
+object_type: metric
+label: total_cash
+calculation_method: average
+dataset: hr_workforce_fact
+column: total_cash
+is_hidden: false
+unrelated_dimensions_handling: empty

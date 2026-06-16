@@ -1,0 +1,8 @@
+unique_name: m_dosage_min
+object_type: metric
+label: dosage
+calculation_method: minimum
+dataset: pharma_clinical_fact
+column: dosage
+is_hidden: false
+unrelated_dimensions_handling: empty

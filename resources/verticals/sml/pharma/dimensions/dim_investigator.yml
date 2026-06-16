@@ -1,0 +1,37 @@
+unique_name: Dim Investigator
+object_type: dimension
+label: Dim Investigator
+type: standard
+level_attributes:
+  -     unique_name: la_pi_id
+        label: Pi Id
+        dataset: dim_investigator
+        name_column: pi_id
+        key_columns:
+          - pi_id
+  -     unique_name: la_principal_investigator
+        label: Principal Investigator
+        dataset: dim_investigator
+        name_column: principal_investigator
+        key_columns:
+          - principal_investigator
+  -     unique_name: la_manufacturing_site
+        label: Manufacturing Site
+        dataset: dim_investigator
+        name_column: manufacturing_site
+        key_columns:
+          - manufacturing_site
+  -     unique_name: la_manufacturing_line
+        label: Manufacturing Line
+        dataset: dim_investigator
+        name_column: manufacturing_line
+        key_columns:
+          - manufacturing_line
+  -     unique_name: la_investigator_id
+        label: investigator_id
+        dataset: dim_investigator
+        name_column: investigator_id
+        key_columns:
+          - investigator_id
+        is_unique_key: true
+hierarchies: []

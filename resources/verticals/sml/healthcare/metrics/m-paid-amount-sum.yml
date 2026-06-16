@@ -1,0 +1,8 @@
+unique_name: m_paid_amount_sum
+object_type: metric
+label: paid_amount
+calculation_method: sum
+dataset: healthcare_encounter_fact
+column: paid_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

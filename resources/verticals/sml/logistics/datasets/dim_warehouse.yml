@@ -1,0 +1,24 @@
+unique_name: dim_warehouse
+object_type: dataset
+label: dim_warehouse
+connection_id: my_connection
+table: dim_warehouse
+columns:
+  -     name: warehouse_id
+        data_type: bigint
+  -     name: warehouse_region
+        data_type: string
+  -     name: warehouse_name
+        data_type: string
+  -     name: dc_id
+        data_type: bigint
+  -     name: fulfillment_center_id
+        data_type: bigint
+  -     name: warehouse_zone
+        data_type: string
+  -     name: aisle_id
+        data_type: string
+  -     name: dock_id
+        data_type: string
+  -     name: dock_door
+        data_type: string

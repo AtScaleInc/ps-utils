@@ -1,0 +1,8 @@
+unique_name: m_units_shipped_sum
+object_type: metric
+label: units_shipped
+calculation_method: sum
+dataset: logistics_shipment_fact
+column: units_shipped
+is_hidden: false
+unrelated_dimensions_handling: empty

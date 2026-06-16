@@ -1,0 +1,8 @@
+unique_name: m_claim_count_min
+object_type: metric
+label: claim_count
+calculation_method: minimum
+dataset: insurance_policy_fact
+column: claim_count
+is_hidden: false
+unrelated_dimensions_handling: empty

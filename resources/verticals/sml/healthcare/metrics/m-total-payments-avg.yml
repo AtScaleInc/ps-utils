@@ -1,0 +1,8 @@
+unique_name: m_total_payments_avg
+object_type: metric
+label: total_payments
+calculation_method: average
+dataset: healthcare_encounter_fact
+column: total_payments
+is_hidden: false
+unrelated_dimensions_handling: empty

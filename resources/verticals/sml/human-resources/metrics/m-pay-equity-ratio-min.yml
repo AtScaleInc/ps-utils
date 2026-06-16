@@ -1,0 +1,8 @@
+unique_name: m_pay_equity_ratio_min
+object_type: metric
+label: pay_equity_ratio
+calculation_method: minimum
+dataset: hr_workforce_fact
+column: pay_equity_ratio
+is_hidden: false
+unrelated_dimensions_handling: empty

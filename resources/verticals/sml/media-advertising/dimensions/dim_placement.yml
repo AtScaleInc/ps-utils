@@ -1,0 +1,75 @@
+unique_name: Dim Placement
+object_type: dimension
+label: Dim Placement
+type: standard
+level_attributes:
+  -     unique_name: la_placement_name
+        label: Placement Name
+        dataset: dim_placement
+        name_column: placement_name
+        key_columns:
+          - placement_name
+        sort_column: placement_id
+  -     unique_name: la_placement_type
+        label: Placement Type
+        dataset: dim_placement
+        name_column: placement_type
+        key_columns:
+          - placement_type
+  -     unique_name: la_site_id
+        label: Site Id
+        dataset: dim_placement
+        name_column: site_id
+        key_columns:
+          - site_id
+  -     unique_name: la_publisher_name
+        label: Publisher Name
+        dataset: dim_placement
+        name_column: publisher_name
+        key_columns:
+          - publisher_name
+  -     unique_name: la_section_name
+        label: Section Name
+        dataset: dim_placement
+        name_column: section_name
+        key_columns:
+          - section_name
+  -     unique_name: la_page_name
+        label: Page Name
+        dataset: dim_placement
+        name_column: page_name
+        key_columns:
+          - page_name
+  -     unique_name: la_ad_slot
+        label: Ad Slot
+        dataset: dim_placement
+        name_column: ad_slot
+        key_columns:
+          - ad_slot
+  -     unique_name: la_media_type
+        label: Media Type
+        dataset: dim_placement
+        name_column: media_type
+        key_columns:
+          - media_type
+  -     unique_name: la_platform_name
+        label: Platform Name
+        dataset: dim_placement
+        name_column: platform_name
+        key_columns:
+          - platform_name
+  -     unique_name: la_channel_name
+        label: Channel Name
+        dataset: dim_placement
+        name_column: channel_name
+        key_columns:
+          - channel_name
+  -     unique_name: la_placement_id
+        label: placement_id
+        dataset: dim_placement
+        name_column: placement_name
+        key_columns:
+          - placement_id
+        is_unique_key: true
+        sort_column: placement_id
+hierarchies: []

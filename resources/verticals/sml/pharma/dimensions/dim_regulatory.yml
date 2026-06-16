@@ -1,0 +1,37 @@
+unique_name: Dim Regulatory
+object_type: dimension
+label: Dim Regulatory
+type: standard
+level_attributes:
+  -     unique_name: la_regulatory_agency
+        label: Regulatory Agency
+        dataset: dim_regulatory
+        name_column: regulatory_agency
+        key_columns:
+          - regulatory_agency
+  -     unique_name: la_regulatory_pathway
+        label: Regulatory Pathway
+        dataset: dim_regulatory
+        name_column: regulatory_pathway
+        key_columns:
+          - regulatory_pathway
+  -     unique_name: la_application_type
+        label: Application Type
+        dataset: dim_regulatory
+        name_column: application_type
+        key_columns:
+          - application_type
+  -     unique_name: la_approval_status
+        label: Approval Status
+        dataset: dim_regulatory
+        name_column: approval_status
+        key_columns:
+          - approval_status
+  -     unique_name: la_regulatory_id
+        label: regulatory_id
+        dataset: dim_regulatory
+        name_column: regulatory_id
+        key_columns:
+          - regulatory_id
+        is_unique_key: true
+hierarchies: []

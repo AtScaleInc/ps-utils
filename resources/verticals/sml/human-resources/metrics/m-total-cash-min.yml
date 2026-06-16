@@ -1,0 +1,8 @@
+unique_name: m_total_cash_min
+object_type: metric
+label: total_cash
+calculation_method: minimum
+dataset: hr_workforce_fact
+column: total_cash
+is_hidden: false
+unrelated_dimensions_handling: empty

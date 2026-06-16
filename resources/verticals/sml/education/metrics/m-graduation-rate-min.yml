@@ -1,0 +1,8 @@
+unique_name: m_graduation_rate_min
+object_type: metric
+label: graduation_rate
+calculation_method: minimum
+dataset: education_enrollment_fact
+column: graduation_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

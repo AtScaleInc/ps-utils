@@ -1,0 +1,8 @@
+unique_name: m_cost_per_kwh_avg
+object_type: metric
+label: cost_per_kwh
+calculation_method: average
+dataset: energy_interval_fact
+column: cost_per_kwh
+is_hidden: false
+unrelated_dimensions_handling: empty

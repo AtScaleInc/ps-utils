@@ -1,0 +1,32 @@
+unique_name: Dim Object Class
+object_type: dimension
+label: Dim Object Class
+type: standard
+level_attributes:
+  -     unique_name: la_object_class_code
+        label: Object Class Code
+        dataset: dim_object_class
+        name_column: object_class_code
+        key_columns:
+          - object_class_code
+  -     unique_name: la_major_object_class
+        label: Major Object Class
+        dataset: dim_object_class
+        name_column: major_object_class
+        key_columns:
+          - major_object_class
+  -     unique_name: la_minor_object_class
+        label: Minor Object Class
+        dataset: dim_object_class
+        name_column: minor_object_class
+        key_columns:
+          - minor_object_class
+  -     unique_name: la_object_class_id
+        label: object_class_id
+        dataset: dim_object_class
+        name_column: object_class_name
+        key_columns:
+          - object_class_id
+        is_unique_key: true
+        sort_column: object_class_id
+hierarchies: []

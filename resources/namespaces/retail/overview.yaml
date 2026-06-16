@@ -1,0 +1,168 @@
+---
+version: 1
+title: Retail Dashboard
+description: Template for building a retail dashboard with KPIs and visualizations.
+
+# -- Project Specific
+# connections.yaml
+# models.yaml (mdx + sql columns): Auto generated
+# aliases.yaml (aliases for measures) : Optional, recommended for AtScale PS team to use
+
+# -- Functional Specific / Visualizations
+# Telemetry.yaml (worksheet definitions)
+
+# -- BI Tool Specific - Should not be modified unless new BI tool
+# tableau.yaml (worksheet interpretation)
+
+# =============================================================================
+# WORKSHEET OPTIONS REFERENCE
+# -----------------------------------------------------------------------------
+# graphType: bar | line | text
+#
+# bar:
+#   xAxis, yAxis       - required column names from model
+#   format             - optional: integer | decimal:N | percent:N | currency:N
+#   limit              - optional int: emit a top-N filter on the dimension axis
+#   sortDirection      - optional: asc | desc (default: desc)
+#   colorField         - optional column name for color breakdown encoding
+#
+# line:
+#   xAxis, yAxis       - required column names from model
+#   xAxisGranularity   - optional: day | week | month | quarter | year (default: week for DATETIME)
+#   colorField         - optional column name for color breakdown encoding
+#
+# text:
+#   measures           - list of column names (or use xAxis + yAxis)
+#   format             - optional: integer | decimal:N | percent:N | currency:N
+# =============================================================================
+
+worksheets:
+  # Summary Statistics - Single number displays
+  summary_total_units_sold:
+    title: Total Units Sold
+    model: internet_sales
+    graphType: text
+    measures:
+      - orderquantity1
+    format: "integer"
+    description: Total Units Sold
+
+  summary_total_sales:
+    title: Total Sales
+    model: internet_sales
+    graphType: text
+    measures:
+      - salesamount1
+    format: "integer"
+    description: Total Sales
+
+  # KPI Visuals
+  kpi_total_orders_per_year:
+    title: Total Orders per Year
+    model: internet_sales
+    graphType: line
+    xAxis: Order YearMonth
+    xAxisGranularity: year
+    yAxis: orderquantity1
+    limit: 5
+
+  kpi_total_sales_per_country:
+    title: Total Sales per Country
+    model: internet_sales
+    graphType: bar
+    xAxis: salesamount1
+    yAxis: CountryCity
+    limit: 5
+    filters:
+    - field: salesamount1
+      excludeNull: true
+
+  kpi_total_sales_per_country2:
+    title: Total Sales per Country
+    model: internet_sales
+    graphType: bar
+    xAxis: CountryCity
+    yAxis: salesamount1
+    filters:
+    - field: salesamount1
+      excludeNull: true
+
+dashboards:
+  # ============================================================================
+  # COMPREHENSIVE RETAIL DASHBOARD
+  # Layout: Section headers (1 row each) followed by worksheet tiles
+  #
+  # Grid: 2 columns x 18 rows (100px per segment)
+  # Sections:
+  #   y=0       → "Summary Statistics" header
+  #   y=1–2     → Summary Statistics tiles (1 rows × 2 cols)
+  #   y=3       → "KPI Visuals" header
+  #   y=4–18    → KPI charts (3 charts × 5 rows each)
+  # ============================================================================
+  Retail_comprehensive:
+    title: Retail Dashboard
+    description: Comprehensive view of Retail metrics organized by Summary Statistics and KPIs
+
+    size:
+      width: 1500
+      height: 3600
+      hSegments: 2
+      vSegments: 18
+
+    # ------------------------------------------
+    # CATEGORY SECTION HEADERS
+    # Each header spans full width (colSpan: 3), 1 row tall.
+    # The EJS template emits these as Tableau title zones.
+    # ------------------------------------------
+    categoryHeaders:
+      - label: "Summary Statistics"
+        x: 0
+        y: 0
+        colSpan: 2
+        rowSpan: 1
+      - label: "KPI Visuals"
+        x: 0
+        y: 3
+        colSpan: 2
+        rowSpan: 1
+
+    tiles:
+      # ------------------------------------------
+      # SUMMARY STATISTICS (3x2 grid, y=1–4)
+      # Row 1 (y=1): Users | Organizations | Cubes
+      # Row 2 (y=3): Avg Queries | Success Rate | Avg WallTime
+      # ------------------------------------------
+      - worksheet: summary_total_units_sold
+        x: 0
+        y: 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+      - worksheet: summary_total_sales
+        x: 1
+        y: 1
+        colSpan: 1
+        rowSpan: 2
+        category: Summary Statistics
+
+      # ------------------------------------------
+      # KPI VISUALS (full width, y=6–20)
+      # ------------------------------------------
+      - worksheet: kpi_total_orders_per_year
+        x: 0
+        y: 4
+        colSpan: 2
+        rowSpan: 5
+        category: KPI Visuals
+      - worksheet: kpi_total_sales_per_country
+        x: 0
+        y: 9
+        colSpan: 2
+        rowSpan: 5
+        category: KPI Visuals
+      - worksheet: kpi_total_sales_per_country2
+        x: 0
+        y: 14
+        colSpan: 2
+        rowSpan: 5
+        category: KPI Visuals

@@ -1,0 +1,18 @@
+unique_name: dim_report_date
+object_type: dataset
+label: dim_report_date
+connection_id: my_connection
+table: dim_report_date
+columns:
+  -     name: report_date_id
+        data_type: bigint
+  -     name: report_date
+        data_type: date
+  -     name: report_year
+        data_type: int
+  -     name: report_month
+        data_type: int
+  -     name: report_week
+        data_type: int
+  -     name: report_quarter
+        data_type: string

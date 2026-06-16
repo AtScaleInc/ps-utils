@@ -1,0 +1,8 @@
+unique_name: m_revpar_min
+object_type: metric
+label: revpar
+calculation_method: minimum
+dataset: travel_reservation_fact
+column: revpar
+is_hidden: false
+unrelated_dimensions_handling: empty

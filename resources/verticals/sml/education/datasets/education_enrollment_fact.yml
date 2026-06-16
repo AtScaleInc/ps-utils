@@ -1,0 +1,42 @@
+unique_name: education_enrollment_fact
+object_type: dataset
+label: education_enrollment_fact
+connection_id: my_connection
+table: education_enrollment_fact
+columns:
+  -     name: enrollment_id
+        data_type: bigint
+  -     name: student_id
+        data_type: bigint
+  -     name: course_id
+        data_type: bigint
+  -     name: institution_id
+        data_type: bigint
+  -     name: academic_calendar_id
+        data_type: bigint
+  -     name: gpa
+        data_type: decimal
+  -     name: grade_point_average
+        data_type: decimal
+  -     name: attendance_rate
+        data_type: decimal
+  -     name: attendance_pct
+        data_type: decimal
+  -     name: test_score
+        data_type: decimal
+  -     name: assessment_score
+        data_type: decimal
+  -     name: pass_rate
+        data_type: decimal
+  -     name: completion_rate
+        data_type: decimal
+  -     name: graduation_rate
+        data_type: decimal
+  -     name: enrollment_count
+        data_type: int
+  -     name: headcount
+        data_type: int
+  -     name: absences_count
+        data_type: int
+  -     name: disciplinary_incidents
+        data_type: int

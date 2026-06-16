@@ -1,0 +1,8 @@
+unique_name: m_completion_rate_avg
+object_type: metric
+label: completion_rate
+calculation_method: average
+dataset: pharma_clinical_fact
+column: completion_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

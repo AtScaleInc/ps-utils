@@ -1,0 +1,8 @@
+unique_name: m_incurred_loss_sum
+object_type: metric
+label: incurred_loss
+calculation_method: sum
+dataset: insurance_policy_fact
+column: incurred_loss
+is_hidden: false
+unrelated_dimensions_handling: empty

@@ -1,0 +1,8 @@
+unique_name: m_subject_count_sum
+object_type: metric
+label: subject_count
+calculation_method: sum
+dataset: pharma_clinical_fact
+column: subject_count
+is_hidden: false
+unrelated_dimensions_handling: empty

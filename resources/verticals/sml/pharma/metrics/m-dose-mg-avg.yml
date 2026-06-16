@@ -1,0 +1,8 @@
+unique_name: m_dose_mg_avg
+object_type: metric
+label: dose_mg
+calculation_method: average
+dataset: pharma_clinical_fact
+column: dose_mg
+is_hidden: false
+unrelated_dimensions_handling: empty

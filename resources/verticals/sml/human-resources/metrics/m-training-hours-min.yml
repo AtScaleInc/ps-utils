@@ -1,0 +1,8 @@
+unique_name: m_training_hours_min
+object_type: metric
+label: training_hours
+calculation_method: minimum
+dataset: hr_workforce_fact
+column: training_hours
+is_hidden: false
+unrelated_dimensions_handling: empty

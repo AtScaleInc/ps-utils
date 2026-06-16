@@ -1,0 +1,8 @@
+unique_name: m_demand_kw_max
+object_type: metric
+label: demand_kw
+calculation_method: maximum
+dataset: energy_interval_fact
+column: demand_kw
+is_hidden: false
+unrelated_dimensions_handling: empty

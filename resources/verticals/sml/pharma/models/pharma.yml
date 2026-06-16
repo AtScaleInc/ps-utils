@@ -1,0 +1,93 @@
+unique_name: pharma
+object_type: model
+label: pharma
+relationships:
+  -     unique_name: pharma_clinical_fact_dim-compound_compound_id
+        from:
+          dataset: pharma_clinical_fact
+          join_columns:
+            - compound_id
+        to:
+          dimension: Dim Compound
+          level: la_compound_id
+  -     unique_name: pharma_clinical_fact_dim-trial_trial_id
+        from:
+          dataset: pharma_clinical_fact
+          join_columns:
+            - trial_id
+        to:
+          dimension: Dim Trial
+          level: la_trial_id
+  -     unique_name: pharma_clinical_fact_dim-investigator_investigator_id
+        from:
+          dataset: pharma_clinical_fact
+          join_columns:
+            - investigator_id
+        to:
+          dimension: Dim Investigator
+          level: la_investigator_id
+  -     unique_name: pharma_clinical_fact_dim-regulatory_regulatory_id
+        from:
+          dataset: pharma_clinical_fact
+          join_columns:
+            - regulatory_id
+        to:
+          dimension: Dim Regulatory
+          level: la_regulatory_id
+  -     unique_name: pharma_clinical_fact_dim-study-date_study_date_id
+        from:
+          dataset: pharma_clinical_fact
+          join_columns:
+            - study_date_id
+        to:
+          dimension: Dim Study Date
+          level: la_study_date_id
+metrics:
+  -     unique_name: m_adverse_event_id_sum
+  -     unique_name: m_adverse_event_id_avg
+  -     unique_name: m_adverse_event_id_min
+  -     unique_name: m_adverse_event_id_max
+  -     unique_name: m_dosage_sum
+  -     unique_name: m_dosage_avg
+  -     unique_name: m_dosage_min
+  -     unique_name: m_dosage_max
+  -     unique_name: m_dose_amount_sum
+  -     unique_name: m_dose_amount_avg
+  -     unique_name: m_dose_amount_min
+  -     unique_name: m_dose_amount_max
+  -     unique_name: m_dose_mg_avg
+  -     unique_name: m_dose_mg_min
+  -     unique_name: m_dose_mg_max
+  -     unique_name: m_enrollment_count_sum
+  -     unique_name: m_enrollment_count_avg
+  -     unique_name: m_enrollment_count_min
+  -     unique_name: m_enrollment_count_max
+  -     unique_name: m_subject_count_sum
+  -     unique_name: m_subject_count_avg
+  -     unique_name: m_subject_count_min
+  -     unique_name: m_subject_count_max
+  -     unique_name: m_patient_count_sum
+  -     unique_name: m_patient_count_avg
+  -     unique_name: m_patient_count_min
+  -     unique_name: m_patient_count_max
+  -     unique_name: m_adverse_event_rate_avg
+  -     unique_name: m_adverse_event_rate_min
+  -     unique_name: m_adverse_event_rate_max
+  -     unique_name: m_completion_rate_avg
+  -     unique_name: m_completion_rate_min
+  -     unique_name: m_completion_rate_max
+  -     unique_name: m_response_rate_avg
+  -     unique_name: m_response_rate_min
+  -     unique_name: m_response_rate_max
+  -     unique_name: m_drop_out_count_sum
+  -     unique_name: m_drop_out_count_avg
+  -     unique_name: m_drop_out_count_min
+  -     unique_name: m_drop_out_count_max
+  -     unique_name: m_serious_ae_count_sum
+  -     unique_name: m_serious_ae_count_avg
+  -     unique_name: m_serious_ae_count_min
+  -     unique_name: m_serious_ae_count_max
+  -     unique_name: m_protocol_deviation_count_sum
+  -     unique_name: m_protocol_deviation_count_avg
+  -     unique_name: m_protocol_deviation_count_min
+  -     unique_name: m_protocol_deviation_count_max

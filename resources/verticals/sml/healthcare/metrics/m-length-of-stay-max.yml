@@ -1,0 +1,8 @@
+unique_name: m_length_of_stay_max
+object_type: metric
+label: length_of_stay
+calculation_method: maximum
+dataset: healthcare_encounter_fact
+column: length_of_stay
+is_hidden: false
+unrelated_dimensions_handling: empty

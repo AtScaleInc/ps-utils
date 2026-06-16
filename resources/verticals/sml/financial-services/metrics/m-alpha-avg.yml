@@ -1,0 +1,8 @@
+unique_name: m_alpha_avg
+object_type: metric
+label: alpha
+calculation_method: average
+dataset: financial_securities_fact
+column: alpha
+is_hidden: false
+unrelated_dimensions_handling: empty

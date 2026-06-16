@@ -1,0 +1,57 @@
+unique_name: Dim Carrier
+object_type: dimension
+label: Dim Carrier
+type: standard
+level_attributes:
+  -     unique_name: la_transport_mode
+        label: Transport Mode
+        dataset: dim_carrier
+        name_column: transport_mode
+        key_columns:
+          - transport_mode
+  -     unique_name: la_carrier_code
+        label: Carrier Code
+        dataset: dim_carrier
+        name_column: carrier_code
+        key_columns:
+          - carrier_code
+  -     unique_name: la_service_level
+        label: Service Level
+        dataset: dim_carrier
+        name_column: service_level
+        key_columns:
+          - service_level
+  -     unique_name: la_route_id
+        label: Route Id
+        dataset: dim_carrier
+        name_column: route_id
+        key_columns:
+          - route_id
+  -     unique_name: la_scac_code
+        label: Scac Code
+        dataset: dim_carrier
+        name_column: scac_code
+        key_columns:
+          - scac_code
+  -     unique_name: la_lane_code
+        label: Lane Code
+        dataset: dim_carrier
+        name_column: lane_code
+        key_columns:
+          - lane_code
+  -     unique_name: la_carrier_id
+        label: carrier_id
+        dataset: dim_carrier
+        name_column: carrier_id
+        key_columns:
+          - carrier_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Carrier Network Hierarchy
+        label: Carrier Network Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_transport_mode
+          -         unique_name: la_carrier_code
+          -         unique_name: la_service_level
+          -         unique_name: la_route_id

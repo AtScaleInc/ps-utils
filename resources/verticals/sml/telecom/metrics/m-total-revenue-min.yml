@@ -1,0 +1,8 @@
+unique_name: m_total_revenue_min
+object_type: metric
+label: total_revenue
+calculation_method: minimum
+dataset: telecom_cdr_fact
+column: total_revenue
+is_hidden: false
+unrelated_dimensions_handling: empty

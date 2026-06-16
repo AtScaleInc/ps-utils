@@ -1,0 +1,8 @@
+unique_name: m_hcc_score_max
+object_type: metric
+label: hcc_score
+calculation_method: maximum
+dataset: healthcare_encounter_fact
+column: hcc_score
+is_hidden: false
+unrelated_dimensions_handling: empty

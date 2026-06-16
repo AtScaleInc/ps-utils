@@ -1,0 +1,20 @@
+unique_name: dim_interval_time
+object_type: dataset
+label: dim_interval_time
+connection_id: my_connection
+table: dim_interval_time
+columns:
+  -     name: interval_time_id
+        data_type: bigint
+  -     name: interval_year
+        data_type: int
+  -     name: interval_month
+        data_type: int
+  -     name: interval_day
+        data_type: int
+  -     name: interval_hour
+        data_type: int
+  -     name: interval_start
+        data_type: datetime
+  -     name: interval_end
+        data_type: datetime

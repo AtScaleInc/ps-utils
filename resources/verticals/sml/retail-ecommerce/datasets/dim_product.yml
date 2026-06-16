@@ -1,0 +1,32 @@
+unique_name: dim_product
+object_type: dataset
+label: dim_product
+connection_id: my_connection
+table: dim_product
+columns:
+  -     name: product_id
+        data_type: bigint
+  -     name: sku
+        data_type: string
+  -     name: sku_code
+        data_type: string
+  -     name: upc_code
+        data_type: string
+  -     name: ean_code
+        data_type: string
+  -     name: style_code
+        data_type: string
+  -     name: item_number
+        data_type: string
+  -     name: product_line
+        data_type: string
+  -     name: sub_category_name
+        data_type: string
+  -     name: category_name
+        data_type: string
+  -     name: department_name
+        data_type: string
+  -     name: vendor_name
+        data_type: string
+  -     name: brand_name
+        data_type: string

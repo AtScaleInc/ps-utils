@@ -1,0 +1,26 @@
+unique_name: dim_energy_source
+object_type: dataset
+label: dim_energy_source
+connection_id: my_connection
+table: dim_energy_source
+columns:
+  -     name: energy_source_id
+        data_type: bigint
+  -     name: fuel_category
+        data_type: string
+  -     name: fuel_type
+        data_type: string
+  -     name: fuel_code
+        data_type: string
+  -     name: energy_source
+        data_type: string
+  -     name: technology_type
+        data_type: string
+  -     name: plant_name
+        data_type: string
+  -     name: unit_id
+        data_type: string
+  -     name: capacity_mw
+        data_type: decimal
+  -     name: capacity_kva
+        data_type: decimal

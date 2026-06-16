@@ -1,0 +1,26 @@
+unique_name: dim_policy
+object_type: dataset
+label: dim_policy
+connection_id: my_connection
+table: dim_policy
+columns:
+  -     name: policy_dim_id
+        data_type: bigint
+  -     name: policy_number
+        data_type: string
+  -     name: coverage_type
+        data_type: string
+  -     name: coverage_code
+        data_type: string
+  -     name: policy_term
+        data_type: string
+  -     name: policy_duration
+        data_type: int
+  -     name: policy_status
+        data_type: string
+  -     name: naic_code
+        data_type: string
+  -     name: carrier_code
+        data_type: string
+  -     name: carrier_id
+        data_type: bigint

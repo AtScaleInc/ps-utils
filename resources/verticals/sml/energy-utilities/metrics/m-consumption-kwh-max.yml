@@ -1,0 +1,8 @@
+unique_name: m_consumption_kwh_max
+object_type: metric
+label: consumption_kwh
+calculation_method: maximum
+dataset: energy_interval_fact
+column: consumption_kwh
+is_hidden: false
+unrelated_dimensions_handling: empty

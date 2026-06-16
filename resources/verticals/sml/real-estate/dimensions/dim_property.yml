@@ -1,0 +1,123 @@
+unique_name: Dim Property
+object_type: dimension
+label: Dim Property
+type: standard
+level_attributes:
+  -     unique_name: la_asset_class
+        label: Asset Class
+        dataset: dim_property
+        name_column: asset_class
+        key_columns:
+          - asset_class
+  -     unique_name: la_property_type
+        label: Property Type
+        dataset: dim_property
+        name_column: property_type
+        key_columns:
+          - property_type
+  -     unique_name: la_property_subtype
+        label: Property Subtype
+        dataset: dim_property
+        name_column: property_subtype
+        key_columns:
+          - property_subtype
+  -     unique_name: la_use_type
+        label: Use Type
+        dataset: dim_property
+        name_column: use_type
+        key_columns:
+          - use_type
+  -     unique_name: la_parcel_id
+        label: Parcel Id
+        dataset: dim_property
+        name_column: parcel_id
+        key_columns:
+          - parcel_id
+  -     unique_name: la_apn
+        label: Apn
+        dataset: dim_property
+        name_column: apn
+        key_columns:
+          - apn
+  -     unique_name: la_assessor_parcel_number
+        label: Assessor Parcel Number
+        dataset: dim_property
+        name_column: assessor_parcel_number
+        key_columns:
+          - assessor_parcel_number
+  -     unique_name: la_mls_number
+        label: Mls Number
+        dataset: dim_property
+        name_column: mls_number
+        key_columns:
+          - mls_number
+  -     unique_name: la_mls_id
+        label: Mls Id
+        dataset: dim_property
+        name_column: mls_id
+        key_columns:
+          - mls_id
+  -     unique_name: la_folio_number
+        label: Folio Number
+        dataset: dim_property
+        name_column: folio_number
+        key_columns:
+          - folio_number
+  -     unique_name: la_zoning_code
+        label: Zoning Code
+        dataset: dim_property
+        name_column: zoning_code
+        key_columns:
+          - zoning_code
+  -     unique_name: la_land_use_code
+        label: Land Use Code
+        dataset: dim_property
+        name_column: land_use_code
+        key_columns:
+          - land_use_code
+  -     unique_name: la_bedroom
+        label: Bedroom
+        dataset: dim_property
+        name_column: bedroom
+        key_columns:
+          - bedroom
+  -     unique_name: la_bathroom
+        label: Bathroom
+        dataset: dim_property
+        name_column: bathroom
+        key_columns:
+          - bathroom
+  -     unique_name: la_half_bath
+        label: Half Bath
+        dataset: dim_property
+        name_column: half_bath
+        key_columns:
+          - half_bath
+  -     unique_name: la_num_units
+        label: Num Units
+        dataset: dim_property
+        name_column: num_units
+        key_columns:
+          - num_units
+  -     unique_name: la_total_rooms
+        label: Total Rooms
+        dataset: dim_property
+        name_column: total_rooms
+        key_columns:
+          - total_rooms
+  -     unique_name: la_property_id
+        label: property_id
+        dataset: dim_property
+        name_column: property_id
+        key_columns:
+          - property_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Property Type Hierarchy
+        label: Property Type Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_asset_class
+          -         unique_name: la_property_type
+          -         unique_name: la_property_subtype
+          -         unique_name: la_use_type

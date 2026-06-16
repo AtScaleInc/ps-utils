@@ -1,0 +1,8 @@
+unique_name: m_transactions_count_min
+object_type: metric
+label: transactions_count
+calculation_method: minimum
+dataset: real_estate_transaction_fact
+column: transactions_count
+is_hidden: false
+unrelated_dimensions_handling: empty

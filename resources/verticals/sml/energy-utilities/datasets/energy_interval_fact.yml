@@ -1,0 +1,52 @@
+unique_name: energy_interval_fact
+object_type: dataset
+label: energy_interval_fact
+connection_id: my_connection
+table: energy_interval_fact
+columns:
+  -     name: record_id
+        data_type: bigint
+  -     name: meter_id
+        data_type: bigint
+  -     name: rate_id
+        data_type: bigint
+  -     name: grid_id
+        data_type: bigint
+  -     name: energy_source_id
+        data_type: bigint
+  -     name: interval_time_id
+        data_type: bigint
+  -     name: consumption_kwh
+        data_type: decimal
+  -     name: consumption_mwh
+        data_type: decimal
+  -     name: demand_kw
+        data_type: decimal
+  -     name: peak_demand_kw
+        data_type: decimal
+  -     name: interval_kwh
+        data_type: decimal
+  -     name: saidi
+        data_type: decimal
+  -     name: saifi
+        data_type: decimal
+  -     name: caidi
+        data_type: decimal
+  -     name: outage_count
+        data_type: int
+  -     name: lmp
+        data_type: decimal
+  -     name: net_generation_mwh
+        data_type: decimal
+  -     name: fuel_consumed_mmbtu
+        data_type: decimal
+  -     name: heat_rate
+        data_type: decimal
+  -     name: revenue_amount
+        data_type: decimal
+  -     name: cost_per_kwh
+        data_type: decimal
+  -     name: restoration_time_min
+        data_type: decimal
+  -     name: customers_affected
+        data_type: int

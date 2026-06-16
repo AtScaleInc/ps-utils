@@ -1,0 +1,8 @@
+unique_name: m_revenue_sum
+object_type: metric
+label: revenue
+calculation_method: sum
+dataset: media_ad_performance_fact
+column: revenue
+is_hidden: false
+unrelated_dimensions_handling: empty

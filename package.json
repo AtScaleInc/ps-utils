@@ -1,0 +1,56 @@
+{
+  "name": "@atscale/ps-utils",
+  "version": "1",
+  "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "atscale-utils": "./atscale-utils"
+  },
+  "files": [
+    "dist",
+    "action.yml",
+    "atscale-utils"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-ejs.mjs && npm run generate:completions && npm run generate:graphql-docs && npm run generate:rest-docs",
+    "start": "npm run build && node dist/cli.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "generate:completions": "node dist/scripts/generate-completions.js",
+    "generate:graphql-docs": "node dist/scripts/generate-graphql-docs.js",
+    "generate:rest-docs": "node dist/scripts/generate-rest-docs.js"
+  },
+  "dependencies": {
+    "@types/node": "^25.3.0",
+    "axios": "^1.13.5",
+    "busboy": "^1.6.0",
+    "ejs": "^3.1.10",
+    "exceljs": "^4.4.0",
+    "graphql": "^16.13.2",
+    "graphql-yoga": "^5.21.0",
+    "js-yaml": "^4.1.1",
+    "jszip": "^3.10.1",
+    "pg": "^8.20.0",
+    "snowflake-sdk": "^2.3.6",
+    "xml2js": "^0.6.2",
+    "yaml": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.4",
+    "@types/ejs": "^3.1.5",
+    "@types/js-yaml": "^4.0.9",
+    "@types/pg": "^8.20.0",
+    "@types/uuid": "^10.0.0",
+    "@types/xml2js": "^0.4.14",
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.5"
+  }
+}

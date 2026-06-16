@@ -1,0 +1,26 @@
+unique_name: dim_store
+object_type: dataset
+label: dim_store
+connection_id: my_connection
+table: dim_store
+columns:
+  -     name: store_id
+        data_type: bigint
+  -     name: store_number
+        data_type: string
+  -     name: store_name
+        data_type: string
+  -     name: pos_terminal_id
+        data_type: string
+  -     name: register_id
+        data_type: string
+  -     name: market_name
+        data_type: string
+  -     name: district_name
+        data_type: string
+  -     name: region_name
+        data_type: string
+  -     name: sales_channel
+        data_type: string
+  -     name: channel_type
+        data_type: string

@@ -1,0 +1,250 @@
+/**
+ * GenerateSMLFromDDL
+ *
+ * Parses a SQL DDL file (CREATE TABLE / CREATE VIEW statements) and generates
+ * AtScale SML files by running the semantic model inference algorithm.
+ *
+ * No database connection is required — inference runs entirely from the schema
+ * definition.  This is useful for offline model generation, CI pipelines, or
+ * environments where a live connection is not available.
+ *
+ * Output files are written to the specified directory following the SML layout:
+ *   <output-dir>/catalog.yml
+ *   <output-dir>/connections/<connectionName>.yml   (optional — requires connection-name)
+ *   <output-dir>/datasets/<table>.yml
+ *   <output-dir>/dimensions/<dimension>.yml
+ *   <output-dir>/metrics/<metric>.yml
+ *   <output-dir>/models/<modelName>.yml
+ *   <output-dir>/sml.style.yaml   (effective settings written after generation)
+ */
+import fs from "fs";
+import path from "path";
+import { Operation } from "../Operation.js";
+import { ParameterSet, StringParameter, BooleanParameter, NumberParameter } from "../../Parameters.js";
+import type { ServiceRegistry } from "../../services/registry.js";
+import type { Logger } from "../../logging.js";
+import { DdlDatabaseMetaData } from "../../algorithm/ddl-reader.js";
+import { resolvePiiSeverity, runInferenceAndWrite } from "../generate-sml-shared.js";
+import { loadSmlStyleConfig, mergeSmlStyle } from "../sml-style-config.js";
+
+// ----------------------------------------------------------
+// Parameter declarations
+// ----------------------------------------------------------
+
+class GenerateSMLFromDDLParamsSet extends ParameterSet {
+  parameters = [
+    new (class extends StringParameter {
+      name        = "ddl-file";
+      description = "Path to the SQL DDL file to parse (CREATE TABLE / CREATE VIEW statements)";
+      required    = true;
+    })(),
+    new (class extends StringParameter {
+      name        = "model-name";
+      description = "Name for the generated semantic model (defaults to the DDL filename stem)";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "output-dir";
+      description = "Directory where SML files will be written";
+      required    = true;
+    })(),
+    new (class extends StringParameter {
+      name        = "connection-name";
+      description = "Connection name to embed in the generated SML files (for AtScale to reference)";
+      required    = false;
+      defaultValue = "my_connection";
+    })(),
+    new (class extends StringParameter {
+      name        = "sml-config-file";
+      description = 'Path to the SML style configuration file (default: "sml.style.yaml"). Style file values are overridden by CLI flags. The effective settings are always written to <output-dir>/sml.style.yaml after generation.';
+      required    = false;
+      defaultValue = "sml.style.yaml";
+    })(),
+    new (class extends StringParameter {
+      name        = "catalog-name";
+      description = "Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "pii-severity";
+      description = 'Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml.';
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "schema";
+      description = "Schema name used to filter the DDL (only tables in this schema will be included)";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "database";
+      description = "Database (catalog) name to embed in the SML connection file";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "dialect";
+      description = 'Database dialect (e.g. "snowflake", "postgresql"). When "snowflake", dataset table names are uppercased.';
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "fact-tables";
+      description = "Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends BooleanParameter {
+      name        = "camel-case-files";
+      description = "When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends BooleanParameter {
+      name        = "camel-case-measures";
+      description = "When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends StringParameter {
+      name        = "label-style";
+      description = 'Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml.';
+      required    = false;
+    })(),
+    new (class extends NumberParameter {
+      name        = "min-hierarchies-per-dim";
+      description = "Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+    new (class extends NumberParameter {
+      name        = "max-hierarchies-per-dim";
+      description = "Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml.";
+      required    = false;
+    })(),
+  ];
+}
+
+type Params = {
+  "ddl-file":             string;
+  "model-name"?:          string;
+  "output-dir":           string;
+  "connection-name":      string;
+  "sml-config-file":      string;
+  "catalog-name"?:        string;
+  "pii-severity"?:        string;
+  schema?:                string;
+  database?:              string;
+  dialect?:               string;
+  "fact-tables"?:         string;
+  "camel-case-files"?:          boolean;
+  "camel-case-measures"?:       boolean;
+  "label-style"?:               "title-case" | "camel-case" | "none";
+  "min-hierarchies-per-dim"?:   number;
+  "max-hierarchies-per-dim"?:   number;
+};
+export type GenerateSMLFromDDLParams = Params;
+
+// ----------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------
+
+const DIALECT_PATTERNS: Array<[RegExp, string]> = [
+  [/snowflake/i, "snowflake"],
+  [/postgres|postgresql|pg\b/i, "postgresql"],
+  [/bigquery|bq\b/i, "bigquery"],
+  [/redshift/i, "redshift"],
+  [/databricks/i, "databricks"],
+];
+
+function detectDialectFromFilename(filePath: string): string | undefined {
+  const name = path.basename(filePath);
+  for (const [pattern, dialect] of DIALECT_PATTERNS) {
+    if (pattern.test(name)) return dialect;
+  }
+  return undefined;
+}
+
+// ----------------------------------------------------------
+// Operation
+// ----------------------------------------------------------
+
+export class GenerateSMLFromDDLOperation extends Operation<Params> {
+  name        = "generate-sml-from-ddl";
+  description = "Parse a DDL file and generate AtScale SML files from the inferred semantic model";
+  parameters  = new GenerateSMLFromDDLParamsSet();
+
+  constructor(services: ServiceRegistry, logger: Logger) {
+    super(services, logger);
+  }
+
+  async run(params: Params): Promise<void> {
+    const ddlFile   = path.resolve(params["ddl-file"]);
+    const outputDir = path.resolve(params["output-dir"]);
+    const modelName = params["model-name"] ?? path.basename(ddlFile, path.extname(ddlFile));
+
+    if (!fs.existsSync(ddlFile)) {
+      throw new Error(`DDL file not found: ${ddlFile}`);
+    }
+
+    this.logger.log(`[GenerateSMLFromDDL] Parsing DDL file: ${ddlFile}`);
+    const db = await DdlDatabaseMetaData.fromFile(ddlFile);
+
+    const tableNames = db.getTableNames();
+    const viewNames  = db.getViewNames();
+    this.logger.log(
+      `[GenerateSMLFromDDL] Found ${tableNames.length} table(s) and ${viewNames.length} view(s)`,
+    );
+
+    // ---- Merge CLI params + sml.style.yaml ----
+    const styleFileConfig = loadSmlStyleConfig(params["sml-config-file"]);
+    const cliFact = params["fact-tables"]?.split(",").map((t) => t.trim()).filter(Boolean);
+    const style = mergeSmlStyle(
+      {
+        "pii-severity":            params["pii-severity"],
+        "fact-tables":             cliFact,
+        "catalog-name":            params["catalog-name"],
+        "camel-case-files":        params["camel-case-files"],
+        "camel-case-measures":     params["camel-case-measures"],
+        "label-style":             params["label-style"],
+        "min-hierarchies-per-dim": params["min-hierarchies-per-dim"],
+        "max-hierarchies-per-dim": params["max-hierarchies-per-dim"],
+      },
+      styleFileConfig,
+    );
+
+    const catalogName      = style["catalog-name"] || modelName;
+    const factTablesEff    = style["fact-tables"].length > 0 ? style["fact-tables"] : undefined;
+
+    await runInferenceAndWrite(
+      db,
+      modelName,
+      {
+        schemaPattern:           params.schema,
+        piiExclusionSeverity:    resolvePiiSeverity(style["pii-severity"]),
+        sampleSize:              0,  // DDL has no row data; disable sampling
+        factTables:              factTablesEff,
+        minHierarchiesPerDim:    style["min-hierarchies-per-dim"],
+        maxHierarchiesPerDim:    style["max-hierarchies-per-dim"],
+        sml: {
+          connectionName:    params["connection-name"],
+          catalogName,
+          database:          params.database,
+          schema:            params.schema,
+          dialect:           params.dialect ?? detectDialectFromFilename(ddlFile),
+          camelCaseFiles:    style["camel-case-files"],
+          camelCaseMeasures: style["camel-case-measures"],
+          labelStyle:        style["label-style"],
+        },
+      },
+      outputDir,
+      this.logger,
+      "GenerateSMLFromDDL",
+      // Effective settings written to <outputDir>/sml.style.yaml
+      {
+        "pii-severity":        style["pii-severity"],
+        "fact-tables":         style["fact-tables"],
+        "catalog-name":        catalogName,
+        "camel-case-files":          style["camel-case-files"],
+        "camel-case-measures":       style["camel-case-measures"],
+        "label-style":               style["label-style"],
+        "sample-size":               0,
+        "min-hierarchies-per-dim":   style["min-hierarchies-per-dim"],
+        "max-hierarchies-per-dim":   style["max-hierarchies-per-dim"],
+      },
+    );
+  }
+}

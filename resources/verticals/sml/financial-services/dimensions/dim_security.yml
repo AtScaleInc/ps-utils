@@ -1,0 +1,105 @@
+unique_name: Dim Security
+object_type: dimension
+label: Dim Security
+type: standard
+level_attributes:
+  -     unique_name: la_asset_class
+        label: Asset Class
+        dataset: dim_security
+        name_column: asset_class
+        key_columns:
+          - asset_class
+  -     unique_name: la_asset_sub_class
+        label: Asset Sub Class
+        dataset: dim_security
+        name_column: asset_sub_class
+        key_columns:
+          - asset_sub_class
+  -     unique_name: la_instrument_type
+        label: Instrument Type
+        dataset: dim_security
+        name_column: instrument_type
+        key_columns:
+          - instrument_type
+  -     unique_name: la_security_type
+        label: Security Type
+        dataset: dim_security
+        name_column: security_type
+        key_columns:
+          - security_type
+  -     unique_name: la_ticker_symbol
+        label: Ticker Symbol
+        dataset: dim_security
+        name_column: ticker_symbol
+        key_columns:
+          - ticker_symbol
+  -     unique_name: la_ticker_code
+        label: Ticker Code
+        dataset: dim_security
+        name_column: ticker_code
+        key_columns:
+          - ticker_code
+  -     unique_name: la_cusip
+        label: Cusip
+        dataset: dim_security
+        name_column: cusip
+        key_columns:
+          - cusip
+  -     unique_name: la_isin
+        label: Isin
+        dataset: dim_security
+        name_column: isin
+        key_columns:
+          - isin
+  -     unique_name: la_sedol
+        label: Sedol
+        dataset: dim_security
+        name_column: sedol
+        key_columns:
+          - sedol
+  -     unique_name: la_figi
+        label: Figi
+        dataset: dim_security
+        name_column: figi
+        key_columns:
+          - figi
+  -     unique_name: la_bloomberg_id
+        label: Bloomberg Id
+        dataset: dim_security
+        name_column: bloomberg_id
+        key_columns:
+          - bloomberg_id
+  -     unique_name: la_lei_code
+        label: Lei Code
+        dataset: dim_security
+        name_column: lei_code
+        key_columns:
+          - lei_code
+  -     unique_name: la_ric_code
+        label: Ric Code
+        dataset: dim_security
+        name_column: ric_code
+        key_columns:
+          - ric_code
+  -     unique_name: la_bond_type
+        label: Bond Type
+        dataset: dim_security
+        name_column: bond_type
+        key_columns:
+          - bond_type
+  -     unique_name: la_security_id
+        label: security_id
+        dataset: dim_security
+        name_column: security_id
+        key_columns:
+          - security_id
+        is_unique_key: true
+hierarchies:
+  -     unique_name: Asset Class Hierarchy
+        label: Asset Class Hierarchy
+        filter_empty: "yes"
+        levels:
+          -         unique_name: la_asset_class
+          -         unique_name: la_asset_sub_class
+          -         unique_name: la_instrument_type
+          -         unique_name: la_security_type

@@ -1,0 +1,111 @@
+unique_name: financial-services
+object_type: model
+label: financial-services
+relationships:
+  -     unique_name: financial_securities_fact_dim-security_security_id
+        from:
+          dataset: financial_securities_fact
+          join_columns:
+            - security_id
+        to:
+          dimension: Dim Security
+          level: la_security_id
+  -     unique_name: financial_securities_fact_dim-issuer_issuer_id
+        from:
+          dataset: financial_securities_fact
+          join_columns:
+            - issuer_id
+        to:
+          dimension: Dim Issuer
+          level: la_issuer_id
+  -     unique_name: financial_securities_fact_dim-portfolio_portfolio_id
+        from:
+          dataset: financial_securities_fact
+          join_columns:
+            - portfolio_id
+        to:
+          dimension: Dim Portfolio
+          level: la_portfolio_id
+  -     unique_name: financial_securities_fact_dim-price-date_price_date_id
+        from:
+          dataset: financial_securities_fact
+          join_columns:
+            - price_date_id
+        to:
+          dimension: Dim Price Date
+          level: la_price_date_id
+metrics:
+  -     unique_name: m_price_close_sum
+  -     unique_name: m_price_close_avg
+  -     unique_name: m_price_close_min
+  -     unique_name: m_price_close_max
+  -     unique_name: m_price_open_sum
+  -     unique_name: m_price_open_avg
+  -     unique_name: m_price_open_min
+  -     unique_name: m_price_open_max
+  -     unique_name: m_price_high_sum
+  -     unique_name: m_price_high_avg
+  -     unique_name: m_price_high_min
+  -     unique_name: m_price_high_max
+  -     unique_name: m_price_low_sum
+  -     unique_name: m_price_low_avg
+  -     unique_name: m_price_low_min
+  -     unique_name: m_price_low_max
+  -     unique_name: m_volume_sum
+  -     unique_name: m_volume_avg
+  -     unique_name: m_volume_min
+  -     unique_name: m_volume_max
+  -     unique_name: m_nav_avg
+  -     unique_name: m_nav_min
+  -     unique_name: m_nav_max
+  -     unique_name: m_aum_avg
+  -     unique_name: m_aum_min
+  -     unique_name: m_aum_max
+  -     unique_name: m_market_cap_avg
+  -     unique_name: m_market_cap_min
+  -     unique_name: m_market_cap_max
+  -     unique_name: m_enterprise_value_avg
+  -     unique_name: m_enterprise_value_min
+  -     unique_name: m_enterprise_value_max
+  -     unique_name: m_yield_to_maturity_avg
+  -     unique_name: m_yield_to_maturity_min
+  -     unique_name: m_yield_to_maturity_max
+  -     unique_name: m_ytm_avg
+  -     unique_name: m_ytm_min
+  -     unique_name: m_ytm_max
+  -     unique_name: m_coupon_rate_avg
+  -     unique_name: m_coupon_rate_min
+  -     unique_name: m_coupon_rate_max
+  -     unique_name: m_pe_ratio_avg
+  -     unique_name: m_pe_ratio_min
+  -     unique_name: m_pe_ratio_max
+  -     unique_name: m_pb_ratio_avg
+  -     unique_name: m_pb_ratio_min
+  -     unique_name: m_pb_ratio_max
+  -     unique_name: m_ps_ratio_avg
+  -     unique_name: m_ps_ratio_min
+  -     unique_name: m_ps_ratio_max
+  -     unique_name: m_ev_ebitda_avg
+  -     unique_name: m_ev_ebitda_min
+  -     unique_name: m_ev_ebitda_max
+  -     unique_name: m_dividend_yield_avg
+  -     unique_name: m_dividend_yield_min
+  -     unique_name: m_dividend_yield_max
+  -     unique_name: m_sharpe_ratio_avg
+  -     unique_name: m_sharpe_ratio_min
+  -     unique_name: m_sharpe_ratio_max
+  -     unique_name: m_information_ratio_avg
+  -     unique_name: m_information_ratio_min
+  -     unique_name: m_information_ratio_max
+  -     unique_name: m_alpha_avg
+  -     unique_name: m_alpha_min
+  -     unique_name: m_alpha_max
+  -     unique_name: m_beta_avg
+  -     unique_name: m_beta_min
+  -     unique_name: m_beta_max
+  -     unique_name: m_volatility_avg
+  -     unique_name: m_volatility_min
+  -     unique_name: m_volatility_max
+  -     unique_name: m_tracking_error_avg
+  -     unique_name: m_tracking_error_min
+  -     unique_name: m_tracking_error_max

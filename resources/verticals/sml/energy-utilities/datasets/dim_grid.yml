@@ -1,0 +1,34 @@
+unique_name: dim_grid
+object_type: dataset
+label: dim_grid
+connection_id: my_connection
+table: dim_grid
+columns:
+  -     name: grid_id
+        data_type: bigint
+  -     name: balancing_authority
+        data_type: string
+  -     name: transmission_zone
+        data_type: string
+  -     name: load_zone
+        data_type: string
+  -     name: iso_id
+        data_type: string
+  -     name: pricing_zone
+        data_type: string
+  -     name: substation_id
+        data_type: string
+  -     name: feeder_id
+        data_type: string
+  -     name: transformer_id
+        data_type: string
+  -     name: circuit_id
+        data_type: string
+  -     name: lmp_node_id
+        data_type: string
+  -     name: service_territory
+        data_type: string
+  -     name: division_name
+        data_type: string
+  -     name: district_name
+        data_type: string

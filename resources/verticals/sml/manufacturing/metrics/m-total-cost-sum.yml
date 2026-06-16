@@ -1,0 +1,8 @@
+unique_name: m_total_cost_sum
+object_type: metric
+label: total_cost
+calculation_method: sum
+dataset: manufacturing_production_fact
+column: total_cost
+is_hidden: false
+unrelated_dimensions_handling: empty

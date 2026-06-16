@@ -1,0 +1,8 @@
+unique_name: m_volatility_avg
+object_type: metric
+label: volatility
+calculation_method: average
+dataset: financial_securities_fact
+column: volatility
+is_hidden: false
+unrelated_dimensions_handling: empty

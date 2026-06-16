@@ -1,0 +1,8 @@
+unique_name: m_cancellation_rate_avg
+object_type: metric
+label: cancellation_rate
+calculation_method: average
+dataset: travel_reservation_fact
+column: cancellation_rate
+is_hidden: false
+unrelated_dimensions_handling: empty

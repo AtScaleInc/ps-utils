@@ -1,0 +1,8 @@
+unique_name: m_expenditure_amount_sum
+object_type: metric
+label: expenditure_amount
+calculation_method: sum
+dataset: government_budget_fact
+column: expenditure_amount
+is_hidden: false
+unrelated_dimensions_handling: empty

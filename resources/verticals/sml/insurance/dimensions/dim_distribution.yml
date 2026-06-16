@@ -1,0 +1,32 @@
+unique_name: Dim Distribution
+object_type: dimension
+label: Dim Distribution
+type: standard
+level_attributes:
+  -     unique_name: la_channel_name
+        label: Channel Name
+        dataset: dim_distribution
+        name_column: channel_name
+        key_columns:
+          - channel_name
+  -     unique_name: la_agency_name
+        label: Agency Name
+        dataset: dim_distribution
+        name_column: agency_name
+        key_columns:
+          - agency_name
+  -     unique_name: la_agent_id
+        label: Agent Id
+        dataset: dim_distribution
+        name_column: agent_name
+        key_columns:
+          - agent_id
+        sort_column: agent_id
+  -     unique_name: la_distribution_id
+        label: distribution_id
+        dataset: dim_distribution
+        name_column: distribution_id
+        key_columns:
+          - distribution_id
+        is_unique_key: true
+hierarchies: []

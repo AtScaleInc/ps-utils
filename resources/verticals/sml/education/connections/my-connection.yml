@@ -1,0 +1,6 @@
+unique_name: my_connection
+object_type: connection
+label: my_connection
+as_connection: my_connection
+database: database_name
+schema: default

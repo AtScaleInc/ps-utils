@@ -1,0 +1,8 @@
+unique_name: m_adr_max
+object_type: metric
+label: adr
+calculation_method: maximum
+dataset: travel_reservation_fact
+column: adr
+is_hidden: false
+unrelated_dimensions_handling: empty

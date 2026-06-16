@@ -1,0 +1,8 @@
+unique_name: m_enterprise_value_min
+object_type: metric
+label: enterprise_value
+calculation_method: minimum
+dataset: financial_securities_fact
+column: enterprise_value
+is_hidden: false
+unrelated_dimensions_handling: empty
