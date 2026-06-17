@@ -3,8 +3,12 @@
   "version": "1",
   "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
   "type": "module",
+  "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "homepage": "https://github.com/AtScaleInc/ps-utils",
+  "repository": "https://github.com/AtScaleInc/ps-utils",
+  "tags": ["atscale", "utils"],
   "exports": {
     ".": {
       "import": "./dist/index.js",
