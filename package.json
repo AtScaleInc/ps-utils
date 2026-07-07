@@ -65,5 +65,17 @@
     "@types/xml2js": "^0.4.14",
     "typescript": "^5.5.4",
     "vitest": "^4.1.5"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "example",
+    "test": "test"
+  },
+  "keywords": [
+    "atscale"
+  ],
+  "author": "AtScale",
+  "bugs": {
+    "url": "https://github.com/AtScaleInc/ps-utils/issues"
   }
 }
