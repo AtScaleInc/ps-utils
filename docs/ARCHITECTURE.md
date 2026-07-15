@@ -80,14 +80,13 @@ flowchart LR
 
     subgraph STORE["Internal Services"]
         META[("PostgreSQL (Metadata)")]
-        CACHE[("Redis (Query Cache)")]
-        ZK["Zookeeper (Coordination)"]
+        CACHE[("Redis (Cache & Coordination)")]
     end
 
     DC & ENG & API & AUTH --> META
     ENG --> CACHE
     ENG --> AGG
-    ENG & AGG -.- ZK
+    ENG & AGG -.- CACHE
 ```
 
 ### Data Warehouse Connections
@@ -150,7 +149,7 @@ flowchart LR
 |---|---|
 | **Design Center** | Browser-based semantic layer designer. Used to build and manage SML models, connections, and deployments. Reads/writes model files to Git and model metadata to PostgreSQL. |
 | **Query Engine** | Receives MDX/XMLA queries from BI tools and SQL queries from direct clients. Translates semantic queries to native SQL dialects and executes them against the connected data source via push-down. Returns results through the originating protocol. |
-| **Aggregation Manager** | Monitors query patterns and cost estimates. Plans, creates, and refreshes pre-computed aggregate tables in the data warehouse to accelerate repeated queries. Coordinates with the Query Engine via Zookeeper. |
+| **Aggregation Manager** | Monitors query patterns and cost estimates. Plans, creates, and refreshes pre-computed aggregate tables in the data warehouse to accelerate repeated queries. Coordinates with the Query Engine via Redis. |
 | **REST API (wapi)** | Management API served at `/wapi/p/`. Used to programmatically create connections, deploy models, list catalogs, and trigger operations. All `ps-utils` AtScale config operations call this API. |
 | **Auth Service (Keycloak)** | Handles all authentication and session management. Delegates to external identity providers via LDAP or SAML/SSO. Issues short-lived JWTs consumed by the REST API and Design Center. |
 
@@ -159,8 +158,7 @@ flowchart LR
 | Component | Detail |
 |---|---|
 | **PostgreSQL (Metadata)** | Stores model definitions, connection configurations, deployment state, query statistics, and user/role assignments. Central store for all AtScale state. |
-| **Zookeeper** | Provides distributed coordination between Query Engine replicas and the Aggregation Manager. Manages leader election and shared configuration. |
-| **Redis (Query Cache)** | Caches query results to avoid redundant push-down executions against the data warehouse. TTL-based invalidation. |
+| **Redis (Cache & Coordination)** | Caches query results to avoid redundant push-down executions against the data warehouse. Also provides distributed coordination (e.g. leader election and shared configuration) between Query Engine replicas and the Aggregation Manager. |
 
 ## Helm Chart Component Diagram
 
