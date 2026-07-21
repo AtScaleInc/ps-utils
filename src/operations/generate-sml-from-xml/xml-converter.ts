@@ -14,6 +14,7 @@
 
 import { Parser } from "xml2js";
 import { dump } from "js-yaml";
+import { createHash } from "crypto";
 import type { Logger } from "../../logging.js";
 
 // ============================================================
@@ -463,7 +464,7 @@ export async function convertXmlToSml(
           }
 
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = safeName(attrNameRaw).toLowerCase();
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -475,7 +476,7 @@ export async function convertXmlToSml(
         } else if (exprEl) {
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = safeName(attrNameRaw).toLowerCase();
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -499,12 +500,12 @@ export async function convertXmlToSml(
             category: "Calculated Member",
             item: def.name,
             reason: "Marked as not visible (visible=false) in the source XML — excluded from output",
-            recommendation: `If this calculated member is needed, create \`calculations/${safeFilename(safeName(def.name).toLowerCase())}.yml\` manually with \`is_hidden_from_ui: false\`.`,
+            recommendation: `If this calculated member is needed, create \`calculations/${safeFilename(truncateUniqueName(safeName(def.name).toLowerCase()))}.yml\` manually with \`is_hidden_from_ui: false\`.`,
           });
           continue;
         }
         const label = def.caption ?? def.name;
-        const uniqueName = safeName(def.name).toLowerCase();
+        const uniqueName = truncateUniqueName(safeName(def.name).toLowerCase());
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
@@ -880,6 +881,17 @@ function safeName(s: string): string {
     .replace(/^_|_$/g, "");
 }
 
+/** SML unique_name values must not exceed this length. */
+const MAX_UNIQUE_NAME_LENGTH = 63;
+
+/** Deterministically shorten a unique_name to fit SML's 63-character limit. */
+function truncateUniqueName(name: string): string {
+  if (name.length <= MAX_UNIQUE_NAME_LENGTH) return name;
+  const hash = createHash("sha1").update(name).digest("hex").slice(0, 8);
+  const keep = MAX_UNIQUE_NAME_LENGTH - hash.length - 1;
+  return `${name.slice(0, keep)}_${hash}`;
+}
+
 /** Convert a name to a safe filename (lowercase, hyphens). */
 function safeFilename(s: string): string {
   return s
@@ -910,22 +922,27 @@ function mapAggregation(raw: string): string {
     case "MIN":            return "minimum";
     case "MAX":            return "maximum";
     case "COUNT":          return "count non-null";
-    case "COUNT_DISTINCT":
+    case "COUNT_DISTINCT":                return "count distinct";
     case "DISTINCT_COUNT_ESTIMATE":
-    case "DISTINCTCOUNTESTIMATE": return "distinct count estimate";
+    case "DISTINCTCOUNTESTIMATE":         return "estimated count distinct";
     default:               return "sum";
+  }
+}
+
+/** Normalize a named format keyword (e.g. "General Number", "Short Date") to a lowercase SML format token. */
+function normalizeNamedFormat(named: string): string {
+  switch (named.toLowerCase()) {
+    case "percent":  return "percent:1";
+    case "standard": return "decimal:2";
+    case "currency": return "currency:0";
+    default:         return named.toLowerCase(); // pass through (e.g. "short date")
   }
 }
 
 /** Map XML format-string or named-format → SML format. */
 function resolveFormat(formatString?: string, namedFormat?: string): string | undefined {
   if (namedFormat) {
-    switch (namedFormat.toLowerCase()) {
-      case "percent":  return "percent:1";
-      case "standard": return "decimal:2";
-      case "currency": return "currency:0";
-      default:         return namedFormat.toLowerCase(); // pass through (e.g. "short date")
-    }
+    return normalizeNamedFormat(namedFormat);
   }
   if (formatString) {
     switch (formatString) {
@@ -935,7 +952,9 @@ function resolveFormat(formatString?: string, namedFormat?: string): string | un
       case "#,##0.0%":  return "#,##0.0%";
       case "$#,##0":    return "$#,##0";
       case "#,##0%":    return "#,##0%";
-      default:          return formatString;
+      default:
+        // format-string can also hold a named format (e.g. "General Number") rather than a numeric pattern
+        return /[a-zA-Z]/.test(formatString) ? normalizeNamedFormat(formatString) : formatString;
     }
   }
   return undefined;
@@ -974,9 +993,9 @@ function mapDataType(xmlType: string | undefined): string {
   if (!xmlType) return "string";
   switch (xmlType.toLowerCase()) {
     case "string":    return "string";
-    case "integer":
     case "int":
-    case "long":      return "integer";
+    case "integer":   return "int";
+    case "long":      return "long";
     case "float":
     case "double":
     case "decimal":
@@ -1672,7 +1691,7 @@ function buildModelYaml(
   });
 
   if (dimNames.length > 0) {
-    obj.dimensions = dimNames.map((n) => ({ unique_name: n }));
+    obj.dimensions = dimNames;
   }
 
   if (metricNames.length > 0) {
