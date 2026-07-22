@@ -290,6 +290,24 @@ export async function convertXmlToSml(
   // Phase 2: Emit dataset files
   // ---------------------------------------------------------------
 
+  // Datasets without an explicit <physical> column list (e.g. fact tables meant to be
+  // introspected live from the database) still need every referenced column declared in
+  // SML. Collect every column any key-ref/attribute-ref points to, per dataset.
+  const referencedColumnsByDataset = new Map<string, Set<string>>();
+  function addReferencedColumn(datasetName: string, column: string): void {
+    const set = referencedColumnsByDataset.get(datasetName) ?? new Set<string>();
+    set.add(column);
+    referencedColumnsByDataset.set(datasetName, set);
+  }
+  for (const entries of keyMap.values()) {
+    for (const entry of entries) {
+      for (const col of entry.columns) addReferencedColumn(entry.datasetName, col);
+    }
+  }
+  for (const entry of attrMap.values()) {
+    addReferencedColumn(entry.datasetName, entry.column);
+  }
+
   for (const dsSec of arr(schemaEl["data-sets"])) {
     for (const ds of arr(dsSec["data-set"])) {
       const dsName = a(ds, "name");
@@ -297,6 +315,7 @@ export async function convertXmlToSml(
       const dsYaml = buildDatasetYaml(
         ds as Record<string, unknown>, dsName, connName,
         Boolean(opts.connectionDb || opts.connectionSchema),
+        referencedColumnsByDataset.get(dsName),
       );
       const fname = safeFilename(dsName);
       output.set(`datasets/${fname}.yml`, dsYaml);
@@ -304,11 +323,13 @@ export async function convertXmlToSml(
 
       // Report tracking
       const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
+      const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
+      for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
       rptDatasets.push({
         name: dsName,
         file: `datasets/${fname}.yml`,
         type: physRpt?.sql ? "sql" : "table",
-        columnCount: physRpt?.columns?.length ?? 0,
+        columnCount: allColumnNames.size,
         isImmutable: physRpt?.immutable ?? false,
         isUnbound: unboundDatasetNames.has(dsName),
       });
@@ -356,6 +377,10 @@ export async function convertXmlToSml(
       if (def) calcMemberDefs.set(id, def);
     }
   }
+
+  // Map every measure/calculated-member's original name to its final unique_name, so
+  // calculation expressions referencing other metrics by name can be rewritten to match.
+  const measureRefMap = buildMeasureRefMap(cubeEls, calcMemberDefs);
 
   // ---------------------------------------------------------------
   // Phase 4+5+Model: Process each cube
@@ -427,6 +452,9 @@ export async function convertXmlToSml(
         const countDistEl = first(arr(typeEl["count-distinct"])) as
           | Record<string, unknown>
           | undefined;
+        const countNonNullEl = first(arr(typeEl["count-nonnull"])) as
+          | Record<string, unknown>
+          | undefined;
         const exprEl = s(first(arr((attrEl as Record<string, unknown>).expression)));
 
         const caption = s(first(arr(props.caption)));
@@ -439,18 +467,29 @@ export async function convertXmlToSml(
         const namedFormat = fmtEl ? s(first(arr(fmtEl["named-format"]))) : undefined;
         const format = resolveFormat(formatString, namedFormat);
 
-        if (measureEl || countDistEl) {
+        if (measureEl || countDistEl || countNonNullEl) {
           // Regular measure
           const aggText = measureEl
-            ? s(first(arr(measureEl["default-aggregation"])))?.toUpperCase()
-            : "DISTINCT_COUNT_ESTIMATE";
-          const aggregation = mapAggregation(
-            aggText ?? (countDistEl ? "COUNT_DISTINCT" : "SUM"),
-          );
+            ? (s(first(arr(measureEl["default-aggregation"])))?.toUpperCase() ?? "SUM")
+            : countDistEl
+            ? "DISTINCT_COUNT_ESTIMATE"
+            : "COUNT";
+          const aggregation = mapAggregation(aggText);
 
-          // Resolve column: attrMap[attrId] → column
+          // Resolve column: prefer the inline <key-ref id="..."> nested under <measure>/
+          // <count-distinct>/<count-nonnull> (resolved through keyMap, same as dimension
+          // level attributes), then attrMap[attrId] (attribute-ref in the fact dataset's
+          // logical section), then fall back to guessing the column from the attribute's own name.
+          const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+          const keyRefEl = measureTypeEl
+            ? (first(arr(measureTypeEl["key-ref"])) as Record<string, unknown> | undefined)
+            : undefined;
+          const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
+          const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
+          const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+
           const colRef = attrMap.get(attrId);
-          const column = colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
+          const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
           if (!column || !factDatasetName) {
             rptOmissions.push({
               category: "Metric",
@@ -480,7 +519,7 @@ export async function convertXmlToSml(
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
-            buildCalcMetricYaml(uniqueName, label, unescapeHtml(exprEl), format, folder, visible, description),
+            buildCalcMetricYaml(uniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
@@ -510,7 +549,7 @@ export async function convertXmlToSml(
         const fname = safeFilename(uniqueName);
         output.set(
           `calculations/${fname}.yml`,
-          buildCalcMemberYaml(uniqueName, label, def.expression, format, def.folder, def.visible, def.description),
+          buildCalcMemberYaml(uniqueName, label, rewriteMeasureRefs(def.expression, measureRefMap), format, def.folder, def.visible, def.description),
         );
         logger.log(`  → calculations/${fname}.yml`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
@@ -565,13 +604,14 @@ export async function convertXmlToSml(
     const relevantDims = new Map([...schemaDims, ...cubeLevelDims]);
 
     // Phase 5: Infer relationships
-    const relationships = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims);
+    const { relationships, matchedDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims);
 
-    // Collect dimension names: inline cube dims + any schema dim referenced via a relationship
+    // Collect dimension names: inline cube dims + any schema dim matched to this cube
+    // (via a relationship, or degenerate dims that attach directly with no relationship)
     const cubeDimNames: string[] = [...cubeLevelDims.keys()];
-    for (const rel of relationships) {
-      if (!cubeDimNames.includes(rel.toDimension)) {
-        cubeDimNames.push(rel.toDimension);
+    for (const dimName of matchedDimNames) {
+      if (!cubeDimNames.includes(dimName)) {
+        cubeDimNames.push(dimName);
       }
     }
     // Mark all referenced dims for YAML emission
@@ -892,6 +932,52 @@ function truncateUniqueName(name: string): string {
   return `${name.slice(0, keep)}_${hash}`;
 }
 
+/**
+ * Build a map from every measure/calculated-member's original XML name to its final
+ * (safeName + truncated) unique_name. Calculation expressions reference other metrics
+ * by their original name (e.g. "[Measures].[Sales Amount-Prev]"), but the output uses
+ * the transformed unique_name — this map lets those references be rewritten to match.
+ */
+function buildMeasureRefMap(
+  cubeEls: Record<string, unknown>[],
+  calcMemberDefs: Map<string, CalcMemberDef>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const def of calcMemberDefs.values()) {
+    map.set(def.name, truncateUniqueName(safeName(def.name).toLowerCase()));
+  }
+  for (const cube of cubeEls) {
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr((attrsSec as Record<string, unknown>).attribute)) {
+        const attrNameRaw = a(attrEl, "name");
+        if (!attrNameRaw) continue;
+        const props = first(arr((attrEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        if (!props) continue;
+        const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
+        if (!typeEl) continue;
+        const isMeasure =
+          arr(typeEl.measure).length > 0 ||
+          arr(typeEl["count-distinct"]).length > 0 ||
+          arr(typeEl["count-nonnull"]).length > 0;
+        const hasExpr = arr((attrEl as Record<string, unknown>).expression).length > 0;
+        if (!isMeasure && !hasExpr) continue;
+        map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw).toLowerCase()));
+      }
+    }
+  }
+  return map;
+}
+
+/** Rewrite "[Measures].[Original Name]" references to match transformed unique_names. */
+function rewriteMeasureRefs(text: string, nameMap: Map<string, string>): string {
+  return text.replace(/\[Measures\]\.\[([^\]]+)\]/g, (full, name) => {
+    const mapped = nameMap.get(name);
+    return mapped ? `[Measures].[${mapped}]` : full;
+  });
+}
+
 /** Convert a name to a safe filename (lowercase, hyphens). */
 function safeFilename(s: string): string {
   return s
@@ -976,12 +1062,50 @@ function parseColumnFromAttrName(attrName: string): string {
 function mapLevelType(xmlLevelType: string | undefined): string | undefined {
   if (!xmlLevelType) return undefined;
   switch (xmlLevelType) {
-    case "TimeYears":   return "year";
-    case "TimeMonths":  return "month";
-    case "TimeDays":    return "day";
-    case "TimeWeeks":   return "week";
-    default:            return undefined;
+    case "TimeYears":     return "year";
+    case "TimeHalfYears": return "halfyear";
+    case "TimeQuarters":  return "quarter";
+    case "TimeMonths":    return "month";
+    case "TimeWeeks":     return "week";
+    case "TimeDays":      return "day";
+    case "TimeHours":     return "hour";
+    case "TimeMinutes":   return "minute";
+    case "TimeSeconds":   return "second";
+    default:              return undefined;
   }
+}
+
+/**
+ * Ordered [pattern, time_unit] fallbacks for levels inside a time dimension whose
+ * XML level-type is missing or unrecognized (e.g. custom levels like "customquarter").
+ */
+const TIME_UNIT_NAME_PATTERNS: Array<[RegExp, string]> = [
+  [/\byear\b|\byr\b/i,          "year"],
+  [/\bquarter\b|\bqtr\b/i,      "quarter"],
+  [/\bhalf.?year\b|\bh[12]\b/i, "halfyear"],
+  [/\bmonth\b/i,                "month"],
+  [/\bweek\b|\bwk\b/i,          "week"],
+  [/\bday\b|\bdate\b/i,         "day"],
+  [/\bhour\b|\bhr\b/i,          "hour"],
+  [/\bminute\b|\bmin\b/i,       "minute"],
+  [/\bsecond\b|\bsec\b/i,       "second"],
+  [/year/i,                     "year"],
+  [/quarter/i,                  "quarter"],
+  [/half.?year|halfyr/i,        "halfyear"],
+  [/month/i,                    "month"],
+  [/week/i,                     "week"],
+  [/date|day/i,                 "day"],
+  [/hour/i,                     "hour"],
+  [/minute/i,                   "minute"],
+  [/second/i,                   "second"],
+];
+
+/** Fallback: infer a level's time_unit from its name when the XML level-type is missing/unrecognized. */
+function inferTimeUnitFromName(levelName: string): string | undefined {
+  for (const [pattern, unit] of TIME_UNIT_NAME_PATTERNS) {
+    if (pattern.test(levelName)) return unit;
+  }
+  return undefined;
 }
 
 // ============================================================
@@ -1061,6 +1185,8 @@ function buildDatasetYaml(
   connName: string,
   /** When true, db/schema live in the connection file — use a plain table name string. */
   connectionHasDbSchema: boolean,
+  /** Every column any key-ref/attribute-ref points to for this dataset, regardless of <physical>. */
+  referencedColumns?: Set<string>,
 ): string {
   const phys = parseDatasetPhysical(dsEl) ?? {};
 
@@ -1087,9 +1213,17 @@ function buildDatasetYaml(
     };
   }
 
-  if (phys.columns?.length) {
-    obj.columns = phys.columns.map((c) => ({ name: c.name, data_type: c.dataType }));
+  const columns: Array<{ name: string; data_type: string }> =
+    phys.columns?.map((c) => ({ name: c.name, data_type: c.dataType })) ?? [];
+
+  if (referencedColumns?.size) {
+    const known = new Set(columns.map((c) => c.name));
+    for (const col of referencedColumns) {
+      if (!known.has(col)) columns.push({ name: col, data_type: "string" }); // unknown — mark for review
+    }
   }
+
+  if (columns.length) obj.columns = columns;
 
   return toYaml(obj);
 }
@@ -1283,7 +1417,7 @@ function buildDimensionYaml(
         const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
         return lProps ? s(first(arr(lProps["level-type"]))) : undefined;
       })();
-      const timeUnit = mapLevelType(levelTypeRaw);
+      const timeUnit = mapLevelType(levelTypeRaw) ?? (isTime ? inferTimeUnitFromName(levelName) : undefined);
 
       // Build or merge the level attribute entry (de-duplicated by unique name)
       if (!levelAttrMap.has(levelUniqueName)) {
@@ -1558,8 +1692,8 @@ function inferRelationships(
   keyMap: Map<string, KeyRefEntry[]>,
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
-): RelationshipDef[] {
-  if (!factDatasetName) return [];
+): { relationships: RelationshipDef[]; matchedDimNames: string[] } {
+  if (!factDatasetName) return { relationships: [], matchedDimNames: [] };
 
   // Build the set of key-ref UUIDs that appear in this cube's data-set-ref logical sections,
   // mapped to the fact-table columns that hold that key.
@@ -1594,6 +1728,7 @@ function inferRelationships(
   }
 
   const relationships: RelationshipDef[] = [];
+  const matchedDimNames: string[] = [];
   const seen = new Set<string>();
 
   for (const [dimName, dimEl] of relevantDims) {
@@ -1610,10 +1745,16 @@ function inferRelationships(
     if (seen.has(relKey)) continue;
     seen.add(relKey);
 
-    const relUniqueName = `${safeName(factDatasetName)}_to_${safeName(dimName)}_${safeName(fromColumns.join("_"))}`;
+    matchedDimNames.push(dimName);
 
     // Dimension dataset: the complete=true side of the key-ref (the lookup table)
     const dimDataset = keyMap.get(keyUuid)?.find((e) => e.complete === "true")?.datasetName;
+
+    // Degenerate dimensions (their own dataset IS the fact dataset) attach directly via
+    // is_degenerate — a relationship here would be a self-join (fromDataset === toDataset).
+    if (dimDataset === factDatasetName) continue;
+
+    const relUniqueName = `${safeName(factDatasetName)}_to_${safeName(dimName)}_${safeName(fromColumns.join("_"))}`;
 
     relationships.push({
       uniqueName: relUniqueName,
@@ -1626,7 +1767,7 @@ function inferRelationships(
     });
   }
 
-  return relationships;
+  return { relationships, matchedDimNames };
 }
 
 // ============================================================
