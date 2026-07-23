@@ -307,6 +307,7 @@ export async function convertXmlToSml(
   for (const entry of attrMap.values()) {
     addReferencedColumn(entry.datasetName, entry.column);
   }
+  collectMeasureColumns(cubeEls, datasetIdToName, keyMap, attrMap, addReferencedColumn);
 
   for (const dsSec of arr(schemaEl["data-sets"])) {
     for (const ds of arr(dsSec["data-set"])) {
@@ -410,17 +411,7 @@ export async function convertXmlToSml(
     }
 
     // Find fact dataset name for this cube
-    let factDatasetName: string | undefined;
-    for (const dsSec of arr(cube["data-sets"])) {
-      for (const dsRef of arr(dsSec["data-set-ref"])) {
-        const refId = a(dsRef, "id");
-        if (refId) {
-          factDatasetName = datasetIdToName.get(refId) ?? refId;
-          break;
-        }
-      }
-      if (factDatasetName) break;
-    }
+    const factDatasetName = getFactDatasetName(cube, datasetIdToName);
 
     // Extract include_default_drillthrough from <actions><properties><include-default-drill-through>
     const actionsEl = first(arr(cube.actions)) as Record<string, unknown> | undefined;
@@ -604,18 +595,22 @@ export async function convertXmlToSml(
     const relevantDims = new Map([...schemaDims, ...cubeLevelDims]);
 
     // Phase 5: Infer relationships
-    const { relationships, matchedDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims);
+    const { relationships, degenerateDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
 
-    // Collect dimension names: inline cube dims + any schema dim matched to this cube
-    // (via a relationship, or degenerate dims that attach directly with no relationship)
+    // The model's flat dimensions: list only holds dimensions with no relationship (they
+    // attach directly via is_degenerate) — inline cube dims plus degenerate schema dims.
+    // Dimensions with a relationship are referenced solely via relationships[].to.dimension
+    // and must not also appear here, or the two representations contradict each other.
     const cubeDimNames: string[] = [...cubeLevelDims.keys()];
-    for (const dimName of matchedDimNames) {
+    for (const dimName of degenerateDimNames) {
       if (!cubeDimNames.includes(dimName)) {
         cubeDimNames.push(dimName);
       }
     }
-    // Mark all referenced dims for YAML emission
+    // Dimension YAML files still need to be emitted for every dimension actually used by
+    // this cube, whether degenerate (flat dimensions: list) or joined via a relationship.
     for (const n of cubeDimNames) referencedDimNames.add(n);
+    for (const rel of relationships) referencedDimNames.add(rel.toDimension);
 
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
@@ -1058,6 +1053,71 @@ function parseColumnFromAttrName(attrName: string): string {
   return withoutPrefix.replace(/_(sum|avg|min|max|count|distinct|average|minimum|maximum)$/i, "");
 }
 
+/** The fact dataset for a cube is the first <data-set-ref> listed under its <data-sets>. */
+function getFactDatasetName(
+  cube: Record<string, unknown>,
+  datasetIdToName: Map<string, string>,
+): string | undefined {
+  for (const dsSec of arr(cube["data-sets"])) {
+    for (const dsRef of arr(dsSec["data-set-ref"])) {
+      const refId = a(dsRef, "id");
+      if (refId) return datasetIdToName.get(refId) ?? refId;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve every cube measure's column using the same priority order as the real emission
+ * logic (inline key-ref, then attribute-ref, then a name-based guess) and record it against
+ * its fact dataset — including fallback name-guessed columns, which otherwise never get
+ * declared in the dataset's columns: list even though the metric YAML ends up referencing them.
+ */
+function collectMeasureColumns(
+  cubeEls: Record<string, unknown>[],
+  datasetIdToName: Map<string, string>,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrMap: Map<string, AttrRefEntry>,
+  addReferencedColumn: (datasetName: string, column: string) => void,
+): void {
+  for (const cube of cubeEls) {
+    const factDatasetName = getFactDatasetName(cube, datasetIdToName);
+    if (!factDatasetName) continue;
+
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr((attrsSec as Record<string, unknown>).attribute)) {
+        const attrId = a(attrEl, "id");
+        const attrNameRaw = a(attrEl, "name") ?? "";
+        if (!attrId) continue;
+
+        const props = first(arr((attrEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        if (!props) continue;
+        const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
+        if (!typeEl) continue;
+
+        const measureEl = first(arr(typeEl.measure)) as Record<string, unknown> | undefined;
+        const countDistEl = first(arr(typeEl["count-distinct"])) as Record<string, unknown> | undefined;
+        const countNonNullEl = first(arr(typeEl["count-nonnull"])) as Record<string, unknown> | undefined;
+        if (!measureEl && !countDistEl && !countNonNullEl) continue;
+
+        const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+        const keyRefEl = measureTypeEl
+          ? (first(arr(measureTypeEl["key-ref"])) as Record<string, unknown> | undefined)
+          : undefined;
+        const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
+        const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
+        const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+
+        const colRef = attrMap.get(attrId);
+        const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
+        if (column) addReferencedColumn(factDatasetName, column);
+      }
+    }
+  }
+}
+
 /** Map XML dimension-type/level-type to SML time_unit. */
 function mapLevelType(xmlLevelType: string | undefined): string | undefined {
   if (!xmlLevelType) return undefined;
@@ -1129,6 +1189,11 @@ function mapDataType(xmlType: string | undefined): string {
     case "datetime":  return "timestamp";
     case "boolean":
     case "bool":      return "boolean";
+    // Semi-structured/JSON types (e.g. Snowflake VARIANT) have no SML equivalent — treat as string.
+    case "variant":
+    case "json":
+    case "object":
+    case "array":     return "string";
     default:          return xmlType.toLowerCase();
   }
 }
@@ -1663,39 +1728,51 @@ interface CubeKeyRole {
   columns: string[];
   rolePlay?: string;
   complete: string;
+  datasetName: string;
+}
+
+interface CubeLevelMatch {
+  matchId: string;
+  toLevel: string;
+  dimKeyUuid?: string;
 }
 
 /**
- * Scan all levels of all hierarchies in a dimension to find one matching the cube's
- * key-refs. Two distinct matching mechanisms exist in the source XML:
+ * Scan every level of every hierarchy in a dimension for matches against the cube's
+ * key-refs — a dimension can have multiple hierarchies (e.g. a date dimension with
+ * separate Calendar/Reporting/Custom hierarchies) each needing their own relationship
+ * to the same fact-table FK, so this returns ALL matches, not just the first.
+ * Two distinct matching mechanisms exist in the source XML:
  *   - Role-played FKs (e.g. "Order Date" / "Ship Date" both pointing at the same Date
  *     Dimension level): the cube's <key-ref><ref-path><new-ref attribute-id="..."> value
  *     equals the level's own `primary-attribute` id directly.
  *   - Plain FKs / degenerate attributes: matched via the keyed-attribute's own
  *     `key-ref="..."` XML attribute (def.keyUuid), same as before.
- * Returns the id to look up in cubeKeyRoles (matchId) plus, separately, the dimension's
- * own canonical key (dimKeyUuid) for resolving which dataset backs the dimension —
+ * Each match's `matchId` is what to look up in cubeKeyRoles; `dimKeyUuid` is the
+ * dimension's own canonical key, used separately to resolve which dataset backs it —
  * these differ for role-played matches, where matchId is cube-local.
  */
-function findCubeMatchingLevel(
+function findCubeMatchingLevels(
   dimEl: Record<string, unknown>,
   attrDef: Map<string, AttrDefEntry>,
   cubeKeyRoles: Map<string, CubeKeyRole[]>,
-): { matchId: string; toLevel: string; dimKeyUuid?: string } | undefined {
+): CubeLevelMatch[] {
+  const matches: CubeLevelMatch[] = [];
   for (const hierEl of arr(dimEl.hierarchy)) {
     for (const levelEl of arr(hierEl.level)) {
       const pa = a(levelEl, "primary-attribute");
       if (!pa) continue;
       const def = attrDef.get(pa);
       if (cubeKeyRoles.has(pa)) {
-        return { matchId: pa, toLevel: def?.name ?? pa, dimKeyUuid: def?.keyUuid };
+        matches.push({ matchId: pa, toLevel: def?.name ?? pa, dimKeyUuid: def?.keyUuid });
+        continue;
       }
       if (def?.keyUuid && cubeKeyRoles.has(def.keyUuid)) {
-        return { matchId: def.keyUuid, toLevel: def.name, dimKeyUuid: def.keyUuid };
+        matches.push({ matchId: def.keyUuid, toLevel: def.name, dimKeyUuid: def.keyUuid });
       }
     }
   }
-  return undefined;
+  return matches;
 }
 
 function inferRelationships(
@@ -1704,19 +1781,28 @@ function inferRelationships(
   keyMap: Map<string, KeyRefEntry[]>,
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
-): { relationships: RelationshipDef[]; matchedDimNames: string[] } {
-  if (!factDatasetName) return { relationships: [], matchedDimNames: [] };
+  datasetIdToName: Map<string, string>,
+): { relationships: RelationshipDef[]; degenerateDimNames: string[] } {
+  if (!factDatasetName) return { relationships: [], degenerateDimNames: [] };
 
   // Build the set of ids that appear in this cube's data-set-ref logical sections, mapped to
   // every distinct role that id represents. Role-played FKs (e.g. "Order Date" and "Ship
   // Date" both pointing at the same Date Dimension level) share the same outer <key-ref id>
   // but have different <ref-path><new-ref attribute-id="..."> values — that attribute-id
   // equals the dimension level's own primary-attribute id, so it's used as the map key
-  // instead of the (colliding) outer id, and every distinct column set is kept as a
-  // separate role rather than the last one silently overwriting the others.
+  // instead of the (colliding) outer id. The same outer id can also appear, unchanged, in
+  // MULTIPLE <data-set-ref> blocks of a multi-fact cube (e.g. a "query" fact and a "sub-
+  // query" fact both keying against the same dimension under different column names) — so
+  // each data-set-ref's own dataset name is tracked per role, not assumed to be the cube's
+  // single factDatasetName, and every distinct (dataset, columns) pair is kept as a separate
+  // role rather than the last one silently overwriting the others.
   const cubeKeyRoles = new Map<string, CubeKeyRole[]>();
   for (const dsSec of arr(cubeEl["data-sets"])) {
     for (const dsRef of arr(dsSec["data-set-ref"])) {
+      const refId = a(dsRef, "id");
+      const dsDatasetName = refId ? (datasetIdToName.get(refId) ?? refId) : undefined;
+      if (!dsDatasetName) continue;
+
       for (const logSec of arr(dsRef.logical)) {
         for (const kr of arr(logSec["key-ref"])) {
           const id = a(kr, "id");
@@ -1734,13 +1820,13 @@ function inferRelationships(
           const matchId = roleAttrId ?? id;
 
           const roles = cubeKeyRoles.get(matchId) ?? [];
-          const colKey = cols.join(",");
-          const existingIdx = roles.findIndex((r) => r.columns.join(",") === colKey);
+          const colKey = `${dsDatasetName}|${cols.join(",")}`;
+          const existingIdx = roles.findIndex((r) => `${r.datasetName}|${r.columns.join(",")}` === colKey);
           if (existingIdx === -1) {
-            roles.push({ columns: cols, rolePlay, complete });
+            roles.push({ columns: cols, rolePlay, complete, datasetName: dsDatasetName });
           } else if (complete === "false") {
             // Prefer the explicit-FK (complete=false) version of the same column set
-            roles[existingIdx] = { columns: cols, rolePlay, complete };
+            roles[existingIdx] = { columns: cols, rolePlay, complete, datasetName: dsDatasetName };
           }
           cubeKeyRoles.set(matchId, roles);
         }
@@ -1749,52 +1835,69 @@ function inferRelationships(
   }
 
   const relationships: RelationshipDef[] = [];
-  const matchedDimNames: string[] = [];
+  const degenerateDimNames: string[] = [];
   const seen = new Set<string>();
+  const usedNames = new Set<string>();
 
   for (const [dimName, dimEl] of relevantDims) {
-    // Find the first level of this dimension matching the cube's key-refs. For multi-level
-    // hierarchies (e.g. date dims) the cube FK is typically on the leaf level; for degenerate
-    // dims it is usually the sole level.
-    const match = findCubeMatchingLevel(dimEl, attrDef, cubeKeyRoles);
-    if (!match) continue; // Dimension not used by this cube
+    // Find every level (across every hierarchy) of this dimension matching the cube's
+    // key-refs — a dimension can have multiple hierarchies each needing their own
+    // relationship to the same fact-table FK (e.g. a date dimension's Calendar/Reporting/
+    // Custom hierarchies all role-played as both "Order Date" and "Ship Date").
+    const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles);
+    if (matches.length === 0) continue; // Dimension not used by this cube
 
-    const { matchId, toLevel, dimKeyUuid } = match;
-    const roles = cubeKeyRoles.get(matchId) ?? [];
-    if (roles.length === 0) continue;
+    let isDegenerate = false;
 
-    matchedDimNames.push(dimName);
+    for (const { matchId, toLevel, dimKeyUuid } of matches) {
+      const roles = cubeKeyRoles.get(matchId) ?? [];
+      if (roles.length === 0) continue;
 
-    // Dimension dataset: the complete=true side of the dimension's own key (the lookup
-    // table) — distinct from matchId, which may be a cube-local role-play identifier.
-    const dimDataset = dimKeyUuid
-      ? keyMap.get(dimKeyUuid)?.find((e) => e.complete === "true")?.datasetName
-      : undefined;
+      // Dimension dataset: the complete=true side of the dimension's own key (the lookup
+      // table) — distinct from matchId, which may be a cube-local role-play identifier.
+      const dimDataset = dimKeyUuid
+        ? keyMap.get(dimKeyUuid)?.find((e) => e.complete === "true")?.datasetName
+        : undefined;
 
-    // Degenerate dimensions (their own dataset IS the fact dataset) attach directly via
-    // is_degenerate — a relationship here would be a self-join (fromDataset === toDataset).
-    if (dimDataset === factDatasetName) continue;
+      for (const role of roles) {
+        // Degenerate dimensions (their own dataset IS the role's own fact-side dataset)
+        // attach directly via is_degenerate — a relationship here would be a self-join.
+        if (dimDataset === role.datasetName) {
+          isDegenerate = true;
+          continue;
+        }
 
-    for (const role of roles) {
-      const relKey = `${dimName}|${role.columns.join(",")}`;
-      if (seen.has(relKey)) continue;
-      seen.add(relKey);
+        const relKey = `${dimName}|${toLevel}|${role.datasetName}|${role.columns.join(",")}`;
+        if (seen.has(relKey)) continue;
+        seen.add(relKey);
 
-      const relUniqueName = `${safeName(factDatasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
+        const baseName = `${safeName(role.datasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
+        let relUniqueName = baseName;
+        let suffix = 1;
+        while (usedNames.has(relUniqueName)) {
+          relUniqueName = `${baseName}_${++suffix}`;
+        }
+        usedNames.add(relUniqueName);
 
-      relationships.push({
-        uniqueName: relUniqueName,
-        fromDataset: factDatasetName,
-        fromColumns: role.columns,
-        toDimension: dimName,
-        toLevel,
-        rolePlay: role.rolePlay,
-        dimensionDataset: dimDataset,
-      });
+        relationships.push({
+          uniqueName: relUniqueName,
+          fromDataset: role.datasetName,
+          fromColumns: role.columns,
+          toDimension: dimName,
+          toLevel,
+          rolePlay: role.rolePlay,
+          dimensionDataset: dimDataset,
+        });
+      }
     }
+
+    // A dimension in the flat dimensions: list is implicitly degenerate (no relationship
+    // needed); one referenced only via relationships[].to.dimension must not also appear
+    // there, so only degenerate dims are tracked here.
+    if (isDegenerate) degenerateDimNames.push(dimName);
   }
 
-  return { relationships, matchedDimNames };
+  return { relationships, degenerateDimNames };
 }
 
 // ============================================================
