@@ -1161,6 +1161,8 @@ function generateAtScaleInstallYaml(
 | `outputFile` | `FileOutput` | No | `"values.yaml"` | Output path for Helm values, or a `Writable` to receive it |
 | `enableMcp` | `boolean` | No | `false` | Enable the MCP server |
 | `minimal` | `boolean` | No | `false` | Generate minimal configuration |
+| `externalPostgres` | `boolean` | No | `false` | Wire AtScale to an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database (`global.atscale.db.enabled=false`, `db.enabled=false`) and sets each service's `externalDatabase` block to read from Kubernetes secrets. Credentials are not taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (`KC_DB_SCHEMA`) rather than `public`; the operator must create that schema before install (a `CREATE SCHEMA` statement is included in the emitted header comment). |
+| `gatekeeperCompliant` | `boolean` | No | `false` | Emit values satisfying common OPA Gatekeeper constraints (`image.pullPolicy=Always`, `serviceAccount.create=true`, and resource requests/limits via `global.resourcesPreset` — `poc` with `minimal`, else `prod`). Residual constraints needing a namespace exemption are listed in a header comment in the output. |
 | `certFile` | `FileInput` | No | | TLS certificate file path, or a `Readable` of its contents |
 | `keyFile` | `FileInput` | No | | TLS key file path, or a `Readable` of its contents |
 | `licenseKey` | `string` | No | | License key |

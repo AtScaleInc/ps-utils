@@ -1387,6 +1387,7 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
     output-file: values.yaml   # optional, default values.yaml
     enable-mcp: "true"         # optional, default false
     minimal: "true"            # optional, default false
+    gatekeeper-compliant: "true"  # optional, default false
 ```
 
 ```yaml
@@ -1409,6 +1410,8 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 | `license-key` | No | | AtScale license key (`atscale-entitlement.entitlement.licenseKey`). Store as `secrets.ATSCALE_LICENSE_KEY`. |
 | `enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart. Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
 | `minimal` | No | `false` | Emit additional values to reduce hardware footprint (disables telemetry, removes Redis replica, reduces PVC sizes). |
+| `external-postgres` | No | `false` | Wire AtScale to an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and sets each service's `externalDatabase` block to read from Kubernetes secrets. Credentials are not taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (`KC_DB_SCHEMA`) rather than `public`; the operator must create that schema before install (a `CREATE SCHEMA` statement is included in the emitted header comment). |
+| `gatekeeper-compliant` | No | `false` | Emit values satisfying common OPA Gatekeeper constraints: `image.pullPolicy=Always` and `serviceAccount.create=true` per subchart, plus resource requests/limits via `global.resourcesPreset` (`poc` with `minimal`, else `prod`). Residual constraints needing a namespace exemption are listed in a header comment in the output. |
 | `output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **What it does:**

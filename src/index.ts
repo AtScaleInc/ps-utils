@@ -757,13 +757,15 @@ export async function executeRunAnalysis(p: ExecuteRunAnalysisParams, o: Library
 // ── AtScale Config ────────────────────────────────────────────────────────────
 
 export type GenerateAtScaleInstallYamlParams = {
-  hostname:      string;
-  outputFile?:   FileOutput;  // default: "values.yaml"
-  enableMcp?:    boolean;     // default: false
-  minimal?:      boolean;     // default: false
-  certFile?:     FileInput;
-  keyFile?:      FileInput;
-  licenseKey?:   string;
+  hostname:              string;
+  outputFile?:           FileOutput;  // default: "values.yaml"
+  enableMcp?:            boolean;     // default: false
+  minimal?:              boolean;     // default: false
+  externalPostgres?:     boolean;     // default: false
+  gatekeeperCompliant?:  boolean;     // default: false
+  certFile?:             FileInput;
+  keyFile?:              FileInput;
+  licenseKey?:           string;
 };
 
 export async function generateAtScaleInstallYaml(p: GenerateAtScaleInstallYamlParams, o: LibraryOptions = {}) {
@@ -773,9 +775,11 @@ export async function generateAtScaleInstallYaml(p: GenerateAtScaleInstallYamlPa
   });
   try {
     await run("generate-atscale-install-yaml", Object.assign({
-      "output-file": "values.yaml",
-      "enable-mcp":  false,
-      minimal:       false,
+      "output-file":          "values.yaml",
+      "enable-mcp":           false,
+      minimal:                false,
+      "external-postgres":    false,
+      "gatekeeper-compliant": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }

@@ -1668,6 +1668,8 @@ curl -X POST http://localhost:4000/graphql \
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `enableMcp` | `Boolean` | No | Enable the AtScale MCP server sub-chart (atscale-mcp.enabled). Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false. |
 | `minimal` | `Boolean` | No | Emit additional Helm values that reduce the hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes. |
+| `externalPostgres` | `Boolean` | No | Emit Helm values that point AtScale at an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and wires each service's externalDatabase block to Kubernetes secrets. The connection credentials (host/port/user/password) are NOT taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA) rather than `public`; the operator must create that schema before install (a CREATE SCHEMA statement is included in the emitted header comment). Verified against AtScale Helm chart 2026.5.0. |
+| `gatekeeperCompliant` | `Boolean` | No | Emit Helm values that satisfy common OPA Gatekeeper constraints: sets image.pullPolicy=Always and serviceAccount.create=true per subchart, and resource requests/limits via global.resourcesPreset (poc when combined with --minimal, otherwise prod). Some constraints cannot be met via values.yaml and require a namespace exemption; these are listed in a comment in the output. Verified against AtScale Helm chart 2026.5.0. |
 
 **GraphQL:**
 
@@ -2876,6 +2878,10 @@ input GenerateAtscaleInstallYamlInput {
   enableMcp: Boolean
   """Emit additional Helm values that reduce the hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes."""
   minimal: Boolean
+  """Emit Helm values that point AtScale at an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and wires each service's externalDatabase block to Kubernetes secrets. The connection credentials (host/port/user/password) are NOT taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA) rather than `public`; the operator must create that schema before install (a CREATE SCHEMA statement is included in the emitted header comment). Verified against AtScale Helm chart 2026.5.0."""
+  externalPostgres: Boolean
+  """Emit Helm values that satisfy common OPA Gatekeeper constraints: sets image.pullPolicy=Always and serviceAccount.create=true per subchart, and resource requests/limits via global.resourcesPreset (poc when combined with --minimal, otherwise prod). Some constraints cannot be met via values.yaml and require a namespace exemption; these are listed in a comment in the output. Verified against AtScale Helm chart 2026.5.0."""
+  gatekeeperCompliant: Boolean
 }
 
 """List data sources (data warehouses) registered in an AtScale instance"""
