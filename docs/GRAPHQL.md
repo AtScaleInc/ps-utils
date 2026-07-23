@@ -2223,6 +2223,55 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `getDsoCount`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Get the DSO count from models
+
+**CLI name:** `get-dso-count`  |  **REST:** `POST /rest/get-dso-count`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | File that defines all the connections |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
+| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  getDsoCount(input: {
+    connectionFileContent: "--- # file content"
+    connectionName: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{getDsoCount(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){getDsoCount(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `version`
 
 [↑ Table of Contents](#table-of-contents)
@@ -3266,6 +3315,22 @@ input GenerateQueriesFromModelInput {
   sqlOutputFileContent: String
 }
 
+"""Get the DSO count from models"""
+input GetDsoCountInput {
+  """File that defines all the connections"""
+  connectionFile: String
+  """Uploaded file — alternative to connectionFile"""
+  connectionFileUpload: Upload
+  """Raw file content as a string — alternative to connectionFile"""
+  connectionFileContent: String
+  """The name of the connection in the connection file"""
+  connectionName: String!
+  """The name of the catalog to pull the DSO count for. Ignore to pull all catalogs"""
+  catalog: String
+  """The name of the model to pull the DSO count for. Ignore to pull all models"""
+  model: String
+}
+
 """Print the installed version of atscale-utils"""
 input VersionInput {
   _placeholder: Boolean
@@ -3348,6 +3413,8 @@ type Mutation {
   generateQueriesFromSml(input: GenerateQueriesFromSmlInput): OperationResult!
   """Read a model.yaml file and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness"""
   generateQueriesFromModel(input: GenerateQueriesFromModelInput): OperationResult!
+  """Get the DSO count from models"""
+  getDsoCount(input: GetDsoCountInput): OperationResult!
   """Print the installed version of atscale-utils"""
   version(input: VersionInput): OperationResult!
 }

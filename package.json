@@ -1,10 +1,23 @@
 {
-  "name": "@atscale/ps-utils",
-  "version": "1",
+  "name": "@atscale-ps/ps-utils",
+  "version": "2.0.0",
   "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
   "type": "module",
+  "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "homepage": "https://github.com/AtScaleInc/ps-utils",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AtScaleInc/ps-utils.git"
+  },
+  "tags": [
+    "atscale",
+    "utils"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -12,7 +25,7 @@
     }
   },
   "bin": {
-    "atscale-utils": "./atscale-utils"
+    "atscale-utils": "atscale-utils"
   },
   "files": [
     "dist",
@@ -36,7 +49,7 @@
     "exceljs": "^4.4.0",
     "graphql": "^16.13.2",
     "graphql-yoga": "^5.21.0",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "jszip": "^3.10.1",
     "pg": "^8.20.0",
     "snowflake-sdk": "^2.3.6",

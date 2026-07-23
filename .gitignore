@@ -12,3 +12,5 @@ example/model.yaml
 queries/*
 run_results/*
 scripts/resources/completions/*
+*.p8
+*.key

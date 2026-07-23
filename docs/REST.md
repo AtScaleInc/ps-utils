@@ -1794,6 +1794,43 @@ curl -X POST http://localhost:4000/rest/apply-style-to-sml \
 
 ---
 
+### `get-dso-count`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Get the DSO count from models
+
+**Endpoint:** `POST /rest/get-dso-count`  |  **GraphQL:** `getDsoCount`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | File that defines all the connections |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
+| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/get-dso-count \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "connectionName": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/get-dso-count \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "connectionName=value"
+```
+
+---
+
 ### `version`
 
 [↑ Table of Contents](#table-of-contents)
