@@ -1215,8 +1215,11 @@ function mapDataType(xmlType: string | undefined): string {
     case "decimal":
     case "numeric":   return "decimal";
     case "date":      return "date";
+    // AtScale's engine rejects "timestamp" as an unrecognized physical type at deploy
+    // time even though it's a valid static data_type token — the reference converter
+    // always emits "datetime" instead, so both map there for engine compatibility.
     case "timestamp":
-    case "datetime":  return "timestamp";
+    case "datetime":  return "datetime";
     case "boolean":
     case "bool":      return "boolean";
     // Semi-structured/JSON types (e.g. Snowflake VARIANT) have no SML equivalent — treat as string.
