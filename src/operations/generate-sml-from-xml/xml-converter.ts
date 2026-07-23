@@ -270,6 +270,9 @@ export async function convertXmlToSml(
   }
 
   // Cube-level attributes and data-set-refs
+  // Datasets no cube ever references are dead schema artifacts (common in migrated/legacy
+  // projects) and should not be emitted — tracked here so Phase 2 can skip them.
+  const referencedDatasetNames = new Set<string>();
   for (const cube of cubeEls) {
     for (const attrsSec of arr(cube.attributes)) {
       ingestKeyedAttrs(attrsSec as Record<string, unknown>);
@@ -279,6 +282,7 @@ export async function convertXmlToSml(
         const refId = a(dsRef, "id");
         const dsName = refId ? (datasetIdToName.get(refId) ?? refId) : undefined;
         if (!dsName) continue;
+        referencedDatasetNames.add(dsName);
         for (const logSec of arr(dsRef.logical)) {
           ingestLogical(logSec as Record<string, unknown>, dsName);
         }
@@ -309,33 +313,8 @@ export async function convertXmlToSml(
   }
   collectMeasureColumns(cubeEls, datasetIdToName, keyMap, attrMap, addReferencedColumn);
 
-  for (const dsSec of arr(schemaEl["data-sets"])) {
-    for (const ds of arr(dsSec["data-set"])) {
-      const dsName = a(ds, "name");
-      if (!dsName) continue;
-      const dsYaml = buildDatasetYaml(
-        ds as Record<string, unknown>, dsName, connName,
-        Boolean(opts.connectionDb || opts.connectionSchema),
-        referencedColumnsByDataset.get(dsName),
-      );
-      const fname = safeFilename(dsName);
-      output.set(`datasets/${fname}.yml`, dsYaml);
-      logger.log(`  → datasets/${fname}.yml`);
-
-      // Report tracking
-      const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
-      const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
-      for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
-      rptDatasets.push({
-        name: dsName,
-        file: `datasets/${fname}.yml`,
-        type: physRpt?.sql ? "sql" : "table",
-        columnCount: allColumnNames.size,
-        isImmutable: physRpt?.immutable ?? false,
-        isUnbound: unboundDatasetNames.has(dsName),
-      });
-    }
-  }
+  // The actual dataset-emission loop runs after Phase 3b (dimensions), once
+  // referencedDatasetNames also accounts for datasets only used by dimensions — see there.
 
   // ---------------------------------------------------------------
   // Phase 3: Collect dimension elements
@@ -670,6 +649,57 @@ export async function convertXmlToSml(
         item: `attribute ${skipped.attrId} in dimension "${skipped.dimName}"`,
         reason: "Cross-dimension embedded relationship (ref-id) cannot be represented as a secondary attribute in SML",
         recommendation: "Verify that the dimension-to-dimension relationship is covered by a model relationship, or add it manually as a secondary attribute referencing the correct dataset.",
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Phase 2: Emit dataset files
+  // ---------------------------------------------------------------
+
+  // Schema-level dimensions never appear in a cube's own data-set-ref list — they're
+  // pulled in via keyed-attribute key-refs instead — so datasets they use only show up
+  // here, once the dimension YAML (built above) is available to scan.
+  for (const [key, dimYaml] of output) {
+    if (!key.startsWith("dimensions/")) continue;
+    for (const m of dimYaml.matchAll(/dataset:\s*(\S+)\.dataset\b/g)) {
+      referencedDatasetNames.add(m[1]);
+    }
+  }
+
+  for (const dsSec of arr(schemaEl["data-sets"])) {
+    for (const ds of arr(dsSec["data-set"])) {
+      const dsName = a(ds, "name");
+      if (!dsName) continue;
+      if (!referencedDatasetNames.has(dsName)) {
+        rptOmissions.push({
+          category: "Dataset",
+          item: dsName,
+          reason: "Declared in the schema but not referenced by any cube's data-set-ref or dimension — excluded from output.",
+          recommendation: "If this dataset is actually needed, add it manually to datasets/ and reference it from the relevant model or dimension.",
+        });
+        continue;
+      }
+      const dsYaml = buildDatasetYaml(
+        ds as Record<string, unknown>, dsName, connName,
+        Boolean(opts.connectionDb || opts.connectionSchema),
+        referencedColumnsByDataset.get(dsName),
+      );
+      const fname = safeFilename(dsName);
+      output.set(`datasets/${fname}.yml`, dsYaml);
+      logger.log(`  → datasets/${fname}.yml`);
+
+      // Report tracking
+      const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
+      const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
+      for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
+      rptDatasets.push({
+        name: dsName,
+        file: `datasets/${fname}.yml`,
+        type: physRpt?.sql ? "sql" : "table",
+        columnCount: allColumnNames.size,
+        isImmutable: physRpt?.immutable ?? false,
+        isUnbound: unboundDatasetNames.has(dsName),
       });
     }
   }
