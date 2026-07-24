@@ -2,6 +2,7 @@
  * CLI runner that resolves operations, validates params, and dispatches execution.
  */
 import { buildRegistry } from "./operations/index.js";
+import { OPERATION_GROUPS } from "./operations/operation-groups.js";
 import type { Operation, OperationParams } from "./operations/Operation.js";
 import { globalInputFilter } from "./global-input.js";
 import { parse } from "yaml";
@@ -127,86 +128,10 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       "",
       "Available operations:",
       ...(() => {
-        const GROUPS: [string, string[]][] = [
-          [
-            "Visualization and Namespace Processing",
-            [
-              "generate-metrics-from-model",
-              "generate-namespace-from-model",
-              "extract-model-from-atscale",
-              "extract-model-from-sml",
-            ],
-          ],
-          [
-            "SML Creation and Manipulation",
-            [
-              "execute-sql-on-connection",
-              "extract-ddl-from-connection",
-              "generate-sml-from-connection",
-              "generate-sml-from-ddl",
-              "generate-sml-from-xml",
-              "apply-style-to-sml",
-              "generate-shared-model-plan",
-              "apply-shared-model-plan-option",
-              "generate-ddl-from-atscale",
-            ],
-          ],
-          [
-            "Synthetic Data Generation",
-            [
-              "extract-data-shape-from-connection",
-              "generate-ddl-from-data-shape",
-              "generate-data-from-data-shape",
-              "generate-data-from-data-shape-to-connection",
-            ],
-          ],
-          [
-            "BI Tool Integration",
-            [
-              "generate-tableau-from-namespace",
-              "generate-excel-from-namespace",
-              "generate-powerbi-from-namespace",
-            ],
-          ],
-          [
-            "Testing / Query Processing",
-            [
-              "generate-queries-from-sml",
-              "generate-queries-from-model",
-              "extract-query-stats-from-atscale",
-              "extract-queries-from-atscale",
-              "execute-atscale-query-harness",
-              "execute-query-on-connection",
-              "generate-enhanced-query-results",
-              "execute-run-analysis",
-            ],
-          ],
-          [
-            "AtScale Config",
-            [
-              "generate-atscale-install-yaml",
-              "atscale-list-data-sources",
-              "atscale-create-data-source",
-              "atscale-list-repos",
-              "atscale-create-repo",
-              "atscale-list-deployments",
-              "atscale-deploy-catalog",
-              "atscale-list-model-errors",
-            ],
-          ],
-          [
-            "Web Services",
-            ["execute-web-services"],
-          ],
-          [
-            "Utilities",
-            ["version"],
-          ],
-        ];
         const opMap = new Map(operationList.map((op) => [op.name, op]));
         const listed = new Set<string>();
         const output: string[] = [];
-        for (const [groupName, names] of GROUPS) {
+        for (const { name: groupName, operations: names } of OPERATION_GROUPS) {
           output.push(`  ${groupName}:`);
           for (const name of names) {
             const op = opMap.get(name);

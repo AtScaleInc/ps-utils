@@ -10,6 +10,7 @@ import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connecti
 import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
 import { GenerateSMLFromXMLOperation } from "./generate-sml-from-xml/GenerateSMLFromXMLOperation.js";
 import { ApplyStyleToSMLOperation } from "./apply-style-to-sml/ApplyStyleToSMLOperation.js";
+import { GenerateSMLDocsOperation } from "./generate-sml-docs/GenerateSMLDocsOperation.js";
 import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractModelFromSMLOperation.js";
 import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-model/GenerateNamespaceFromModelOperation.js";
 import { GenerateMetricsFromModelOperation } from "./generate-metrics-from-model/GenerateMetricsFromModelOperation.js";
@@ -64,6 +65,7 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
   registry.register(new GenerateSMLFromXMLOperation(services, logger));
   registry.register(new ApplyStyleToSMLOperation(services, logger));
+  registry.register(new GenerateSMLDocsOperation(services, logger));
   registry.register(new GenerateSharedModelPlanOperation(services, logger));
   registry.register(new ApplySharedModelPlanOptionOperation(services, logger));
   registry.register(new ExtractModelFromSMLOperation(services, logger));

@@ -29,6 +29,7 @@ flowchart LR
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
+    SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
 ```
 
 ### Synthetic Data Generation
@@ -124,6 +125,7 @@ flowchart LR
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
+    - [`generate-sml-docs`](#generate-sml-docs)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
   - Synthetic Data Generation
@@ -527,6 +529,35 @@ Re-applies display labels to an existing SML directory using a style config. Rea
 | `sml-config-file` | No | `<sml-dir>/sml.style.yaml` | Path to the SML style config to read settings from |
 | `label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names) |
 | `catalog-name` | No | | Catalog display name for `STYLE.md` |
+
+---
+
+### `generate-sml-docs`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a single Markdown reference of every SML object — catalog, connections, datasets (fact vs dimension), dimensions (hierarchies, levels, level attributes, secondary attributes, snowflake/embedded joins), models (fact→dimension relationships with a Mermaid diagram and join table, metric references, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), metrics, calculations, and any security objects.
+
+**Requires:** No secrets — the SML directory must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-docs
+    sml-dir: sml-output
+    output-file: README.md                      # optional
+    title: "Sales Analytics — Semantic Model"   # optional
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML directory to document |
+| `output-file` | No | `README.md` | Output Markdown file. A relative path is written inside `<sml-dir>`; an absolute path is used as-is. |
+| `title` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
 
 ---
 

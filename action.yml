@@ -44,6 +44,7 @@ inputs:
         generate-sml-from-xml
         generate-shared-model-plan
         apply-shared-model-plan-option
+        generate-sml-docs
         deploy-atscale-microk8s
         execute-web-services
     required: true
@@ -236,7 +237,9 @@ inputs:
                generate-tableau-from-namespace, generate-queries-from-model.
     required: false
   title:
-    description: Title for the generated namespace / Tableau workbook.
+    description: >
+      Title for the generated namespace / Tableau workbook.
+      For generate-sml-docs: H1 title of the docs (default: catalog label / unique_name).
     required: false
   max-suggestions:
     description: "Maximum number of analysis suggestions to generate (default: 25)."
@@ -260,6 +263,7 @@ inputs:
       For extract-ddl-from-connection: DDL output (omit to print to stdout).
       For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
       For execute-query-on-connection: path to write query results (CSV for SQL, XML for XMLA).
+      For generate-sml-docs: Markdown output file; relative paths are written inside the SML dir (default: README.md).
     required: false
 
   # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
@@ -967,6 +971,19 @@ runs:
         [[ -n "${{ inputs.label-style }}" ]]     && ARGS+=(--label-style     "${{ inputs.label-style }}")
         [[ -n "${{ inputs.catalog-name }}" ]]    && ARGS+=(--catalog-name    "${{ inputs.catalog-name }}")
         node "${{ github.action_path }}/dist/cli.js" apply-style-to-sml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-docs ───────────────────────────────────────────────
+    - name: Generate SML docs
+      if: inputs.operation == 'generate-sml-docs'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-docs "${ARGS[@]}"
       shell: bash
 
     # ── apply-shared-model-plan-option ──────────────────────────────────

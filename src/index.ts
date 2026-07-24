@@ -241,6 +241,24 @@ export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, 
   } finally { cleanup(); }
 }
 
+export type GenerateSMLDocsParams = {
+  smlDir:       DirInput;
+  outputFile?:  string;   // default: "README.md" (relative → written inside smlDir)
+  title?:       string;
+};
+
+export async function generateSMLDocs(p: GenerateSMLDocsParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputDirs: ["smlDir"],
+  });
+  try {
+    await run("generate-sml-docs", Object.assign({
+      "output-file": "README.md",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type ApplySharedModelPlanOptionParams = {
   planFile:        FileInput;
   sharedDir:       DirOutput;

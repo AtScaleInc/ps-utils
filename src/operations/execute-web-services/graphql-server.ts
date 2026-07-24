@@ -71,7 +71,7 @@ function esc(s: string): string {
  * Returns true when the parameter is an output directory.
  * Convention: name ends with "-dir" AND contains "output" (e.g. "output-dir").
  */
-function isOutputDirParam(paramName: string): boolean {
+export function isOutputDirParam(paramName: string): boolean {
   return paramName.endsWith("-dir") && paramName.includes("output");
 }
 
@@ -79,7 +79,7 @@ function isOutputDirParam(paramName: string): boolean {
  * Returns true when the parameter is an output file path.
  * Convention: equals "output-file" or starts with "output-" and ends with "-file".
  */
-function isOutputFileParam(paramName: string): boolean {
+export function isOutputFileParam(paramName: string): boolean {
   return paramName === "output-file" || (paramName.startsWith("output-") && paramName.endsWith("-file"));
 }
 
@@ -192,8 +192,13 @@ export interface OpMeta {
   params: ParamMeta[];
 }
 
-function isFileParam(paramName: string): boolean {
+export function isFileParam(paramName: string): boolean {
   return paramName.endsWith("-file");
+}
+
+/** Returns true when the parameter is a directory (input or output). */
+export function isDirParam(paramName: string): boolean {
+  return paramName.endsWith("-dir") || paramName.endsWith("-folder");
 }
 
 function gqlParamType(param: { isFlag: boolean; parse: (s: string) => unknown }): string {
