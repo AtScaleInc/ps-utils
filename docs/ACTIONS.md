@@ -432,8 +432,8 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
 | `output-dir` | Yes | | Directory to write SML files |
 | `connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
 | `connection-type` | No | | Database dialect for the connection file (e.g. `snowflake`, `bigquery`) |
-| `connection-db` | No | | Database/project name written to the connection file; when set, datasets use a plain table name |
-| `connection-schema` | No | | Schema/dataset name written to the connection file; when set, datasets use a plain table name |
+| `connection-db` | No | | Database/project name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 
 ---

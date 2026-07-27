@@ -667,6 +667,31 @@ export async function convertXmlToSml(
     }
   }
 
+  // Without an explicit --connection-db/--connection-schema override, datasets can
+  // legitimately span multiple database/schema pairs under one AtScale connection (e.g.
+  // several schemas in the same warehouse). Represent each distinct pair as its own
+  // connection — matching AtScale's own reference converter — instead of a nested
+  // `table: {db, schema, name}` object, which the live engine rejects even though it's
+  // schema-valid. The first distinct pair encountered keeps the base connection name;
+  // every other pair gets a `_<schema>` suffix.
+  const connectionIdByDataset = new Map<string, string>(); // dataset name -> connection unique_name
+  const connectionDbSchema = new Map<string, { db?: string; schema?: string }>(); // connection unique_name -> its db/schema
+  if (!opts.connectionDb && !opts.connectionSchema) {
+    const pairToConnId = new Map<string, string>();
+    for (const dsName of referencedDatasetNames) {
+      const phys = datasetNameToPhysical.get(dsName);
+      if (!phys?.db && !phys?.schema) continue;
+      const pairKey = `${phys.db ?? ""}|${phys.schema ?? ""}`;
+      let connId = pairToConnId.get(pairKey);
+      if (!connId) {
+        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? phys.db}`;
+        pairToConnId.set(pairKey, connId);
+        connectionDbSchema.set(connId, { db: phys.db, schema: phys.schema });
+      }
+      connectionIdByDataset.set(dsName, connId);
+    }
+  }
+
   for (const dsSec of arr(schemaEl["data-sets"])) {
     for (const ds of arr(dsSec["data-set"])) {
       const dsName = a(ds, "name");
@@ -681,8 +706,8 @@ export async function convertXmlToSml(
         continue;
       }
       const dsYaml = buildDatasetYaml(
-        ds as Record<string, unknown>, dsName, connName,
-        Boolean(opts.connectionDb || opts.connectionSchema),
+        ds as Record<string, unknown>, dsName,
+        connectionIdByDataset.get(dsName) ?? connName,
         referencedColumnsByDataset.get(dsName),
       );
       const fname = safeFilename(dsName);
@@ -709,12 +734,23 @@ export async function convertXmlToSml(
   // ---------------------------------------------------------------
 
   output.set("catalog.yml", buildCatalogYaml(catalogName));
-  output.set(
-    `connections/${safeFilename(connName)}.yml`,
-    buildConnectionYaml(connName, opts.connectionType, opts.connectionDb, opts.connectionSchema),
-  );
+
+  // Always emit the default connection, plus one per extra db/schema pair discovered
+  // above (all variants of the same underlying AtScale-registered connection).
+  const allConnectionIds = new Set<string>([connName, ...connectionDbSchema.keys()]);
+  for (const connId of allConnectionIds) {
+    const dbSchema = connectionDbSchema.get(connId);
+    output.set(
+      `connections/${safeFilename(connId)}.yml`,
+      buildConnectionYaml(
+        connId, opts.connectionType,
+        dbSchema?.db ?? opts.connectionDb, dbSchema?.schema ?? opts.connectionSchema,
+        connName,
+      ),
+    );
+    logger.log(`  → connections/${safeFilename(connId)}.yml`);
+  }
   logger.log(`  → catalog.yml`);
-  logger.log(`  → connections/${safeFilename(connName)}.yml`);
 
   // ---------------------------------------------------------------
   // Phase 8: Generate README.md conversion report
@@ -1280,9 +1316,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
 function buildDatasetYaml(
   dsEl: Record<string, unknown>,
   dsName: string,
-  connName: string,
-  /** When true, db/schema live in the connection file — use a plain table name string. */
-  connectionHasDbSchema: boolean,
+  connectionId: string,
   /** Every column any key-ref/attribute-ref points to for this dataset, regardless of <physical>. */
   referencedColumns?: Set<string>,
 ): string {
@@ -1292,23 +1326,18 @@ function buildDatasetYaml(
     unique_name: `${dsName}.dataset`,
     object_type: "dataset",
     label: dsName,          // preserve original casing; do not title-case
-    connection_id: connName,
+    connection_id: connectionId,
   };
 
   if (phys.immutable) obj.immutable = true;
 
   if (phys.sql) {
     obj.sql = phys.sql;
-  } else if (connectionHasDbSchema || (!phys.db && !phys.schema)) {
-    // db/schema are in the connection file (or absent): use a simple table name string
-    obj.table = phys.tableName ?? dsName;
   } else {
-    // db/schema are dataset-specific: use structured table object
-    obj.table = {
-      ...(phys.db ? { db: phys.db } : {}),
-      ...(phys.schema ? { schema: phys.schema } : {}),
-      name: phys.tableName ?? dsName,
-    };
+    // db/schema always live on the connection (see connectionIdByDataset) — a dataset's
+    // own table is always a plain string; a nested {db, schema, name} object here is
+    // schema-valid SML but rejected by AtScale's live engine.
+    obj.table = phys.tableName ?? dsName;
   }
 
   const columns: Array<{ name: string; data_type: string }> =
@@ -1948,12 +1977,19 @@ function buildCatalogYaml(catalogName: string): string {
   });
 }
 
-function buildConnectionYaml(connName: string, connType?: string, db?: string, schema?: string): string {
+function buildConnectionYaml(
+  connName: string,
+  connType?: string,
+  db?: string,
+  schema?: string,
+  /** The base AtScale-registered connection this one is a db/schema variant of, if any. */
+  asConnection?: string,
+): string {
   const obj: Record<string, unknown> = {
     unique_name: connName,
     object_type: "connection",
     label: connName,
-    as_connection: connName,
+    as_connection: asConnection ?? connName,
   };
   if (connType) obj.connection_type = connType;
   if (db) obj.database = db;

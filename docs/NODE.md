@@ -379,8 +379,8 @@ function generateSMLFromXML(
 | `connectionName` | `string` | No | | SML connection `unique_name` (auto-detected from XML if omitted) |
 | `connectionType` | `string` | No | | Database dialect for the connection file |
 | `catalogName` | `string` | No | | Override the catalog label |
-| `connectionDb` | `string` | No | | Database name written into the connection file |
-| `connectionSchema` | `string` | No | | Schema name written into the connection file |
+| `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 
 ---
 

@@ -526,16 +526,16 @@ With optional overrides:
 | `--output-dir` | Yes | | Directory to write SML files |
 | `--connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
 | `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `bigquery`) |
-| `--connection-db` | No | | Database/project name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
-| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
+| `--connection-db` | No | | Database/project name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `--catalog-name` | No | XML schema name | Override the catalog label |
 
 **Output layout:**
 ```
 <output-dir>/
   catalog.yml
-  connections/<connection-name>.yml
-  datasets/<dataset-name>.yml      (one per XML <data-set>)
+  connections/<connection-name>.yml  (one per distinct database/schema pair, unless --connection-db/--connection-schema is set)
+  datasets/<dataset-name>.yml      (one per dataset referenced by a cube or dimension)
   dimensions/<dim-name>.yml        (one per referenced dimension)
   metrics/<metric-name>.yml        (one per measure or inline expression)
   calculations/<calc-name>.yml     (one per schema-level calculated member)

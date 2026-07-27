@@ -495,8 +495,8 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from XML if omitted) |
 | `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
 | `catalogName` | `String` | No | Override the catalog label (defaults to the XML schema name) |
-| `connectionDb` | `String` | No | Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object |
-| `connectionSchema` | `String` | No | Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object |
+| `connectionDb` | `String` | No | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connectionSchema` | `String` | No | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
 
@@ -2567,9 +2567,9 @@ input GenerateSmlFromXmlInput {
   connectionType: String
   """Override the catalog label (defaults to the XML schema name)"""
   catalogName: String
-  """Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object"""
+  """Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionDb: String
-  """Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object"""
+  """Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionSchema: String
 }
 
