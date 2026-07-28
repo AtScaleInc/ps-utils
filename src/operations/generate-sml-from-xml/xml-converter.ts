@@ -254,21 +254,6 @@ export async function convertXmlToSml(
     }
   }
 
-  // Collect fact dataset names (first data-set-ref per cube) for degenerate dim detection
-  const factDatasetNames = new Set<string>();
-  for (const cube of cubeEls) {
-    outer: for (const dsSec of arr(cube["data-sets"])) {
-      for (const dsRef of arr(dsSec["data-set-ref"])) {
-        const refId = a(dsRef, "id");
-        if (refId) {
-          const dsName = datasetIdToName.get(refId);
-          if (dsName) factDatasetNames.add(dsName);
-        }
-        break outer; // only the first data-set-ref is the fact table
-      }
-    }
-  }
-
   // Cube-level attributes and data-set-refs
   // Datasets no cube ever references are dead schema artifacts (common in migrated/legacy
   // projects) and should not be emitted — tracked here so Phase 2 can skip them.
@@ -611,15 +596,13 @@ export async function convertXmlToSml(
     const { relationships, degenerateDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
 
     // The model's flat dimensions: list only holds dimensions with no relationship (they
-    // attach directly via is_degenerate) — inline cube dims plus degenerate schema dims.
-    // Dimensions with a relationship are referenced solely via relationships[].to.dimension
-    // and must not also appear here, or the two representations contradict each other.
-    const cubeDimNames: string[] = [...cubeLevelDims.keys()];
-    for (const dimName of degenerateDimNames) {
-      if (!cubeDimNames.includes(dimName)) {
-        cubeDimNames.push(dimName);
-      }
-    }
+    // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
+    // relationship are referenced solely via relationships[].to.dimension and must not
+    // also appear here, or the two representations contradict each other. A cube-level
+    // dim (inline, or via <dimension-ref>) matching neither category has no possible join
+    // in this cube at all (e.g. its dataset is never bound to any data-set-ref) and is
+    // excluded entirely, rather than forced into dimensions: with no real attachment.
+    const cubeDimNames: string[] = [...new Set(degenerateDimNames)];
     // Dimension YAML files still need to be emitted for every dimension actually used by
     // this cube, whether degenerate (flat dimensions: list) or joined via a relationship.
     for (const n of cubeDimNames) referencedDimNames.add(n);
@@ -664,7 +647,7 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, factDatasetNames);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, referencedDatasetNames);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -696,7 +679,10 @@ export async function convertXmlToSml(
   // here, once the dimension YAML (built above) is available to scan.
   for (const [key, dimYaml] of output) {
     if (!key.startsWith("dimensions/")) continue;
-    for (const m of dimYaml.matchAll(/dataset:\s*(\S+)\.dataset\b/g)) {
+    // Dataset names can contain spaces (e.g. "CUSTOMER AGE MONTHLY") — anchor to the
+    // trailing ".dataset" at end of line rather than a non-whitespace-only match, which
+    // would incorrectly capture just the last word of a multi-word name.
+    for (const m of dimYaml.matchAll(/^\s*dataset:\s*(.+)\.dataset\s*$/gm)) {
       referencedDatasetNames.add(m[1]);
     }
   }
@@ -1424,7 +1410,10 @@ function buildDimensionYaml(
   attrDef: Map<string, AttrDefEntry>,
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
-  factDatasetNames: Set<string>,
+  /** Every dataset referenced by any cube's data-set-ref (not just the first per cube) —
+   * a multi-fact cube can have several fact-like datasets, any of which makes a dimension
+   * whose data lives there degenerate. */
+  referencedDatasetNames: Set<string>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -1623,7 +1612,7 @@ function buildDimensionYaml(
   const isDegenerate =
     levelAttrMap.size > 0 &&
     Array.from(levelAttrMap.values()).every((la) =>
-      factDatasetNames.has(la.dataset.replace(/\.dataset$/, "")),
+      referencedDatasetNames.has(la.dataset.replace(/\.dataset$/, "")),
     );
 
   // Build YAML structure
