@@ -402,6 +402,10 @@ export async function convertXmlToSml(
       : false;
 
     const metricNames: Array<{ uniqueName: string; folder?: string }> = [];
+    // The same measure/calc name can legitimately appear under multiple XML attribute ids
+    // (e.g. a visible=false leftover from a rename) — dedupe by the transformed unique_name
+    // so the model's metrics: list never contains the same entry twice.
+    const seenMetricNames = new Set<string>();
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -474,6 +478,16 @@ export async function convertXmlToSml(
 
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          if (seenMetricNames.has(uniqueName)) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+            });
+            continue;
+          }
+          seenMetricNames.add(uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -486,6 +500,16 @@ export async function convertXmlToSml(
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          if (seenMetricNames.has(uniqueName)) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+            });
+            continue;
+          }
+          seenMetricNames.add(uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -515,6 +539,16 @@ export async function convertXmlToSml(
         }
         const label = def.caption ?? def.name;
         const uniqueName = truncateUniqueName(safeName(def.name).toLowerCase());
+        if (seenMetricNames.has(uniqueName)) {
+          rptOmissions.push({
+            category: "Calculated Member",
+            item: def.name,
+            reason: `Duplicate calculated member name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+            recommendation: "If both are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+          });
+          continue;
+        }
+        seenMetricNames.add(uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
