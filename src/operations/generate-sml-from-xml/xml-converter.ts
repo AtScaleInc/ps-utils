@@ -328,6 +328,16 @@ export async function convertXmlToSml(
 
   // We emit dimension YAMLs after processing cubes (so we know which dims are referenced)
   const referencedDimNames = new Set<string>();
+  // inferRelationships already determines, per cube, whether a dimension is degenerate
+  // (no relationship, attaches directly) or has a real relationship — buildDimensionYaml
+  // must use that same determination for its own is_degenerate/type field rather than
+  // re-deriving it independently, or the two can disagree for a multi-fact cube (a
+  // dimension can be degenerate relative to one cube-bound dataset yet have a genuine
+  // relationship from the cube's primary fact table via a different dataset/column).
+  // A dimension used by multiple cubes with a real relationship in any of them is not
+  // degenerate overall, so the relationship set takes precedence when both are present.
+  const globalDegenerateDimNames = new Set<string>();
+  const globalRelationshipDimNames = new Set<string>();
 
   // ---------------------------------------------------------------
   // Phase 7: Schema-level calculated members
@@ -607,6 +617,8 @@ export async function convertXmlToSml(
     // this cube, whether degenerate (flat dimensions: list) or joined via a relationship.
     for (const n of cubeDimNames) referencedDimNames.add(n);
     for (const rel of relationships) referencedDimNames.add(rel.toDimension);
+    for (const n of degenerateDimNames) globalDegenerateDimNames.add(n);
+    for (const rel of relationships) globalRelationshipDimNames.add(rel.toDimension);
 
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
@@ -647,7 +659,11 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, referencedDatasetNames);
+    // A real relationship anywhere wins over a degenerate determination elsewhere — a
+    // dimension used by multiple cubes could be degenerate in one and properly joined
+    // in another.
+    const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1299,12 +1315,18 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const immutableStr = s(first(arr(physSec.immutable)));
   const immutable = immutableStr === "true" ? true : undefined;
 
-  // Column definitions from <column><name>...</name><type>...</type></column>
+  // Column definitions from <column><name>...</name><type>...</type></column>. Source
+  // XML can genuinely declare the same column twice (a copy-paste artifact) — dedupe by
+  // name, keeping the first occurrence, since a duplicate column name is invalid SML.
   const columns: Array<{ name: string; dataType: string }> = [];
+  const seenColumnNames = new Set<string>();
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
-    if (colName) columns.push({ name: colName, dataType: mapDataType(colType) });
+    if (colName && !seenColumnNames.has(colName)) {
+      seenColumnNames.add(colName);
+      columns.push({ name: colName, dataType: mapDataType(colType) });
+    }
   }
   const colsResult = columns.length ? columns : undefined;
 
@@ -1410,10 +1432,10 @@ function buildDimensionYaml(
   attrDef: Map<string, AttrDefEntry>,
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
-  /** Every dataset referenced by any cube's data-set-ref (not just the first per cube) —
-   * a multi-fact cube can have several fact-like datasets, any of which makes a dimension
-   * whose data lives there degenerate. */
-  referencedDatasetNames: Set<string>,
+  /** Whether inferRelationships determined this dimension is degenerate (no relationship
+   * in any cube that uses it) — the single source of truth for is_degenerate/type, so it
+   * can never disagree with the model's own dimensions:/relationships: placement. */
+  isDegenerate: boolean,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -1607,13 +1629,6 @@ function buildDimensionYaml(
       });
     }
   }
-
-  // Detect degenerate: all resolved level attributes reference a fact-table dataset
-  const isDegenerate =
-    levelAttrMap.size > 0 &&
-    Array.from(levelAttrMap.values()).every((la) =>
-      referencedDatasetNames.has(la.dataset.replace(/\.dataset$/, "")),
-    );
 
   // Build YAML structure
   const obj: Record<string, unknown> = {
