@@ -254,21 +254,6 @@ export async function convertXmlToSml(
     }
   }
 
-  // Collect fact dataset names (first data-set-ref per cube) for degenerate dim detection
-  const factDatasetNames = new Set<string>();
-  for (const cube of cubeEls) {
-    outer: for (const dsSec of arr(cube["data-sets"])) {
-      for (const dsRef of arr(dsSec["data-set-ref"])) {
-        const refId = a(dsRef, "id");
-        if (refId) {
-          const dsName = datasetIdToName.get(refId);
-          if (dsName) factDatasetNames.add(dsName);
-        }
-        break outer; // only the first data-set-ref is the fact table
-      }
-    }
-  }
-
   // Cube-level attributes and data-set-refs
   // Datasets no cube ever references are dead schema artifacts (common in migrated/legacy
   // projects) and should not be emitted — tracked here so Phase 2 can skip them.
@@ -343,6 +328,16 @@ export async function convertXmlToSml(
 
   // We emit dimension YAMLs after processing cubes (so we know which dims are referenced)
   const referencedDimNames = new Set<string>();
+  // inferRelationships already determines, per cube, whether a dimension is degenerate
+  // (no relationship, attaches directly) or has a real relationship — buildDimensionYaml
+  // must use that same determination for its own is_degenerate/type field rather than
+  // re-deriving it independently, or the two can disagree for a multi-fact cube (a
+  // dimension can be degenerate relative to one cube-bound dataset yet have a genuine
+  // relationship from the cube's primary fact table via a different dataset/column).
+  // A dimension used by multiple cubes with a real relationship in any of them is not
+  // degenerate overall, so the relationship set takes precedence when both are present.
+  const globalDegenerateDimNames = new Set<string>();
+  const globalRelationshipDimNames = new Set<string>();
 
   // ---------------------------------------------------------------
   // Phase 7: Schema-level calculated members
@@ -402,6 +397,10 @@ export async function convertXmlToSml(
       : false;
 
     const metricNames: Array<{ uniqueName: string; folder?: string }> = [];
+    // The same measure/calc name can legitimately appear under multiple XML attribute ids
+    // (e.g. a visible=false leftover from a rename) — dedupe by the transformed unique_name
+    // so the model's metrics: list never contains the same entry twice.
+    const seenMetricNames = new Set<string>();
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -474,6 +473,16 @@ export async function convertXmlToSml(
 
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          if (seenMetricNames.has(uniqueName)) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+            });
+            continue;
+          }
+          seenMetricNames.add(uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -486,6 +495,16 @@ export async function convertXmlToSml(
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          if (seenMetricNames.has(uniqueName)) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+            });
+            continue;
+          }
+          seenMetricNames.add(uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -515,6 +534,16 @@ export async function convertXmlToSml(
         }
         const label = def.caption ?? def.name;
         const uniqueName = truncateUniqueName(safeName(def.name).toLowerCase());
+        if (seenMetricNames.has(uniqueName)) {
+          rptOmissions.push({
+            category: "Calculated Member",
+            item: def.name,
+            reason: `Duplicate calculated member name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+            recommendation: "If both are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+          });
+          continue;
+        }
+        seenMetricNames.add(uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
@@ -577,19 +606,19 @@ export async function convertXmlToSml(
     const { relationships, degenerateDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
 
     // The model's flat dimensions: list only holds dimensions with no relationship (they
-    // attach directly via is_degenerate) — inline cube dims plus degenerate schema dims.
-    // Dimensions with a relationship are referenced solely via relationships[].to.dimension
-    // and must not also appear here, or the two representations contradict each other.
-    const cubeDimNames: string[] = [...cubeLevelDims.keys()];
-    for (const dimName of degenerateDimNames) {
-      if (!cubeDimNames.includes(dimName)) {
-        cubeDimNames.push(dimName);
-      }
-    }
+    // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
+    // relationship are referenced solely via relationships[].to.dimension and must not
+    // also appear here, or the two representations contradict each other. A cube-level
+    // dim (inline, or via <dimension-ref>) matching neither category has no possible join
+    // in this cube at all (e.g. its dataset is never bound to any data-set-ref) and is
+    // excluded entirely, rather than forced into dimensions: with no real attachment.
+    const cubeDimNames: string[] = [...new Set(degenerateDimNames)];
     // Dimension YAML files still need to be emitted for every dimension actually used by
     // this cube, whether degenerate (flat dimensions: list) or joined via a relationship.
     for (const n of cubeDimNames) referencedDimNames.add(n);
     for (const rel of relationships) referencedDimNames.add(rel.toDimension);
+    for (const n of degenerateDimNames) globalDegenerateDimNames.add(n);
+    for (const rel of relationships) globalRelationshipDimNames.add(rel.toDimension);
 
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
@@ -630,7 +659,11 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, factDatasetNames);
+    // A real relationship anywhere wins over a degenerate determination elsewhere — a
+    // dimension used by multiple cubes could be degenerate in one and properly joined
+    // in another.
+    const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -662,8 +695,36 @@ export async function convertXmlToSml(
   // here, once the dimension YAML (built above) is available to scan.
   for (const [key, dimYaml] of output) {
     if (!key.startsWith("dimensions/")) continue;
-    for (const m of dimYaml.matchAll(/dataset:\s*(\S+)\.dataset\b/g)) {
+    // Dataset names can contain spaces (e.g. "CUSTOMER AGE MONTHLY") — anchor to the
+    // trailing ".dataset" at end of line rather than a non-whitespace-only match, which
+    // would incorrectly capture just the last word of a multi-word name.
+    for (const m of dimYaml.matchAll(/^\s*dataset:\s*(.+)\.dataset\s*$/gm)) {
       referencedDatasetNames.add(m[1]);
+    }
+  }
+
+  // Without an explicit --connection-db/--connection-schema override, datasets can
+  // legitimately span multiple database/schema pairs under one AtScale connection (e.g.
+  // several schemas in the same warehouse). Represent each distinct pair as its own
+  // connection — matching AtScale's own reference converter — instead of a nested
+  // `table: {db, schema, name}` object, which the live engine rejects even though it's
+  // schema-valid. The first distinct pair encountered keeps the base connection name;
+  // every other pair gets a `_<schema>` suffix.
+  const connectionIdByDataset = new Map<string, string>(); // dataset name -> connection unique_name
+  const connectionDbSchema = new Map<string, { db?: string; schema?: string }>(); // connection unique_name -> its db/schema
+  if (!opts.connectionDb && !opts.connectionSchema) {
+    const pairToConnId = new Map<string, string>();
+    for (const dsName of referencedDatasetNames) {
+      const phys = datasetNameToPhysical.get(dsName);
+      if (!phys?.db && !phys?.schema) continue;
+      const pairKey = `${phys.db ?? ""}|${phys.schema ?? ""}`;
+      let connId = pairToConnId.get(pairKey);
+      if (!connId) {
+        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? phys.db}`;
+        pairToConnId.set(pairKey, connId);
+        connectionDbSchema.set(connId, { db: phys.db, schema: phys.schema });
+      }
+      connectionIdByDataset.set(dsName, connId);
     }
   }
 
@@ -681,8 +742,8 @@ export async function convertXmlToSml(
         continue;
       }
       const dsYaml = buildDatasetYaml(
-        ds as Record<string, unknown>, dsName, connName,
-        Boolean(opts.connectionDb || opts.connectionSchema),
+        ds as Record<string, unknown>, dsName,
+        connectionIdByDataset.get(dsName) ?? connName,
         referencedColumnsByDataset.get(dsName),
       );
       const fname = safeFilename(dsName);
@@ -709,12 +770,23 @@ export async function convertXmlToSml(
   // ---------------------------------------------------------------
 
   output.set("catalog.yml", buildCatalogYaml(catalogName));
-  output.set(
-    `connections/${safeFilename(connName)}.yml`,
-    buildConnectionYaml(connName, opts.connectionType, opts.connectionDb, opts.connectionSchema),
-  );
+
+  // Always emit the default connection, plus one per extra db/schema pair discovered
+  // above (all variants of the same underlying AtScale-registered connection).
+  const allConnectionIds = new Set<string>([connName, ...connectionDbSchema.keys()]);
+  for (const connId of allConnectionIds) {
+    const dbSchema = connectionDbSchema.get(connId);
+    output.set(
+      `connections/${safeFilename(connId)}.yml`,
+      buildConnectionYaml(
+        connId, opts.connectionType,
+        dbSchema?.db ?? opts.connectionDb, dbSchema?.schema ?? opts.connectionSchema,
+        connName,
+      ),
+    );
+    logger.log(`  → connections/${safeFilename(connId)}.yml`);
+  }
   logger.log(`  → catalog.yml`);
-  logger.log(`  → connections/${safeFilename(connName)}.yml`);
 
   // ---------------------------------------------------------------
   // Phase 8: Generate README.md conversion report
@@ -1243,12 +1315,18 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const immutableStr = s(first(arr(physSec.immutable)));
   const immutable = immutableStr === "true" ? true : undefined;
 
-  // Column definitions from <column><name>...</name><type>...</type></column>
+  // Column definitions from <column><name>...</name><type>...</type></column>. Source
+  // XML can genuinely declare the same column twice (a copy-paste artifact) — dedupe by
+  // name, keeping the first occurrence, since a duplicate column name is invalid SML.
   const columns: Array<{ name: string; dataType: string }> = [];
+  const seenColumnNames = new Set<string>();
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
-    if (colName) columns.push({ name: colName, dataType: mapDataType(colType) });
+    if (colName && !seenColumnNames.has(colName)) {
+      seenColumnNames.add(colName);
+      columns.push({ name: colName, dataType: mapDataType(colType) });
+    }
   }
   const colsResult = columns.length ? columns : undefined;
 
@@ -1280,9 +1358,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
 function buildDatasetYaml(
   dsEl: Record<string, unknown>,
   dsName: string,
-  connName: string,
-  /** When true, db/schema live in the connection file — use a plain table name string. */
-  connectionHasDbSchema: boolean,
+  connectionId: string,
   /** Every column any key-ref/attribute-ref points to for this dataset, regardless of <physical>. */
   referencedColumns?: Set<string>,
 ): string {
@@ -1292,23 +1368,18 @@ function buildDatasetYaml(
     unique_name: `${dsName}.dataset`,
     object_type: "dataset",
     label: dsName,          // preserve original casing; do not title-case
-    connection_id: connName,
+    connection_id: connectionId,
   };
 
   if (phys.immutable) obj.immutable = true;
 
   if (phys.sql) {
     obj.sql = phys.sql;
-  } else if (connectionHasDbSchema || (!phys.db && !phys.schema)) {
-    // db/schema are in the connection file (or absent): use a simple table name string
-    obj.table = phys.tableName ?? dsName;
   } else {
-    // db/schema are dataset-specific: use structured table object
-    obj.table = {
-      ...(phys.db ? { db: phys.db } : {}),
-      ...(phys.schema ? { schema: phys.schema } : {}),
-      name: phys.tableName ?? dsName,
-    };
+    // db/schema always live on the connection (see connectionIdByDataset) — a dataset's
+    // own table is always a plain string; a nested {db, schema, name} object here is
+    // schema-valid SML but rejected by AtScale's live engine.
+    obj.table = phys.tableName ?? dsName;
   }
 
   const columns: Array<{ name: string; data_type: string }> =
@@ -1361,7 +1432,10 @@ function buildDimensionYaml(
   attrDef: Map<string, AttrDefEntry>,
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
-  factDatasetNames: Set<string>,
+  /** Whether inferRelationships determined this dimension is degenerate (no relationship
+   * in any cube that uses it) — the single source of truth for is_degenerate/type, so it
+   * can never disagree with the model's own dimensions:/relationships: placement. */
+  isDegenerate: boolean,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -1555,13 +1629,6 @@ function buildDimensionYaml(
       });
     }
   }
-
-  // Detect degenerate: all resolved level attributes reference a fact-table dataset
-  const isDegenerate =
-    levelAttrMap.size > 0 &&
-    Array.from(levelAttrMap.values()).every((la) =>
-      factDatasetNames.has(la.dataset.replace(/\.dataset$/, "")),
-    );
 
   // Build YAML structure
   const obj: Record<string, unknown> = {
@@ -1948,12 +2015,19 @@ function buildCatalogYaml(catalogName: string): string {
   });
 }
 
-function buildConnectionYaml(connName: string, connType?: string, db?: string, schema?: string): string {
+function buildConnectionYaml(
+  connName: string,
+  connType?: string,
+  db?: string,
+  schema?: string,
+  /** The base AtScale-registered connection this one is a db/schema variant of, if any. */
+  asConnection?: string,
+): string {
   const obj: Record<string, unknown> = {
     unique_name: connName,
     object_type: "connection",
     label: connName,
-    as_connection: connName,
+    as_connection: asConnection ?? connName,
   };
   if (connType) obj.connection_type = connType;
   if (db) obj.database = db;

@@ -182,14 +182,16 @@ inputs:
     required: false
   connection-db:
     description: >
-      Database or project name written into the connection file. When set, individual
-      datasets use a plain table name instead of a nested db/schema/name object.
+      Database or project name written into the connection file. When set, every
+      dataset shares one connection instead of a separate connection per distinct
+      database/schema pair found in the XML.
       Used by: generate-sml-from-xml.
     required: false
   connection-schema:
     description: >
-      Schema or dataset name written into the connection file. When set, individual
-      datasets use a plain table name instead of a nested db/schema/name object.
+      Schema or dataset name written into the connection file. When set, every
+      dataset shares one connection instead of a separate connection per distinct
+      database/schema pair found in the XML.
       Used by: generate-sml-from-xml.
     required: false
 
