@@ -479,7 +479,7 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
     }
 
     const proxyConfig: Record<string, any> = {};
-    if (yamlConfig.proxy.host) {
+    if (yamlConfig.proxy && yamlConfig.proxy.host) {
       proxyConfig.host = yamlConfig.proxy.host;
       if (yamlConfig.proxy.password) {
         proxyConfig.port = yamlConfig.proxy.port;
