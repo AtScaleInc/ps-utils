@@ -1090,7 +1090,7 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
 
           // All XMLA workers share the same stateless HTTP execute function.
           executePerWorker = Array.from({ length: concurrency }, () =>
-            (q: QueryRecord) => executeXmlaQuery(q, cfg, token, proxyconfig),
+            (q: QueryRecord) => executeXmlaQuery(q, cfg, token, proxyConfig),
           );
         } else {
           const { connectionConfig, connectionName } = isProperties

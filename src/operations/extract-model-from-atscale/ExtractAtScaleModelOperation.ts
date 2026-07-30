@@ -186,10 +186,11 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     atscaleUrl: string,
     organizationId: string,
     catalogName: string,
-    modelName: string
+    modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<any[]> {
     const statement = "SELECT MEASURE_NAME, DATA_TYPE, MEASURE_CAPTION, MEASURE_AGGREGATOR, MEASURE_DISPLAY_FOLDER, DEFAULT_FORMAT_STRING, DESCRIPTION FROM $system.MDSCHEMA_MEASURES WHERE [CUBE_NAME] = @CubeName";
-    const rows = await this.getDmvData(token, installer, atscaleUrl, statement, organizationId, catalogName, modelName);
+    const rows = await this.getDmvData(token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig);
 
     this.logger.verbose("Metric Rows: " + rows);
     return rows ? rows.map((row) => {
@@ -220,14 +221,15 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     atscaleUrl: string,
     organizationId: string,
     catalogName: string,
-    modelName: string
+    modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<Record<string, any>> {
     const levelStatement = "SELECT LEVEL_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NUMBER, LEVEL_CAPTION, DESCRIPTION, LEVEL_DBTYPE FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
     const hierStatement = "SELECT HIERARCHY_UNIQUE_NAME, HIERARCHY_DISPLAY_FOLDER FROM $system.MDSCHEMA_HIERARCHIES WHERE [CUBE_NAME] = @CubeName";
 
     const [levelRows, hierRows] = await Promise.all([
-      this.getDmvData(token, installer, atscaleUrl, levelStatement, organizationId, catalogName, modelName),
-      this.getDmvData(token, installer, atscaleUrl, hierStatement, organizationId, catalogName, modelName)
+      this.getDmvData(token, installer, atscaleUrl, levelStatement, organizationId, catalogName, modelName, proxyConfig),
+      this.getDmvData(token, installer, atscaleUrl, hierStatement, organizationId, catalogName, modelName, proxyConfig)
     ]);
 
     const folderLookup: Record<string, string> = {};
@@ -364,14 +366,16 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       connection.mdx.url,
       connection.mdx.organization_id,
       connection.mdx.catalog_name,
-      _params.model);
+      _params.model,
+      proxyConfig);
 
     this.logger.info("Fetching Attributes...");
     const attributes = await this.getAttributes(token, connection.installer,
       connection.mdx.url,
       connection.mdx.organization_id,
       connection.mdx.catalog_name,
-      _params.model);
+      _params.model,
+      proxyConfig);
 
     const output = { metrics, attributes };
 

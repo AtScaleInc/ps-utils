@@ -1,6 +1,6 @@
 {
   "name": "@atscale-ps/ps-utils",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
   "type": "module",
   "license": "Apache-2.0",
@@ -42,7 +42,6 @@
     "generate:rest-docs": "node dist/scripts/generate-rest-docs.js"
   },
   "dependencies": {
-    "@atscale-ps/ps-utils": "^2.0.0",
     "@types/node": "^25.3.0",
     "axios": "^1.13.5",
     "busboy": "^1.6.0",

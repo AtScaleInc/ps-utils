@@ -231,11 +231,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<string[]> {
     const statement =
       "SELECT MEASURE_NAME FROM $system.MDSCHEMA_MEASURES WHERE [CUBE_NAME] = @CubeName";
     const rows = await this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig
     );
     return rows.map((r) => r.MEASURE_NAME).filter(Boolean);
   }
@@ -248,9 +249,10 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<string[]> {
     const rows = await this.getLevelMetadataRows(
-      token, installer, atscaleUrl, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig
     );
     return rows.map((r) => r.LEVEL_NAME).filter(Boolean);
   }
@@ -266,13 +268,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<Record<string, string>[]> {
     const statement =
       "SELECT DIMENSION_UNIQUE_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NAME " +
       "FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName " +
       "and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
     return this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig
     );
   }
 
@@ -291,11 +294,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<{ catalogId: string; modelId: string }> {
     const catalogStatement =
       `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = '${catalogName}'`;
     const catalogRows = await this.getDmvData(
-      token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName, proxyConfig
     );
     const catalogId = catalogRows[0]?.CATALOG_GUID ?? "";
 
@@ -303,7 +307,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = '${catalogName}' ` +
       `and [CUBE_NAME] = '${modelName}'`;
     const modelRows = await this.getDmvData(
-      token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName, proxyConfig
     );
     const modelId = modelRows[0]?.CUBE_GUID ?? "";
 
@@ -470,6 +474,30 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         `Add mdx: { url, organization_id, catalog_name, user } to this connection in ${params["connection-file"]}.`
       );
     }
+
+    const proxyConfig: Record<string, any> = {};
+    if (connection.proxy.host) {
+      proxyConfig.host = connection.proxy.host;
+      if (connection.proxy.password) {
+        proxyConfig.port = connection.proxy.port;
+      }
+      else {
+        throw new Error(
+          `Connection '${params["connection-name"]}' contains a proxy host but is missing the required port`,
+        );
+      }
+      if (connection.proxy.protocol) {
+        proxyConfig.protocol = connection.proxy.protocol;
+      }
+      if (connection.proxy.username) {
+        proxyConfig.auth = {};
+        proxyConfig.auth.username = connection.proxy.username;
+        if (connection.proxy.password) {
+          proxyConfig.password = connection.proxy.password;
+        }
+      }
+    }
+
     const { installer, mdx } = connection;
     const { url: atscaleUrl, organization_id: organizationId, catalog_name: catalogName } = mdx;
     const user = (connectionFile.users ?? {})[mdx.user] ?? {};
@@ -478,15 +506,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Auth ---
     this.logger.info("Authenticating…");
     const token = await this.getToken(
-      installer, atscaleUrl, organizationId, user.username, user.password,
+      installer, atscaleUrl, organizationId, user.username, user.password, proxyConfig
     );
 
     // --- Discover model schema ---
     this.logger.info("Fetching measure and attribute names from DMV…");
     const [measureNames, levelMetaRows, ids] = await Promise.all([
-      this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName),
-      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName),
-      this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName),
+      this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
+      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
+      this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
     ]);
     const attributeNames = levelMetaRows.map((r) => r.LEVEL_NAME).filter(Boolean);
 
@@ -550,7 +578,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     this.logger.info(`Collecting query stats from ${startTime} to ${endTime}…`);
     const { occurrenceDict } = await this.processQueries(
       installer, atscaleUrl, token, organizationId,
-      catalogId, modelId, startTime, endTime, limit, numQueries,
+      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig
     );
 
     // Build occurrence CSV: cross-product of attributes × measures
@@ -687,7 +715,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         this.logger.info(`  ${MONTHS[month]} ${year}…`);
         const { occurrenceDict: mDict } = await this.processQueries(
           installer, atscaleUrl, token, organizationId,
-          catalogId, modelId, mStart, mEnd, limit, numQueries,
+          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig
         );
         monthlyDicts.push(mDict);
       }
