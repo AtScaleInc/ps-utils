@@ -42,6 +42,7 @@
     "generate:rest-docs": "node dist/scripts/generate-rest-docs.js"
   },
   "dependencies": {
+    "@atscale-ps/ps-utils": "^2.0.0",
     "@types/node": "^25.3.0",
     "axios": "^1.13.5",
     "busboy": "^1.6.0",

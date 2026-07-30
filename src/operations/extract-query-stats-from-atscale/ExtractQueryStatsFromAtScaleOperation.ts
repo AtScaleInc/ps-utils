@@ -138,11 +138,18 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     username: string,
     password: string,
+    proxyConfig: Record<string, any>
   ): Promise<string> {
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
     if (installer) {
       const url = `${atscaleUrl}:10500/${organizationId}/auth`;
-      this.logger.verbose(`Auth URL: ${url}`);
-      const response = await axios.get(url, { auth: { username, password } });
+      this.logger.verbose("Auth URL: " + url);
+
+      config.auth = { username, password };
+      const response = await axios.get(url, config);
       return response.data as string;
     } else {
       const url = `${atscaleUrl}/auth/realms/atscale/protocol/openid-connect/token`;
@@ -169,6 +176,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<Record<string, string>[]> {
     const data = `<?xml version="1.0" encoding="UTF-8"?>
     <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
@@ -192,12 +200,16 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       ? `${atscaleUrl}:10502/xmla/${organizationId}`
       : `${atscaleUrl}/engine/xmla`;
 
-    const response = await axios.post(xmlaUrl, data, {
-      headers: {
-        "Content-Type": "text/xml",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    config.headers = {
+      'Content-Type': 'text/xml',
+      'Authorization': `Bearer ${token}`
+    }
+
+    const response = await axios.post(xmlaUrl, data, config);
 
     const parser = new Parser({ explicitArray: false, ignoreAttrs: true });
     const result: any = await parser.parseStringPromise(response.data);
@@ -325,6 +337,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     endTime: string,
     limit: number,
     numQueries: number,
+    proxyConfig: Record<string, any>
   ): Promise<{
     occurrenceDict: Map<PairKey, number>;
     sampleQueryIds: Map<PairKey, Array<[string, string[]]>>;
@@ -332,10 +345,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     const occurrenceDict = new Map<PairKey, number>();
     const sampleQueryIds = new Map<PairKey, Array<[string, string[]]>>();
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    config.headers = {
+      'Content-Type': 'text/xml',
+      'Authorization': `Bearer ${token}`
+    }
 
     const baseUrl = installer
       ? `${atscaleUrl}:10502/queries/orgId/${organizationId}`
@@ -352,7 +369,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         `&offset=${offset}&limit=${limit}`;
 
       this.logger.verbose(`Fetching query page at offset ${offset}: ${url}`);
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, config);
       const data: any[] = response.data?.response?.data ?? [];
 
       for (const query of data) {
@@ -483,7 +500,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       const entry: LevelMeta = {
         dimension: this.stripBrackets(row.DIMENSION_UNIQUE_NAME ?? ""),
         hierarchy: this.stripBrackets(row.HIERARCHY_UNIQUE_NAME ?? ""),
-        level:     levelName,
+        level: levelName,
       };
       const existing = levelMetaByName.get(levelName);
       if (existing) existing.push(entry);

@@ -108,7 +108,7 @@ export async function runCli(argv: string[], stdinData?: string): Promise<number
       "  cat input.yml | atscale-utils",
       "",
       "Installation:",
-      "  sudo npm install -g @atscale/ps-utils",
+      "  sudo npm install -g @atscale-ps/ps-utils",
       "",
       "Shell completions:",
       "  atscale-utils --completion bash    Install bash completions (~/.bash_completion.d/atscale-utils)",
