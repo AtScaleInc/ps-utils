@@ -138,11 +138,18 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     username: string,
     password: string,
+    proxyConfig: Record<string, any>
   ): Promise<string> {
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
     if (installer) {
       const url = `${atscaleUrl}:10500/${organizationId}/auth`;
-      this.logger.verbose(`Auth URL: ${url}`);
-      const response = await axios.get(url, { auth: { username, password } });
+      this.logger.verbose("Auth URL: " + url);
+
+      config.auth = { username, password };
+      const response = await axios.get(url, config);
       return response.data as string;
     } else {
       const url = `${atscaleUrl}/auth/realms/atscale/protocol/openid-connect/token`;
@@ -169,6 +176,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<Record<string, string>[]> {
     const data = `<?xml version="1.0" encoding="UTF-8"?>
     <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
@@ -192,12 +200,16 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       ? `${atscaleUrl}:10502/xmla/${organizationId}`
       : `${atscaleUrl}/engine/xmla`;
 
-    const response = await axios.post(xmlaUrl, data, {
-      headers: {
-        "Content-Type": "text/xml",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    config.headers = {
+      'Content-Type': 'text/xml',
+      'Authorization': `Bearer ${token}`
+    }
+
+    const response = await axios.post(xmlaUrl, data, config);
 
     const parser = new Parser({ explicitArray: false, ignoreAttrs: true });
     const result: any = await parser.parseStringPromise(response.data);
@@ -219,11 +231,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<string[]> {
     const statement =
       "SELECT MEASURE_NAME FROM $system.MDSCHEMA_MEASURES WHERE [CUBE_NAME] = @CubeName";
     const rows = await this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig
     );
     return rows.map((r) => r.MEASURE_NAME).filter(Boolean);
   }
@@ -236,9 +249,10 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<string[]> {
     const rows = await this.getLevelMetadataRows(
-      token, installer, atscaleUrl, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig
     );
     return rows.map((r) => r.LEVEL_NAME).filter(Boolean);
   }
@@ -254,13 +268,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<Record<string, string>[]> {
     const statement =
       "SELECT DIMENSION_UNIQUE_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NAME " +
       "FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName " +
       "and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
     return this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig
     );
   }
 
@@ -279,11 +294,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
+    proxyConfig: Record<string, any>
   ): Promise<{ catalogId: string; modelId: string }> {
     const catalogStatement =
       `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = '${catalogName}'`;
     const catalogRows = await this.getDmvData(
-      token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName, proxyConfig
     );
     const catalogId = catalogRows[0]?.CATALOG_GUID ?? "";
 
@@ -291,7 +307,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = '${catalogName}' ` +
       `and [CUBE_NAME] = '${modelName}'`;
     const modelRows = await this.getDmvData(
-      token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName,
+      token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName, proxyConfig
     );
     const modelId = modelRows[0]?.CUBE_GUID ?? "";
 
@@ -325,6 +341,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     endTime: string,
     limit: number,
     numQueries: number,
+    proxyConfig: Record<string, any>
   ): Promise<{
     occurrenceDict: Map<PairKey, number>;
     sampleQueryIds: Map<PairKey, Array<[string, string[]]>>;
@@ -332,10 +349,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     const occurrenceDict = new Map<PairKey, number>();
     const sampleQueryIds = new Map<PairKey, Array<[string, string[]]>>();
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    config.headers = {
+      'Content-Type': 'text/xml',
+      'Authorization': `Bearer ${token}`
+    }
 
     const baseUrl = installer
       ? `${atscaleUrl}:10502/queries/orgId/${organizationId}`
@@ -352,7 +373,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         `&offset=${offset}&limit=${limit}`;
 
       this.logger.verbose(`Fetching query page at offset ${offset}: ${url}`);
-      const response = await axios.get(url, { headers });
+      const response = await axios.get(url, config);
       const data: any[] = response.data?.response?.data ?? [];
 
       for (const query of data) {
@@ -453,6 +474,30 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         `Add mdx: { url, organization_id, catalog_name, user } to this connection in ${params["connection-file"]}.`
       );
     }
+
+    const proxyConfig: Record<string, any> = {};
+    if (connection.proxy && connection.proxy.host) {
+      proxyConfig.host = connection.proxy.host;
+      if (connection.proxy.password) {
+        proxyConfig.port = connection.proxy.port;
+      }
+      else {
+        throw new Error(
+          `Connection '${params["connection-name"]}' contains a proxy host but is missing the required port`,
+        );
+      }
+      if (connection.proxy.protocol) {
+        proxyConfig.protocol = connection.proxy.protocol;
+      }
+      if (connection.proxy.username) {
+        proxyConfig.auth = {};
+        proxyConfig.auth.username = connection.proxy.username;
+        if (connection.proxy.password) {
+          proxyConfig.password = connection.proxy.password;
+        }
+      }
+    }
+
     const { installer, mdx } = connection;
     const { url: atscaleUrl, organization_id: organizationId, catalog_name: catalogName } = mdx;
     const user = (connectionFile.users ?? {})[mdx.user] ?? {};
@@ -461,15 +506,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Auth ---
     this.logger.info("Authenticating…");
     const token = await this.getToken(
-      installer, atscaleUrl, organizationId, user.username, user.password,
+      installer, atscaleUrl, organizationId, user.username, user.password, proxyConfig
     );
 
     // --- Discover model schema ---
     this.logger.info("Fetching measure and attribute names from DMV…");
     const [measureNames, levelMetaRows, ids] = await Promise.all([
-      this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName),
-      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName),
-      this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName),
+      this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
+      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
+      this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
     ]);
     const attributeNames = levelMetaRows.map((r) => r.LEVEL_NAME).filter(Boolean);
 
@@ -483,7 +528,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       const entry: LevelMeta = {
         dimension: this.stripBrackets(row.DIMENSION_UNIQUE_NAME ?? ""),
         hierarchy: this.stripBrackets(row.HIERARCHY_UNIQUE_NAME ?? ""),
-        level:     levelName,
+        level: levelName,
       };
       const existing = levelMetaByName.get(levelName);
       if (existing) existing.push(entry);
@@ -533,7 +578,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     this.logger.info(`Collecting query stats from ${startTime} to ${endTime}…`);
     const { occurrenceDict } = await this.processQueries(
       installer, atscaleUrl, token, organizationId,
-      catalogId, modelId, startTime, endTime, limit, numQueries,
+      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig
     );
 
     // Build occurrence CSV: cross-product of attributes × measures
@@ -670,7 +715,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         this.logger.info(`  ${MONTHS[month]} ${year}…`);
         const { occurrenceDict: mDict } = await this.processQueries(
           installer, atscaleUrl, token, organizationId,
-          catalogId, modelId, mStart, mEnd, limit, numQueries,
+          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig
         );
         monthlyDicts.push(mDict);
       }

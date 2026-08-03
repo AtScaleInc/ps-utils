@@ -147,7 +147,7 @@ Before starting, ensure the following are available:
 | **API tokens for each instance** | One per environment; must have `admin` or `model-admin` scope |
 | **GitHub repository** | A new or existing repo where SML files will live |
 | **Node.js 18 or later** | Required to run `ps-utils` locally |
-| **`ps-utils` installed** | `npm install -g @atscale/ps-utils` or use `npx @atscale/ps-utils` |
+| **`ps-utils` installed** | `npm install -g @atscale-ps/ps-utils` or use `npx @atscale-ps/ps-utils` |
 | **Access to AtScale Postgres backend** | Port `10520`, database `atscale` — needed only for Phase 2 query extraction |
 
 ### Pre-Migration Assessment
@@ -375,7 +375,7 @@ Export `ATSCALE_LEGACY_SQL_PASSWORD` in your shell before running extraction loc
 Use `extract-queries-from-atscale` to pull deduplicated query history from the legacy instance. Specify each cube/model name in `--models`:
 
 ```bash
-npx @atscale/ps-utils extract-queries-from-atscale \
+npx @atscale-ps/ps-utils extract-queries-from-atscale \
   --connection-file connections.yaml \
   --connection-name legacy-atscale-postgres \
   --models "SalesModel,InventoryModel,FinanceModel" \
@@ -446,7 +446,7 @@ The `queries/` directory is now the canonical regression baseline and travels wi
 Use `generate-sml-from-xml` to produce SML YAML files from the XML project file. Run this locally before opening any PR:
 
 ```bash
-npx @atscale/ps-utils generate-sml-from-xml \
+npx @atscale-ps/ps-utils generate-sml-from-xml \
   --xml-file path/to/MyAtScaleProject.xml \
   --output-dir models \
   --connection-type snowflake \
@@ -619,7 +619,7 @@ connections:
       org: my-org
 EOF
 
-npx @atscale/ps-utils atscale-deploy-catalog \
+npx @atscale-ps/ps-utils atscale-deploy-catalog \
   --connection-file /tmp/connections-dev.yaml \
   --atscale-connection-name dev \
   --sml-dir models \
@@ -986,7 +986,7 @@ jobs:
           node-version: "20"
 
       - name: Install ps-utils
-        run: npm install -g @atscale/ps-utils
+        run: npm install -g @atscale-ps/ps-utils
 
       - name: Validate SML schema
         run: |
@@ -1107,7 +1107,7 @@ jobs:
           node-version: "20"
 
       - name: Install ps-utils
-        run: npm install -g @atscale/ps-utils
+        run: npm install -g @atscale-ps/ps-utils
 
       - name: Write connections file
         run: |
@@ -1239,7 +1239,7 @@ jobs:
           node-version: "20"
 
       - name: Install ps-utils
-        run: npm install -g @atscale/ps-utils
+        run: npm install -g @atscale-ps/ps-utils
 
       - name: Write connections file
         run: |

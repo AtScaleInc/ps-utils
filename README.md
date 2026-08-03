@@ -108,7 +108,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["version"] --> VER["@atscale/ps-utils@x.y.z (stdout)"]
+    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
 ```
 
 ### AtScale Config
@@ -202,7 +202,7 @@ flowchart LR
 
 **Install globally from npm:**
 ```bash
-sudo npm install -g @atscale/ps-utils
+sudo npm install -g @atscale-ps/ps-utils
 ```
 
 **Build from source:**
@@ -1969,7 +1969,7 @@ atscale-utils version
 atscale-utils --version
 ```
 
-**Output:** `@atscale/ps-utils@<version>`
+**Output:** `@atscale-ps/ps-utils@<version>`
 
 This operation takes no parameters.
 
