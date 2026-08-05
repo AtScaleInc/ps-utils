@@ -31,11 +31,13 @@ export async function profileConformedDimensions(
   const dimByName = new Map(dimensions.map((d) => [d.uniqueName, d]));
   const results: ConformedDimensionFingerprint[] = [];
 
-  // Build: dimName → [ { fact, fkCol, leafKeyCol } ]
+  // Build: dimName → [ { fact, fkCol, leafKeyCol, leafTable, leafSchema } ]
   const dimJoins = new Map<string, Array<{
     fact:       FactNode;
     fkCol:      string;
     leafKeyCol: string;
+    leafTable?: string;
+    leafSchema?: string;
   }>>();
 
   for (const fact of facts) {
@@ -49,7 +51,11 @@ export async function profileConformedDimensions(
       if (!fkCol || !leafKeyCol) continue;
 
       const existing = dimJoins.get(dim.uniqueName) ?? [];
-      existing.push({ fact, fkCol, leafKeyCol });
+      existing.push({
+        fact, fkCol, leafKeyCol,
+        leafTable:  leafLevel?.sourceTable,
+        leafSchema: leafLevel?.sourceSchema,
+      });
       dimJoins.set(dim.uniqueName, existing);
     }
   }
@@ -59,7 +65,12 @@ export async function profileConformedDimensions(
     if (joins.length < 2) continue;
 
     const dim = dimByName.get(dimName)!;
-    const dimTable = qualifyTable(dim.sourceSchema, dim.sourceTable);
+    // Snowflake-schema hierarchies normalize the leaf level into its own table,
+    // distinct from the dimension's root-level table — query the leaf's own
+    // table when one is recorded.
+    const dimTable = joins[0]!.leafTable
+      ? qualifyTable(joins[0]!.leafSchema ?? dim.sourceSchema, joins[0]!.leafTable!)
+      : qualifyTable(dim.sourceSchema, dim.sourceTable);
 
     // Leaf member count for the denominator
     const leafKeyCol  = joins[0]!.leafKeyCol;
