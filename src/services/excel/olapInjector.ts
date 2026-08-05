@@ -31,7 +31,7 @@ export async function injectOlap(
   pivotMeta: PivotMeta[],
   chartMeta: ChartMeta[],
   connString: string,
-  catalog: string,
+  cubeName: string,
   connectionName: string,
   models: Record<string, unknown>,
 ): Promise<Buffer> {
@@ -44,7 +44,7 @@ export async function injectOlap(
   const newParts: string[] = [];
 
   // connections.xml
-  zip.file("xl/connections.xml", buildConnectionsXml(connString, connectionName, catalog));
+  zip.file("xl/connections.xml", buildConnectionsXml(connString, connectionName, cubeName));
   newParts.push("xl/connections.xml");
 
   // Pivot cache + table per tile

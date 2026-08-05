@@ -75,23 +75,46 @@ export class ExcelService extends ServiceProvider {
     const password = (userObj["password"] as string | undefined) ?? "";
 
     let xmlaUrl: string;
+    let connString: string;
     if (connection["installer"]) {
       if (!/:\d+/.test(mdxUrl.split("//")[1] ?? "")) {
         mdxUrl = `${mdxUrl}:10502`;
       }
       xmlaUrl = `${mdxUrl}/xmla/${orgId}`;
+      connString =
+        `Provider=MSOLAP.8;` +
+        `Data Source=${xmlaUrl};` +
+        `Initial Catalog=${catalog};` +
+        `User ID=${username};` +
+        `Password=${password};` +
+        `Persist Security Info=True;`;
     } else {
-      // Non-installer (cloud/container) connections embed the full endpoint
-      // in the url field already — use it as-is.
-      xmlaUrl = mdxUrl;
+      // Non-installer (cloud/container) connections: mdx.url may be either the
+      // bare host or may already carry the /engine/xmla suffix (connections.yaml
+      // entries are inconsistent on this) — add it only if missing. The
+      // org-specific path segment beyond that is the connecting user's own
+      // token, not something derivable from the URL or org id.
+      const base = /\/engine\/xmla(\/|$)/i.test(mdxUrl) ? mdxUrl : `${mdxUrl}/engine/xmla`;
+      const userToken = (userObj["token"] as string | undefined) ?? "";
+      xmlaUrl = userToken ? `${base}/${userToken}` : base;
+      // Explicit User ID/Password authenticates as the configured connections.yaml
+      // service account (e.g. demo2_admin), not the interactive Windows/SSO user.
+      // Integrated Security=SSPI authenticates as whichever account is currently
+      // logged into Windows/Excel instead — which matters because AtScale's
+      // row-level security is keyed by user identity, and the interactive user
+      // may be subject to RLS restrictions the service account is not.
+      connString =
+        `Provider=MSOLAP.8;` +
+        `Persist Security Info=True;` +
+        `Initial Catalog=${catalog};` +
+        `Data Source=${xmlaUrl};` +
+        `User ID=${username};` +
+        `Password=${password};` +
+        `MDX Compatibility=1;` +
+        `Safety Options=2;` +
+        `MDX Missing Member Mode=Error;` +
+        `Update Isolation Level=2;`;
     }
-    const connString =
-      `Provider=MSOLAP.8;` +
-      `Data Source=${xmlaUrl};` +
-      `Initial Catalog=${catalog};` +
-      `User ID=${username};` +
-      `Password=${password};` +
-      `Persist Security Info=True;`;
 
     // ------------------------------------------------------------------
     // Collect data
@@ -283,18 +306,50 @@ export class ExcelService extends ServiceProvider {
               const xaxisHier = hierarchies.find(h => h.uniqueName === xaxisUnique);
               const xAxisGranularity = wsDef["xAxisGranularity"] as string | undefined;
               const leafLevel = xaxisHier?.leafLevelName ?? null;
+              // xAxis itself may name one specific level within a shared,
+              // multi-level hierarchy (e.g. "Order Custom Year" inside the
+              // "Order Custom PP445" hierarchy). When it does, that's the
+              // authoritative level — it takes priority over granularity
+              // matching or the leaf-level fallback, both of which would
+              // otherwise pick the wrong (usually finer-grained) level.
+              const xAxisLower = (xAxis ?? "").toLowerCase();
+              const exactXAxisLevel = xaxisHier?.levels.find(
+                l => l.caption.toLowerCase() === xAxisLower || l.queryName.toLowerCase() === xAxisLower,
+              )?.queryName ?? null;
               // Find the hierarchy level that matches the granularity (case-insensitive substring).
               // Only uses levels that actually exist in the model; falls back to leaf level.
               const granLevel = xAxisGranularity && xaxisHier
                 ? levelForGranularity(xaxisHier, xAxisGranularity)
                 : null;
-              const levelToUse = granLevel ?? leafLevel;
+              const levelToUse = exactXAxisLevel ?? granLevel ?? leafLevel;
               const setExpr = levelToUse
                 ? `${xaxisUnique}.[${levelToUse}].Members`
                 : `${xaxisUnique}.Members`;
+
+              // Define the set once via CUBESET and have every CUBERANKEDMEMBER
+              // call reference that cell, rather than re-passing the raw set
+              // expression string on each of the 10 rank calls. This is
+              // Microsoft's documented pattern for CUBE-function dashboards and
+              // is more reliable against third-party MDX providers than
+              // repeated inline set expressions. Row 12 (just below the 10 data
+              // rows) is otherwise unused within this data section's columns.
+              const setCellRow = 12;
+              const setCellRef = colLetter(dataCol) + setCellRow;
+              dashWs.getCell(setCellRow, dataCol).value = {
+                formula: `CUBESET("${connectionName}","${setExpr}","${xAxis ?? ""}")`,
+              };
+
+              // Rank from the END of the set (negative rank = count back from
+              // the last member, per CUBERANKEDMEMBER's documented behavior)
+              // so trend charts show the most recent 10 periods rather than
+              // the first 10. Wide date dimensions (e.g. TPC-DS benchmark
+              // models) often pad back a century or more before real fact
+              // data begins, so "first 10" silently lands on empty history.
+              // Row 2 → rank -10 (oldest of the last 10), row 11 → rank -1
+              // (most recent), keeping the displayed order chronological.
               for (let r = 2; r <= 11; r++) {
                 dashWs.getCell(r, dataCol).value = {
-                  formula: `CUBERANKEDMEMBER("${connectionName}","${setExpr}",${r - 1})`,
+                  formula: `CUBERANKEDMEMBER("${connectionName}",${setCellRef},${r - 12})`,
                 };
                 for (let mi = 0; mi < measureUniques.length; mi++) {
                   const rankCellRef = colLetter(dataCol) + r;
@@ -428,9 +483,14 @@ export class ExcelService extends ServiceProvider {
     const dir = path.dirname(targetFile);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
+    // The connection's dbPr command/commandType="1" ("Cube") names the cube
+    // Excel queries — this is the AtScale MODEL name, not the catalog
+    // (a catalog/project can expose multiple cubes with different names).
+    // Reusing catalog here caused "Excel cannot find OLAP cube <catalog>".
+    const cubeName    = pivotMeta[0].model;
     const rawBuffer   = Buffer.from(await wb.xlsx.writeBuffer() as unknown as ArrayBuffer);
     const finalBuffer = await injectOlap(
-      rawBuffer, pivotMeta, chartMeta, connString, catalog, connectionName, models,
+      rawBuffer, pivotMeta, chartMeta, connString, cubeName, connectionName, models,
     );
     fs.writeFileSync(targetFile, finalBuffer);
 
