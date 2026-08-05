@@ -89,23 +89,27 @@ export class ExcelService extends ServiceProvider {
         `Password=${password};` +
         `Persist Security Info=True;`;
     } else {
-      // Non-installer (cloud/container) connections: mdx.url is the base
-      // XMLA endpoint; the org-specific path segment is the connecting
-      // user's own token, not something derivable from the URL or org id.
+      // Non-installer (cloud/container) connections: mdx.url may be either the
+      // bare host or may already carry the /engine/xmla suffix (connections.yaml
+      // entries are inconsistent on this) — add it only if missing. The
+      // org-specific path segment beyond that is the connecting user's own
+      // token, not something derivable from the URL or org id.
+      const base = /\/engine\/xmla(\/|$)/i.test(mdxUrl) ? mdxUrl : `${mdxUrl}/engine/xmla`;
       const userToken = (userObj["token"] as string | undefined) ?? "";
-      xmlaUrl = userToken ? `${mdxUrl}/${userToken}` : mdxUrl;
-      // Cloud/container XMLA gateways authenticate via the org token embedded
-      // in the URL path itself, not via OLE DB User ID/Password — passing
-      // those causes the MSOLAP provider to send a request shape the gateway
-      // rejects with HTTP 405. Integrated Security=SSPI plus these MDX
-      // provider flags is the connection string confirmed working against
-      // a live AtScale cloud/container instance.
+      xmlaUrl = userToken ? `${base}/${userToken}` : base;
+      // Explicit User ID/Password authenticates as the configured connections.yaml
+      // service account (e.g. demo2_admin), not the interactive Windows/SSO user.
+      // Integrated Security=SSPI authenticates as whichever account is currently
+      // logged into Windows/Excel instead — which matters because AtScale's
+      // row-level security is keyed by user identity, and the interactive user
+      // may be subject to RLS restrictions the service account is not.
       connString =
         `Provider=MSOLAP.8;` +
-        `Integrated Security=SSPI;` +
         `Persist Security Info=True;` +
         `Initial Catalog=${catalog};` +
         `Data Source=${xmlaUrl};` +
+        `User ID=${username};` +
+        `Password=${password};` +
         `MDX Compatibility=1;` +
         `Safety Options=2;` +
         `MDX Missing Member Mode=Error;` +
@@ -335,9 +339,17 @@ export class ExcelService extends ServiceProvider {
                 formula: `CUBESET("${connectionName}","${setExpr}","${xAxis ?? ""}")`,
               };
 
+              // Rank from the END of the set (negative rank = count back from
+              // the last member, per CUBERANKEDMEMBER's documented behavior)
+              // so trend charts show the most recent 10 periods rather than
+              // the first 10. Wide date dimensions (e.g. TPC-DS benchmark
+              // models) often pad back a century or more before real fact
+              // data begins, so "first 10" silently lands on empty history.
+              // Row 2 → rank -10 (oldest of the last 10), row 11 → rank -1
+              // (most recent), keeping the displayed order chronological.
               for (let r = 2; r <= 11; r++) {
                 dashWs.getCell(r, dataCol).value = {
-                  formula: `CUBERANKEDMEMBER("${connectionName}",${setCellRef},${r - 1})`,
+                  formula: `CUBERANKEDMEMBER("${connectionName}",${setCellRef},${r - 12})`,
                 };
                 for (let mi = 0; mi < measureUniques.length; mi++) {
                   const rankCellRef = colLetter(dataCol) + r;

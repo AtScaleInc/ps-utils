@@ -1,0 +1,144 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.5.0/schema.json",
+  "name": "32c1525d-643b-4e90-b9b7-4c0951454c09",
+  
+  "position": {
+    "x": 0,
+    "y": 10600,
+    "z": 0,
+    "height": 300,
+    "width": 3000,
+    "tabOrder": 0
+  },
+  
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "HierarchyLevel": {
+                  "Expression": {
+                    "Hierarchy": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "Order Date Dimension"
+                        }
+                      },
+                      "Hierarchy": "Order Month of Year"
+                    }
+                  },
+                  "Level": "Order Month of Year"
+                }
+              },
+              "queryRef": "Order Date Dimension.Order Month of Year.Order Month of Year",
+              "nativeQueryRef": "Order Month of Year Order Month of Year",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "CubeMeasures"
+                    }
+                  },
+                  "Property": "Calculated Tax"
+                }
+              },
+              "queryRef": "CubeMeasures.Calculated Tax",
+              "nativeQueryRef": "Calculated Tax"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "CubeMeasures"
+                  }
+                },
+                "Property": "Calculated Tax"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Calculated Tax by Month of Year'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "bf50da0a4cc3866d59ea",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "CubeMeasures"
+              }
+            },
+            "Property": "Calculated Tax"
+          }
+        },
+        "type": "Advanced",
+        
+      },
+      {
+        "name": "855061c636a2fd0f74c8",
+        "field": {
+          "HierarchyLevel": {
+            "Expression": {
+              "Hierarchy": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Order Date Dimension"
+                  }
+                },
+                "Hierarchy": "Order Month of Year"
+              }
+            },
+            "Level": "Order Month of Year"
+          }
+        },
+        
+        "type": "Categorical",
+        
+      }
+    ]
+  }
+}

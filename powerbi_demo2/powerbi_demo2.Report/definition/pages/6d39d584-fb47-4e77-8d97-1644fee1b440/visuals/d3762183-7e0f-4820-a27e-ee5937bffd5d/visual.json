@@ -1,0 +1,144 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.5.0/schema.json",
+  "name": "d3762183-7e0f-4820-a27e-ee5937bffd5d",
+  
+  "position": {
+    "x": 0,
+    "y": 5600,
+    "z": 0,
+    "height": 300,
+    "width": 3000,
+    "tabOrder": 0
+  },
+  
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "HierarchyLevel": {
+                  "Expression": {
+                    "Hierarchy": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "Order Date Dimension"
+                        }
+                      },
+                      "Hierarchy": "Order Custom Quarter Of Year"
+                    }
+                  },
+                  "Level": "Order Custom Quarter Of Year"
+                }
+              },
+              "queryRef": "Order Date Dimension.Order Custom Quarter Of Year.Order Custom Quarter Of Year",
+              "nativeQueryRef": "Order Custom Quarter Of Year Order Custom Quarter Of Year",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "CubeMeasures"
+                    }
+                  },
+                  "Property": "Calculated Tax"
+                }
+              },
+              "queryRef": "CubeMeasures.Calculated Tax",
+              "nativeQueryRef": "Calculated Tax"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "CubeMeasures"
+                  }
+                },
+                "Property": "Calculated Tax"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Calculated Tax by Quarter Of Year'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "bf50da0a4cc3866d59ea",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "CubeMeasures"
+              }
+            },
+            "Property": "Calculated Tax"
+          }
+        },
+        "type": "Advanced",
+        
+      },
+      {
+        "name": "855061c636a2fd0f74c8",
+        "field": {
+          "HierarchyLevel": {
+            "Expression": {
+              "Hierarchy": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Order Date Dimension"
+                  }
+                },
+                "Hierarchy": "Order Custom Quarter Of Year"
+              }
+            },
+            "Level": "Order Custom Quarter Of Year"
+          }
+        },
+        
+        "type": "Categorical",
+        
+      }
+    ]
+  }
+}

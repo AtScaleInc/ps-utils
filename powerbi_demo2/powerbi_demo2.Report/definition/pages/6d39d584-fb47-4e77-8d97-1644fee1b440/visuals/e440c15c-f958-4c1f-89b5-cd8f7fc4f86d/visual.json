@@ -1,0 +1,144 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.5.0/schema.json",
+  "name": "e440c15c-f958-4c1f-89b5-cd8f7fc4f86d",
+  
+  "position": {
+    "x": 0,
+    "y": 12100,
+    "z": 0,
+    "height": 300,
+    "width": 3000,
+    "tabOrder": 0
+  },
+  
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "HierarchyLevel": {
+                  "Expression": {
+                    "Hierarchy": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "Order Date Dimension"
+                        }
+                      },
+                      "Hierarchy": "Order Reporting Day Of Week"
+                    }
+                  },
+                  "Level": "Order Reporting Day Of Week"
+                }
+              },
+              "queryRef": "Order Date Dimension.Order Reporting Day Of Week.Order Reporting Day Of Week",
+              "nativeQueryRef": "Order Reporting Day Of Week Order Reporting Day Of Week",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "CubeMeasures"
+                    }
+                  },
+                  "Property": "Calculated Tax"
+                }
+              },
+              "queryRef": "CubeMeasures.Calculated Tax",
+              "nativeQueryRef": "Calculated Tax"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "CubeMeasures"
+                  }
+                },
+                "Property": "Calculated Tax"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Calculated Tax by Reporting Day Of Week'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "bf50da0a4cc3866d59ea",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "CubeMeasures"
+              }
+            },
+            "Property": "Calculated Tax"
+          }
+        },
+        "type": "Advanced",
+        
+      },
+      {
+        "name": "855061c636a2fd0f74c8",
+        "field": {
+          "HierarchyLevel": {
+            "Expression": {
+              "Hierarchy": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Order Date Dimension"
+                  }
+                },
+                "Hierarchy": "Order Reporting Day Of Week"
+              }
+            },
+            "Level": "Order Reporting Day Of Week"
+          }
+        },
+        
+        "type": "Categorical",
+        
+      }
+    ]
+  }
+}
