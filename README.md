@@ -108,7 +108,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["version"] --> VER["@atscale/ps-utils@x.y.z (stdout)"]
+    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
 ```
 
 ### AtScale Config
@@ -202,7 +202,7 @@ flowchart LR
 
 **Install globally from npm:**
 ```bash
-sudo npm install -g @atscale/ps-utils
+sudo npm install -g @atscale-ps/ps-utils
 ```
 
 **Build from source:**
@@ -526,16 +526,16 @@ With optional overrides:
 | `--output-dir` | Yes | | Directory to write SML files |
 | `--connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
 | `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `bigquery`) |
-| `--connection-db` | No | | Database/project name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
-| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
+| `--connection-db` | No | | Database/project name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `--catalog-name` | No | XML schema name | Override the catalog label |
 
 **Output layout:**
 ```
 <output-dir>/
   catalog.yml
-  connections/<connection-name>.yml
-  datasets/<dataset-name>.yml      (one per XML <data-set>)
+  connections/<connection-name>.yml  (one per distinct database/schema pair, unless --connection-db/--connection-schema is set)
+  datasets/<dataset-name>.yml      (one per dataset referenced by a cube or dimension)
   dimensions/<dim-name>.yml        (one per referenced dimension)
   metrics/<metric-name>.yml        (one per measure or inline expression)
   calculations/<calc-name>.yml     (one per schema-level calculated member)
@@ -1656,7 +1656,9 @@ The `tlsCrt` and `tlsKey` fields in the output are base64-encoded PEM strings â€
 | `--cert-file` | No | | Path to an existing PEM certificate file |
 | `--key-file` | No | | Path to an existing PEM private key file (required when `--cert-file` is set) |
 | `--enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart (`atscale-mcp.enabled`). Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
-| `--minimal` | No | `false` | Append values that reduce hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes (`db` 20 Gi, Redis master 8 Gi, telemetry 10 Gi). Verified against chart 2026.1.0. |
+| `--minimal` | No | `false` | Append values that reduce hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes (`db` 20 Gi, Redis master 8 Gi, telemetry 10 Gi). Verified against chart 2026.5.0. |
+| `--external-postgres` | No | `false` | Wire AtScale to an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database (`global.atscale.db.enabled=false`, `db.enabled=false`) and sets each service's `externalDatabase` block to read from Kubernetes secrets. Credentials (host/port/user/password) are **not** taken as inputs â€” stubbed secret manifests are emitted as a header comment for the operator to fill in and `kubectl apply`. Keycloak is pinned to a dedicated `keycloak` Postgres schema (`KC_DB_SCHEMA`) rather than `public`; the operator must create that schema before install (a `CREATE SCHEMA` statement is included in the emitted header comment). Verified against chart 2026.5.0. |
+| `--gatekeeper-compliant` | No | `false` | Emit values that satisfy common OPA Gatekeeper constraints: `image.pullPolicy=Always` and `serviceAccount.create=true` per subchart, plus resource requests/limits via `global.resourcesPreset` (`poc` when combined with `--minimal`, otherwise `prod`). A header comment lists the residual constraints that cannot be met via `values.yaml` and need a namespace exemption. Verified against chart 2026.5.0. |
 | `--output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **Output:** A `values.yaml` ready to pass to `helm install atscale ... --values values.yaml`.
@@ -1967,7 +1969,7 @@ atscale-utils version
 atscale-utils --version
 ```
 
-**Output:** `@atscale/ps-utils@<version>`
+**Output:** `@atscale-ps/ps-utils@<version>`
 
 This operation takes no parameters.
 

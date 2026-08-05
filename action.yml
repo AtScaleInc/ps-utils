@@ -182,14 +182,16 @@ inputs:
     required: false
   connection-db:
     description: >
-      Database or project name written into the connection file. When set, individual
-      datasets use a plain table name instead of a nested db/schema/name object.
+      Database or project name written into the connection file. When set, every
+      dataset shares one connection instead of a separate connection per distinct
+      database/schema pair found in the XML.
       Used by: generate-sml-from-xml.
     required: false
   connection-schema:
     description: >
-      Schema or dataset name written into the connection file. When set, individual
-      datasets use a plain table name instead of a nested db/schema/name object.
+      Schema or dataset name written into the connection file. When set, every
+      dataset shares one connection instead of a separate connection per distinct
+      database/schema pair found in the XML.
       Used by: generate-sml-from-xml.
     required: false
 
@@ -634,6 +636,30 @@ inputs:
     description: >
       Emit additional Helm values that reduce the hardware footprint:
       disables telemetry, removes the Redis replica, and shrinks default PVC sizes.
+      Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.
+      Used by: generate-atscale-install-yaml.
+    required: false
+    default: "false"
+  external-postgres:
+    description: >
+      Wire AtScale to an externally-managed PostgreSQL instance instead of the bundled db
+      sub-chart: disables the in-cluster database (global.atscale.db.enabled=false,
+      db.enabled=false) and sets each service's externalDatabase block to read from Kubernetes
+      secrets. Connection credentials (host/port/user/password) are NOT taken as inputs —
+      stubbed secret manifests are emitted as a header comment for the operator to fill in and
+      apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA)
+      rather than `public`; the operator must create that schema before install (a CREATE
+      SCHEMA statement is included in the emitted header comment).
+      Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.
+      Used by: generate-atscale-install-yaml.
+    required: false
+    default: "false"
+  gatekeeper-compliant:
+    description: >
+      Emit Helm values that satisfy common OPA Gatekeeper constraints: image.pullPolicy=Always
+      and serviceAccount.create=true per subchart, plus resource requests/limits via
+      global.resourcesPreset (poc when combined with minimal, otherwise prod). A header comment
+      in the output lists residual constraints that require a namespace exemption.
       Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.
       Used by: generate-atscale-install-yaml.
     required: false
@@ -1098,6 +1124,8 @@ runs:
         [[ -n "${{ inputs.output-file }}"   ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         ARGS+=(--enable-mcp "${{ inputs.enable-mcp }}")
         [[ "${{ inputs.minimal }}" == "true" ]] && ARGS+=(--minimal)
+        [[ "${{ inputs.external-postgres }}" == "true" ]] && ARGS+=(--external-postgres)
+        [[ "${{ inputs.gatekeeper-compliant }}" == "true" ]] && ARGS+=(--gatekeeper-compliant)
         node "${{ github.action_path }}/dist/cli.js" generate-atscale-install-yaml "${ARGS[@]}"
       shell: bash
 

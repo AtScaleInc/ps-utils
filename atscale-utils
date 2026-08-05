@@ -4,7 +4,7 @@ set -eu
 
 # Resolve all symlinks so SCRIPT_DIR is the real package directory even when
 # invoked via a global npm bin symlink (e.g. /usr/local/bin/atscale-utils →
-# /usr/local/lib/node_modules/@atscale/ps-utils/atscale-utils → real path).
+# /usr/local/lib/node_modules/@atscale-ps/ps-utils/atscale-utils → real path).
 _resolve_script() {
   _p="$1"
   while [ -L "$_p" ]; do

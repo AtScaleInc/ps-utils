@@ -1,5 +1,5 @@
 /**
- * @atscale/ps-utils — public library API
+ * @atscale-ps/ps-utils — public library API
  *
  * Each exported function corresponds to one CLI operation.
  * Parameters use camelCase keys.  Fields with library defaults are optional.
@@ -11,7 +11,7 @@
  */
 
 import { buildRegistry } from "./operations/index.js";
-import { buildLogger }   from "./logging.js";
+import { buildLogger } from "./logging.js";
 import type { Operation } from "./operations/Operation.js";
 import {
   resolveIO,
@@ -45,9 +45,9 @@ async function run<T extends Record<string, unknown>>(
   params: T,
   options: LibraryOptions,
 ): Promise<void> {
-  const logger   = options.logger ?? buildLogger({});
+  const logger = options.logger ?? buildLogger({});
   const registry = await buildRegistry(logger);
-  const op       = registry.get(name);
+  const op = registry.get(name);
   if (!op) throw new Error(`Operation not found: ${name}`);
   await (op as Operation<T>).run(params);
 }
@@ -55,15 +55,15 @@ async function run<T extends Record<string, unknown>>(
 // ── Model Extraction ──────────────────────────────────────────────────────────
 
 export type ExtractModelFromAtScaleParams = {
-  model:               string;
-  connectionFile:      FileInput;
-  connectionName:      string;
-  outputModelFile?:    FileOutput;
+  model: string;
+  connectionFile: FileInput;
+  connectionName: string;
+  outputModelFile?: FileOutput;
 };
 
 export async function extractModelFromAtScale(p: ExtractModelFromAtScaleParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["connectionFile"],
+    inputFiles: ["connectionFile"],
     outputFiles: ["outputModelFile"],
   });
   try {
@@ -73,15 +73,15 @@ export async function extractModelFromAtScale(p: ExtractModelFromAtScaleParams, 
 }
 
 export type ExtractModelFromSMLParams = {
-  smlDir:           DirInput;
-  modelName?:       string;
-  connectionName?:  string;
+  smlDir: DirInput;
+  modelName?: string;
+  connectionName?: string;
   outputModelFile?: FileOutput;
 };
 
 export async function extractModelFromSML(p: ExtractModelFromSMLParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputDirs:   ["smlDir"],
+    inputDirs: ["smlDir"],
     outputFiles: ["outputModelFile"],
   });
   try {
@@ -93,11 +93,11 @@ export async function extractModelFromSML(p: ExtractModelFromSMLParams, o: Libra
 // ── SML Creation and Manipulation ─────────────────────────────────────────────
 
 export type ExecuteSQLOnConnectionParams = {
-  sqlFile:          FileInput;
-  connectionName:   string;
-  connectionFile?:  FileInput;  // default: "connections.yaml"
-  onError?:         string;     // default: "stop"
-  dryRun?:          boolean;    // default: false
+  sqlFile: FileInput;
+  connectionName: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  onError?: string;     // default: "stop"
+  dryRun?: boolean;    // default: false
 };
 
 export async function executeSQLOnConnection(p: ExecuteSQLOnConnectionParams, o: LibraryOptions = {}) {
@@ -107,24 +107,24 @@ export async function executeSQLOnConnection(p: ExecuteSQLOnConnectionParams, o:
   try {
     await run("execute-sql-on-connection", Object.assign({
       "connection-file": "connections.yaml",
-      "on-error":        "stop",
-      "dry-run":         false,
+      "on-error": "stop",
+      "dry-run": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type ExtractDDLFromConnectionParams = {
-  connectionName:   string;
-  schema:           string;
-  connectionFile?:  FileInput;  // default: "connections.yaml"
-  tables?:          string;
-  outputFile?:      FileOutput;
+  connectionName: string;
+  schema: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  tables?: string;
+  outputFile?: FileOutput;
 };
 
 export async function extractDDLFromConnection(p: ExtractDDLFromConnectionParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["connectionFile"],
+    inputFiles: ["connectionFile"],
     outputFiles: ["outputFile"],
   });
   try {
@@ -136,18 +136,18 @@ export async function extractDDLFromConnection(p: ExtractDDLFromConnectionParams
 }
 
 export type GenerateSMLFromConnectionParams = {
-  connectionName:        string;
-  modelName:             string;
-  outputDir:             DirOutput;
-  connectionFile?:       FileInput;   // default: "connections.yaml"
-  smlConfigFile?:        FileInput;   // default: "sml.style.yaml"
-  schema?:               string;
-  catalogName?:          string;
-  piiSeverity?:          string;
-  sampleSize?:           number;
-  factTables?:           string;
-  camelCaseFiles?:       boolean;
-  camelCaseMeasures?:    boolean;
+  connectionName: string;
+  modelName: string;
+  outputDir: DirOutput;
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  smlConfigFile?: FileInput;   // default: "sml.style.yaml"
+  schema?: string;
+  catalogName?: string;
+  piiSeverity?: string;
+  sampleSize?: number;
+  factTables?: string;
+  camelCaseFiles?: boolean;
+  camelCaseMeasures?: boolean;
   minHierarchiesPerDim?: number;
   maxHierarchiesPerDim?: number;
 };
@@ -167,19 +167,19 @@ export async function generateSMLFromConnection(p: GenerateSMLFromConnectionPara
 }
 
 export type GenerateSMLFromDDLParams = {
-  ddlFile:               FileInput;
-  outputDir:             DirOutput;
-  connectionName?:       string;    // default: "my_connection"
-  smlConfigFile?:        FileInput; // default: "sml.style.yaml"
-  modelName?:            string;
-  catalogName?:          string;
-  piiSeverity?:          string;
-  schema?:               string;
-  database?:             string;
-  dialect?:              string;
-  factTables?:           string;
-  camelCaseFiles?:       boolean;
-  camelCaseMeasures?:    boolean;
+  ddlFile: FileInput;
+  outputDir: DirOutput;
+  connectionName?: string;    // default: "my_connection"
+  smlConfigFile?: FileInput; // default: "sml.style.yaml"
+  modelName?: string;
+  catalogName?: string;
+  piiSeverity?: string;
+  schema?: string;
+  database?: string;
+  dialect?: string;
+  factTables?: string;
+  camelCaseFiles?: boolean;
+  camelCaseMeasures?: boolean;
   minHierarchiesPerDim?: number;
   maxHierarchiesPerDim?: number;
 };
@@ -199,12 +199,12 @@ export async function generateSMLFromDDL(p: GenerateSMLFromDDLParams, o: Library
 }
 
 export type GenerateSMLFromXMLParams = {
-  xmlFile:           FileInput;
-  outputDir:         DirOutput;
-  connectionName?:   string;
-  connectionType?:   string;
-  catalogName?:      string;
-  connectionDb?:     string;
+  xmlFile: FileInput;
+  outputDir: DirOutput;
+  connectionName?: string;
+  connectionType?: string;
+  catalogName?: string;
+  connectionDb?: string;
   connectionSchema?: string;
 };
 
@@ -221,20 +221,20 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
 
 export type GenerateSharedModelPlanParams = {
   /** Comma-separated paths, or a Readable ZIP whose top-level folders are the directories. */
-  inputDirs:        DirInput;
-  outputDir:        DirOutput;
-  threshold?:       number;  // default: 0.5
-  maxPerSubject?:   number;  // default: 3
+  inputDirs: DirInput;
+  outputDir: DirOutput;
+  threshold?: number;  // default: 0.5
+  maxPerSubject?: number;  // default: 3
 };
 
 export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
     inputDirLists: ["inputDirs"],
-    outputDirs:    ["outputDir"],
+    outputDirs: ["outputDir"],
   });
   try {
     await run("generate-shared-model-plan", Object.assign({
-      threshold:        0.5,
+      threshold: 0.5,
       "max-per-subject": 3,
     }, cc2kebab(params)), o);
     await flush();
@@ -242,10 +242,10 @@ export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, 
 }
 
 export type ApplySharedModelPlanOptionParams = {
-  planFile:        FileInput;
-  sharedDir:       DirOutput;
-  removeSources?:  boolean;  // default: false
-  dryRun?:         boolean;  // default: false
+  planFile: FileInput;
+  sharedDir: DirOutput;
+  removeSources?: boolean;  // default: false
+  dryRun?: boolean;  // default: false
 };
 
 export async function applySharedModelPlanOption(p: ApplySharedModelPlanOptionParams, o: LibraryOptions = {}) {
@@ -256,7 +256,7 @@ export async function applySharedModelPlanOption(p: ApplySharedModelPlanOptionPa
   try {
     await run("apply-shared-model-plan-option", Object.assign({
       "remove-sources": false,
-      "dry-run":        false,
+      "dry-run": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -264,18 +264,18 @@ export async function applySharedModelPlanOption(p: ApplySharedModelPlanOptionPa
 
 export type GenerateDDLFromAtScaleParams = {
   atscaleConnectionName: string;
-  dataSourceName:        string;
-  database:              string;
-  schema:                string;
-  connectionFile?:       FileInput;  // default: "connections.yaml"
-  tables?:               string;
-  outputFile?:           FileOutput;
-  insecure?:             boolean;
+  dataSourceName: string;
+  database: string;
+  schema: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  tables?: string;
+  outputFile?: FileOutput;
+  insecure?: boolean;
 };
 
 export async function generateDDLFromAtScale(p: GenerateDDLFromAtScaleParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["connectionFile"],
+    inputFiles: ["connectionFile"],
     outputFiles: ["outputFile"],
   });
   try {
@@ -287,34 +287,34 @@ export async function generateDDLFromAtScale(p: GenerateDDLFromAtScaleParams, o:
 }
 
 export type GenerateMetricsFromModelParams = {
-  modelFile:       FileInput;
-  smlConfigFile?:  FileInput;  // default: "sml.style.yaml"
-  format?:         string;     // default: "text"
-  modelName?:      string;
+  modelFile: FileInput;
+  smlConfigFile?: FileInput;  // default: "sml.style.yaml"
+  format?: string;     // default: "text"
+  modelName?: string;
   maxSuggestions?: number;
-  minScore?:       number;
-  includeTuples?:  boolean;
-  outputFile?:     FileOutput;
+  minScore?: number;
+  includeTuples?: boolean;
+  outputFile?: FileOutput;
 };
 
 export async function generateMetricsFromModel(p: GenerateMetricsFromModelParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["modelFile", "smlConfigFile"],
+    inputFiles: ["modelFile", "smlConfigFile"],
     outputFiles: ["outputFile"],
   });
   try {
     await run("generate-metrics-from-model", Object.assign({
       "sml-config-file": "sml.style.yaml",
-      format:            "text",
+      format: "text",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type EchoConnectionMetadataParams = {
-  connectionName:  string;
+  connectionName: string;
   connectionFile?: FileInput;  // default: "connections.yaml"
-  schema?:         string;
+  schema?: string;
 };
 
 export async function echoConnectionMetadata(p: EchoConnectionMetadataParams, o: LibraryOptions = {}) {
@@ -332,32 +332,32 @@ export async function echoConnectionMetadata(p: EchoConnectionMetadataParams, o:
 // ── Synthetic Data Generation ─────────────────────────────────────────────────
 
 export type ExtractDataShapeFromConnectionParams = {
-  connectionName:     string;
+  connectionName: string;
   /** Path to SML output directory or model.yml, or a Readable ZIP of the directory. */
-  smlPath:            DirInput;
-  connectionFile?:    FileInput;  // default: "connections.yaml"
-  outputFile?:        FileOutput; // default: "data-shape.yaml"
-  targetFactRows?:    number;     // default: 100000
-  targetColumnRows?:  number;     // default: 10000
-  tablesample?:       boolean;    // default: true
-  serial?:            boolean;    // default: false
-  preserveMetadata?:  boolean;    // default: false
+  smlPath: DirInput;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  outputFile?: FileOutput; // default: "data-shape.yaml"
+  targetFactRows?: number;     // default: 100000
+  targetColumnRows?: number;     // default: 10000
+  tablesample?: boolean;    // default: true
+  serial?: boolean;    // default: false
+  preserveMetadata?: boolean;    // default: false
 };
 
 export async function extractDataShapeFromConnection(p: ExtractDataShapeFromConnectionParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["connectionFile"],
-    inputDirs:   ["smlPath"],
+    inputFiles: ["connectionFile"],
+    inputDirs: ["smlPath"],
     outputFiles: ["outputFile"],
   });
   try {
     await run("extract-data-shape-from-connection", Object.assign({
-      "connection-file":    "connections.yaml",
-      "output-file":        "data-shape.yaml",
-      "target-fact-rows":   100_000,
+      "connection-file": "connections.yaml",
+      "output-file": "data-shape.yaml",
+      "target-fact-rows": 100_000,
       "target-column-rows": 10_000,
-      tablesample:          true,
-      serial:               false,
+      tablesample: true,
+      serial: false,
       "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
@@ -365,21 +365,21 @@ export async function extractDataShapeFromConnection(p: ExtractDataShapeFromConn
 }
 
 export type GenerateDDLFromDataShapeParams = {
-  inputFile?:        FileInput;  // default: "data-shape.yaml"
-  dialect?:          string;     // default: "ansi"
-  outputFile?:       FileOutput;
+  inputFile?: FileInput;  // default: "data-shape.yaml"
+  dialect?: string;     // default: "ansi"
+  outputFile?: FileOutput;
   preserveMetadata?: boolean;    // default: false
 };
 
 export async function generateDDLFromDataShape(p: GenerateDDLFromDataShapeParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["inputFile"],
+    inputFiles: ["inputFile"],
     outputFiles: ["outputFile"],
   });
   try {
     await run("generate-ddl-from-data-shape", Object.assign({
-      "input-file":         "data-shape.yaml",
-      dialect:              "ansi",
+      "input-file": "data-shape.yaml",
+      dialect: "ansi",
       "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
@@ -387,10 +387,10 @@ export async function generateDDLFromDataShape(p: GenerateDDLFromDataShapeParams
 }
 
 export type GenerateDataFromDataShapeParams = {
-  inputFile?:        FileInput;  // default: "data-shape.yaml"
-  outputDir?:        DirOutput;  // default: "data"
-  scaleFactor?:      number;     // default: 1.0
-  seed?:             number;
+  inputFile?: FileInput;  // default: "data-shape.yaml"
+  outputDir?: DirOutput;  // default: "data"
+  scaleFactor?: number;     // default: 1.0
+  seed?: number;
   preserveMetadata?: boolean;    // default: false
 };
 
@@ -401,9 +401,9 @@ export async function generateDataFromDataShape(p: GenerateDataFromDataShapePara
   });
   try {
     await run("generate-data-from-data-shape", Object.assign({
-      "input-file":         "data-shape.yaml",
-      "output-dir":         "data",
-      "scale-factor":       1.0,
+      "input-file": "data-shape.yaml",
+      "output-dir": "data",
+      "scale-factor": 1.0,
       "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
@@ -411,17 +411,17 @@ export async function generateDataFromDataShape(p: GenerateDataFromDataShapePara
 }
 
 export type GenerateDataFromDataShapeToConnectionParams = {
-  connectionName:   string;
-  inputFile?:       FileInput;  // default: "data-shape.yaml"
-  connectionFile?:  FileInput;  // default: "connections.yaml"
-  scaleFactor?:     number;     // default: 1.0
-  createTables?:    boolean;    // default: false
-  dropIfExists?:    boolean;    // default: false
-  dialect?:         string;     // auto-detected from connection config; falls back to "ansi"
-  batchSize?:       number;     // default: 500
-  reportsDir?:      string;     // default: "_reports"
-  seed?:            number;
-  schema?:          string;
+  connectionName: string;
+  inputFile?: FileInput;  // default: "data-shape.yaml"
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  scaleFactor?: number;     // default: 1.0
+  createTables?: boolean;    // default: false
+  dropIfExists?: boolean;    // default: false
+  dialect?: string;     // auto-detected from connection config; falls back to "ansi"
+  batchSize?: number;     // default: 500
+  reportsDir?: string;     // default: "_reports"
+  seed?: number;
+  schema?: string;
   preserveMetadata?: boolean;   // default: false
 };
 
@@ -431,13 +431,13 @@ export async function generateDataFromDataShapeToConnection(p: GenerateDataFromD
   });
   try {
     await run("generate-data-from-data-shape-to-connection", Object.assign({
-      "input-file":         "data-shape.yaml",
-      "connection-file":    "connections.yaml",
-      "scale-factor":       1.0,
-      "create-tables":      false,
-      "drop-if-exists":     false,
-      "batch-size":         500,
-      "reports-dir":        "_reports",
+      "input-file": "data-shape.yaml",
+      "connection-file": "connections.yaml",
+      "scale-factor": 1.0,
+      "create-tables": false,
+      "drop-if-exists": false,
+      "batch-size": 500,
+      "reports-dir": "_reports",
       "preserve-meta-data": false,
     }, cc2kebab(params)), o);
     await flush();
@@ -447,49 +447,49 @@ export async function generateDataFromDataShapeToConnection(p: GenerateDataFromD
 // ── Visualization and Namespace Processing ────────────────────────────────────
 
 export type GenerateNamespaceFromModelParams = {
-  modelFile:        FileInput;
-  maxSuggestions?:  string;    // default: "25"
-  minScore?:        string;    // default: "0.5"
-  modelName?:       string;
-  title?:           string;
-  outputFile?:      FileOutput;
+  modelFile: FileInput;
+  maxSuggestions?: string;    // default: "25"
+  minScore?: string;    // default: "0.5"
+  modelName?: string;
+  title?: string;
+  outputFile?: FileOutput;
 };
 
 export async function generateNamespaceFromModel(p: GenerateNamespaceFromModelParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["modelFile"],
+    inputFiles: ["modelFile"],
     outputFiles: ["outputFile"],
   });
   try {
     await run("generate-namespace-from-model", Object.assign({
       "max-suggestions": "25",
-      "min-score":       "0.5",
+      "min-score": "0.5",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type GenerateTableauFromNamespaceParams = {
-  namespaceFile?:   FileInput;   // default: "analysis/namespace.yaml"
-  connectionFile?:  FileInput;   // default: "connections.yaml"
-  modelFile?:       FileInput;   // default: "model.yaml"
-  targetFile?:      FileOutput;  // default: "tableau.twb"
-  tableauVersion?:  string;      // default: "2025"
-  connectionName?:  string;      // default: "default"
-  aliasesFile?:     FileInput;
+  namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  modelFile?: FileInput;   // default: "model.yaml"
+  targetFile?: FileOutput;  // default: "tableau.twb"
+  tableauVersion?: string;      // default: "2025"
+  connectionName?: string;      // default: "default"
+  aliasesFile?: FileInput;
 };
 
 export async function generateTableauFromNamespace(p: GenerateTableauFromNamespaceParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
+    inputFiles: ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
     outputFiles: ["targetFile"],
   });
   try {
     await run("generate-tableau-from-namespace", Object.assign({
-      "namespace-file":  "analysis/namespace.yaml",
+      "namespace-file": "analysis/namespace.yaml",
       "connection-file": "connections.yaml",
-      "model-file":      "model.yaml",
-      "target-file":     "tableau.twb",
+      "model-file": "model.yaml",
+      "target-file": "tableau.twb",
       "tableau-version": "2025",
       "connection-name": "default",
     }, cc2kebab(params)), o);
@@ -498,25 +498,25 @@ export async function generateTableauFromNamespace(p: GenerateTableauFromNamespa
 }
 
 export type GenerateExcelFromNamespaceParams = {
-  namespaceFile?:   FileInput;   // default: "analysis/namespace.yaml"
-  connectionFile?:  FileInput;   // default: "connections.yaml"
-  modelFile?:       FileInput;   // default: "model.yaml"
-  targetFile?:      FileOutput;  // default: "analysis/workbook.xlsx"
-  connectionName?:  string;      // default: "default"
-  aliasesFile?:     FileInput;
+  namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  modelFile?: FileInput;   // default: "model.yaml"
+  targetFile?: FileOutput;  // default: "analysis/workbook.xlsx"
+  connectionName?: string;      // default: "default"
+  aliasesFile?: FileInput;
 };
 
 export async function generateExcelFromNamespace(p: GenerateExcelFromNamespaceParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
+    inputFiles: ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
     outputFiles: ["targetFile"],
   });
   try {
     await run("generate-excel-from-namespace", Object.assign({
-      "namespace-file":  "analysis/namespace.yaml",
+      "namespace-file": "analysis/namespace.yaml",
       "connection-file": "connections.yaml",
-      "model-file":      "model.yaml",
-      "target-file":     "analysis/workbook.xlsx",
+      "model-file": "model.yaml",
+      "target-file": "analysis/workbook.xlsx",
       "connection-name": "default",
     }, cc2kebab(params)), o);
     await flush();
@@ -524,25 +524,25 @@ export async function generateExcelFromNamespace(p: GenerateExcelFromNamespacePa
 }
 
 export type GenerateNotebookFromConnectionParams = {
-  namespaceFile?:   FileInput;   // default: "analysis/namespace.yaml"
-  connectionFile?:  FileInput;   // default: "connections.yaml"
-  modelFile?:       FileInput;   // default: "model.yaml"
-  targetFile?:      FileOutput;  // default: "notebook.ipynb"
-  connectionName?:  string;      // default: "default"
-  aliasesFile?:     FileInput;
+  namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  modelFile?: FileInput;   // default: "model.yaml"
+  targetFile?: FileOutput;  // default: "notebook.ipynb"
+  connectionName?: string;      // default: "default"
+  aliasesFile?: FileInput;
 };
 
 export async function generateNotebookFromConnection(p: GenerateNotebookFromConnectionParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
+    inputFiles: ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
     outputFiles: ["targetFile"],
   });
   try {
     await run("generate-notebook-from-connection", Object.assign({
-      "namespace-file":  "analysis/namespace.yaml",
+      "namespace-file": "analysis/namespace.yaml",
       "connection-file": "connections.yaml",
-      "model-file":      "model.yaml",
-      "target-file":     "notebook.ipynb",
+      "model-file": "model.yaml",
+      "target-file": "notebook.ipynb",
       "connection-name": "default",
     }, cc2kebab(params)), o);
     await flush();
@@ -552,16 +552,16 @@ export async function generateNotebookFromConnection(p: GenerateNotebookFromConn
 // ── Testing / Query Processing ────────────────────────────────────────────────
 
 export type GenerateQueriesFromSMLParams = {
-  smlDir:          DirInput;
-  xmlaOutputFile:  FileOutput;
-  sqlOutputFile:   FileOutput;
-  modelName?:      string;
-  cubeName?:       string;
+  smlDir: DirInput;
+  xmlaOutputFile: FileOutput;
+  sqlOutputFile: FileOutput;
+  modelName?: string;
+  cubeName?: string;
 };
 
 export async function generateQueriesFromSML(p: GenerateQueriesFromSMLParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputDirs:   ["smlDir"],
+    inputDirs: ["smlDir"],
     outputFiles: ["xmlaOutputFile", "sqlOutputFile"],
   });
   try {
@@ -571,16 +571,16 @@ export async function generateQueriesFromSML(p: GenerateQueriesFromSMLParams, o:
 }
 
 export type GenerateQueriesFromModelParams = {
-  modelFile:       FileInput;
-  xmlaOutputFile:  FileOutput;
-  sqlOutputFile:   FileOutput;
-  modelName?:      string;
-  cubeName?:       string;
+  modelFile: FileInput;
+  xmlaOutputFile: FileOutput;
+  sqlOutputFile: FileOutput;
+  modelName?: string;
+  cubeName?: string;
 };
 
 export async function generateQueriesFromModel(p: GenerateQueriesFromModelParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["modelFile"],
+    inputFiles: ["modelFile"],
     outputFiles: ["xmlaOutputFile", "sqlOutputFile"],
   });
   try {
@@ -590,17 +590,17 @@ export async function generateQueriesFromModel(p: GenerateQueriesFromModelParams
 }
 
 export type ExtractQueryStatsFromAtScaleParams = {
-  connectionFile:   FileInput;
-  connectionName:   string;
-  model:            string;
-  outputDir?:       DirOutput;  // default: "."
-  windowDays?:      string;     // default: "30"
-  monthly?:         string;     // default: "false"
-  limit?:           string;     // default: "100"
-  numQueries?:      string;     // default: "10"
-  startDate?:       string;
-  endDate?:         string;
-  monthlyYear?:     string;
+  connectionFile: FileInput;
+  connectionName: string;
+  model: string;
+  outputDir?: DirOutput;  // default: "."
+  windowDays?: string;     // default: "30"
+  monthly?: string;     // default: "false"
+  limit?: string;     // default: "100"
+  numQueries?: string;     // default: "10"
+  startDate?: string;
+  endDate?: string;
+  monthlyYear?: string;
 };
 
 export async function extractQueryStatsFromAtScale(p: ExtractQueryStatsFromAtScaleParams, o: LibraryOptions = {}) {
@@ -610,25 +610,25 @@ export async function extractQueryStatsFromAtScale(p: ExtractQueryStatsFromAtSca
   });
   try {
     await run("extract-query-stats-from-atscale", Object.assign({
-      "output-dir":   ".",
-      "window-days":  "30",
-      monthly:        "false",
-      limit:          "100",
-      "num-queries":  "10",
+      "output-dir": ".",
+      "window-days": "30",
+      monthly: "false",
+      limit: "100",
+      "num-queries": "10",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type ExtractQueriesFromAtScaleParams = {
-  connectionFile:    FileInput;
-  connectionName?:   string;    // default: "default"
-  days?:             string;    // default: "60"
-  outputDir?:        DirOutput; // default: "queries"
-  protocol?:         string;    // default: "all"
-  minExecutions?:    string;    // default: "1"
-  dbSchema?:         string;    // default: ""
-  models?:           string;
+  connectionFile: FileInput;
+  connectionName?: string;    // default: "default"
+  days?: string;    // default: "60"
+  outputDir?: DirOutput; // default: "queries"
+  protocol?: string;    // default: "all"
+  minExecutions?: string;    // default: "1"
+  dbSchema?: string;    // default: ""
+  models?: string;
 };
 
 export async function extractQueriesFromAtScale(p: ExtractQueriesFromAtScaleParams, o: LibraryOptions = {}) {
@@ -639,30 +639,30 @@ export async function extractQueriesFromAtScale(p: ExtractQueriesFromAtScalePara
   try {
     await run("extract-queries-from-atscale", Object.assign({
       "connection-name": "default",
-      days:              "60",
-      "output-dir":      "queries",
-      protocol:          "all",
-      "min-executions":  "1",
-      "db-schema":       "",
+      days: "60",
+      "output-dir": "queries",
+      protocol: "all",
+      "min-executions": "1",
+      "db-schema": "",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type ExecuteAtScaleQueryHarnessParams = {
-  connectionFile:    FileInput;
-  connectionName:    string;
-  protocol?:         string;    // default: "xmla"
-  concurrentUsers?:  string;    // default: "1"
-  throttleMs?:       string;    // default: "5"
-  outputDir?:        DirOutput; // default: "run_results"
-  redact?:           string;    // default: "false"
-  durationMinutes?:  string;    // default: "0"
-  annotateQueries?:  string;    // default: "true"
-  queryFile?:        FileInput;
-  ingestFile?:       FileInput;
-  taskFile?:         FileInput;
-  runId?:            string;
+  connectionFile: FileInput;
+  connectionName: string;
+  protocol?: string;    // default: "xmla"
+  concurrentUsers?: string;    // default: "1"
+  throttleMs?: string;    // default: "5"
+  outputDir?: DirOutput; // default: "run_results"
+  redact?: string;    // default: "false"
+  durationMinutes?: string;    // default: "0"
+  annotateQueries?: string;    // default: "true"
+  queryFile?: FileInput;
+  ingestFile?: FileInput;
+  taskFile?: FileInput;
+  runId?: string;
 };
 
 export async function executeAtScaleQueryHarness(p: ExecuteAtScaleQueryHarnessParams, o: LibraryOptions = {}) {
@@ -672,11 +672,11 @@ export async function executeAtScaleQueryHarness(p: ExecuteAtScaleQueryHarnessPa
   });
   try {
     await run("execute-atscale-query-harness", Object.assign({
-      protocol:           "xmla",
+      protocol: "xmla",
       "concurrent-users": "1",
-      "throttle-ms":      "5",
-      "output-dir":       "run_results",
-      redact:             "false",
+      "throttle-ms": "5",
+      "output-dir": "run_results",
+      redact: "false",
       "duration-minutes": "0",
       "annotate-queries": "true",
     }, cc2kebab(params)), o);
@@ -685,17 +685,17 @@ export async function executeAtScaleQueryHarness(p: ExecuteAtScaleQueryHarnessPa
 }
 
 export type ExecuteQueryOnConnectionParams = {
-  connectionFile:   FileInput;
-  connectionName:   string;
-  queryFile:        FileInput;
-  queryName:        string;
-  outputFile:       FileOutput;
-  protocol?:        string;  // default: "xmla"
+  connectionFile: FileInput;
+  connectionName: string;
+  queryFile: FileInput;
+  queryName: string;
+  outputFile: FileOutput;
+  protocol?: string;  // default: "xmla"
 };
 
 export async function executeQueryOnConnection(p: ExecuteQueryOnConnectionParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["connectionFile", "queryFile"],
+    inputFiles: ["connectionFile", "queryFile"],
     outputFiles: ["outputFile"],
   });
   try {
@@ -707,48 +707,48 @@ export async function executeQueryOnConnection(p: ExecuteQueryOnConnectionParams
 }
 
 export type GenerateEnhancedQueryResultsParams = {
-  resultsFile:             FileInput;
-  connectionFile:          FileInput;
-  connectionName:          string;
-  dbSchema?:               string;    // default: ""
-  days?:                   string;    // default: "7"
-  outputFile?:             FileOutput;
-  targetConnectionName?:   string;
+  resultsFile: FileInput;
+  connectionFile: FileInput;
+  connectionName: string;
+  dbSchema?: string;    // default: ""
+  days?: string;    // default: "7"
+  outputFile?: FileOutput;
+  targetConnectionName?: string;
 };
 
 export async function generateEnhancedQueryResults(p: GenerateEnhancedQueryResultsParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["resultsFile", "connectionFile"],
+    inputFiles: ["resultsFile", "connectionFile"],
     outputFiles: ["outputFile"],
   });
   try {
     await run("generate-enhanced-query-results", Object.assign({
       "db-schema": "",
-      days:        "7",
+      days: "7",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
 
 export type ExecuteRunAnalysisParams = {
-  fileA:                FileInput;
-  fileB:                FileInput;
-  summaryFile:          FileOutput;
-  comparisonFile:       FileOutput;
-  outliersFile:         FileOutput;
-  joinKey?:             string;  // default: "original_text_hash"
+  fileA: FileInput;
+  fileB: FileInput;
+  summaryFile: FileOutput;
+  comparisonFile: FileOutput;
+  outliersFile: FileOutput;
+  joinKey?: string;  // default: "original_text_hash"
   durationVariancePct?: string;  // default: "20"
 };
 
 export async function executeRunAnalysis(p: ExecuteRunAnalysisParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["fileA", "fileB"],
+    inputFiles: ["fileA", "fileB"],
     outputFiles: ["summaryFile", "comparisonFile", "outliersFile"],
   });
   try {
     await run("execute-run-analysis", Object.assign({
-      "join-key":               "original_text_hash",
-      "duration-variance-pct":  "20",
+      "join-key": "original_text_hash",
+      "duration-variance-pct": "20",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -757,25 +757,29 @@ export async function executeRunAnalysis(p: ExecuteRunAnalysisParams, o: Library
 // ── AtScale Config ────────────────────────────────────────────────────────────
 
 export type GenerateAtScaleInstallYamlParams = {
-  hostname:      string;
-  outputFile?:   FileOutput;  // default: "values.yaml"
-  enableMcp?:    boolean;     // default: false
-  minimal?:      boolean;     // default: false
-  certFile?:     FileInput;
-  keyFile?:      FileInput;
-  licenseKey?:   string;
+  hostname: string;
+  outputFile?: FileOutput;  // default: "values.yaml"
+  enableMcp?: boolean;     // default: false
+  minimal?: boolean;     // default: false
+  externalPostgres?: boolean;     // default: false
+  gatekeeperCompliant?: boolean;     // default: false
+  certFile?: FileInput;
+  keyFile?: FileInput;
+  licenseKey?: string;
 };
 
 export async function generateAtScaleInstallYaml(p: GenerateAtScaleInstallYamlParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
-    inputFiles:  ["certFile", "keyFile"],
+    inputFiles: ["certFile", "keyFile"],
     outputFiles: ["outputFile"],
   });
   try {
     await run("generate-atscale-install-yaml", Object.assign({
       "output-file": "values.yaml",
-      "enable-mcp":  false,
-      minimal:       false,
+      "enable-mcp": false,
+      minimal: false,
+      "external-postgres": false,
+      "gatekeeper-compliant": false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -783,8 +787,8 @@ export async function generateAtScaleInstallYaml(p: GenerateAtScaleInstallYamlPa
 
 export type AtScaleListDataSourcesParams = {
   atscaleConnectionName: string;
-  connectionFile?:       FileInput;  // default: "connections.yaml"
-  insecure?:             boolean;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  insecure?: boolean;
 };
 
 export async function atScaleListDataSources(p: AtScaleListDataSourcesParams, o: LibraryOptions = {}) {
@@ -800,15 +804,15 @@ export async function atScaleListDataSources(p: AtScaleListDataSourcesParams, o:
 }
 
 export type AtScaleCreateDataSourceParams = {
-  atscaleConnectionName:  string;
-  newConnectionName:      string;
-  aggregateSchema:        string;
-  connectionFile?:        FileInput;  // default: "connections.yaml"
-  accessUsers?:           string;     // default: ""
-  name?:                  string;
-  connectionId?:          string;
-  aggregateProjectId?:    string;
-  insecure?:              boolean;
+  atscaleConnectionName: string;
+  newConnectionName: string;
+  aggregateSchema: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  accessUsers?: string;     // default: ""
+  name?: string;
+  connectionId?: string;
+  aggregateProjectId?: string;
+  insecure?: boolean;
 };
 
 export async function atScaleCreateDataSource(p: AtScaleCreateDataSourceParams, o: LibraryOptions = {}) {
@@ -818,7 +822,7 @@ export async function atScaleCreateDataSource(p: AtScaleCreateDataSourceParams, 
   try {
     await run("atscale-create-data-source", Object.assign({
       "connection-file": "connections.yaml",
-      "access-users":    "",
+      "access-users": "",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -826,8 +830,8 @@ export async function atScaleCreateDataSource(p: AtScaleCreateDataSourceParams, 
 
 export type AtScaleListReposParams = {
   atscaleConnectionName: string;
-  connectionFile?:       FileInput;  // default: "connections.yaml"
-  insecure?:             boolean;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  insecure?: boolean;
 };
 
 export async function atScaleListRepos(p: AtScaleListReposParams, o: LibraryOptions = {}) {
@@ -843,14 +847,14 @@ export async function atScaleListRepos(p: AtScaleListReposParams, o: LibraryOpti
 }
 
 export type AtScaleCreateRepoParams = {
-  atscaleConnectionName:    string;
-  name:                     string;
-  url:                      string;
-  connectionFile?:          FileInput;  // default: "connections.yaml"
-  type?:                    string;     // default: "catalog"
-  visibleBranchesPattern?:  string;
-  defaultBranch?:           string;
-  insecure?:                boolean;
+  atscaleConnectionName: string;
+  name: string;
+  url: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  type?: string;     // default: "catalog"
+  visibleBranchesPattern?: string;
+  defaultBranch?: string;
+  insecure?: boolean;
 };
 
 export async function atScaleCreateRepo(p: AtScaleCreateRepoParams, o: LibraryOptions = {}) {
@@ -860,7 +864,7 @@ export async function atScaleCreateRepo(p: AtScaleCreateRepoParams, o: LibraryOp
   try {
     await run("atscale-create-repo", Object.assign({
       "connection-file": "connections.yaml",
-      type:              "catalog",
+      type: "catalog",
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -868,8 +872,8 @@ export async function atScaleCreateRepo(p: AtScaleCreateRepoParams, o: LibraryOp
 
 export type AtScaleListDeploymentsParams = {
   atscaleConnectionName: string;
-  connectionFile?:       FileInput;  // default: "connections.yaml"
-  insecure?:             boolean;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  insecure?: boolean;
 };
 
 export async function atScaleListDeployments(p: AtScaleListDeploymentsParams, o: LibraryOptions = {}) {
@@ -886,19 +890,19 @@ export async function atScaleListDeployments(p: AtScaleListDeploymentsParams, o:
 
 export type AtScaleDeployCatalogParams = {
   atscaleConnectionName: string;
-  smlDir:                DirInput;
-  connectionFile?:       FileInput;  // default: "connections.yaml"
-  repoId?:               string;
-  repoName?:             string;
-  projectName?:          string;
-  tableauServers?:       string;
-  insecure?:             boolean;
+  smlDir: DirInput;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  repoId?: string;
+  repoName?: string;
+  projectName?: string;
+  tableauServers?: string;
+  insecure?: boolean;
 };
 
 export async function atScaleDeployCatalog(p: AtScaleDeployCatalogParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
     inputFiles: ["connectionFile"],
-    inputDirs:  ["smlDir"],
+    inputDirs: ["smlDir"],
   });
   try {
     await run("atscale-deploy-catalog", Object.assign({
@@ -910,19 +914,19 @@ export async function atScaleDeployCatalog(p: AtScaleDeployCatalogParams, o: Lib
 
 export type AtScaleListModelErrorsParams = {
   atscaleConnectionName: string;
-  connectionFile?:       FileInput;  // default: "connections.yaml"
-  smlDir?:               DirInput;
-  repoName?:             string;
-  repoId?:               string;
-  branch?:               string;
-  modelName?:            string;
-  insecure?:             boolean;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  smlDir?: DirInput;
+  repoName?: string;
+  repoId?: string;
+  branch?: string;
+  modelName?: string;
+  insecure?: boolean;
 };
 
 export async function atScaleListModelErrors(p: AtScaleListModelErrorsParams, o: LibraryOptions = {}) {
   const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
     inputFiles: ["connectionFile"],
-    inputDirs:  ["smlDir"],
+    inputDirs: ["smlDir"],
   });
   try {
     await run("atscale-list-model-errors", Object.assign({

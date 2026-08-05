@@ -177,3 +177,63 @@ When in doubt about which group an operation belongs to, match what is already i
 ## Connections file
 
 Use `example/connections.yaml` in the project root when a connections file is needed for testing or development. Do not use paths outside the project directory.
+
+## Branded document styling — standalone Markdown deliverables
+
+When generating a **standalone Markdown document** meant to be read or converted to PDF (onboarding guides, engagement deliverables, runbooks, design docs — i.e. not the repo's auto-generated `docs/*.md` reference files), apply the AtScale brand style below instead of plain default Markdown. These rules match the house PDF template.
+
+### Rules
+
+1. **Embed a stylesheet.** Put an inline `<style>` block at the very top of the `.md` file (before the H1). Do not rely on external CSS files. Use the block in *Embedded stylesheet* below verbatim, adjusting only content-specific values if the user asks.
+2. **Brand colors only** — never introduce other accent colors:
+   | Token | Hex | Use |
+   |-------|-----|-----|
+   | Brand teal | `#00AB9F` | H2 section headings only |
+   | Charcoal | `#434343` | H1 title and body text |
+   | Black | `#000000` | H3 subheadings and table-header text |
+   | Rule gray | `#CCCCCC` | table row rules and bullets |
+3. **Font is Signika** (the AtScale brand typeface) for all headings and body, with a sans-serif fallback stack. Code/monospace spans use a monospace stack.
+4. **No horizontal rules.** Never emit `---`/`***` thematic breaks or `<hr>`. Separate sections with headings and whitespace only.
+5. **Emoji only when functional.** Remove decorative/topical emoji (☸️ ☁️ ❄️ and section-topic icons). Keep an emoji **only** when it is a defined legend/key marker used consistently — e.g. 🔒 = "access/permission required", 🛠️ = "hands-on practice". Define such markers once near the top of the document.
+6. **Tables use horizontal rules only** — no vertical borders and no outer box. Bold header row with a heavier bottom rule; thin `#CCCCCC` rules between rows. (The embedded stylesheet already enforces this.)
+7. **Heading hierarchy maps to the brand roles above:** `#` (H1) = charcoal document title; `##` (H2) = teal section headings; `###` (H3) = black subheadings. Do not skip levels to get a color.
+
+### Embedded stylesheet
+
+Place this at the top of the generated `.md`:
+
+```html
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Signika:wght@300;400;600;700&display=swap');
+
+body, .markdown-body {
+  font-family: "Signika", "Segoe UI", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  color: #434343;
+  background-color: #FFFFFF;
+  line-height: 1.5;
+  max-width: 800px;
+  margin: 0 auto;
+}
+h1 { font-family: "Signika", sans-serif; font-weight: 700; color: #434343; font-size: 2em; }
+h2 { font-family: "Signika", sans-serif; font-weight: 600; color: #00AB9F; margin-top: 1.6em; }
+h3 { font-family: "Signika", sans-serif; font-weight: 700; color: #000000; }
+h4, h5, h6 { font-family: "Signika", sans-serif; color: #434343; }
+strong, b { color: #000000; }
+a { color: #00AB9F; }
+code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; background-color: #FFFFFF; color: #000000; }
+ul { list-style-type: disc; }
+ul ul { list-style-type: circle; }
+li { margin: 0.25em 0; }
+hr { display: none; }
+blockquote { background-color: #FFFFFF; color: #434343; border-left: 3px solid #00AB9F; margin: 1em 0; padding: 0.25em 1em; }
+
+table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+th, td { text-align: left; padding: 0.5em 0.75em; border: none; }
+thead th { color: #000000; font-weight: 700; border-bottom: 2px solid #434343; }
+tbody tr { border-bottom: 1px solid #CCCCCC; }
+tbody tr:last-child { border-bottom: 1px solid #434343; }
+</style>
+```
+
+When converting these documents to PDF, keep the same fonts and colors so the Markdown and PDF stay visually identical.
