@@ -1,5 +1,0 @@
-{
-  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/semanticModel/modelReference/2.0.0/schema.json",
-  "connectionString": "Data Source=https://demo2.poc.atscale-se-demo.com/engine/xmla/engine/xmla;Initial Catalog=\"internet_sales_Databricks\";Cube=\"internet_sales\"",
-  "connectionType": "atScaleDatabaseLive"
-}
