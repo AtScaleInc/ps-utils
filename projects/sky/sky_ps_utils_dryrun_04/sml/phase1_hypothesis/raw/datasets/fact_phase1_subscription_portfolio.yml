@@ -1,0 +1,78 @@
+unique_name: fact_phase1_subscription_portfolio.dataset
+object_type: dataset
+label: fact_phase1_subscription_portfolio
+connection_id: sky_ps_utils_dryrun_04_postgres
+table: fact_phase1_subscription_portfolio
+columns:
+  - name: snapshot_id
+    data_type: string
+  - name: date_key
+    data_type: int
+  - name: portfolio_key
+    data_type: int
+  - name: sod_trading_base_flag
+    data_type: string
+  - name: eod_trading_base_flag
+    data_type: string
+  - name: sod_holdings_type
+    data_type: string
+  - name: eod_holdings_type
+    data_type: string
+  - name: sod_product_holdings
+    data_type: string
+  - name: eod_product_holdings
+    data_type: string
+  - name: sod_primary_viewing_type
+    data_type: string
+  - name: eod_primary_viewing_type
+    data_type: string
+  - name: sod_dtv_base
+    data_type: int
+  - name: eod_dtv_base
+    data_type: int
+  - name: sod_glass_base
+    data_type: int
+  - name: eod_glass_base
+    data_type: int
+  - name: sod_broadband_base
+    data_type: int
+  - name: eod_broadband_base
+    data_type: int
+  - name: sod_mobile_base
+    data_type: int
+  - name: eod_mobile_base
+    data_type: int
+  - name: sod_sports_base
+    data_type: int
+  - name: eod_sports_base
+    data_type: int
+  - name: sod_cinema_base
+    data_type: int
+  - name: eod_cinema_base
+    data_type: int
+  - name: sod_smart_home_base
+    data_type: int
+  - name: eod_smart_home_base
+    data_type: int
+  - name: portfolio_count
+    data_type: int
+  - name: sod_active_portfolio_count
+    data_type: int
+  - name: eod_active_portfolio_count
+    data_type: int
+  - name: activated_portfolio_count
+    data_type: int
+  - name: churned_portfolio_count
+    data_type: int
+  - name: product_additions
+    data_type: int
+  - name: product_removals
+    data_type: int
+  - name: net_product_movement
+    data_type: int
+  - name: sod_product_count
+    data_type: int
+  - name: eod_product_count
+    data_type: int
+  - name: customer_continuous_tenure_months
+    data_type: decimal

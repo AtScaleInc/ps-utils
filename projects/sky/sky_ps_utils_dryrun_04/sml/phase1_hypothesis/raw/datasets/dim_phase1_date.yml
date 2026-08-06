@@ -1,0 +1,26 @@
+unique_name: dim_phase1_date.dataset
+object_type: dataset
+label: dim_phase1_date
+connection_id: sky_ps_utils_dryrun_04_postgres
+table: dim_phase1_date
+columns:
+  - name: date_key
+    data_type: int
+  - name: calendar_date
+    data_type: date
+  - name: calendar_year
+    data_type: int
+  - name: calendar_quarter
+    data_type: string
+  - name: calendar_month
+    data_type: int
+  - name: month_name
+    data_type: string
+  - name: week_of_year
+    data_type: int
+  - name: day_of_month
+    data_type: int
+  - name: day_name
+    data_type: string
+  - name: is_weekend
+    data_type: boolean

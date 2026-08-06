@@ -1,0 +1,524 @@
+unique_name: Dim Subscription Product Price
+object_type: dimension
+label: dim_subscription_product_price
+type: standard
+hierarchies:
+  - unique_name: date_hierarchy
+    label: date_hierarchy
+    levels:
+      - unique_name: created_dt
+      - unique_name: last_modified_dt
+      - unique_name: free_trial_end_dt
+        visualize_in_bi_tool: false
+        secondary_attributes:
+          - unique_name: id
+            label: id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - id
+            name_column: id
+          - unique_name: catalogue_product_price_id
+            label: catalogue_product_price_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_price_id
+            name_column: catalogue_product_price_id
+          - unique_name: subscription_id
+            label: subscription_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - subscription_id
+            name_column: subscription_id
+          - unique_name: dw_created_dt
+            label: dw_created_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - dw_created_dt
+            name_column: dw_created_dt
+          - unique_name: dw_last_modified_dt
+            label: dw_last_modified_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - dw_last_modified_dt
+            name_column: dw_last_modified_dt
+          - unique_name: effective_from_dt
+            label: effective_from_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - effective_from_dt
+            name_column: effective_from_dt
+          - unique_name: effective_to_dt
+            label: effective_to_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - effective_to_dt
+            name_column: effective_to_dt
+          - unique_name: created_dt
+            label: created_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - created_dt
+            name_column: created_dt
+          - unique_name: created_by_id
+            label: created_by_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - created_by_id
+            name_column: created_by_id
+          - unique_name: last_modified_dt
+            label: last_modified_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - last_modified_dt
+            name_column: last_modified_dt
+          - unique_name: last_modified_by_id
+            label: last_modified_by_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - last_modified_by_id
+            name_column: last_modified_by_id
+          - unique_name: entitlement_id
+            label: entitlement_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - entitlement_id
+            name_column: entitlement_id
+          - unique_name: catalogue_product_id
+            label: catalogue_product_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_id
+            name_column: catalogue_product_id
+          - unique_name: catalogue_product_name
+            label: catalogue_product_name
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_name
+            name_column: catalogue_product_name
+          - unique_name: catalogue_product_bill_name
+            label: catalogue_product_bill_name
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_bill_name
+            name_column: catalogue_product_bill_name
+          - unique_name: catalogue_product_description
+            label: catalogue_product_description
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_description
+            name_column: catalogue_product_description
+          - unique_name: catalogue_product_type
+            label: catalogue_product_type
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_type
+            name_column: catalogue_product_type
+          - unique_name: catalogue_product_transaction_code
+            label: catalogue_product_transaction_code
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_transaction_code
+            name_column: catalogue_product_transaction_code
+          - unique_name: currency_code
+            label: currency_code
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - currency_code
+            name_column: currency_code
+          - unique_name: catalogue_product_price
+            label: catalogue_product_price
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_price
+            name_column: catalogue_product_price
+          - unique_name: current_billing_plan
+            label: current_billing_plan
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - current_billing_plan
+            name_column: current_billing_plan
+          - unique_name: free_trial_flag
+            label: free_trial_flag
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - free_trial_flag
+            name_column: free_trial_flag
+          - unique_name: bundled_flag
+            label: bundled_flag
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - bundled_flag
+            name_column: bundled_flag
+          - unique_name: free_trial_end_dt_sa
+            label: free_trial_end_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - free_trial_end_dt
+            name_column: free_trial_end_dt
+          - unique_name: rate_id
+            label: rate_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - rate_id
+            name_column: rate_id
+          - unique_name: campaign_name
+            label: campaign_name
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - campaign_name
+            name_column: campaign_name
+  - unique_name: dim_subscription_product_price_hierarchy
+    label: dim_subscription_product_price Hierarchy
+    levels:
+      - unique_name: id
+        visualize_in_bi_tool: false
+        secondary_attributes:
+          - unique_name: id_sa
+            label: id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - id
+            name_column: id
+          - unique_name: catalogue_product_price_id
+            label: catalogue_product_price_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_price_id
+            name_column: catalogue_product_price_id
+          - unique_name: subscription_id
+            label: subscription_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - subscription_id
+            name_column: subscription_id
+          - unique_name: dw_created_dt
+            label: dw_created_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - dw_created_dt
+            name_column: dw_created_dt
+          - unique_name: dw_last_modified_dt
+            label: dw_last_modified_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - dw_last_modified_dt
+            name_column: dw_last_modified_dt
+          - unique_name: effective_from_dt
+            label: effective_from_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - effective_from_dt
+            name_column: effective_from_dt
+          - unique_name: effective_to_dt
+            label: effective_to_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - effective_to_dt
+            name_column: effective_to_dt
+          - unique_name: created_dt
+            label: created_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - created_dt
+            name_column: created_dt
+          - unique_name: created_by_id
+            label: created_by_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - created_by_id
+            name_column: created_by_id
+          - unique_name: last_modified_dt
+            label: last_modified_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - last_modified_dt
+            name_column: last_modified_dt
+          - unique_name: last_modified_by_id
+            label: last_modified_by_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - last_modified_by_id
+            name_column: last_modified_by_id
+          - unique_name: entitlement_id
+            label: entitlement_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - entitlement_id
+            name_column: entitlement_id
+          - unique_name: catalogue_product_id
+            label: catalogue_product_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_id
+            name_column: catalogue_product_id
+          - unique_name: catalogue_product_name
+            label: catalogue_product_name
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_name
+            name_column: catalogue_product_name
+          - unique_name: catalogue_product_bill_name
+            label: catalogue_product_bill_name
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_bill_name
+            name_column: catalogue_product_bill_name
+          - unique_name: catalogue_product_description
+            label: catalogue_product_description
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_description
+            name_column: catalogue_product_description
+          - unique_name: catalogue_product_type
+            label: catalogue_product_type
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_type
+            name_column: catalogue_product_type
+          - unique_name: catalogue_product_transaction_code
+            label: catalogue_product_transaction_code
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_transaction_code
+            name_column: catalogue_product_transaction_code
+          - unique_name: currency_code
+            label: currency_code
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - currency_code
+            name_column: currency_code
+          - unique_name: catalogue_product_price
+            label: catalogue_product_price
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - catalogue_product_price
+            name_column: catalogue_product_price
+          - unique_name: current_billing_plan
+            label: current_billing_plan
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - current_billing_plan
+            name_column: current_billing_plan
+          - unique_name: free_trial_flag
+            label: free_trial_flag
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - free_trial_flag
+            name_column: free_trial_flag
+          - unique_name: bundled_flag
+            label: bundled_flag
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - bundled_flag
+            name_column: bundled_flag
+          - unique_name: free_trial_end_dt
+            label: free_trial_end_dt
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - free_trial_end_dt
+            name_column: free_trial_end_dt
+          - unique_name: rate_id
+            label: rate_id
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - rate_id
+            name_column: rate_id
+          - unique_name: campaign_name
+            label: campaign_name
+            contains_unique_names: false
+            dataset: dim_subscription_product_price.dataset
+            is_unique_key: false
+            key_columns:
+              - campaign_name
+            name_column: campaign_name
+level_attributes:
+  - unique_name: created_dt
+    label: created_dt
+    dataset: dim_subscription_product_price.dataset
+    name_column: created_dt
+    key_columns:
+      - created_dt
+  - unique_name: last_modified_dt
+    label: last_modified_dt
+    dataset: dim_subscription_product_price.dataset
+    name_column: last_modified_dt
+    key_columns:
+      - last_modified_dt
+  - unique_name: free_trial_end_dt
+    label: free_trial_end_dt
+    dataset: dim_subscription_product_price.dataset
+    name_column: free_trial_end_dt
+    key_columns:
+      - free_trial_end_dt
+  - unique_name: catalogue_product_price_id
+    label: catalogue_product_price_id
+    dataset: dim_subscription_product_price.dataset
+    name_column: catalogue_product_price_id
+    key_columns:
+      - catalogue_product_price_id
+  - unique_name: created_by_id
+    label: created_by_id
+    dataset: dim_subscription_product_price.dataset
+    name_column: created_by_id
+    key_columns:
+      - created_by_id
+  - unique_name: last_modified_by_id
+    label: last_modified_by_id
+    dataset: dim_subscription_product_price.dataset
+    name_column: last_modified_by_id
+    key_columns:
+      - last_modified_by_id
+  - unique_name: catalogue_product_bill_name
+    label: catalogue_product_bill_name
+    dataset: dim_subscription_product_price.dataset
+    name_column: catalogue_product_bill_name
+    key_columns:
+      - catalogue_product_bill_name
+  - unique_name: currency_code
+    label: currency_code
+    dataset: dim_subscription_product_price.dataset
+    name_column: currency_code
+    key_columns:
+      - currency_code
+  - unique_name: current_billing_plan
+    label: current_billing_plan
+    dataset: dim_subscription_product_price.dataset
+    name_column: current_billing_plan
+    key_columns:
+      - current_billing_plan
+  - unique_name: rate_id
+    label: rate_id
+    dataset: dim_subscription_product_price.dataset
+    name_column: rate_id
+    key_columns:
+      - rate_id
+  - unique_name: campaign_name
+    label: campaign_name
+    dataset: dim_subscription_product_price.dataset
+    name_column: campaign_name
+    key_columns:
+      - campaign_name
+  - unique_name: id
+    label: id
+    dataset: dim_subscription_product_price.dataset
+    name_column: id
+    key_columns:
+      - id
+      - subscription_id
+      - dw_created_dt
+      - dw_last_modified_dt
+      - effective_from_dt
+      - effective_to_dt
+      - entitlement_id
+      - catalogue_product_id
+      - catalogue_product_name
+      - catalogue_product_description
+      - catalogue_product_type
+      - catalogue_product_transaction_code
+      - catalogue_product_price
+      - free_trial_flag
+      - bundled_flag
+    is_unique_key: true
+    contains_unique_names: false

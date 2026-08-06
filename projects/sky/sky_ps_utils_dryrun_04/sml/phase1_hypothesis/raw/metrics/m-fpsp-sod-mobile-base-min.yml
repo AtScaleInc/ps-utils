@@ -1,0 +1,9 @@
+unique_name: m_fpsp_sod_mobile_base_min
+object_type: metric
+label: sod_mobile_base_min
+calculation_method: minimum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: sod_mobile_base
+description: Minimum of Sod Mobile Base from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

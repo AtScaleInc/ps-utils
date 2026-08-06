@@ -1,0 +1,9 @@
+unique_name: m_fpsp_net_product_movement_max
+object_type: metric
+label: net_product_movement_max
+calculation_method: maximum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: net_product_movement
+description: Maximum of Net Product Movement from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

@@ -1,0 +1,9 @@
+unique_name: m_fpsp_eod_dtv_base_sum
+object_type: metric
+label: eod_dtv_base_sum
+calculation_method: sum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: eod_dtv_base
+description: Sum of Eod Dtv Base from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

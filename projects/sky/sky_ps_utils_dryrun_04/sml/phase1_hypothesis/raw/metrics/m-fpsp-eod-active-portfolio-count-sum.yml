@@ -1,0 +1,9 @@
+unique_name: m_fpsp_eod_active_portfolio_count_sum
+object_type: metric
+label: eod_active_portfolio_count_sum
+calculation_method: sum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: eod_active_portfolio_count
+description: Sum of Eod Active Portfolio Count from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

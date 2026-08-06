@@ -1,0 +1,9 @@
+unique_name: m_fpsp_product_removals_min
+object_type: metric
+label: product_removals_min
+calculation_method: minimum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: product_removals
+description: Minimum of Product Removals from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

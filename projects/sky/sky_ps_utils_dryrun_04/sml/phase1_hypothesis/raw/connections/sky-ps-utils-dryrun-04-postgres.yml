@@ -1,0 +1,6 @@
+unique_name: sky_ps_utils_dryrun_04_postgres
+object_type: connection
+label: sky_ps_utils_dryrun_04_postgres
+as_connection: sky_ps_utils_dryrun_04_postgres
+database: database_name
+schema: sky_ps_utils_dryrun_04_phase1_hypothesis

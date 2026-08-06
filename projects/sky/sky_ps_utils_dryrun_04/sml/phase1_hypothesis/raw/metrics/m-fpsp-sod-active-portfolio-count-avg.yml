@@ -1,0 +1,9 @@
+unique_name: m_fpsp_sod_active_portfolio_count_avg
+object_type: metric
+label: sod_active_portfolio_count_avg
+calculation_method: average
+dataset: fact_phase1_subscription_portfolio.dataset
+column: sod_active_portfolio_count
+description: Average of Sod Active Portfolio Count from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

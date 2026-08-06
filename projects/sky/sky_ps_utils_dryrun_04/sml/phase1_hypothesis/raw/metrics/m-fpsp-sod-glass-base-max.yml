@@ -1,0 +1,9 @@
+unique_name: m_fpsp_sod_glass_base_max
+object_type: metric
+label: sod_glass_base_max
+calculation_method: maximum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: sod_glass_base
+description: Maximum of Sod Glass Base from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

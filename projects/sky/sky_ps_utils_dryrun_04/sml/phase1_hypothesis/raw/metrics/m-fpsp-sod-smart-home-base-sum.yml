@@ -1,0 +1,9 @@
+unique_name: m_fpsp_sod_smart_home_base_sum
+object_type: metric
+label: sod_smart_home_base_sum
+calculation_method: sum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: sod_smart_home_base
+description: Sum of Sod Smart Home Base from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

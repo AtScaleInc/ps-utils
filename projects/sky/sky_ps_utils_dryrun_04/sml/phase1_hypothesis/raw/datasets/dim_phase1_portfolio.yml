@@ -1,0 +1,22 @@
+unique_name: dim_phase1_portfolio.dataset
+object_type: dataset
+label: dim_phase1_portfolio
+connection_id: sky_ps_utils_dryrun_04_postgres
+table: dim_phase1_portfolio
+columns:
+  - name: portfolio_key
+    data_type: int
+  - name: portfolio_id
+    data_type: string
+  - name: cust_type
+    data_type: string
+  - name: cust_sub_type
+    data_type: string
+  - name: currency_code
+    data_type: string
+  - name: test_account_flag
+    data_type: boolean
+  - name: tenure_start_date
+    data_type: date
+  - name: initial_tenure_months
+    data_type: int

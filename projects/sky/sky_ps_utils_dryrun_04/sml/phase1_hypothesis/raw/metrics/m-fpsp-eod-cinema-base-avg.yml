@@ -1,0 +1,9 @@
+unique_name: m_fpsp_eod_cinema_base_avg
+object_type: metric
+label: eod_cinema_base_avg
+calculation_method: average
+dataset: fact_phase1_subscription_portfolio.dataset
+column: eod_cinema_base
+description: Average of Eod Cinema Base from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

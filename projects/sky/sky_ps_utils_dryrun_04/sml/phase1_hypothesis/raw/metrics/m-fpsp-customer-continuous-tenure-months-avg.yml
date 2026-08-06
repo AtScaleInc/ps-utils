@@ -1,0 +1,9 @@
+unique_name: m_fpsp_customer_continuous_tenure_months_avg
+object_type: metric
+label: customer_continuous_tenure_months_avg
+calculation_method: average
+dataset: fact_phase1_subscription_portfolio.dataset
+column: customer_continuous_tenure_months
+description: Average of Customer Continuous Tenure Months from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

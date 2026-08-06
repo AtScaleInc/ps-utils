@@ -1,0 +1,9 @@
+unique_name: m_fpsp_product_removals_sum
+object_type: metric
+label: product_removals_sum
+calculation_method: sum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: product_removals
+description: Sum of Product Removals from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

@@ -1,0 +1,125 @@
+unique_name: Dim Phase1 Portfolio
+object_type: dimension
+label: dim_phase1_portfolio
+type: standard
+hierarchies:
+  - unique_name: phase1_portfolio_hierarchy
+    label: phase1_portfolio_hierarchy
+    levels:
+      - unique_name: portfolio_key
+        visualize_in_bi_tool: false
+        secondary_attributes:
+          - unique_name: portfolio_key_sa
+            label: portfolio_key
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - portfolio_key
+            name_column: portfolio_key
+          - unique_name: portfolio_id
+            label: portfolio_id
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - portfolio_id
+            name_column: portfolio_id
+          - unique_name: cust_type
+            label: cust_type
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - cust_type
+            name_column: cust_type
+          - unique_name: cust_sub_type
+            label: cust_sub_type
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - cust_sub_type
+            name_column: cust_sub_type
+          - unique_name: currency_code
+            label: currency_code
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - currency_code
+            name_column: currency_code
+          - unique_name: test_account_flag
+            label: test_account_flag
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - test_account_flag
+            name_column: test_account_flag
+          - unique_name: tenure_start_date
+            label: tenure_start_date
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - tenure_start_date
+            name_column: tenure_start_date
+          - unique_name: initial_tenure_months
+            label: initial_tenure_months
+            contains_unique_names: false
+            dataset: dim_phase1_portfolio.dataset
+            is_unique_key: false
+            key_columns:
+              - initial_tenure_months
+            name_column: initial_tenure_months
+level_attributes:
+  - unique_name: portfolio_key
+    label: portfolio_key
+    dataset: dim_phase1_portfolio.dataset
+    name_column: portfolio_key
+    key_columns:
+      - portfolio_key
+    is_unique_key: true
+  - unique_name: portfolio_id
+    label: portfolio_id
+    dataset: dim_phase1_portfolio.dataset
+    name_column: portfolio_id
+    key_columns:
+      - portfolio_id
+  - unique_name: cust_type
+    label: cust_type
+    dataset: dim_phase1_portfolio.dataset
+    name_column: cust_type
+    key_columns:
+      - cust_type
+  - unique_name: cust_sub_type
+    label: cust_sub_type
+    dataset: dim_phase1_portfolio.dataset
+    name_column: cust_sub_type
+    key_columns:
+      - cust_sub_type
+  - unique_name: currency_code
+    label: currency_code
+    dataset: dim_phase1_portfolio.dataset
+    name_column: currency_code
+    key_columns:
+      - currency_code
+  - unique_name: test_account_flag
+    label: test_account_flag
+    dataset: dim_phase1_portfolio.dataset
+    name_column: test_account_flag
+    key_columns:
+      - test_account_flag
+  - unique_name: tenure_start_date
+    label: tenure_start_date
+    dataset: dim_phase1_portfolio.dataset
+    name_column: tenure_start_date
+    key_columns:
+      - tenure_start_date
+  - unique_name: initial_tenure_months
+    label: initial_tenure_months
+    dataset: dim_phase1_portfolio.dataset
+    name_column: initial_tenure_months
+    key_columns:
+      - initial_tenure_months

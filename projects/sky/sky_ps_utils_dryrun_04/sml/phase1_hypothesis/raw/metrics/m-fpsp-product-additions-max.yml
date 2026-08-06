@@ -1,0 +1,9 @@
+unique_name: m_fpsp_product_additions_max
+object_type: metric
+label: product_additions_max
+calculation_method: maximum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: product_additions
+description: Maximum of Product Additions from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics

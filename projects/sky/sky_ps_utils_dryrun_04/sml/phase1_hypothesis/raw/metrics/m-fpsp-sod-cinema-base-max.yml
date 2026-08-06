@@ -1,0 +1,9 @@
+unique_name: m_fpsp_sod_cinema_base_max
+object_type: metric
+label: sod_cinema_base_max
+calculation_method: maximum
+dataset: fact_phase1_subscription_portfolio.dataset
+column: sod_cinema_base
+description: Maximum of Sod Cinema Base from Fact Phase1 Subscription Portfolio
+format: "#,##0"
+folder: fact_phase1_subscription_portfolio_metrics
