@@ -1,9 +1,0 @@
-unique_name: m_fpsp_eod_smart_home_base_min
-object_type: metric
-label: eod_smart_home_base_min
-calculation_method: minimum
-dataset: fact_phase1_subscription_portfolio.dataset
-column: eod_smart_home_base
-description: Minimum of Eod Smart Home Base from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics

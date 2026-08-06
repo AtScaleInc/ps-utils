@@ -1,9 +1,0 @@
-unique_name: m_fpsp_product_additions_sum
-object_type: metric
-label: product_additions_sum
-calculation_method: sum
-dataset: fact_phase1_subscription_portfolio.dataset
-column: product_additions
-description: Sum of Product Additions from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics

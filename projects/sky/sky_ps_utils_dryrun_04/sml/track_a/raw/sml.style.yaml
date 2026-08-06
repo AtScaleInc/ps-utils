@@ -1,9 +1,0 @@
-pii-severity: MEDIUM
-fact-tables: []
-catalog-name: SkyDryRun04TrackA
-camel-case-files: false
-camel-case-measures: false
-label-style: none
-sample-size: 0
-min-hierarchies-per-dim: 1
-max-hierarchies-per-dim: 4

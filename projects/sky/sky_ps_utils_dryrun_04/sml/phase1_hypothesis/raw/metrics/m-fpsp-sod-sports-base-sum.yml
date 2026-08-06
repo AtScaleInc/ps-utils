@@ -1,9 +1,0 @@
-unique_name: m_fpsp_sod_sports_base_sum
-object_type: metric
-label: sod_sports_base_sum
-calculation_method: sum
-dataset: fact_phase1_subscription_portfolio.dataset
-column: sod_sports_base
-description: Sum of Sod Sports Base from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics

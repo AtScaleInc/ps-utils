@@ -1,9 +1,0 @@
-unique_name: m_fpsp_sod_dtv_base_min
-object_type: metric
-label: sod_dtv_base_min
-calculation_method: minimum
-dataset: fact_phase1_subscription_portfolio.dataset
-column: sod_dtv_base
-description: Minimum of Sod Dtv Base from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics

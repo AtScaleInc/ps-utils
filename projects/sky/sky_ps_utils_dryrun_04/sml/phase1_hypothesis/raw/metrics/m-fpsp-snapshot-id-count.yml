@@ -1,9 +1,0 @@
-unique_name: m_fpsp_snapshot_id_count
-object_type: metric
-label: snapshot_id_count
-calculation_method: count non-null
-dataset: fact_phase1_subscription_portfolio.dataset
-column: snapshot_id
-description: Count of Snapshot Id from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics

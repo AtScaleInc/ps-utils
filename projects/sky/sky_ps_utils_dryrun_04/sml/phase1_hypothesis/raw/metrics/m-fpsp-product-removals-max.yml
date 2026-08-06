@@ -1,9 +1,0 @@
-unique_name: m_fpsp_product_removals_max
-object_type: metric
-label: product_removals_max
-calculation_method: maximum
-dataset: fact_phase1_subscription_portfolio.dataset
-column: product_removals
-description: Maximum of Product Removals from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics

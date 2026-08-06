@@ -1,9 +1,0 @@
-unique_name: m_fpsp_churned_portfolio_count_min
-object_type: metric
-label: churned_portfolio_count_min
-calculation_method: minimum
-dataset: fact_phase1_subscription_portfolio.dataset
-column: churned_portfolio_count
-description: Minimum of Churned Portfolio Count from Fact Phase1 Subscription Portfolio
-format: "#,##0"
-folder: fact_phase1_subscription_portfolio_metrics
