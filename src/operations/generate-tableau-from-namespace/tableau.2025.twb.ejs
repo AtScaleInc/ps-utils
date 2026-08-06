@@ -59,7 +59,7 @@
         <named-connections>
           <named-connection caption='<%= connection.sql.server %>' name='<%= ds.connectionName %>'>
             <connection authentication='username-password' class='postgres'
-                dbname='<%= connection.sql.schema %>' one-time-sql=''
+                dbname='<%= connection.sql.database %>' one-time-sql=''
                 port='<%= connection.sql.port %>' server='<%= connection.sql.server %>'
                 username='<%= connection.user.username %>' />
           </named-connection>
