@@ -138,11 +138,11 @@ schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin
           "DATE_DOUBLE": "date",
           "BSTR": "string",
           "BOOL": "boolean",
-          "DECIMAL": "decimal",
+          "DECIMAL": "real",
           "GUID": "string",
           "BYTES": "binary",
           "WSTR": "string",
-          "NUMERIC": "numeric",
+          "NUMERIC": "real",
           "TIME": "time",
           "DATETIME": "datetime"
         } as Record<string, string>,

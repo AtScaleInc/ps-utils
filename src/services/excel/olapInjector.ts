@@ -367,6 +367,10 @@ function updateWorkbookXml(src: string, cacheRids: Map<number, string>): string 
   if (!src || cacheRids.size === 0) return src;
   if (src.includes("<pivotCaches")) return src;
 
+  // ExcelJS hardcodes lastEdited="5" which causes Excel to strip charts on open
+  src = src.replace(/lastEdited="5"/g, 'lastEdited="8"')
+           .replace(/lowestEdited="5"/g, 'lowestEdited="8"');
+
   const rNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   const entries = [...cacheRids.entries()]
     .sort(([a], [b]) => a - b)
