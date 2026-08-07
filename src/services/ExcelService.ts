@@ -295,12 +295,14 @@ export class ExcelService extends ServiceProvider {
               for (let r = 2; r <= 11; r++) {
                 dashWs.getCell(r, dataCol).value = {
                   formula: `CUBERANKEDMEMBER("${connectionName}","${setExpr}",${r - 1})`,
+                  date1904: false,
                 };
                 for (let mi = 0; mi < measureUniques.length; mi++) {
                   const rankCellRef = colLetter(dataCol) + r;
                   const mc = dashWs.getCell(r, dataCol + 1 + mi);
                   mc.value = {
                     formula: `CUBEVALUE("${connectionName}","${measureUniques[mi]}",${rankCellRef})`,
+                    date1904: false,
                   };
                   if (numFmt) mc.numFmt = numFmt;
                 }
@@ -310,6 +312,7 @@ export class ExcelService extends ServiceProvider {
               const gc = dashWs.getCell(2, dataCol);
               gc.value = {
                 formula: `CUBEVALUE("${connectionName}","${measureUniques[0]}")`,
+                date1904: false,
               };
               if (numFmt) gc.numFmt = numFmt;
             }
@@ -354,6 +357,7 @@ export class ExcelService extends ServiceProvider {
             if (section.measureUniques.length > 0) {
               valueCell.value = {
                 formula: `CUBEVALUE("${connectionName}","${section.measureUniques[0]}")`,
+                date1904: false,
               };
             }
             if (section.numFmt) valueCell.numFmt = section.numFmt;
