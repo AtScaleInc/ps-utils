@@ -1,17 +1,17 @@
-# @atscale/ps-utils — Node.js Library API
+# @atscale-ps/ps-utils — Node.js Library API
 
 Typed Node.js API that wraps every CLI operation as an `async` function. Install once, call from any TypeScript or JavaScript project.
 
 ## Installation
 
 ```bash
-npm install @atscale/ps-utils
+npm install @atscale-ps/ps-utils
 ```
 
 ## Quick Start
 
 ```typescript
-import { generateSMLFromConnection } from "@atscale/ps-utils";
+import { generateSMLFromConnection } from "@atscale-ps/ps-utils";
 
 await generateSMLFromConnection({
   connectionName: "snow_prod",
@@ -34,7 +34,7 @@ interface LibraryOptions {
 `Logger` and `LoggerOptions` are also exported if you need to construct a logger manually:
 
 ```typescript
-import { buildLogger } from "@atscale/ps-utils";
+import { buildLogger } from "@atscale-ps/ps-utils";
 const logger = buildLogger({ verbose: true, logfile: "run.log" });
 ```
 
@@ -47,7 +47,7 @@ All parameters use **camelCase** keys. Fields marked **Optional** in the table b
 Every file and directory parameter accepts a Node.js stream in place of a path. Four type aliases are exported:
 
 ```typescript
-import type { FileInput, DirInput, FileOutput, DirOutput } from "@atscale/ps-utils";
+import type { FileInput, DirInput, FileOutput, DirOutput } from "@atscale-ps/ps-utils";
 ```
 
 | Type | Definition | Usage |
@@ -61,7 +61,7 @@ import type { FileInput, DirInput, FileOutput, DirOutput } from "@atscale/ps-uti
 
 ```typescript
 import { createWriteStream } from "node:fs";
-import { generateSMLFromConnection } from "@atscale/ps-utils";
+import { generateSMLFromConnection } from "@atscale-ps/ps-utils";
 
 const zip = createWriteStream("sml-output.zip");
 await generateSMLFromConnection({
@@ -141,7 +141,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
 Connects to a live AtScale instance and extracts a model's metrics and dimension hierarchies into a `model.yaml` file.
 
 ```typescript
-import { extractModelFromAtScale } from "@atscale/ps-utils";
+import { extractModelFromAtScale } from "@atscale-ps/ps-utils";
 
 await extractModelFromAtScale({
   model:            "Sales",
@@ -174,7 +174,7 @@ function extractModelFromAtScale(
 Reads a local SML directory and outputs a `model.yaml` in the same format as `extractModelFromAtScale`. Use when no live AtScale connection is available.
 
 ```typescript
-import { extractModelFromSML } from "@atscale/ps-utils";
+import { extractModelFromSML } from "@atscale-ps/ps-utils";
 
 await extractModelFromSML({
   smlDir:          "./sml-output",
@@ -207,7 +207,7 @@ function extractModelFromSML(
 Reads a SQL file and executes each statement against a named database connection.
 
 ```typescript
-import { executeSQLOnConnection } from "@atscale/ps-utils";
+import { executeSQLOnConnection } from "@atscale-ps/ps-utils";
 
 await executeSQLOnConnection({
   sqlFile:        "./schema.sql",
@@ -239,7 +239,7 @@ function executeSQLOnConnection(
 Connects to a live database and writes `CREATE TABLE` DDL statements for each table in the target schema.
 
 ```typescript
-import { extractDDLFromConnection } from "@atscale/ps-utils";
+import { extractDDLFromConnection } from "@atscale-ps/ps-utils";
 
 await extractDDLFromConnection({
   connectionName: "snow_prod",
@@ -272,7 +272,7 @@ function extractDDLFromConnection(
 Connects to a live database, introspects its schema, and writes a complete set of AtScale SML files.
 
 ```typescript
-import { generateSMLFromConnection } from "@atscale/ps-utils";
+import { generateSMLFromConnection } from "@atscale-ps/ps-utils";
 
 await generateSMLFromConnection({
   connectionName: "snow_prod",
@@ -315,7 +315,7 @@ function generateSMLFromConnection(
 Parses a DDL file and generates a complete set of AtScale SML files without a live database connection.
 
 ```typescript
-import { generateSMLFromDDL } from "@atscale/ps-utils";
+import { generateSMLFromDDL } from "@atscale-ps/ps-utils";
 
 await generateSMLFromDDL({
   ddlFile:  "./schema.sql",
@@ -358,7 +358,7 @@ function generateSMLFromDDL(
 Converts an AtScale XML project file to SML files.
 
 ```typescript
-import { generateSMLFromXML } from "@atscale/ps-utils";
+import { generateSMLFromXML } from "@atscale-ps/ps-utils";
 
 await generateSMLFromXML({
   xmlFile:   "./project.xml",
@@ -380,8 +380,8 @@ function generateSMLFromXML(
 | `connectionName` | `string` | No | | SML connection `unique_name` (auto-detected from XML if omitted) |
 | `connectionType` | `string` | No | | Database dialect for the connection file |
 | `catalogName` | `string` | No | | Override the catalog label |
-| `connectionDb` | `string` | No | | Database name written into the connection file |
-| `connectionSchema` | `string` | No | | Schema name written into the connection file |
+| `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 
 ---
 
@@ -392,7 +392,7 @@ function generateSMLFromXML(
 Analyses two or more SML output directories and writes a `RECOMMENDATION.md` plus option YAML files describing how to consolidate shared dimensions, datasets, and models.
 
 ```typescript
-import { generateSharedModelPlan } from "@atscale/ps-utils";
+import { generateSharedModelPlan } from "@atscale-ps/ps-utils";
 
 await generateSharedModelPlan({
   inputDirs: "./project-a/sml,./project-b/sml",
@@ -423,7 +423,7 @@ function generateSharedModelPlan(
 Applies a `generateSharedModelPlan` recommendation YAML to produce shared SML files.
 
 ```typescript
-import { applySharedModelPlanOption } from "@atscale/ps-utils";
+import { applySharedModelPlanOption } from "@atscale-ps/ps-utils";
 
 await applySharedModelPlanOption({
   planFile:  "./shared-plan/option-1.yml",
@@ -454,7 +454,7 @@ function applySharedModelPlanOption(
 Re-applies display labels to an existing SML directory using a style config. Updates `label` fields in datasets, dimensions, and metrics YAML files in-place, and writes `STYLE.md` and `STYLE_CHANGES.md`.
 
 ```typescript
-import { applyStyleToSML } from "@atscale/ps-utils";
+import { applyStyleToSML } from "@atscale-ps/ps-utils";
 
 await applyStyleToSML({
   smlDir: "./sml-output",
@@ -513,7 +513,7 @@ function generateSMLDocs(
 Generates `CREATE TABLE` DDL by reading table metadata from an AtScale data source via the REST API.
 
 ```typescript
-import { generateDDLFromAtScale } from "@atscale/ps-utils";
+import { generateDDLFromAtScale } from "@atscale-ps/ps-utils";
 
 await generateDDLFromAtScale({
   atscaleConnectionName: "ats_prod",
@@ -550,7 +550,7 @@ function generateDDLFromAtScale(
 Runs the analysis-suggestions engine against a `model.yaml` and outputs ranked metric combinations.
 
 ```typescript
-import { generateMetricsFromModel } from "@atscale/ps-utils";
+import { generateMetricsFromModel } from "@atscale-ps/ps-utils";
 
 await generateMetricsFromModel({
   modelFile: "./model.yaml",
@@ -584,7 +584,7 @@ function generateMetricsFromModel(
 Prints schemas, tables, columns, and foreign keys for a database connection. Useful for verifying connection config.
 
 ```typescript
-import { echoConnectionMetadata } from "@atscale/ps-utils";
+import { echoConnectionMetadata } from "@atscale-ps/ps-utils";
 
 await echoConnectionMetadata({
   connectionName: "snow_prod",
@@ -615,7 +615,7 @@ function echoConnectionMetadata(
 Profiles an existing database and writes a statistical fingerprint to `data-shape.yaml`.
 
 ```typescript
-import { extractDataShapeFromConnection } from "@atscale/ps-utils";
+import { extractDataShapeFromConnection } from "@atscale-ps/ps-utils";
 
 await extractDataShapeFromConnection({
   connectionName: "snow_prod",
@@ -651,7 +651,7 @@ function extractDataShapeFromConnection(
 Generates `CREATE TABLE` DDL from a `data-shape.yaml` fingerprint.
 
 ```typescript
-import { generateDDLFromDataShape } from "@atscale/ps-utils";
+import { generateDDLFromDataShape } from "@atscale-ps/ps-utils";
 
 await generateDDLFromDataShape({});  // all params have defaults
 ```
@@ -679,7 +679,7 @@ function generateDDLFromDataShape(
 Generates synthetic CSV data from a `data-shape.yaml` fingerprint.
 
 ```typescript
-import { generateDataFromDataShape } from "@atscale/ps-utils";
+import { generateDataFromDataShape } from "@atscale-ps/ps-utils";
 
 await generateDataFromDataShape({});  // all params have defaults
 ```
@@ -708,7 +708,7 @@ function generateDataFromDataShape(
 Generates synthetic data from a fingerprint and loads it directly into a target database.
 
 ```typescript
-import { generateDataFromDataShapeToConnection } from "@atscale/ps-utils";
+import { generateDataFromDataShapeToConnection } from "@atscale-ps/ps-utils";
 
 await generateDataFromDataShapeToConnection({
   connectionName: "snow_target",
@@ -748,7 +748,7 @@ function generateDataFromDataShapeToConnection(
 Generates a namespace YAML from a `model.yaml` file, enriched with analysis suggestions.
 
 ```typescript
-import { generateNamespaceFromModel } from "@atscale/ps-utils";
+import { generateNamespaceFromModel } from "@atscale-ps/ps-utils";
 
 await generateNamespaceFromModel({
   modelFile:   "./model.yaml",
@@ -781,7 +781,7 @@ function generateNamespaceFromModel(
 Generates a ready-to-open Tableau workbook from a namespace YAML.
 
 ```typescript
-import { generateTableauFromNamespace } from "@atscale/ps-utils";
+import { generateTableauFromNamespace } from "@atscale-ps/ps-utils";
 
 await generateTableauFromNamespace({
   // all params have defaults — omit any you want to keep as default
@@ -815,7 +815,7 @@ function generateTableauFromNamespace(
 Generates an Excel workbook with OLAP pivot tables from a namespace YAML.
 
 ```typescript
-import { generateExcelFromNamespace } from "@atscale/ps-utils";
+import { generateExcelFromNamespace } from "@atscale-ps/ps-utils";
 
 await generateExcelFromNamespace({
   targetFile: "./output/sales.xlsx",
@@ -847,7 +847,7 @@ function generateExcelFromNamespace(
 Generates a Jupyter notebook from a namespace and model YAML.
 
 ```typescript
-import { generateNotebookFromConnection } from "@atscale/ps-utils";
+import { generateNotebookFromConnection } from "@atscale-ps/ps-utils";
 
 await generateNotebookFromConnection({
   targetFile: "./output/analysis.ipynb",
@@ -881,7 +881,7 @@ function generateNotebookFromConnection(
 Reads an SML directory and generates XMLA (MDX) and SQL query JSON files for use with `executeAtScaleQueryHarness`.
 
 ```typescript
-import { generateQueriesFromSML } from "@atscale/ps-utils";
+import { generateQueriesFromSML } from "@atscale-ps/ps-utils";
 
 await generateQueriesFromSML({
   smlDir:         "./sml-output",
@@ -914,7 +914,7 @@ function generateQueriesFromSML(
 Reads a `model.yaml` and generates XMLA (MDX) and SQL query JSON files.
 
 ```typescript
-import { generateQueriesFromModel } from "@atscale/ps-utils";
+import { generateQueriesFromModel } from "@atscale-ps/ps-utils";
 
 await generateQueriesFromModel({
   modelFile:      "./model.yaml",
@@ -947,7 +947,7 @@ function generateQueriesFromModel(
 Paginates through AtScale's query history API and writes a CSV occurrence matrix showing attribute × measure query frequency.
 
 ```typescript
-import { extractQueryStatsFromAtScale } from "@atscale/ps-utils";
+import { extractQueryStatsFromAtScale } from "@atscale-ps/ps-utils";
 
 await extractQueryStatsFromAtScale({
   connectionFile: "connections.yaml",
@@ -986,7 +986,7 @@ function extractQueryStatsFromAtScale(
 Extracts historical queries from AtScale's Postgres backend and writes them as JSON files for use with the query harness.
 
 ```typescript
-import { extractQueriesFromAtScale } from "@atscale/ps-utils";
+import { extractQueriesFromAtScale } from "@atscale-ps/ps-utils";
 
 await extractQueriesFromAtScale({
   connectionFile: "connections.yaml",
@@ -1020,7 +1020,7 @@ function extractQueriesFromAtScale(
 Replays queries against an AtScale instance with configurable concurrency and writes results to CSV.
 
 ```typescript
-import { executeAtScaleQueryHarness } from "@atscale/ps-utils";
+import { executeAtScaleQueryHarness } from "@atscale-ps/ps-utils";
 
 await executeAtScaleQueryHarness({
   connectionFile: "connections.yaml",
@@ -1061,7 +1061,7 @@ function executeAtScaleQueryHarness(
 Executes a single named query from a query JSON file against a connection and writes the result.
 
 ```typescript
-import { executeQueryOnConnection } from "@atscale/ps-utils";
+import { executeQueryOnConnection } from "@atscale-ps/ps-utils";
 
 await executeQueryOnConnection({
   connectionFile: "connections.yaml",
@@ -1097,7 +1097,7 @@ function executeQueryOnConnection(
 Joins a harness results CSV with AtScale query history to add execution metadata and produce an `_enhanced.csv`.
 
 ```typescript
-import { generateEnhancedQueryResults } from "@atscale/ps-utils";
+import { generateEnhancedQueryResults } from "@atscale-ps/ps-utils";
 
 await generateEnhancedQueryResults({
   resultsFile:    "./run_results/run1.csv",
@@ -1132,7 +1132,7 @@ function generateEnhancedQueryResults(
 Compares two harness run result CSVs and outputs a summary, row-by-row comparison, and outliers report.
 
 ```typescript
-import { executeRunAnalysis } from "@atscale/ps-utils";
+import { executeRunAnalysis } from "@atscale-ps/ps-utils";
 
 await executeRunAnalysis({
   fileA:          "./run_results/run1.csv",
@@ -1171,7 +1171,7 @@ function executeRunAnalysis(
 Generates a Helm `values.yaml` for installing AtScale on Kubernetes.
 
 ```typescript
-import { generateAtScaleInstallYaml } from "@atscale/ps-utils";
+import { generateAtScaleInstallYaml } from "@atscale-ps/ps-utils";
 
 await generateAtScaleInstallYaml({
   hostname: "atscale.example.com",
@@ -1206,7 +1206,7 @@ function generateAtScaleInstallYaml(
 Lists data sources (data warehouses) registered in an AtScale instance.
 
 ```typescript
-import { atScaleListDataSources } from "@atscale/ps-utils";
+import { atScaleListDataSources } from "@atscale-ps/ps-utils";
 
 await atScaleListDataSources({
   atscaleConnectionName: "ats_prod",
@@ -1235,7 +1235,7 @@ function atScaleListDataSources(
 Registers a SQL connection as a data source (data warehouse) in an AtScale instance.
 
 ```typescript
-import { atScaleCreateDataSource } from "@atscale/ps-utils";
+import { atScaleCreateDataSource } from "@atscale-ps/ps-utils";
 
 await atScaleCreateDataSource({
   atscaleConnectionName: "ats_prod",
@@ -1272,7 +1272,7 @@ function atScaleCreateDataSource(
 Lists git repositories registered in an AtScale instance.
 
 ```typescript
-import { atScaleListRepos } from "@atscale/ps-utils";
+import { atScaleListRepos } from "@atscale-ps/ps-utils";
 
 await atScaleListRepos({
   atscaleConnectionName: "ats_prod",
@@ -1301,7 +1301,7 @@ function atScaleListRepos(
 Registers a git repository in an AtScale instance.
 
 ```typescript
-import { atScaleCreateRepo } from "@atscale/ps-utils";
+import { atScaleCreateRepo } from "@atscale-ps/ps-utils";
 
 await atScaleCreateRepo({
   atscaleConnectionName: "ats_prod",
@@ -1337,7 +1337,7 @@ function atScaleCreateRepo(
 Lists deployed catalogs (semantic models) in an AtScale instance.
 
 ```typescript
-import { atScaleListDeployments } from "@atscale/ps-utils";
+import { atScaleListDeployments } from "@atscale-ps/ps-utils";
 
 await atScaleListDeployments({
   atscaleConnectionName: "ats_prod",
@@ -1366,7 +1366,7 @@ function atScaleListDeployments(
 Deploys local SML files to an AtScale git repository and publishes the catalog.
 
 ```typescript
-import { atScaleDeployCatalog } from "@atscale/ps-utils";
+import { atScaleDeployCatalog } from "@atscale-ps/ps-utils";
 
 await atScaleDeployCatalog({
   atscaleConnectionName: "ats_prod",
@@ -1402,7 +1402,7 @@ function atScaleDeployCatalog(
 Validates an SML model and lists structural and engine-level errors. Accepts a local SML directory or a connected git repository.
 
 ```typescript
-import { atScaleListModelErrors } from "@atscale/ps-utils";
+import { atScaleListModelErrors } from "@atscale-ps/ps-utils";
 
 await atScaleListModelErrors({
   atscaleConnectionName: "ats_prod",
@@ -1439,7 +1439,7 @@ function atScaleListModelErrors(
 Starts an HTTP server that exposes all operations as GraphQL mutations and REST endpoints. Returns a `Promise` that **never resolves** under normal operation — kill the process to stop.
 
 ```typescript
-import { executeWebServices } from "@atscale/ps-utils";
+import { executeWebServices } from "@atscale-ps/ps-utils";
 
 // This call does not return until the process is killed.
 await executeWebServices({ port: 4000 });
@@ -1468,7 +1468,7 @@ function executeWebServices(
 Prints the installed package name and version to stdout.
 
 ```typescript
-import { version } from "@atscale/ps-utils";
+import { version } from "@atscale-ps/ps-utils";
 
 await version();
 ```

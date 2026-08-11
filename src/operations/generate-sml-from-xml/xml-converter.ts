@@ -14,6 +14,7 @@
 
 import { Parser } from "xml2js";
 import { dump } from "js-yaml";
+import { createHash } from "crypto";
 import type { Logger } from "../../logging.js";
 
 // ============================================================
@@ -253,22 +254,10 @@ export async function convertXmlToSml(
     }
   }
 
-  // Collect fact dataset names (first data-set-ref per cube) for degenerate dim detection
-  const factDatasetNames = new Set<string>();
-  for (const cube of cubeEls) {
-    outer: for (const dsSec of arr(cube["data-sets"])) {
-      for (const dsRef of arr(dsSec["data-set-ref"])) {
-        const refId = a(dsRef, "id");
-        if (refId) {
-          const dsName = datasetIdToName.get(refId);
-          if (dsName) factDatasetNames.add(dsName);
-        }
-        break outer; // only the first data-set-ref is the fact table
-      }
-    }
-  }
-
   // Cube-level attributes and data-set-refs
+  // Datasets no cube ever references are dead schema artifacts (common in migrated/legacy
+  // projects) and should not be emitted — tracked here so Phase 2 can skip them.
+  const referencedDatasetNames = new Set<string>();
   for (const cube of cubeEls) {
     for (const attrsSec of arr(cube.attributes)) {
       ingestKeyedAttrs(attrsSec as Record<string, unknown>);
@@ -278,6 +267,7 @@ export async function convertXmlToSml(
         const refId = a(dsRef, "id");
         const dsName = refId ? (datasetIdToName.get(refId) ?? refId) : undefined;
         if (!dsName) continue;
+        referencedDatasetNames.add(dsName);
         for (const logSec of arr(dsRef.logical)) {
           ingestLogical(logSec as Record<string, unknown>, dsName);
         }
@@ -289,30 +279,27 @@ export async function convertXmlToSml(
   // Phase 2: Emit dataset files
   // ---------------------------------------------------------------
 
-  for (const dsSec of arr(schemaEl["data-sets"])) {
-    for (const ds of arr(dsSec["data-set"])) {
-      const dsName = a(ds, "name");
-      if (!dsName) continue;
-      const dsYaml = buildDatasetYaml(
-        ds as Record<string, unknown>, dsName, connName,
-        Boolean(opts.connectionDb || opts.connectionSchema),
-      );
-      const fname = safeFilename(dsName);
-      output.set(`datasets/${fname}.yml`, dsYaml);
-      logger.log(`  → datasets/${fname}.yml`);
-
-      // Report tracking
-      const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
-      rptDatasets.push({
-        name: dsName,
-        file: `datasets/${fname}.yml`,
-        type: physRpt?.sql ? "sql" : "table",
-        columnCount: physRpt?.columns?.length ?? 0,
-        isImmutable: physRpt?.immutable ?? false,
-        isUnbound: unboundDatasetNames.has(dsName),
-      });
+  // Datasets without an explicit <physical> column list (e.g. fact tables meant to be
+  // introspected live from the database) still need every referenced column declared in
+  // SML. Collect every column any key-ref/attribute-ref points to, per dataset.
+  const referencedColumnsByDataset = new Map<string, Set<string>>();
+  function addReferencedColumn(datasetName: string, column: string): void {
+    const set = referencedColumnsByDataset.get(datasetName) ?? new Set<string>();
+    set.add(column);
+    referencedColumnsByDataset.set(datasetName, set);
+  }
+  for (const entries of keyMap.values()) {
+    for (const entry of entries) {
+      for (const col of entry.columns) addReferencedColumn(entry.datasetName, col);
     }
   }
+  for (const entry of attrMap.values()) {
+    addReferencedColumn(entry.datasetName, entry.column);
+  }
+  collectMeasureColumns(cubeEls, datasetIdToName, keyMap, attrMap, addReferencedColumn);
+
+  // The actual dataset-emission loop runs after Phase 3b (dimensions), once
+  // referencedDatasetNames also accounts for datasets only used by dimensions — see there.
 
   // ---------------------------------------------------------------
   // Phase 3: Collect dimension elements
@@ -341,6 +328,16 @@ export async function convertXmlToSml(
 
   // We emit dimension YAMLs after processing cubes (so we know which dims are referenced)
   const referencedDimNames = new Set<string>();
+  // inferRelationships already determines, per cube, whether a dimension is degenerate
+  // (no relationship, attaches directly) or has a real relationship — buildDimensionYaml
+  // must use that same determination for its own is_degenerate/type field rather than
+  // re-deriving it independently, or the two can disagree for a multi-fact cube (a
+  // dimension can be degenerate relative to one cube-bound dataset yet have a genuine
+  // relationship from the cube's primary fact table via a different dataset/column).
+  // A dimension used by multiple cubes with a real relationship in any of them is not
+  // degenerate overall, so the relationship set takes precedence when both are present.
+  const globalDegenerateDimNames = new Set<string>();
+  const globalRelationshipDimNames = new Set<string>();
 
   // ---------------------------------------------------------------
   // Phase 7: Schema-level calculated members
@@ -355,6 +352,10 @@ export async function convertXmlToSml(
       if (def) calcMemberDefs.set(id, def);
     }
   }
+
+  // Map every measure/calculated-member's original name to its final unique_name, so
+  // calculation expressions referencing other metrics by name can be rewritten to match.
+  const measureRefMap = buildMeasureRefMap(cubeEls, calcMemberDefs);
 
   // ---------------------------------------------------------------
   // Phase 4+5+Model: Process each cube
@@ -384,17 +385,7 @@ export async function convertXmlToSml(
     }
 
     // Find fact dataset name for this cube
-    let factDatasetName: string | undefined;
-    for (const dsSec of arr(cube["data-sets"])) {
-      for (const dsRef of arr(dsSec["data-set-ref"])) {
-        const refId = a(dsRef, "id");
-        if (refId) {
-          factDatasetName = datasetIdToName.get(refId) ?? refId;
-          break;
-        }
-      }
-      if (factDatasetName) break;
-    }
+    const factDatasetName = getFactDatasetName(cube, datasetIdToName);
 
     // Extract include_default_drillthrough from <actions><properties><include-default-drill-through>
     const actionsEl = first(arr(cube.actions)) as Record<string, unknown> | undefined;
@@ -406,6 +397,10 @@ export async function convertXmlToSml(
       : false;
 
     const metricNames: Array<{ uniqueName: string; folder?: string }> = [];
+    // The same measure/calc name can legitimately appear under multiple XML attribute ids
+    // (e.g. a visible=false leftover from a rename) — dedupe by the transformed unique_name
+    // so the model's metrics: list never contains the same entry twice.
+    const seenMetricNames = new Set<string>();
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -426,6 +421,9 @@ export async function convertXmlToSml(
         const countDistEl = first(arr(typeEl["count-distinct"])) as
           | Record<string, unknown>
           | undefined;
+        const countNonNullEl = first(arr(typeEl["count-nonnull"])) as
+          | Record<string, unknown>
+          | undefined;
         const exprEl = s(first(arr((attrEl as Record<string, unknown>).expression)));
 
         const caption = s(first(arr(props.caption)));
@@ -438,18 +436,29 @@ export async function convertXmlToSml(
         const namedFormat = fmtEl ? s(first(arr(fmtEl["named-format"]))) : undefined;
         const format = resolveFormat(formatString, namedFormat);
 
-        if (measureEl || countDistEl) {
+        if (measureEl || countDistEl || countNonNullEl) {
           // Regular measure
           const aggText = measureEl
-            ? s(first(arr(measureEl["default-aggregation"])))?.toUpperCase()
-            : "DISTINCT_COUNT_ESTIMATE";
-          const aggregation = mapAggregation(
-            aggText ?? (countDistEl ? "COUNT_DISTINCT" : "SUM"),
-          );
+            ? (s(first(arr(measureEl["default-aggregation"])))?.toUpperCase() ?? "SUM")
+            : countDistEl
+            ? "DISTINCT_COUNT_ESTIMATE"
+            : "COUNT";
+          const aggregation = mapAggregation(aggText);
 
-          // Resolve column: attrMap[attrId] → column
+          // Resolve column: prefer the inline <key-ref id="..."> nested under <measure>/
+          // <count-distinct>/<count-nonnull> (resolved through keyMap, same as dimension
+          // level attributes), then attrMap[attrId] (attribute-ref in the fact dataset's
+          // logical section), then fall back to guessing the column from the attribute's own name.
+          const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+          const keyRefEl = measureTypeEl
+            ? (first(arr(measureTypeEl["key-ref"])) as Record<string, unknown> | undefined)
+            : undefined;
+          const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
+          const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
+          const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+
           const colRef = attrMap.get(attrId);
-          const column = colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
+          const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
           if (!column || !factDatasetName) {
             rptOmissions.push({
               category: "Metric",
@@ -463,7 +472,17 @@ export async function convertXmlToSml(
           }
 
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = safeName(attrNameRaw).toLowerCase();
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          if (seenMetricNames.has(uniqueName)) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+            });
+            continue;
+          }
+          seenMetricNames.add(uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -475,11 +494,21 @@ export async function convertXmlToSml(
         } else if (exprEl) {
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = safeName(attrNameRaw).toLowerCase();
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          if (seenMetricNames.has(uniqueName)) {
+            rptOmissions.push({
+              category: "Metric",
+              item: attrNameRaw,
+              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+            });
+            continue;
+          }
+          seenMetricNames.add(uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
-            buildCalcMetricYaml(uniqueName, label, unescapeHtml(exprEl), format, folder, visible, description),
+            buildCalcMetricYaml(uniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
@@ -499,17 +528,27 @@ export async function convertXmlToSml(
             category: "Calculated Member",
             item: def.name,
             reason: "Marked as not visible (visible=false) in the source XML — excluded from output",
-            recommendation: `If this calculated member is needed, create \`calculations/${safeFilename(safeName(def.name).toLowerCase())}.yml\` manually with \`is_hidden_from_ui: false\`.`,
+            recommendation: `If this calculated member is needed, create \`calculations/${safeFilename(truncateUniqueName(safeName(def.name).toLowerCase()))}.yml\` manually with \`is_hidden_from_ui: false\`.`,
           });
           continue;
         }
         const label = def.caption ?? def.name;
-        const uniqueName = safeName(def.name).toLowerCase();
+        const uniqueName = truncateUniqueName(safeName(def.name).toLowerCase());
+        if (seenMetricNames.has(uniqueName)) {
+          rptOmissions.push({
+            category: "Calculated Member",
+            item: def.name,
+            reason: `Duplicate calculated member name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+            recommendation: "If both are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+          });
+          continue;
+        }
+        seenMetricNames.add(uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
           `calculations/${fname}.yml`,
-          buildCalcMemberYaml(uniqueName, label, def.expression, format, def.folder, def.visible, def.description),
+          buildCalcMemberYaml(uniqueName, label, rewriteMeasureRefs(def.expression, measureRefMap), format, def.folder, def.visible, def.description),
         );
         logger.log(`  → calculations/${fname}.yml`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
@@ -564,17 +603,22 @@ export async function convertXmlToSml(
     const relevantDims = new Map([...schemaDims, ...cubeLevelDims]);
 
     // Phase 5: Infer relationships
-    const relationships = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims);
+    const { relationships, degenerateDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
 
-    // Collect dimension names: inline cube dims + any schema dim referenced via a relationship
-    const cubeDimNames: string[] = [...cubeLevelDims.keys()];
-    for (const rel of relationships) {
-      if (!cubeDimNames.includes(rel.toDimension)) {
-        cubeDimNames.push(rel.toDimension);
-      }
-    }
-    // Mark all referenced dims for YAML emission
+    // The model's flat dimensions: list only holds dimensions with no relationship (they
+    // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
+    // relationship are referenced solely via relationships[].to.dimension and must not
+    // also appear here, or the two representations contradict each other. A cube-level
+    // dim (inline, or via <dimension-ref>) matching neither category has no possible join
+    // in this cube at all (e.g. its dataset is never bound to any data-set-ref) and is
+    // excluded entirely, rather than forced into dimensions: with no real attachment.
+    const cubeDimNames: string[] = [...new Set(degenerateDimNames)];
+    // Dimension YAML files still need to be emitted for every dimension actually used by
+    // this cube, whether degenerate (flat dimensions: list) or joined via a relationship.
     for (const n of cubeDimNames) referencedDimNames.add(n);
+    for (const rel of relationships) referencedDimNames.add(rel.toDimension);
+    for (const n of degenerateDimNames) globalDegenerateDimNames.add(n);
+    for (const rel of relationships) globalRelationshipDimNames.add(rel.toDimension);
 
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
@@ -615,7 +659,11 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, factDatasetNames);
+    // A real relationship anywhere wins over a degenerate determination elsewhere — a
+    // dimension used by multiple cubes could be degenerate in one and properly joined
+    // in another.
+    const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -639,16 +687,106 @@ export async function convertXmlToSml(
   }
 
   // ---------------------------------------------------------------
+  // Phase 2: Emit dataset files
+  // ---------------------------------------------------------------
+
+  // Schema-level dimensions never appear in a cube's own data-set-ref list — they're
+  // pulled in via keyed-attribute key-refs instead — so datasets they use only show up
+  // here, once the dimension YAML (built above) is available to scan.
+  for (const [key, dimYaml] of output) {
+    if (!key.startsWith("dimensions/")) continue;
+    // Dataset names can contain spaces (e.g. "CUSTOMER AGE MONTHLY") — anchor to the
+    // trailing ".dataset" at end of line rather than a non-whitespace-only match, which
+    // would incorrectly capture just the last word of a multi-word name.
+    for (const m of dimYaml.matchAll(/^\s*dataset:\s*(.+)\.dataset\s*$/gm)) {
+      referencedDatasetNames.add(m[1]);
+    }
+  }
+
+  // Without an explicit --connection-db/--connection-schema override, datasets can
+  // legitimately span multiple database/schema pairs under one AtScale connection (e.g.
+  // several schemas in the same warehouse). Represent each distinct pair as its own
+  // connection — matching AtScale's own reference converter — instead of a nested
+  // `table: {db, schema, name}` object, which the live engine rejects even though it's
+  // schema-valid. The first distinct pair encountered keeps the base connection name;
+  // every other pair gets a `_<schema>` suffix.
+  const connectionIdByDataset = new Map<string, string>(); // dataset name -> connection unique_name
+  const connectionDbSchema = new Map<string, { db?: string; schema?: string }>(); // connection unique_name -> its db/schema
+  if (!opts.connectionDb && !opts.connectionSchema) {
+    const pairToConnId = new Map<string, string>();
+    for (const dsName of referencedDatasetNames) {
+      const phys = datasetNameToPhysical.get(dsName);
+      if (!phys?.db && !phys?.schema) continue;
+      const pairKey = `${phys.db ?? ""}|${phys.schema ?? ""}`;
+      let connId = pairToConnId.get(pairKey);
+      if (!connId) {
+        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? phys.db}`;
+        pairToConnId.set(pairKey, connId);
+        connectionDbSchema.set(connId, { db: phys.db, schema: phys.schema });
+      }
+      connectionIdByDataset.set(dsName, connId);
+    }
+  }
+
+  for (const dsSec of arr(schemaEl["data-sets"])) {
+    for (const ds of arr(dsSec["data-set"])) {
+      const dsName = a(ds, "name");
+      if (!dsName) continue;
+      if (!referencedDatasetNames.has(dsName)) {
+        rptOmissions.push({
+          category: "Dataset",
+          item: dsName,
+          reason: "Declared in the schema but not referenced by any cube's data-set-ref or dimension — excluded from output.",
+          recommendation: "If this dataset is actually needed, add it manually to datasets/ and reference it from the relevant model or dimension.",
+        });
+        continue;
+      }
+      const dsYaml = buildDatasetYaml(
+        ds as Record<string, unknown>, dsName,
+        connectionIdByDataset.get(dsName) ?? connName,
+        referencedColumnsByDataset.get(dsName),
+      );
+      const fname = safeFilename(dsName);
+      output.set(`datasets/${fname}.yml`, dsYaml);
+      logger.log(`  → datasets/${fname}.yml`);
+
+      // Report tracking
+      const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
+      const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
+      for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
+      rptDatasets.push({
+        name: dsName,
+        file: `datasets/${fname}.yml`,
+        type: physRpt?.sql ? "sql" : "table",
+        columnCount: allColumnNames.size,
+        isImmutable: physRpt?.immutable ?? false,
+        isUnbound: unboundDatasetNames.has(dsName),
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------
   // Phase 6: Catalog and connection
   // ---------------------------------------------------------------
 
   output.set("catalog.yml", buildCatalogYaml(catalogName));
-  output.set(
-    `connections/${safeFilename(connName)}.yml`,
-    buildConnectionYaml(connName, opts.connectionType, opts.connectionDb, opts.connectionSchema),
-  );
+
+  // Always emit the default connection, plus one per extra db/schema pair discovered
+  // above (all variants of the same underlying AtScale-registered connection).
+  const allConnectionIds = new Set<string>([connName, ...connectionDbSchema.keys()]);
+  for (const connId of allConnectionIds) {
+    const dbSchema = connectionDbSchema.get(connId);
+    output.set(
+      `connections/${safeFilename(connId)}.yml`,
+      buildConnectionYaml(
+        connId, opts.connectionType,
+        dbSchema?.db ?? opts.connectionDb, dbSchema?.schema ?? opts.connectionSchema,
+        connName,
+      ),
+    );
+    logger.log(`  → connections/${safeFilename(connId)}.yml`);
+  }
   logger.log(`  → catalog.yml`);
-  logger.log(`  → connections/${safeFilename(connName)}.yml`);
 
   // ---------------------------------------------------------------
   // Phase 8: Generate README.md conversion report
@@ -880,6 +1018,63 @@ function safeName(s: string): string {
     .replace(/^_|_$/g, "");
 }
 
+/** SML unique_name values must not exceed this length. */
+const MAX_UNIQUE_NAME_LENGTH = 63;
+
+/** Deterministically shorten a unique_name to fit SML's 63-character limit. */
+function truncateUniqueName(name: string): string {
+  if (name.length <= MAX_UNIQUE_NAME_LENGTH) return name;
+  const hash = createHash("sha1").update(name).digest("hex").slice(0, 8);
+  const keep = MAX_UNIQUE_NAME_LENGTH - hash.length - 1;
+  return `${name.slice(0, keep)}_${hash}`;
+}
+
+/**
+ * Build a map from every measure/calculated-member's original XML name to its final
+ * (safeName + truncated) unique_name. Calculation expressions reference other metrics
+ * by their original name (e.g. "[Measures].[Sales Amount-Prev]"), but the output uses
+ * the transformed unique_name — this map lets those references be rewritten to match.
+ */
+function buildMeasureRefMap(
+  cubeEls: Record<string, unknown>[],
+  calcMemberDefs: Map<string, CalcMemberDef>,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const def of calcMemberDefs.values()) {
+    map.set(def.name, truncateUniqueName(safeName(def.name).toLowerCase()));
+  }
+  for (const cube of cubeEls) {
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr((attrsSec as Record<string, unknown>).attribute)) {
+        const attrNameRaw = a(attrEl, "name");
+        if (!attrNameRaw) continue;
+        const props = first(arr((attrEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        if (!props) continue;
+        const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
+        if (!typeEl) continue;
+        const isMeasure =
+          arr(typeEl.measure).length > 0 ||
+          arr(typeEl["count-distinct"]).length > 0 ||
+          arr(typeEl["count-nonnull"]).length > 0;
+        const hasExpr = arr((attrEl as Record<string, unknown>).expression).length > 0;
+        if (!isMeasure && !hasExpr) continue;
+        map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw).toLowerCase()));
+      }
+    }
+  }
+  return map;
+}
+
+/** Rewrite "[Measures].[Original Name]" references to match transformed unique_names. */
+function rewriteMeasureRefs(text: string, nameMap: Map<string, string>): string {
+  return text.replace(/\[Measures\]\.\[([^\]]+)\]/g, (full, name) => {
+    const mapped = nameMap.get(name);
+    return mapped ? `[Measures].[${mapped}]` : full;
+  });
+}
+
 /** Convert a name to a safe filename (lowercase, hyphens). */
 function safeFilename(s: string): string {
   return s
@@ -910,22 +1105,27 @@ function mapAggregation(raw: string): string {
     case "MIN":            return "minimum";
     case "MAX":            return "maximum";
     case "COUNT":          return "count non-null";
-    case "COUNT_DISTINCT":
+    case "COUNT_DISTINCT":                return "count distinct";
     case "DISTINCT_COUNT_ESTIMATE":
-    case "DISTINCTCOUNTESTIMATE": return "distinct count estimate";
+    case "DISTINCTCOUNTESTIMATE":         return "estimated count distinct";
     default:               return "sum";
+  }
+}
+
+/** Normalize a named format keyword (e.g. "General Number", "Short Date") to a lowercase SML format token. */
+function normalizeNamedFormat(named: string): string {
+  switch (named.toLowerCase()) {
+    case "percent":  return "percent:1";
+    case "standard": return "decimal:2";
+    case "currency": return "currency:0";
+    default:         return named.toLowerCase(); // pass through (e.g. "short date")
   }
 }
 
 /** Map XML format-string or named-format → SML format. */
 function resolveFormat(formatString?: string, namedFormat?: string): string | undefined {
   if (namedFormat) {
-    switch (namedFormat.toLowerCase()) {
-      case "percent":  return "percent:1";
-      case "standard": return "decimal:2";
-      case "currency": return "currency:0";
-      default:         return namedFormat.toLowerCase(); // pass through (e.g. "short date")
-    }
+    return normalizeNamedFormat(namedFormat);
   }
   if (formatString) {
     switch (formatString) {
@@ -935,7 +1135,9 @@ function resolveFormat(formatString?: string, namedFormat?: string): string | un
       case "#,##0.0%":  return "#,##0.0%";
       case "$#,##0":    return "$#,##0";
       case "#,##0%":    return "#,##0%";
-      default:          return formatString;
+      default:
+        // format-string can also hold a named format (e.g. "General Number") rather than a numeric pattern
+        return /[a-zA-Z]/.test(formatString) ? normalizeNamedFormat(formatString) : formatString;
     }
   }
   return undefined;
@@ -953,16 +1155,119 @@ function parseColumnFromAttrName(attrName: string): string {
   return withoutPrefix.replace(/_(sum|avg|min|max|count|distinct|average|minimum|maximum)$/i, "");
 }
 
+/** The fact dataset for a cube is the first <data-set-ref> listed under its <data-sets>. */
+function getFactDatasetName(
+  cube: Record<string, unknown>,
+  datasetIdToName: Map<string, string>,
+): string | undefined {
+  for (const dsSec of arr(cube["data-sets"])) {
+    for (const dsRef of arr(dsSec["data-set-ref"])) {
+      const refId = a(dsRef, "id");
+      if (refId) return datasetIdToName.get(refId) ?? refId;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve every cube measure's column using the same priority order as the real emission
+ * logic (inline key-ref, then attribute-ref, then a name-based guess) and record it against
+ * its fact dataset — including fallback name-guessed columns, which otherwise never get
+ * declared in the dataset's columns: list even though the metric YAML ends up referencing them.
+ */
+function collectMeasureColumns(
+  cubeEls: Record<string, unknown>[],
+  datasetIdToName: Map<string, string>,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrMap: Map<string, AttrRefEntry>,
+  addReferencedColumn: (datasetName: string, column: string) => void,
+): void {
+  for (const cube of cubeEls) {
+    const factDatasetName = getFactDatasetName(cube, datasetIdToName);
+    if (!factDatasetName) continue;
+
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr((attrsSec as Record<string, unknown>).attribute)) {
+        const attrId = a(attrEl, "id");
+        const attrNameRaw = a(attrEl, "name") ?? "";
+        if (!attrId) continue;
+
+        const props = first(arr((attrEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        if (!props) continue;
+        const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
+        if (!typeEl) continue;
+
+        const measureEl = first(arr(typeEl.measure)) as Record<string, unknown> | undefined;
+        const countDistEl = first(arr(typeEl["count-distinct"])) as Record<string, unknown> | undefined;
+        const countNonNullEl = first(arr(typeEl["count-nonnull"])) as Record<string, unknown> | undefined;
+        if (!measureEl && !countDistEl && !countNonNullEl) continue;
+
+        const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+        const keyRefEl = measureTypeEl
+          ? (first(arr(measureTypeEl["key-ref"])) as Record<string, unknown> | undefined)
+          : undefined;
+        const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
+        const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
+        const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+
+        const colRef = attrMap.get(attrId);
+        const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
+        if (column) addReferencedColumn(factDatasetName, column);
+      }
+    }
+  }
+}
+
 /** Map XML dimension-type/level-type to SML time_unit. */
 function mapLevelType(xmlLevelType: string | undefined): string | undefined {
   if (!xmlLevelType) return undefined;
   switch (xmlLevelType) {
-    case "TimeYears":   return "year";
-    case "TimeMonths":  return "month";
-    case "TimeDays":    return "day";
-    case "TimeWeeks":   return "week";
-    default:            return undefined;
+    case "TimeYears":     return "year";
+    case "TimeHalfYears": return "halfyear";
+    case "TimeQuarters":  return "quarter";
+    case "TimeMonths":    return "month";
+    case "TimeWeeks":     return "week";
+    case "TimeDays":      return "day";
+    case "TimeHours":     return "hour";
+    case "TimeMinutes":   return "minute";
+    case "TimeSeconds":   return "second";
+    default:              return undefined;
   }
+}
+
+/**
+ * Ordered [pattern, time_unit] fallbacks for levels inside a time dimension whose
+ * XML level-type is missing or unrecognized (e.g. custom levels like "customquarter").
+ */
+const TIME_UNIT_NAME_PATTERNS: Array<[RegExp, string]> = [
+  [/\byear\b|\byr\b/i,          "year"],
+  [/\bquarter\b|\bqtr\b/i,      "quarter"],
+  [/\bhalf.?year\b|\bh[12]\b/i, "halfyear"],
+  [/\bmonth\b/i,                "month"],
+  [/\bweek\b|\bwk\b/i,          "week"],
+  [/\bday\b|\bdate\b/i,         "day"],
+  [/\bhour\b|\bhr\b/i,          "hour"],
+  [/\bminute\b|\bmin\b/i,       "minute"],
+  [/\bsecond\b|\bsec\b/i,       "second"],
+  [/year/i,                     "year"],
+  [/quarter/i,                  "quarter"],
+  [/half.?year|halfyr/i,        "halfyear"],
+  [/month/i,                    "month"],
+  [/week/i,                     "week"],
+  [/date|day/i,                 "day"],
+  [/hour/i,                     "hour"],
+  [/minute/i,                   "minute"],
+  [/second/i,                   "second"],
+];
+
+/** Fallback: infer a level's time_unit from its name when the XML level-type is missing/unrecognized. */
+function inferTimeUnitFromName(levelName: string): string | undefined {
+  for (const [pattern, unit] of TIME_UNIT_NAME_PATTERNS) {
+    if (pattern.test(levelName)) return unit;
+  }
+  return undefined;
 }
 
 // ============================================================
@@ -974,18 +1279,26 @@ function mapDataType(xmlType: string | undefined): string {
   if (!xmlType) return "string";
   switch (xmlType.toLowerCase()) {
     case "string":    return "string";
-    case "integer":
     case "int":
-    case "long":      return "integer";
+    case "integer":   return "int";
+    case "long":      return "long";
     case "float":
     case "double":
     case "decimal":
     case "numeric":   return "decimal";
     case "date":      return "date";
+    // AtScale's engine rejects "timestamp" as an unrecognized physical type at deploy
+    // time even though it's a valid static data_type token — the reference converter
+    // always emits "datetime" instead, so both map there for engine compatibility.
     case "timestamp":
-    case "datetime":  return "timestamp";
+    case "datetime":  return "datetime";
     case "boolean":
     case "bool":      return "boolean";
+    // Semi-structured/JSON types (e.g. Snowflake VARIANT) have no SML equivalent — treat as string.
+    case "variant":
+    case "json":
+    case "object":
+    case "array":     return "string";
     default:          return xmlType.toLowerCase();
   }
 }
@@ -1002,12 +1315,18 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const immutableStr = s(first(arr(physSec.immutable)));
   const immutable = immutableStr === "true" ? true : undefined;
 
-  // Column definitions from <column><name>...</name><type>...</type></column>
+  // Column definitions from <column><name>...</name><type>...</type></column>. Source
+  // XML can genuinely declare the same column twice (a copy-paste artifact) — dedupe by
+  // name, keeping the first occurrence, since a duplicate column name is invalid SML.
   const columns: Array<{ name: string; dataType: string }> = [];
+  const seenColumnNames = new Set<string>();
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
-    if (colName) columns.push({ name: colName, dataType: mapDataType(colType) });
+    if (colName && !seenColumnNames.has(colName)) {
+      seenColumnNames.add(colName);
+      columns.push({ name: colName, dataType: mapDataType(colType) });
+    }
   }
   const colsResult = columns.length ? columns : undefined;
 
@@ -1039,9 +1358,9 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
 function buildDatasetYaml(
   dsEl: Record<string, unknown>,
   dsName: string,
-  connName: string,
-  /** When true, db/schema live in the connection file — use a plain table name string. */
-  connectionHasDbSchema: boolean,
+  connectionId: string,
+  /** Every column any key-ref/attribute-ref points to for this dataset, regardless of <physical>. */
+  referencedColumns?: Set<string>,
 ): string {
   const phys = parseDatasetPhysical(dsEl) ?? {};
 
@@ -1049,28 +1368,31 @@ function buildDatasetYaml(
     unique_name: `${dsName}.dataset`,
     object_type: "dataset",
     label: dsName,          // preserve original casing; do not title-case
-    connection_id: connName,
+    connection_id: connectionId,
   };
 
   if (phys.immutable) obj.immutable = true;
 
   if (phys.sql) {
     obj.sql = phys.sql;
-  } else if (connectionHasDbSchema || (!phys.db && !phys.schema)) {
-    // db/schema are in the connection file (or absent): use a simple table name string
-    obj.table = phys.tableName ?? dsName;
   } else {
-    // db/schema are dataset-specific: use structured table object
-    obj.table = {
-      ...(phys.db ? { db: phys.db } : {}),
-      ...(phys.schema ? { schema: phys.schema } : {}),
-      name: phys.tableName ?? dsName,
-    };
+    // db/schema always live on the connection (see connectionIdByDataset) — a dataset's
+    // own table is always a plain string; a nested {db, schema, name} object here is
+    // schema-valid SML but rejected by AtScale's live engine.
+    obj.table = phys.tableName ?? dsName;
   }
 
-  if (phys.columns?.length) {
-    obj.columns = phys.columns.map((c) => ({ name: c.name, data_type: c.dataType }));
+  const columns: Array<{ name: string; data_type: string }> =
+    phys.columns?.map((c) => ({ name: c.name, data_type: c.dataType })) ?? [];
+
+  if (referencedColumns?.size) {
+    const known = new Set(columns.map((c) => c.name));
+    for (const col of referencedColumns) {
+      if (!known.has(col)) columns.push({ name: col, data_type: "string" }); // unknown — mark for review
+    }
   }
+
+  if (columns.length) obj.columns = columns;
 
   return toYaml(obj);
 }
@@ -1110,7 +1432,10 @@ function buildDimensionYaml(
   attrDef: Map<string, AttrDefEntry>,
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
-  factDatasetNames: Set<string>,
+  /** Whether inferRelationships determined this dimension is degenerate (no relationship
+   * in any cube that uses it) — the single source of truth for is_degenerate/type, so it
+   * can never disagree with the model's own dimensions:/relationships: placement. */
+  isDegenerate: boolean,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -1264,7 +1589,7 @@ function buildDimensionYaml(
         const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
         return lProps ? s(first(arr(lProps["level-type"]))) : undefined;
       })();
-      const timeUnit = mapLevelType(levelTypeRaw);
+      const timeUnit = mapLevelType(levelTypeRaw) ?? (isTime ? inferTimeUnitFromName(levelName) : undefined);
 
       // Build or merge the level attribute entry (de-duplicated by unique name)
       if (!levelAttrMap.has(levelUniqueName)) {
@@ -1304,13 +1629,6 @@ function buildDimensionYaml(
       });
     }
   }
-
-  // Detect degenerate: all resolved level attributes reference a fact-table dataset
-  const isDegenerate =
-    levelAttrMap.size > 0 &&
-    Array.from(levelAttrMap.values()).every((la) =>
-      factDatasetNames.has(la.dataset.replace(/\.dataset$/, "")),
-    );
 
   // Build YAML structure
   const obj: Record<string, unknown> = {
@@ -1506,31 +1824,55 @@ function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined
 // Phase 5: Relationship inference
 // ============================================================
 
+interface CubeKeyRole {
+  columns: string[];
+  rolePlay?: string;
+  complete: string;
+  datasetName: string;
+}
+
+interface CubeLevelMatch {
+  matchId: string;
+  toLevel: string;
+  dimKeyUuid?: string;
+}
+
 /**
- * Scan all levels of all hierarchies in a dimension to find one whose key-ref UUID
- * appears in cubeKeyCols (the set of key UUIDs referenced by the cube).
- * Returns { keyUuid, toLevel } for the first matching level, or undefined if none match.
- * This handles both degenerate dims (complete=true in cube) and cross-table dims
- * (complete=false in cube + complete=true in dim dataset), as well as multi-level
- * hierarchies where only the leaf level has a FK in the fact table.
+ * Scan every level of every hierarchy in a dimension for matches against the cube's
+ * key-refs — a dimension can have multiple hierarchies (e.g. a date dimension with
+ * separate Calendar/Reporting/Custom hierarchies) each needing their own relationship
+ * to the same fact-table FK, so this returns ALL matches, not just the first.
+ * Two distinct matching mechanisms exist in the source XML:
+ *   - Role-played FKs (e.g. "Order Date" / "Ship Date" both pointing at the same Date
+ *     Dimension level): the cube's <key-ref><ref-path><new-ref attribute-id="..."> value
+ *     equals the level's own `primary-attribute` id directly.
+ *   - Plain FKs / degenerate attributes: matched via the keyed-attribute's own
+ *     `key-ref="..."` XML attribute (def.keyUuid), same as before.
+ * Each match's `matchId` is what to look up in cubeKeyRoles; `dimKeyUuid` is the
+ * dimension's own canonical key, used separately to resolve which dataset backs it —
+ * these differ for role-played matches, where matchId is cube-local.
  */
-function findCubeMatchingLevel(
+function findCubeMatchingLevels(
   dimEl: Record<string, unknown>,
   attrDef: Map<string, AttrDefEntry>,
-  cubeKeyCols: Map<string, string[]>,
-): { keyUuid: string; toLevel: string } | undefined {
+  cubeKeyRoles: Map<string, CubeKeyRole[]>,
+): CubeLevelMatch[] {
+  const matches: CubeLevelMatch[] = [];
   for (const hierEl of arr(dimEl.hierarchy)) {
     for (const levelEl of arr(hierEl.level)) {
       const pa = a(levelEl, "primary-attribute");
       if (!pa) continue;
       const def = attrDef.get(pa);
-      if (!def?.keyUuid) continue;
-      if (cubeKeyCols.has(def.keyUuid)) {
-        return { keyUuid: def.keyUuid, toLevel: def.name };
+      if (cubeKeyRoles.has(pa)) {
+        matches.push({ matchId: pa, toLevel: def?.name ?? pa, dimKeyUuid: def?.keyUuid });
+        continue;
+      }
+      if (def?.keyUuid && cubeKeyRoles.has(def.keyUuid)) {
+        matches.push({ matchId: def.keyUuid, toLevel: def.name, dimKeyUuid: def.keyUuid });
       }
     }
   }
-  return undefined;
+  return matches;
 }
 
 function inferRelationships(
@@ -1539,75 +1881,123 @@ function inferRelationships(
   keyMap: Map<string, KeyRefEntry[]>,
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
-): RelationshipDef[] {
-  if (!factDatasetName) return [];
+  datasetIdToName: Map<string, string>,
+): { relationships: RelationshipDef[]; degenerateDimNames: string[] } {
+  if (!factDatasetName) return { relationships: [], degenerateDimNames: [] };
 
-  // Build the set of key-ref UUIDs that appear in this cube's data-set-ref logical sections,
-  // mapped to the fact-table columns that hold that key.
-  // We prefer complete="false" entries (explicit FK) but also accept complete="true" (degenerate).
-  const cubeKeyCols = new Map<string, string[]>(); // keyUuid → fact columns
-  const cubeKeyRolePlays = new Map<string, string>(); // keyUuid → role_play name
+  // Build the set of ids that appear in this cube's data-set-ref logical sections, mapped to
+  // every distinct role that id represents. Role-played FKs (e.g. "Order Date" and "Ship
+  // Date" both pointing at the same Date Dimension level) share the same outer <key-ref id>
+  // but have different <ref-path><new-ref attribute-id="..."> values — that attribute-id
+  // equals the dimension level's own primary-attribute id, so it's used as the map key
+  // instead of the (colliding) outer id. The same outer id can also appear, unchanged, in
+  // MULTIPLE <data-set-ref> blocks of a multi-fact cube (e.g. a "query" fact and a "sub-
+  // query" fact both keying against the same dimension under different column names) — so
+  // each data-set-ref's own dataset name is tracked per role, not assumed to be the cube's
+  // single factDatasetName, and every distinct (dataset, columns) pair is kept as a separate
+  // role rather than the last one silently overwriting the others.
+  const cubeKeyRoles = new Map<string, CubeKeyRole[]>();
   for (const dsSec of arr(cubeEl["data-sets"])) {
     for (const dsRef of arr(dsSec["data-set-ref"])) {
+      const refId = a(dsRef, "id");
+      const dsDatasetName = refId ? (datasetIdToName.get(refId) ?? refId) : undefined;
+      if (!dsDatasetName) continue;
+
       for (const logSec of arr(dsRef.logical)) {
         for (const kr of arr(logSec["key-ref"])) {
           const id = a(kr, "id");
           if (!id) continue;
           const cols = extractColumns(arr(kr.column));
           if (cols.length === 0) continue;
-          // Store once; prefer complete=false (explicit FK) over complete=true (degenerate)
           const complete = a(kr, "complete") ?? "true";
-          if (!cubeKeyCols.has(id) || complete === "false") {
-            cubeKeyCols.set(id, cols);
-            // Extract role_play from <ref-path><new-ref><ref-naming>
-            const refPathEl = first(arr(kr["ref-path"])) as Record<string, unknown> | undefined;
-            if (refPathEl) {
-              const newRefEl = first(arr(refPathEl["new-ref"])) as Record<string, unknown> | undefined;
-              if (newRefEl) {
-                const refNaming = s(first(arr(newRefEl["ref-naming"])));
-                if (refNaming) cubeKeyRolePlays.set(id, refNaming);
-              }
-            }
+
+          const refPathEl = first(arr(kr["ref-path"])) as Record<string, unknown> | undefined;
+          const newRefEl = refPathEl
+            ? (first(arr(refPathEl["new-ref"])) as Record<string, unknown> | undefined)
+            : undefined;
+          const roleAttrId = newRefEl ? a(newRefEl, "attribute-id") : undefined;
+          const rolePlay = newRefEl ? s(first(arr(newRefEl["ref-naming"]))) : undefined;
+          const matchId = roleAttrId ?? id;
+
+          const roles = cubeKeyRoles.get(matchId) ?? [];
+          const colKey = `${dsDatasetName}|${cols.join(",")}`;
+          const existingIdx = roles.findIndex((r) => `${r.datasetName}|${r.columns.join(",")}` === colKey);
+          if (existingIdx === -1) {
+            roles.push({ columns: cols, rolePlay, complete, datasetName: dsDatasetName });
+          } else if (complete === "false") {
+            // Prefer the explicit-FK (complete=false) version of the same column set
+            roles[existingIdx] = { columns: cols, rolePlay, complete, datasetName: dsDatasetName };
           }
+          cubeKeyRoles.set(matchId, roles);
         }
       }
     }
   }
 
   const relationships: RelationshipDef[] = [];
+  const degenerateDimNames: string[] = [];
   const seen = new Set<string>();
+  const usedNames = new Set<string>();
 
   for (const [dimName, dimEl] of relevantDims) {
-    // Find the first level of this dimension whose key UUID appears in the cube's key-refs.
-    // For multi-level hierarchies (e.g. date dims) the cube FK is typically on the leaf level;
-    // for degenerate dims it is usually the sole level.
-    const match = findCubeMatchingLevel(dimEl, attrDef, cubeKeyCols);
-    if (!match) continue; // Dimension not used by this cube
+    // Find every level (across every hierarchy) of this dimension matching the cube's
+    // key-refs — a dimension can have multiple hierarchies each needing their own
+    // relationship to the same fact-table FK (e.g. a date dimension's Calendar/Reporting/
+    // Custom hierarchies all role-played as both "Order Date" and "Ship Date").
+    const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles);
+    if (matches.length === 0) continue; // Dimension not used by this cube
 
-    const { keyUuid, toLevel } = match;
-    const fromColumns = cubeKeyCols.get(keyUuid)!;
+    let isDegenerate = false;
 
-    const relKey = `${dimName}|${fromColumns.join(",")}`;
-    if (seen.has(relKey)) continue;
-    seen.add(relKey);
+    for (const { matchId, toLevel, dimKeyUuid } of matches) {
+      const roles = cubeKeyRoles.get(matchId) ?? [];
+      if (roles.length === 0) continue;
 
-    const relUniqueName = `${safeName(factDatasetName)}_to_${safeName(dimName)}_${safeName(fromColumns.join("_"))}`;
+      // Dimension dataset: the complete=true side of the dimension's own key (the lookup
+      // table) — distinct from matchId, which may be a cube-local role-play identifier.
+      const dimDataset = dimKeyUuid
+        ? keyMap.get(dimKeyUuid)?.find((e) => e.complete === "true")?.datasetName
+        : undefined;
 
-    // Dimension dataset: the complete=true side of the key-ref (the lookup table)
-    const dimDataset = keyMap.get(keyUuid)?.find((e) => e.complete === "true")?.datasetName;
+      for (const role of roles) {
+        // Degenerate dimensions (their own dataset IS the role's own fact-side dataset)
+        // attach directly via is_degenerate — a relationship here would be a self-join.
+        if (dimDataset === role.datasetName) {
+          isDegenerate = true;
+          continue;
+        }
 
-    relationships.push({
-      uniqueName: relUniqueName,
-      fromDataset: factDatasetName,
-      fromColumns,
-      toDimension: dimName,
-      toLevel,
-      rolePlay: cubeKeyRolePlays.get(keyUuid),
-      dimensionDataset: dimDataset,
-    });
+        const relKey = `${dimName}|${toLevel}|${role.datasetName}|${role.columns.join(",")}`;
+        if (seen.has(relKey)) continue;
+        seen.add(relKey);
+
+        const baseName = `${safeName(role.datasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
+        let relUniqueName = baseName;
+        let suffix = 1;
+        while (usedNames.has(relUniqueName)) {
+          relUniqueName = `${baseName}_${++suffix}`;
+        }
+        usedNames.add(relUniqueName);
+
+        relationships.push({
+          uniqueName: relUniqueName,
+          fromDataset: role.datasetName,
+          fromColumns: role.columns,
+          toDimension: dimName,
+          toLevel,
+          rolePlay: role.rolePlay,
+          dimensionDataset: dimDataset,
+        });
+      }
+    }
+
+    // A dimension in the flat dimensions: list is implicitly degenerate (no relationship
+    // needed); one referenced only via relationships[].to.dimension must not also appear
+    // there, so only degenerate dims are tracked here.
+    if (isDegenerate) degenerateDimNames.push(dimName);
   }
 
-  return relationships;
+  return { relationships, degenerateDimNames };
 }
 
 // ============================================================
@@ -1625,12 +2015,19 @@ function buildCatalogYaml(catalogName: string): string {
   });
 }
 
-function buildConnectionYaml(connName: string, connType?: string, db?: string, schema?: string): string {
+function buildConnectionYaml(
+  connName: string,
+  connType?: string,
+  db?: string,
+  schema?: string,
+  /** The base AtScale-registered connection this one is a db/schema variant of, if any. */
+  asConnection?: string,
+): string {
   const obj: Record<string, unknown> = {
     unique_name: connName,
     object_type: "connection",
     label: connName,
-    as_connection: connName,
+    as_connection: asConnection ?? connName,
   };
   if (connType) obj.connection_type = connType;
   if (db) obj.database = db;
@@ -1672,7 +2069,7 @@ function buildModelYaml(
   });
 
   if (dimNames.length > 0) {
-    obj.dimensions = dimNames.map((n) => ({ unique_name: n }));
+    obj.dimensions = dimNames;
   }
 
   if (metricNames.length > 0) {
