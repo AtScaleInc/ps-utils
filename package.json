@@ -33,13 +33,15 @@
     "atscale-utils"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-ejs.mjs && npm run generate:completions && npm run generate:graphql-docs && npm run generate:rest-docs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-ejs.mjs && npm run generate:completions && npm run generate:graphql-docs && npm run generate:rest-docs && npm run generate:extension-manifest && npm run generate:extension-contributes",
     "start": "npm run build && node dist/cli.js",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run",
     "generate:completions": "node dist/scripts/generate-completions.js",
     "generate:graphql-docs": "node dist/scripts/generate-graphql-docs.js",
-    "generate:rest-docs": "node dist/scripts/generate-rest-docs.js"
+    "generate:rest-docs": "node dist/scripts/generate-rest-docs.js",
+    "generate:extension-manifest": "node dist/scripts/generate-extension-manifest.js",
+    "generate:extension-contributes": "node dist/scripts/generate-extension-contributes.js"
   },
   "dependencies": {
     "@types/node": "^25.3.0",

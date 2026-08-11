@@ -1,0 +1,2750 @@
+{
+  "cliPackage": "@atscale-ps/ps-utils",
+  "cliBin": "atscale-utils",
+  "settingsParams": {
+    "connection-file": "connectionFile",
+    "sml-config-file": "styleFile",
+    "model-name": "modelName"
+  },
+  "generalGroupName": "General",
+  "groups": [
+    {
+      "name": "Visualization and Namespace Processing",
+      "operations": [
+        "generate-metrics-from-model",
+        "generate-namespace-from-model",
+        "extract-model-from-atscale",
+        "extract-model-from-sml"
+      ]
+    },
+    {
+      "name": "SML Creation and Manipulation",
+      "operations": [
+        "execute-sql-on-connection",
+        "extract-ddl-from-connection",
+        "generate-sml-from-connection",
+        "generate-sml-from-ddl",
+        "generate-sml-from-xml",
+        "apply-style-to-sml",
+        "generate-sml-docs",
+        "generate-shared-model-plan",
+        "apply-shared-model-plan-option",
+        "generate-ddl-from-atscale"
+      ]
+    },
+    {
+      "name": "Synthetic Data Generation",
+      "operations": [
+        "extract-data-shape-from-connection",
+        "generate-ddl-from-data-shape",
+        "generate-data-from-data-shape",
+        "generate-data-from-data-shape-to-connection"
+      ]
+    },
+    {
+      "name": "BI Tool Integration",
+      "operations": [
+        "generate-tableau-from-namespace",
+        "generate-excel-from-namespace",
+        "generate-powerbi-from-namespace"
+      ]
+    },
+    {
+      "name": "Testing / Query Processing",
+      "operations": [
+        "generate-queries-from-sml",
+        "generate-queries-from-model",
+        "extract-query-stats-from-atscale",
+        "extract-queries-from-atscale",
+        "execute-atscale-query-harness",
+        "execute-query-on-connection",
+        "generate-enhanced-query-results",
+        "execute-run-analysis"
+      ]
+    },
+    {
+      "name": "AtScale Config",
+      "operations": [
+        "generate-atscale-install-yaml",
+        "atscale-deploy-catalog",
+        "atscale-list-model-errors"
+      ]
+    },
+    {
+      "name": "General",
+      "operations": [
+        "generate-notebook-from-connection",
+        "echo-connection-metadata",
+        "atscale-list-data-sources",
+        "atscale-create-data-source",
+        "atscale-list-repos",
+        "atscale-create-repo",
+        "atscale-list-deployments",
+        "get-dso-count",
+        "execute-web-services",
+        "version"
+      ]
+    }
+  ],
+  "operations": {
+    "extract-model-from-atscale": {
+      "description": "Extract an AtScale model (stub)",
+      "group": "Visualization and Namespace Processing",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-model-file"
+      },
+      "params": [
+        {
+          "name": "model",
+          "description": "AtScale model identifier",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-file",
+          "description": "Path to connection file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-model-file",
+          "description": "Output file path for extracted model",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-powerbi-from-namespace": {
+      "description": "Generate a PowerBI workbook from a namespace (stub)",
+      "group": "BI Tool Integration",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "namespace-file",
+        "folder": "target-folder"
+      },
+      "params": [
+        {
+          "name": "namespace-file",
+          "description": "The file where the namespace is contained",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "analysis/namespace.yaml"
+        },
+        {
+          "name": "model-file",
+          "description": "The file where the models are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "model.yaml"
+        },
+        {
+          "name": "connection-file",
+          "description": "The file where the connections are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "aliases-file",
+          "description": "Optional YAML file containing column aliases (global / worksheets / dashboards sections)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "target-folder",
+          "description": "Target folder to output the report",
+          "type": "string",
+          "role": "input-dir",
+          "required": false,
+          "default": "powerbi"
+        },
+        {
+          "name": "connection-name",
+          "description": "The name of the connection to use",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "default"
+        }
+      ]
+    },
+    "generate-notebook-from-connection": {
+      "description": "Generate a Notebook from a namespace (stub)",
+      "group": "General",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "namespace-file"
+      },
+      "params": [
+        {
+          "name": "namespace-file",
+          "description": "The file where the namespace is contained",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "analysis/namespace.yaml"
+        },
+        {
+          "name": "model-file",
+          "description": "The file where the models are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "model.yaml"
+        },
+        {
+          "name": "connection-file",
+          "description": "The file where the connections are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "aliases-file",
+          "description": "Optional YAML file containing column aliases (global / worksheets / dashboards sections)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "The name of the connection to use",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "default"
+        },
+        {
+          "name": "target-file",
+          "description": "Target file to output the notebook",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "notebook.ipynb"
+        }
+      ]
+    },
+    "generate-tableau-from-namespace": {
+      "description": "Generate a Tableau workbook from a namespace (stub)",
+      "group": "BI Tool Integration",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "namespace-file"
+      },
+      "params": [
+        {
+          "name": "namespace-file",
+          "description": "The file where the namespace is contained",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "analysis/namespace.yaml"
+        },
+        {
+          "name": "model-file",
+          "description": "The file where the models are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "model.yaml"
+        },
+        {
+          "name": "connection-file",
+          "description": "The file where the connections are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "aliases-file",
+          "description": "Optional YAML file containing column aliases (global / worksheets / dashboards sections)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "tableau-version",
+          "description": "The target version of tableau",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "2025"
+        },
+        {
+          "name": "connection-name",
+          "description": "The name of the connection to use",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "default"
+        },
+        {
+          "name": "target-file",
+          "description": "Target file to output the workbook",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "tableau.twb"
+        }
+      ]
+    },
+    "echo-connection-metadata": {
+      "description": "Print schemas, tables, columns, and foreign keys for a connection",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "File that defines all the connections",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "The name of the connection in the connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "schema",
+          "description": "Override schema name for metadata queries",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-connection": {
+      "description": "Connect to a database and generate AtScale SML files from the inferred semantic model",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections.yaml file (default: connections.yaml)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "Name of the connection entry in the connections.yaml file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Name for the generated semantic model",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where SML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sml-config-file",
+          "description": "Path to the SML style configuration file (default: \"sml.style.yaml\"). Style file values are overridden by CLI flags. The effective settings are always written to <output-dir>/sml.style.yaml after generation.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "sml.style.yaml"
+        },
+        {
+          "name": "schema",
+          "description": "Database schema to introspect (overrides the schema in the connection config)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "catalog-name",
+          "description": "Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "pii-severity",
+          "description": "Minimum PII severity to exclude: \"HIGH\", \"MEDIUM\" (default), \"LOW\", or \"none\". Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "sample-size",
+          "description": "Maximum rows to sample per table for type inference (default: 250; 0 to disable). Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "fact-tables",
+          "description": "Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "camel-case-files",
+          "description": "When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "camel-case-measures",
+          "description": "When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "label-style",
+          "description": "Label style for all SML object labels: \"title-case\" (default), \"camel-case\", or \"none\" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "min-hierarchies-per-dim",
+          "description": "Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "max-hierarchies-per-dim",
+          "description": "Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-ddl": {
+      "description": "Parse a DDL file and generate AtScale SML files from the inferred semantic model",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "ddl-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "ddl-file",
+          "description": "Path to the SQL DDL file to parse (CREATE TABLE / CREATE VIEW statements)",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Name for the generated semantic model (defaults to the DDL filename stem)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where SML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name to embed in the generated SML files (for AtScale to reference)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "my_connection"
+        },
+        {
+          "name": "sml-config-file",
+          "description": "Path to the SML style configuration file (default: \"sml.style.yaml\"). Style file values are overridden by CLI flags. The effective settings are always written to <output-dir>/sml.style.yaml after generation.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "sml.style.yaml"
+        },
+        {
+          "name": "catalog-name",
+          "description": "Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "pii-severity",
+          "description": "Minimum PII severity to exclude: \"HIGH\", \"MEDIUM\" (default), \"LOW\", or \"none\". Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "schema",
+          "description": "Schema name used to filter the DDL (only tables in this schema will be included)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "database",
+          "description": "Database (catalog) name to embed in the SML connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "dialect",
+          "description": "Database dialect (e.g. \"snowflake\", \"postgresql\"). When \"snowflake\", dataset table names are uppercased.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "fact-tables",
+          "description": "Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "camel-case-files",
+          "description": "When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "camel-case-measures",
+          "description": "When true, metric labels use camelCase of the source column name (default: false). Can also be set in sml.style.yaml.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "label-style",
+          "description": "Label style for all SML object labels: \"title-case\" (default), \"camel-case\", or \"none\" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "min-hierarchies-per-dim",
+          "description": "Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "max-hierarchies-per-dim",
+          "description": "Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-xml": {
+      "description": "Convert an AtScale XML project file (project_2_0 format) to AtScale SML files",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "xml-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "xml-file",
+          "description": "Path to the AtScale XML project file to convert",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where SML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "SML connection unique_name to embed in generated files (auto-detected from XML if omitted)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-type",
+          "description": "Database dialect for the connection file (e.g. \"snowflake\", \"postgresql\")",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "catalog-name",
+          "description": "Override the catalog label (defaults to the XML schema name)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-db",
+          "description": "Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-schema",
+          "description": "Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "apply-style-to-sml": {
+      "description": "Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sml-config-file",
+          "description": "Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "label-style",
+          "description": "Label style to apply: \"title-case\" (default), \"camel-case\", or \"none\" (raw source names). Overrides sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "catalog-name",
+          "description": "Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-docs": {
+      "description": "Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output Markdown file. A relative path is written inside the SML directory; an absolute path is used as-is. Defaults to README.md.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": "README.md"
+        },
+        {
+          "name": "title",
+          "description": "H1 title for the document. Defaults to the catalog label / unique_name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-shared-model-plan": {
+      "description": "Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "input-dirs",
+          "description": "Comma-separated list of SML output directories to analyse (at least one required)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where RECOMMENDATION.md and option YAML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "threshold",
+          "description": "Similarity threshold 0–1; lower values surface more options (default 0.5)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 0.5
+        },
+        {
+          "name": "max-per-subject",
+          "description": "Maximum number of recommendations to emit per subject entity (dataset, dimension, or model pair); prevents flooding the output with near-duplicate options for the same entity (default 3)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 3
+        }
+      ]
+    },
+    "apply-shared-model-plan-option": {
+      "description": "Apply a generate-shared-model-plan recommendation YAML to create shared SML files",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "plan-file",
+        "folder": "shared-dir"
+      },
+      "params": [
+        {
+          "name": "plan-file",
+          "description": "Path to the option YAML file produced by generate-shared-model-plan",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "shared-dir",
+          "description": "Base directory for shared output files (e.g. ./shared)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "remove-sources",
+          "description": "Delete the local source files after writing the shared version (default false)",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "dry-run",
+          "description": "Print all actions that would be taken without writing or deleting any files",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "extract-model-from-sml": {
+      "description": "Read an SML directory and output the same model.yaml format as extract-model-from-atscale",
+      "group": "Visualization and Namespace Processing",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory (must contain models/, metrics/, dimensions/, datasets/ sub-directories)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Model label or unique_name to extract (defaults to the first model found)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Override the data_source connection name written to the output model.yaml",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-model-file",
+          "description": "Output file path for the model YAML (omit to print to stdout)",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-namespace-from-model": {
+      "description": "Generate a namespace YAML from a model.yaml file using analysis suggestions",
+      "group": "Visualization and Namespace Processing",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "model-file"
+      },
+      "params": [
+        {
+          "name": "model-file",
+          "description": "Path to the model.yaml file produced by extract-model-from-atscale or extract-model-from-sml",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Model name to use when model.yaml contains multiple models (defaults to first)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "description": "Title for the generated workbook (defaults to \"<ModelName> Analysis\")",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "max-suggestions",
+          "description": "Maximum number of analysis suggestions to generate (default: 25)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "25"
+        },
+        {
+          "name": "min-score",
+          "description": "Minimum relevance score [0-1] for a suggestion to be included (default: 0.5)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "0.5"
+        },
+        {
+          "name": "output-file",
+          "description": "Output path for the namespace YAML (omit to print to stdout)",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-metrics-from-model": {
+      "description": "Generate ranked metric suggestions from a model.yaml file using the analysis-suggestions engine",
+      "group": "Visualization and Namespace Processing",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "model-file"
+      },
+      "params": [
+        {
+          "name": "model-file",
+          "description": "Path to the model.yaml file produced by extract-model-from-atscale or extract-model-from-sml",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Model name to use when model.yaml contains multiple models (defaults to first)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "sml-config-file",
+          "description": "Path to the SML style configuration file (default: \"sml.style.yaml\"). Style file values are overridden by CLI flags. The effective settings are written to sml.style.yaml in the output file's directory (or the working directory when writing to stdout).",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "sml.style.yaml"
+        },
+        {
+          "name": "max-suggestions",
+          "description": "Maximum number of suggestions to generate (default: 25). Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "min-score",
+          "description": "Minimum relevance score [0-1] for a suggestion to be included (default: 0.5). Can also be set in sml.style.yaml.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "include-tuples",
+          "description": "Include multi-dimension suggestions (default: true). Can also be set in sml.style.yaml.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "format",
+          "description": "Output format: text (default) or yaml",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "text"
+        },
+        {
+          "name": "output-file",
+          "description": "Output path (omit to print to stdout)",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "execute-sql-on-connection": {
+      "description": "Execute a SQL file against a named database connection",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "sql-file"
+      },
+      "params": [
+        {
+          "name": "sql-file",
+          "description": "Path to the SQL file to execute",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-file",
+          "description": "Path to the connections.yaml file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "Name of the connection in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "on-error",
+          "description": "Behaviour when a statement fails: \"stop\" (default) or \"continue\"",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "stop"
+        },
+        {
+          "name": "dry-run",
+          "description": "Print each statement without executing it. Pass true/false or use as a standalone flag.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "extract-ddl-from-connection": {
+      "description": "Connect to a database and extract CREATE TABLE DDL for each table in the schema",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections.yaml file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "Name of the connection entry in the connections.yaml file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "schema",
+          "description": "Database schema to introspect",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "tables",
+          "description": "Comma-separated list of table names or wildcard patterns to include (e.g. \"Dim*,FactSales\"). Omit to extract all tables.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output file path for the DDL. Omit to print to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "case-insensitive",
+          "description": "Match table names case-insensitively. Default is case-sensitive matching.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-excel-from-namespace": {
+      "description": "Generate an Excel workbook with OLAP pivot tables from a namespace",
+      "group": "BI Tool Integration",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "namespace-file"
+      },
+      "params": [
+        {
+          "name": "namespace-file",
+          "description": "The file where the namespace is contained",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "analysis/namespace.yaml"
+        },
+        {
+          "name": "model-file",
+          "description": "The file where the models are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "model.yaml"
+        },
+        {
+          "name": "connection-file",
+          "description": "The file where the connections are defined",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "aliases-file",
+          "description": "Optional YAML file containing column aliases (global / worksheets / dashboards sections)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Name of the connection in the connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "default"
+        },
+        {
+          "name": "target-file",
+          "description": "Output path for the generated Excel workbook (.xlsx)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "analysis/workbook.xlsx"
+        }
+      ]
+    },
+    "extract-query-stats-from-atscale": {
+      "description": "Analyse AtScale query history and output a CSV occurrence matrix of (dimension attribute × measure) query pairs",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name within the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model",
+          "description": "AtScale model (cube) name to analyse",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory to write the output CSV files",
+          "type": "string",
+          "role": "output-dir",
+          "required": false,
+          "default": "."
+        },
+        {
+          "name": "window-days",
+          "description": "Number of days to look back when no explicit start/end date is given",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "30"
+        },
+        {
+          "name": "start-date",
+          "description": "Explicit window start (ISO-8601, e.g. 2025-01-01T00:00:00Z). Overrides --window-days.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "end-date",
+          "description": "Explicit window end (ISO-8601). Defaults to now when --start-date is given.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "monthly",
+          "description": "When 'true', also generates a month-by-month breakdown CSV for --monthly-year",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "false"
+        },
+        {
+          "name": "monthly-year",
+          "description": "Calendar year (e.g. 2025) for the monthly breakdown. Defaults to the current year.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "limit",
+          "description": "Page size for the query history API",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "100"
+        },
+        {
+          "name": "num-queries",
+          "description": "Maximum number of sample query IDs to retain per (attribute, measure) pair",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "10"
+        }
+      ]
+    },
+    "extract-queries-from-atscale": {
+      "description": "Extract deduplicated query history from the AtScale Postgres backend and write JSON files for use with execute-atscale-query-harness",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to connections.yaml or a Gatling systems.properties file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name within connections.yaml (ignored for .properties files)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "default"
+        },
+        {
+          "name": "models",
+          "description": "Comma-separated model/cube names to extract. Required for YAML mode; overrides atscale.models for .properties mode.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "days",
+          "description": "Look-back window in days",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "60"
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory to write the output JSON files",
+          "type": "string",
+          "role": "output-dir",
+          "required": false,
+          "default": "queries"
+        },
+        {
+          "name": "protocol",
+          "description": "Query protocol to extract: sql, xmla, or all",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "all"
+        },
+        {
+          "name": "min-executions",
+          "description": "Exclude queries seen fewer than N times in the window",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "1"
+        },
+        {
+          "name": "db-schema",
+          "description": "Postgres schema prefix for the AtScale backend tables (e.g. 'engine' or 'atscale.engine'). Defaults to the schema in the connection file, then 'engine' (standard container deployment).",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    "execute-atscale-query-harness": {
+      "description": "Execute a set of AtScale queries (XMLA or SQL) with configurable concurrency and write a timestamped CSV results file",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "query-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to connections.yaml or a Gatling systems.properties file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name within connections.yaml, or model name for .properties files",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "query-file",
+          "description": "JSON file produced by extract-queries-from-atscale. Ignored when --task-file is set.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "ingest-file",
+          "description": "CSV query file in Gatling ingest/ format (sampler_name,sql_text or sampler_name,atscale_query_id,sql_text). Ignored when --task-file is set.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "task-file",
+          "description": "YAML or JSON executor task file (executor_tasks/*.yaml schema). All tasks in the file are run sequentially.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "protocol",
+          "description": "Query protocol: xmla or sql",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "xmla"
+        },
+        {
+          "name": "concurrent-users",
+          "description": "Number of simultaneous query workers. Overridden by --task-file injection steps.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "1"
+        },
+        {
+          "name": "throttle-ms",
+          "description": "Milliseconds to pause between queries per worker (matches atscale.gatling.throttle.ms)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "5"
+        },
+        {
+          "name": "run-id",
+          "description": "Identifier stamped on every output row. Auto-generated (YYYY-MM-DD-XXXXXXXXXX) if omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory to write the results CSV file(s)",
+          "type": "string",
+          "role": "output-dir",
+          "required": false,
+          "default": "run_results"
+        },
+        {
+          "name": "redact",
+          "description": "When true, omit query text from the output and replace with the hash only",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "false"
+        },
+        {
+          "name": "duration-minutes",
+          "description": "For timed runs: how long to keep cycling through the query list. When 0 (default), each query is executed exactly once. Overridden by --task-file injection steps.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "0"
+        },
+        {
+          "name": "annotate-queries",
+          "description": "When true (default), prepend a /* {run_id, run_query_uuid, original_text_hash} */ comment to each executed query so AtScale's query log carries correlation fields. Set to false to send queries unmodified.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "true"
+        }
+      ]
+    },
+    "execute-query-on-connection": {
+      "description": "Execute one or more named queries (wildcard-matched) against a connection and write the results to file(s)",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "query-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to connections.yaml or a Gatling systems.properties file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name within connections.yaml, or model name for .properties files",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "query-file",
+          "description": "JSON file produced by extract-queries-from-atscale, or a CSV ingest file (sampler_name,sql_text or sampler_name,atscale_query_id,sql_text)",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "protocol",
+          "description": "Query protocol: xmla or sql (default: xmla)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "xmla"
+        },
+        {
+          "name": "query-name",
+          "description": "Name of the query (or queries) to execute. Supports shell-style wildcards: * matches any sequence of characters, ? matches exactly one character. When multiple queries match, each result is written to a separate file derived from --output-file: {dir}/{query_name}{ext}.",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Path to write query results. SQL results are written as CSV; XMLA results are written as raw XML.",
+          "type": "string",
+          "role": "output-file",
+          "required": true,
+          "default": null
+        }
+      ]
+    },
+    "generate-atscale-install-yaml": {
+      "description": "Generate a Helm values.yaml for an AtScale Kubernetes deployment, optionally creating a self-signed TLS certificate for the provided hostname",
+      "group": "AtScale Config",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "cert-file"
+      },
+      "params": [
+        {
+          "name": "hostname",
+          "description": "Fully-qualified domain name (or IP) used as the AtScale ingress domain and as the certificate Common Name / SAN when generating a self-signed cert",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "cert-file",
+          "description": "Path to an existing PEM-encoded TLS certificate file. If omitted a self-signed certificate is generated automatically.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "key-file",
+          "description": "Path to an existing PEM-encoded private key file. Required when --cert-file is provided.",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "license-key",
+          "description": "AtScale license key to embed in the values.yaml. Written to atscale-entitlement.entitlement.licenseKey. If omitted the field is left blank and the key can be uploaded via the UI after install.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output file path for the generated values.yaml",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": "values.yaml"
+        },
+        {
+          "name": "enable-mcp",
+          "description": "Enable the AtScale MCP server sub-chart (atscale-mcp.enabled). Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "minimal",
+          "description": "Emit additional Helm values that reduce the hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "external-postgres",
+          "description": "Emit Helm values that point AtScale at an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and wires each service's externalDatabase block to Kubernetes secrets. The connection credentials (host/port/user/password) are NOT taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA) rather than `public`; the operator must create that schema before install (a CREATE SCHEMA statement is included in the emitted header comment). Verified against AtScale Helm chart 2026.5.0.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "gatekeeper-compliant",
+          "description": "Emit Helm values that satisfy common OPA Gatekeeper constraints: sets image.pullPolicy=Always and serviceAccount.create=true per subchart, and resource requests/limits via global.resourcesPreset (poc when combined with --minimal, otherwise prod). Some constraints cannot be met via values.yaml and require a namespace exemption; these are listed in a comment in the output. Verified against AtScale Helm chart 2026.5.0.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "atscale-list-data-sources": {
+      "description": "List data sources (data warehouses) registered in an AtScale instance",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-create-data-source": {
+      "description": "Register a data source (data warehouse) in an AtScale instance",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (must have an atscale: block)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "new-connection-name",
+          "description": "Name of the SQL connection entry to register as a data source (must have a sql: block)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "aggregate-schema",
+          "description": "Schema (or BigQuery dataset) used for aggregate table storage",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "description": "Display name for the data warehouse in AtScale. Defaults to --new-connection-name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-id",
+          "description": "Logical connection ID embedded in SML. Defaults to --new-connection-name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "access-users",
+          "description": "Comma-separated AtScale usernames to grant access. Omit or pass empty string to grant access to the 'everyone' group instead.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "aggregate-project-id",
+          "description": "BigQuery only: GCP project ID for aggregate storage. Defaults to sql.project from the connection config.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-list-repos": {
+      "description": "List git repositories registered in an AtScale instance",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-create-repo": {
+      "description": "Register a git repository in an AtScale instance",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (must have an atscale: block)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "description": "Human-readable name for the repository",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "url",
+          "description": "Git remote URL (HTTPS or SSH)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "type",
+          "description": "Repository type: 'catalog' (default) or 'global_settings'",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "catalog"
+        },
+        {
+          "name": "visible-branches-pattern",
+          "description": "Glob pattern controlling which branches are visible in the UI",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "default-branch",
+          "description": "Default branch name (e.g. 'main')",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-list-deployments": {
+      "description": "List deployed catalogs (semantic models) in an AtScale instance",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-deploy-catalog": {
+      "description": "Deploy local SML files to an AtScale git repository and publish the catalog",
+      "group": "AtScale Config",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (must have an atscale: block)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sml-dir",
+          "description": "Path to the directory containing SML files to deploy",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "repo-id",
+          "description": "UUID of the git repository already configured in AtScale (from atscale-list-repos). Either repo-id or repo-name is required.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "repo-name",
+          "description": "Name of the git repository already configured in AtScale. Used to look up the repo-id when repo-id is not provided.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "project-name",
+          "description": "Catalog project name to deploy as. Defaults to {catalog.unique_name}_{repo.defaultBranch}.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "tableau-servers",
+          "description": "Optional JSON array of Tableau servers to publish to, e.g. [{\"name\":\"ts1\",\"sites\":[\"Default\"]}]",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-list-model-errors": {
+      "description": "Validate an SML model and list structural and engine-level problems",
+      "group": "AtScale Config",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sml-dir",
+          "description": "Local SML directory (models/, dimensions/, datasets/). Use for pre-deploy CI/CD validation. Mutually exclusive with --repo-name / --repo-id.",
+          "type": "string",
+          "role": "input-dir",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "repo-name",
+          "description": "Name of a git repository already connected in AtScale. Clones the repo to a temp directory and validates it. Mutually exclusive with --sml-dir.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "repo-id",
+          "description": "UUID of a git repository already connected in AtScale. Alternative to --repo-name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "branch",
+          "description": "Branch to validate when using --repo-name / --repo-id. Defaults to the repository's defaultBranch.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Model label or unique_name to validate (defaults to the first model found)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-ddl-from-atscale": {
+      "description": "Generate DDL from an AtScale data source by reading table metadata via the REST API",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file (must have an atscale: block)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "data-source-name",
+          "description": "Name of the data source as registered in AtScale (used to resolve the connection ID)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "database",
+          "description": "Database (catalog) name to read tables from",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "schema",
+          "description": "Schema name to read tables from",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "tables",
+          "description": "Comma-separated table names or wildcard patterns to include (e.g. \"Dim*,FactSales\"). Omit to extract all tables.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output file path for the generated DDL. Omit to print to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "extract-data-shape-from-connection": {
+      "description": "Connect to a database and extract a statistical fingerprint of the SML model data shape",
+      "group": "Synthetic Data Generation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections.yaml file (default: connections.yaml)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "Name of the connection entry in the connections.yaml file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sml-path",
+          "description": "Path to the SML output directory or a model.yml file produced by generate-sml-from-connection / generate-sml-from-ddl",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output path for the fingerprint YAML (default: data-shape.yaml)",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": "data-shape.yaml"
+        },
+        {
+          "name": "target-fact-rows",
+          "description": "Target row count when sampling large fact tables for density profiling (default: 100000; 0 = no sampling)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 100000
+        },
+        {
+          "name": "target-column-rows",
+          "description": "Target row count for measure column distribution sampling (default: 10000; 0 = no sampling)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 10000
+        },
+        {
+          "name": "tablesample",
+          "description": "Use TABLESAMPLE SYSTEM for fact sampling when true (default: true). Set to false for databases that do not support TABLESAMPLE (e.g. MySQL).",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "serial",
+          "description": "Profile dimensions one at a time instead of in parallel (default: false). Use when the database enforces a low per-user connection limit.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "preserve-meta-data",
+          "description": "Store original table and column names in the fingerprint so data generation uses real names instead of synthetic ones (default: false)",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "generate-ddl-from-data-shape": {
+      "description": "Generate CREATE TABLE DDL from a data-shape.yaml statistical fingerprint",
+      "group": "Synthetic Data Generation",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "input-file"
+      },
+      "params": [
+        {
+          "name": "input-file",
+          "description": "Path to the data-shape.yaml fingerprint file (default: data-shape.yaml)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "data-shape.yaml"
+        },
+        {
+          "name": "output-file",
+          "description": "Output path for the generated DDL.  Omit to write to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "dialect",
+          "description": "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "ansi"
+        },
+        {
+          "name": "preserve-meta-data",
+          "description": "Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "generate-data-from-data-shape": {
+      "description": "Generate synthetic CSV data from a data-shape.yaml statistical fingerprint",
+      "group": "Synthetic Data Generation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "input-file",
+        "folder": "reports-dir"
+      },
+      "params": [
+        {
+          "name": "input-file",
+          "description": "Path to the data-shape.yaml fingerprint file (default: data-shape.yaml)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "data-shape.yaml"
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where CSV files are written (default: data)",
+          "type": "string",
+          "role": "output-dir",
+          "required": false,
+          "default": "data"
+        },
+        {
+          "name": "scale-factor",
+          "description": "Scale row/member counts by this factor (default: 1.0; use < 1 for smaller datasets)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 1
+        },
+        {
+          "name": "seed",
+          "description": "Random seed for reproducible output (omit for non-deterministic)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "reports-dir",
+          "description": "Directory where security reports are written (default: <output-dir>/_reports)",
+          "type": "string",
+          "role": "input-dir",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "preserve-meta-data",
+          "description": "Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "generate-data-from-data-shape-to-connection": {
+      "description": "Generate synthetic data from a fingerprint and load it into a live database",
+      "group": "Synthetic Data Generation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "input-file",
+        "folder": "reports-dir"
+      },
+      "params": [
+        {
+          "name": "input-file",
+          "description": "Path to the data-shape.yaml fingerprint file (default: data-shape.yaml)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "data-shape.yaml"
+        },
+        {
+          "name": "connection-file",
+          "description": "Path to the connections.yaml file (default: connections.yaml)",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "Name of the connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "scale-factor",
+          "description": "Scale row/member counts by this factor (default: 1.0)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 1
+        },
+        {
+          "name": "seed",
+          "description": "Random seed for reproducible output",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "create-tables",
+          "description": "Emit CREATE TABLE statements before inserting (default: false)",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "drop-if-exists",
+          "description": "DROP TABLE IF EXISTS before creating tables — implies --create-tables (default: false)",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "dialect",
+          "description": "SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "batch-size",
+          "description": "Rows per INSERT statement (default: 500)",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 500
+        },
+        {
+          "name": "schema",
+          "description": "Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "reports-dir",
+          "description": "Directory where security reports are written (default: ./_reports)",
+          "type": "string",
+          "role": "input-dir",
+          "required": false,
+          "default": "_reports"
+        },
+        {
+          "name": "preserve-meta-data",
+          "description": "Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    "generate-enhanced-query-results": {
+      "description": "Enrich a execute-atscale-query-harness results CSV with the AtScale query_id, outbound SQL text, and optionally the execution plan from the target data source (requires --target-connection-name)",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "results-file"
+      },
+      "params": [
+        {
+          "name": "results-file",
+          "description": "Path to the run-results CSV produced by execute-atscale-query-harness",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-file",
+          "description": "Path to connections.yaml",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "Connection name within connections.yaml. The metadata: block is used when present; falls back to the sql: block.",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output path for the enhanced CSV. Defaults to {results-file-stem}_enhanced.csv in the same directory.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "db-schema",
+          "description": "Postgres schema prefix for the AtScale backend tables (e.g. 'engine' or 'atscale'). Auto-detected from the connection file when omitted (installer → 'atscale', container → 'engine').",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "days",
+          "description": "How far back in the AtScale query log to search (default: 7). Increase if the harness run was more than a week ago.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "7"
+        },
+        {
+          "name": "target-connection-name",
+          "description": "Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "execute-run-analysis": {
+      "description": "Compare two execute-atscale-query-harness run logs (or enhanced outputs) query-by-query; writes a plain-text summary report, a full row-by-row comparison CSV, and a filtered outliers CSV for row-count and duration mismatches",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "summary-file"
+      },
+      "params": [
+        {
+          "name": "file-a",
+          "description": "Path to the first run log (execute-atscale-query-harness CSV) or enhanced output (generate-enhanced-query-results CSV)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "file-b",
+          "description": "Path to the second run log or enhanced output to compare against file-a",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "join-key",
+          "description": "Column to join queries across the two files. Use 'original_text_hash' (default) to match queries by SQL text, or 'original_atscale_query_id' to match by the AtScale query ID recorded at capture time.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "original_text_hash"
+        },
+        {
+          "name": "duration-variance-pct",
+          "description": "Percentage threshold for flagging duration differences. A pair is flagged when |(b_duration - a_duration) / a_duration| × 100 exceeds this value. Default: 20.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "20"
+        },
+        {
+          "name": "summary-file",
+          "description": "Path to write the plain-text summary report",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "comparison-file",
+          "description": "Path to write the row-by-row comparison CSV",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "outliers-file",
+          "description": "Path to write the outliers CSV — a filtered subset of --comparison-file containing only pairs flagged for a row-count mismatch or a duration outside the variance threshold",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        }
+      ]
+    },
+    "generate-queries-from-sml": {
+      "description": "Read an SML directory and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "xmla-output-file",
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Model label or unique_name to use (defaults to the first model found)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "cube-name",
+          "description": "Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "xmla-output-file",
+          "description": "Path to write the XMLA (MDX) query JSON file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sql-output-file",
+          "description": "Path to write the SQL query JSON file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        }
+      ]
+    },
+    "generate-queries-from-model": {
+      "description": "Read a model.yaml file and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness",
+      "group": "Testing / Query Processing",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "model-file"
+      },
+      "params": [
+        {
+          "name": "model-file",
+          "description": "Path to the model.yaml file (output of extract-model-from-atscale or extract-model-from-sml)",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "cube-name",
+          "description": "Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key).",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "xmla-output-file",
+          "description": "Path to write the XMLA (MDX) query JSON file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "sql-output-file",
+          "description": "Path to write the SQL query JSON file",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        }
+      ]
+    },
+    "get-dso-count": {
+      "description": "Get the DSO count from models",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "File that defines all the connections",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "connection-name",
+          "description": "The name of the connection in the connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog",
+          "description": "The name of the catalog to pull the DSO count for. Ignore to pull all catalogs",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model",
+          "description": "The name of the model to pull the DSO count for. Ignore to pull all models",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "execute-web-services": {
+      "description": "Start a GraphQL HTTP server that exposes all operations as mutations",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "port",
+          "description": "Port the GraphQL server will listen on",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 4000
+        },
+        {
+          "name": "host",
+          "description": "Host / bind address for the server",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "localhost"
+        }
+      ]
+    },
+    "version": {
+      "description": "Print the installed version of atscale-utils",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": []
+    }
+  }
+}

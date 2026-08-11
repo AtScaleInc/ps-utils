@@ -91,6 +91,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
   - [`applySharedModelPlanOption`](#generatesmlFromsharedmodelplan)
   - [`applyStyleToSML`](#applystyletosml)
+  - [`generateSMLDocs`](#generatesmldocs)
   - [`generateDDLFromAtScale`](#generateddlfromatscale)
   - [`generateMetricsFromModel`](#generatemetricsfrommodel)
   - [`echoConnectionMetadata`](#echoconnectionmetadata)
@@ -473,6 +474,35 @@ function applyStyleToSML(
 | `smlConfigFile` | `FileInput` | No | `"<smlDir>/sml.style.yaml"` | Path to SML style configuration file, or a `Readable` of its contents |
 | `labelStyle` | `"title-case" \| "camel-case" \| "none"` | No | `"title-case"` | Label style for all SML object labels; overrides `camelCaseMeasures` |
 | `catalogName` | `string` | No | | Catalog display name for `STYLE.md` |
+
+---
+
+### `generateSMLDocs`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a single Markdown reference of every SML object — catalog, connections, datasets (fact vs dimension), dimensions (hierarchies, levels, level attributes, secondary attributes, snowflake/embedded joins), models (fact→dimension relationships with a Mermaid diagram, metric references, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), metrics, calculations, and any security objects.
+
+```typescript
+import { generateSMLDocs } from "@atscale/ps-utils";
+
+await generateSMLDocs({
+  smlDir: "./sml-output",
+});
+```
+
+```typescript
+function generateSMLDocs(
+  params: GenerateSMLDocsParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `smlDir` | `DirInput` | Yes | | Path to the SML directory to document, or a `Readable` ZIP archive of it |
+| `outputFile` | `string` | No | `"README.md"` | Output Markdown file. A relative path is written inside `smlDir`; an absolute path is used as-is. |
+| `title` | `string` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
 
 ---
 

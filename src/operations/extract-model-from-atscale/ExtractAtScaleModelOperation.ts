@@ -150,7 +150,9 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
 
     const xmlaUrl = installer
       ? `${atscaleUrl}:10502/xmla/${organizationId}`
-      : `${atscaleUrl}/engine/xmla`;
+      // mdx.url may already carry the /engine/xmla suffix (and a per-user
+      // token beyond it) — avoid doubling the path if so.
+      : /\/engine\/xmla(\/|$)/i.test(atscaleUrl) ? atscaleUrl : `${atscaleUrl}/engine/xmla`;
 
     const config: Record<string, any> = {}
     if (Object.keys(proxyConfig).length != 0) {
@@ -356,8 +358,11 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
 
     const user = (connectionFile.users ?? {})[connection.mdx.user] ?? {};
     this.logger.verbose("User detail: " + user.username);
+    // Auth is against the AtScale base host, not the XMLA endpoint (mdx.url
+    // may carry an /engine/xmla suffix, which is not a valid auth path).
+    const authUrl = connection.atscale?.url ?? connection.mdx.url;
     const token = await this.getToken(connection.installer,
-      connection.mdx.url,
+      authUrl,
       connection.mdx.organization_id, user.username, user.password, proxyConfig);
 
 

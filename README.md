@@ -45,6 +45,7 @@ flowchart LR
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
+    SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
 ```
 
 ### Synthetic Data Generation
@@ -143,6 +144,7 @@ flowchart LR
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
+    - [`generate-sml-docs`](#generate-sml-docs)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -225,6 +227,7 @@ The `docs/` directory contains extended reference material:
 | [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
 | [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
 | [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+| [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu (install & usage) |
 
 ---
 
@@ -667,6 +670,36 @@ With optional overrides:
 | `--catalog-name` | No | | Catalog display name for `STYLE.md` |
 
 **Output:** Updates `datasets/*.yml`, `dimensions/*.yml`, and `metrics/*.yml` labels in-place; writes `STYLE.md` and `STYLE_CHANGES.md` to `<sml-dir>`.
+
+---
+
+### `generate-sml-docs`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a single Markdown reference documenting every object in it: the catalog, connections, datasets (tagged fact or dimension), dimensions (hierarchies, levels, level attributes, secondary attributes, and snowflake/embedded joins), models (fact→dimension relationships as a Mermaid diagram plus a join table, metric references, degenerate dimensions, perspectives, aggregates, query-name overrides, and drillthrough), metrics, calculations, and any security objects. Objects are discovered by their `object_type`, so anything present is documented — not just the listed examples.
+
+```bash
+./atscale-utils generate-sml-docs \
+  --sml-dir "./sml-output"
+```
+
+With optional overrides:
+
+```bash
+./atscale-utils generate-sml-docs \
+  --sml-dir "./sml-output" \
+  --output-file "DOCS.md" \
+  --title "Sales Analytics — Semantic Model"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML directory to document |
+| `--output-file` | No | `README.md` | Output Markdown file. A relative path is written inside `<sml-dir>`; an absolute path is used as-is. |
+| `--title` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
+
+**Output:** Writes the Markdown document (default `<sml-dir>/README.md`).
 
 ---
 

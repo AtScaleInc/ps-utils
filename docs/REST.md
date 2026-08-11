@@ -1794,6 +1794,38 @@ curl -X POST http://localhost:4000/rest/apply-style-to-sml \
 
 ---
 
+### `generate-sml-docs`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
+
+**Endpoint:** `POST /rest/generate-sml-docs`  |  **GraphQL:** `generateSmlDocs`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-docs \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-sml-docs \
+  -F "outputFileUpload=@/path/to/file" \
+  -F "smlDir=value"
+```
+
+---
+
 ### `get-dso-count`
 
 [↑ Table of Contents](#table-of-contents)

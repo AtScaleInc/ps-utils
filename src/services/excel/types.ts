@@ -13,9 +13,13 @@ export type HierarchyInfo = {
   leafLevelName: string | null;
   /**
    * All levels of this hierarchy, sorted broadest → most granular (ascending levelNumber).
-   * Used to resolve xAxisGranularity to a specific level caption.
+   * Used to resolve xAxisGranularity to a specific level caption. queryName is
+   * tracked separately from caption because namespace xAxis values sometimes
+   * reference a level by its query_name rather than its display caption (the
+   * two can differ, e.g. query_name "Order Year Week Hierarchy" vs caption
+   * "Order Year").
    */
-  levels: Array<{ caption: string; levelNumber: number }>;
+  levels: Array<{ caption: string; queryName: string; levelNumber: number }>;
 };
 
 /**

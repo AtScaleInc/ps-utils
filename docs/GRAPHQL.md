@@ -2223,6 +2223,51 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSmlDocs`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
+
+**CLI name:** `generate-sml-docs`  |  **REST:** `POST /rest/generate-sml-docs`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlDocs(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlDocs(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSmlDocs(input:{outputFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `getDsoCount`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2587,6 +2632,20 @@ input ApplyStyleToSmlInput {
   labelStyle: String
   """Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml."""
   catalogName: String
+}
+
+"""Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""
+input GenerateSmlDocsInput {
+  """Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)"""
+  smlDir: String!
+  """Output Markdown file. A relative path is written inside the SML directory; an absolute path is used as-is. Defaults to README.md."""
+  outputFile: String
+  """Uploaded file — alternative to outputFile"""
+  outputFileUpload: Upload
+  """Raw file content as a string — alternative to outputFile"""
+  outputFileContent: String
+  """H1 title for the document. Defaults to the catalog label / unique_name."""
+  title: String
 }
 
 """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
@@ -3355,6 +3414,8 @@ type Mutation {
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
   """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
   applyStyleToSml(input: ApplyStyleToSmlInput): OperationResult!
+  """Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""
+  generateSmlDocs(input: GenerateSmlDocsInput): OperationResult!
   """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
   generateSharedModelPlan(input: GenerateSharedModelPlanInput): OperationResult!
   """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""

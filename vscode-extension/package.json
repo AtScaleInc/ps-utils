@@ -1,0 +1,596 @@
+{
+  "name": "atscale-ps-utils",
+  "displayName": "AtScale PS-Utils",
+  "description": "Run AtScale ps-utils operations from the VS Code Explorer context menu.",
+  "version": "0.1.9",
+  "publisher": "atscale-ps",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#00AB9F",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AtScaleInc/ps-utils.git",
+    "directory": "vscode-extension"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "AtScale PS-Utils",
+      "properties": {
+        "psUtils.cliCommand": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Command used to invoke the ps-utils CLI. Leave blank to auto-detect: a local `node_modules/.bin/atscale-utils` (`.cmd` on Windows), then `npx --yes @atscale-ps/ps-utils`."
+        },
+        "psUtils.shell": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "bash",
+            "powershell",
+            "cmd"
+          ],
+          "default": "auto",
+          "markdownDescription": "Shell the integrated terminal runs, used to quote command arguments. `auto` picks PowerShell on Windows and POSIX (bash/zsh) elsewhere. Set explicitly if your default terminal differs (e.g. `bash` for Git Bash/WSL on Windows)."
+        },
+        "psUtils.connectionFile": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the project connections file. Prefilled into any operation's `--connection-file` parameter."
+        },
+        "psUtils.styleFile": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the project SML style config. Prefilled into any operation's `--sml-config-file` parameter."
+        },
+        "psUtils.modelName": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Default model name. Prefilled into any operation's `--model-name` parameter (used when a `model.yaml` contains multiple models)."
+        },
+        "psUtils.commonParams": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Additional parameter values consistent across the project, keyed by kebab-case parameter name (e.g. `{ \"catalog-name\": \"sales\" }`). Prefilled into operation dialogs when a matching parameter exists. These explicit pins take precedence over auto-remembered values.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "psUtils.rememberParameters": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Remember the last value entered for each scalar parameter when an operation is executed, and prefill it into any other operation that has a parameter of the same name (e.g. reuse a `--model-name` across operations). Stored per workspace. Clear the remembered values from the **Settings…** panel."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "psUtils.op.extract-model-from-atscale",
+        "title": "extract-model-from-atscale",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-powerbi-from-namespace",
+        "title": "generate-powerbi-from-namespace",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-notebook-from-connection",
+        "title": "generate-notebook-from-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-tableau-from-namespace",
+        "title": "generate-tableau-from-namespace",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.echo-connection-metadata",
+        "title": "echo-connection-metadata",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-sml-from-connection",
+        "title": "generate-sml-from-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-sml-from-ddl",
+        "title": "generate-sml-from-ddl",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-sml-from-xml",
+        "title": "generate-sml-from-xml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.apply-style-to-sml",
+        "title": "apply-style-to-sml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-sml-docs",
+        "title": "generate-sml-docs",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-shared-model-plan",
+        "title": "generate-shared-model-plan",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.apply-shared-model-plan-option",
+        "title": "apply-shared-model-plan-option",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.extract-model-from-sml",
+        "title": "extract-model-from-sml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-namespace-from-model",
+        "title": "generate-namespace-from-model",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-metrics-from-model",
+        "title": "generate-metrics-from-model",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.execute-sql-on-connection",
+        "title": "execute-sql-on-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.extract-ddl-from-connection",
+        "title": "extract-ddl-from-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-excel-from-namespace",
+        "title": "generate-excel-from-namespace",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.extract-query-stats-from-atscale",
+        "title": "extract-query-stats-from-atscale",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.extract-queries-from-atscale",
+        "title": "extract-queries-from-atscale",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.execute-atscale-query-harness",
+        "title": "execute-atscale-query-harness",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.execute-query-on-connection",
+        "title": "execute-query-on-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-atscale-install-yaml",
+        "title": "generate-atscale-install-yaml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-data-sources",
+        "title": "atscale-list-data-sources",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-create-data-source",
+        "title": "atscale-create-data-source",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-repos",
+        "title": "atscale-list-repos",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-create-repo",
+        "title": "atscale-create-repo",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-deployments",
+        "title": "atscale-list-deployments",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-deploy-catalog",
+        "title": "atscale-deploy-catalog",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-model-errors",
+        "title": "atscale-list-model-errors",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-ddl-from-atscale",
+        "title": "generate-ddl-from-atscale",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.extract-data-shape-from-connection",
+        "title": "extract-data-shape-from-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-ddl-from-data-shape",
+        "title": "generate-ddl-from-data-shape",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-data-from-data-shape",
+        "title": "generate-data-from-data-shape",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-data-from-data-shape-to-connection",
+        "title": "generate-data-from-data-shape-to-connection",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-enhanced-query-results",
+        "title": "generate-enhanced-query-results",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.execute-run-analysis",
+        "title": "execute-run-analysis",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-queries-from-sml",
+        "title": "generate-queries-from-sml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-queries-from-model",
+        "title": "generate-queries-from-model",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.get-dso-count",
+        "title": "get-dso-count",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.execute-web-services",
+        "title": "execute-web-services",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.version",
+        "title": "version",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.settings",
+        "title": "Settings…",
+        "category": "PS-Utils"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "psUtils.root",
+        "label": "PS-Utils"
+      },
+      {
+        "id": "psUtils.group.visualization-and-namespace-processing",
+        "label": "Visualization and Namespace Processing"
+      },
+      {
+        "id": "psUtils.group.sml-creation-and-manipulation",
+        "label": "SML Creation and Manipulation"
+      },
+      {
+        "id": "psUtils.group.synthetic-data-generation",
+        "label": "Synthetic Data Generation"
+      },
+      {
+        "id": "psUtils.group.bi-tool-integration",
+        "label": "BI Tool Integration"
+      },
+      {
+        "id": "psUtils.group.testing-query-processing",
+        "label": "Testing / Query Processing"
+      },
+      {
+        "id": "psUtils.group.atscale-config",
+        "label": "AtScale Config"
+      },
+      {
+        "id": "psUtils.group.general",
+        "label": "General"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "submenu": "psUtils.root",
+          "group": "9_psutils@1",
+          "when": "resourceScheme == file"
+        }
+      ],
+      "psUtils.root": [
+        {
+          "submenu": "psUtils.group.visualization-and-namespace-processing",
+          "group": "1_groups@1"
+        },
+        {
+          "submenu": "psUtils.group.sml-creation-and-manipulation",
+          "group": "1_groups@2"
+        },
+        {
+          "submenu": "psUtils.group.synthetic-data-generation",
+          "group": "1_groups@3"
+        },
+        {
+          "submenu": "psUtils.group.bi-tool-integration",
+          "group": "1_groups@4"
+        },
+        {
+          "submenu": "psUtils.group.testing-query-processing",
+          "group": "1_groups@5"
+        },
+        {
+          "submenu": "psUtils.group.atscale-config",
+          "group": "1_groups@6"
+        },
+        {
+          "submenu": "psUtils.group.general",
+          "group": "1_groups@7"
+        },
+        {
+          "command": "psUtils.settings",
+          "group": "9_settings@1"
+        }
+      ],
+      "psUtils.group.visualization-and-namespace-processing": [
+        {
+          "command": "psUtils.op.generate-metrics-from-model",
+          "group": "1_ops@1",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-namespace-from-model",
+          "group": "1_ops@2",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.extract-model-from-atscale",
+          "group": "1_ops@3",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.extract-model-from-sml",
+          "group": "1_ops@4",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "psUtils.group.sml-creation-and-manipulation": [
+        {
+          "command": "psUtils.op.execute-sql-on-connection",
+          "group": "1_ops@1",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.extract-ddl-from-connection",
+          "group": "1_ops@2",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-sml-from-connection",
+          "group": "1_ops@3",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-sml-from-ddl",
+          "group": "1_ops@4"
+        },
+        {
+          "command": "psUtils.op.generate-sml-from-xml",
+          "group": "1_ops@5"
+        },
+        {
+          "command": "psUtils.op.apply-style-to-sml",
+          "group": "1_ops@6",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-sml-docs",
+          "group": "1_ops@7",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-shared-model-plan",
+          "group": "1_ops@8",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.apply-shared-model-plan-option",
+          "group": "1_ops@9"
+        },
+        {
+          "command": "psUtils.op.generate-ddl-from-atscale",
+          "group": "1_ops@10",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "psUtils.group.synthetic-data-generation": [
+        {
+          "command": "psUtils.op.extract-data-shape-from-connection",
+          "group": "1_ops@1",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-ddl-from-data-shape",
+          "group": "1_ops@2",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-data-from-data-shape",
+          "group": "1_ops@3"
+        },
+        {
+          "command": "psUtils.op.generate-data-from-data-shape-to-connection",
+          "group": "1_ops@4"
+        }
+      ],
+      "psUtils.group.bi-tool-integration": [
+        {
+          "command": "psUtils.op.generate-tableau-from-namespace",
+          "group": "1_ops@1",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-excel-from-namespace",
+          "group": "1_ops@2",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-powerbi-from-namespace",
+          "group": "1_ops@3"
+        }
+      ],
+      "psUtils.group.testing-query-processing": [
+        {
+          "command": "psUtils.op.generate-queries-from-sml",
+          "group": "1_ops@1"
+        },
+        {
+          "command": "psUtils.op.generate-queries-from-model",
+          "group": "1_ops@2",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.extract-query-stats-from-atscale",
+          "group": "1_ops@3",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.extract-queries-from-atscale",
+          "group": "1_ops@4",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.execute-atscale-query-harness",
+          "group": "1_ops@5"
+        },
+        {
+          "command": "psUtils.op.execute-query-on-connection",
+          "group": "1_ops@6",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-enhanced-query-results",
+          "group": "1_ops@7",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.execute-run-analysis",
+          "group": "1_ops@8",
+          "when": "!explorerResourceIsFolder"
+        }
+      ],
+      "psUtils.group.atscale-config": [
+        {
+          "command": "psUtils.op.generate-atscale-install-yaml",
+          "group": "1_ops@1",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.atscale-deploy-catalog",
+          "group": "1_ops@2",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.atscale-list-model-errors",
+          "group": "1_ops@3",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
+      "psUtils.group.general": [
+        {
+          "command": "psUtils.op.generate-notebook-from-connection",
+          "group": "1_ops@1"
+        },
+        {
+          "command": "psUtils.op.echo-connection-metadata",
+          "group": "1_ops@2"
+        },
+        {
+          "command": "psUtils.op.atscale-list-data-sources",
+          "group": "1_ops@3"
+        },
+        {
+          "command": "psUtils.op.atscale-create-data-source",
+          "group": "1_ops@4"
+        },
+        {
+          "command": "psUtils.op.atscale-list-repos",
+          "group": "1_ops@5"
+        },
+        {
+          "command": "psUtils.op.atscale-create-repo",
+          "group": "1_ops@6"
+        },
+        {
+          "command": "psUtils.op.atscale-list-deployments",
+          "group": "1_ops@7"
+        },
+        {
+          "command": "psUtils.op.get-dso-count",
+          "group": "1_ops@8"
+        },
+        {
+          "command": "psUtils.op.execute-web-services",
+          "group": "1_ops@9"
+        },
+        {
+          "command": "psUtils.op.version",
+          "group": "1_ops@10"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0"
+  },
+  "overrides": {
+    "undici": "5.28.5"
+  }
+}

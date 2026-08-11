@@ -13,6 +13,13 @@ When making any code change, update the following files as part of the same chan
 
 All six files must reflect every operation change before the change is considered complete.
 
+The VS Code extension's operation catalogue is also auto-generated and needs no manual edits:
+
+- **vscode-extension/media/operations.manifest.json** — auto-generated; regenerate via `npm run generate:extension-manifest`
+- **vscode-extension/package.json** `contributes.commands/submenus/menus` — auto-generated from the manifest via `npm run generate:extension-contributes`
+
+Both run automatically during `npm run build` (after the REST/GraphQL docs). They derive everything from the operation registry and `OPERATION_GROUPS`, so any operation/parameter change flows into the extension menus with no hand-editing. Never edit these two generated regions by hand.
+
 ## docs/NODE.md — Node.js library API reference
 
 `docs/NODE.md` documents the typed `async` function exported from `src/index.ts` for every operation. It is written by hand and must be kept in sync with the code. When adding or modifying an operation:
@@ -164,15 +171,15 @@ The group order in the body must match the group order in the TOC — do not reo
 
 The CLI, README, and action.yml all define operation groups. Whenever you add, move, or rename an operation, update **all three** in the same change:
 
-1. **`src/cli-runner.ts` → `printUsage()` → `GROUPS` array** — the authoritative list. Groups and their membership must exactly match the README.
-2. **`README.md` — `### <Group Name>` sections** — each section has a Mermaid `flowchart` diagram showing the operations and their data flow. Add the new operation to the correct section diagram and the operation's own reference anchor (`click X href "#..."`). Group names and membership must match `cli-runner.ts`.
+1. **`src/operations/operation-groups.ts` → `OPERATION_GROUPS`** — the authoritative list. `printUsage()` in `src/cli-runner.ts` imports it for CLI help, and `generate-extension-manifest.ts` consumes it for the VS Code extension menus. Groups and their membership must exactly match the README. Editing this array is what updates the CLI help and the extension menus.
+2. **`README.md` — `### <Group Name>` sections** — each section has a Mermaid `flowchart` diagram showing the operations and their data flow. Add the new operation to the correct section diagram and the operation's own reference anchor (`click X href "#..."`). Group names and membership must match `OPERATION_GROUPS`.
 3. **`action.yml` — composite action steps** — each operation has a corresponding `if: inputs.operation == '<name>'` step. Add a step for any new operation in the appropriate logical position.
 
 Also update the TOC and body in **`docs/ACTIONS.md`** to add the operation in the correct group.
 
-**Diagrams at the top of README.md** are one per group. Each diagram must include every operation in that group — no operation may be present in `cli-runner.ts` GROUPS but absent from the corresponding README diagram, and vice versa.
+**Diagrams at the top of README.md** are one per group. Each diagram must include every operation in that group — no operation may be present in `OPERATION_GROUPS` but absent from the corresponding README diagram, and vice versa.
 
-When in doubt about which group an operation belongs to, match what is already in `cli-runner.ts`. Do not invent new groups without updating all three files.
+When in doubt about which group an operation belongs to, match what is already in `src/operations/operation-groups.ts`. Do not invent new groups without updating all three files.
 
 ## Connections file
 
