@@ -9,14 +9,20 @@ import type { Manifest, ManifestOperation, ManifestParam } from "./manifest";
 import { isDirRole, isFileRole } from "./manifest";
 import { buildCommand, detectShell, resolveCli, runInTerminal } from "./runner";
 import { readConnectionNames } from "./connections";
+import { getRemembered, rememberEnabled, updateRemembered, type RememberedMap } from "./remembered";
 
 /**
- * True when `param` is the `--connection-name` for an op that also takes a
+ * True when `param` names an existing connection and the op also takes a
  * `--connection-file`: it should render as a dropdown populated from that file.
+ *
+ * Matches `connection-name` and prefixed variants (`atscale-connection-name`,
+ * `target-connection-name`, …), but NOT `new-connection-name` — that is the name
+ * of a connection being created, which must stay free-text.
  */
 function isConnectionNameDropdown(op: ManifestOperation, param: ManifestParam): boolean {
   return (
-    param.name === "connection-name" &&
+    /(^|-)connection-name$/.test(param.name) &&
+    !param.name.startsWith("new-") &&
     op.params.some((p) => p.name === "connection-file")
   );
 }
@@ -29,18 +35,47 @@ function folderOutputFilename(param: ManifestParam): string {
   return param.name.replace(/^output-/, "").replace(/-file$/, "") || "output";
 }
 
-/** Compute the initial value for a parameter from target path, settings, and defaults. */
+function asBool(v: unknown): boolean {
+  return v === true || v === "true" || v === "yes";
+}
+
+/**
+ * The parameter a right-clicked FILE should populate. Normally the operation's
+ * genuine input-file target; but for connection-based operations that have no
+ * such target (e.g. atscale-list-repos), fall back to a settings-backed file
+ * parameter — `connection-file` first, then `sml-config-file` — so right-clicking
+ * a connections file fills it (overriding the saved setting).
+ */
+function fileTargetParam(op: ManifestOperation, manifest: Manifest): string | undefined {
+  if (op.targetParam.file) return op.targetParam.file;
+  const settingsFiles = op.params.filter((p) => p.role === "input-file" && manifest.settingsParams[p.name]);
+  return (
+    settingsFiles.find((p) => p.name === "connection-file")?.name ??
+    settingsFiles.find((p) => p.name === "sml-config-file")?.name ??
+    settingsFiles[0]?.name
+  );
+}
+
+/**
+ * Compute the initial value for a parameter. Precedence, highest first:
+ *   1. the clicked file/folder (the operation's target parameter)
+ *   2. `psUtils.commonParams` — values the user explicitly pinned
+ *   3. remembered last-used value (cross-operation memory; scalars only)
+ *   4. a dedicated project setting (connectionFile / styleFile / modelName)
+ *   5. the manifest default
+ */
 function initialValue(
   param: ManifestParam,
   manifest: Manifest,
   op: ManifestOperation,
   targetPath: string | undefined,
   isFolder: boolean,
+  remembered: RememberedMap,
+  targetName: string | undefined,
 ): string | boolean {
   const cfg = vscode.workspace.getConfiguration("psUtils");
-  const target = isFolder ? op.targetParam.folder : op.targetParam.file;
 
-  if (targetPath && param.name === target) {
+  if (targetPath && targetName && param.name === targetName) {
     // For a net-new generator, the folder is the destination directory — prefill the
     // output file as <folder>/<filename> rather than the bare folder path.
     if (isFolder && param.role === "output-file") {
@@ -49,13 +84,22 @@ function initialValue(
     return targetPath;
   }
 
+  const common = cfg.get<Record<string, string>>("commonParams") ?? {};
+  if (common[param.name] !== undefined && common[param.name] !== "") {
+    return param.type === "boolean" ? asBool(common[param.name]) : common[param.name];
+  }
+
+  if (Object.prototype.hasOwnProperty.call(remembered, param.name)) {
+    const r = remembered[param.name];
+    if (param.type === "boolean") return asBool(r);
+    if (r !== "" && r !== undefined && r !== null) return String(r);
+  }
+
   const settingKey = manifest.settingsParams[param.name];
   if (settingKey) {
     const v = cfg.get<string>(settingKey)?.trim();
     if (v) return v;
   }
-  const common = cfg.get<Record<string, string>>("commonParams") ?? {};
-  if (common[param.name]) return common[param.name];
 
   if (param.type === "boolean") return param.default === true;
   return param.default === null || param.default === undefined ? "" : String(param.default);
@@ -88,8 +132,10 @@ export function openParamDialog(
     { enableScripts: true, retainContextWhenHidden: true },
   );
 
+  const remembered = getRemembered(context);
+  const targetName = isFolder ? op.targetParam.folder : fileTargetParam(op, manifest);
   const initial: Record<string, string | boolean> = {};
-  for (const p of op.params) initial[p.name] = initialValue(p, manifest, op, targetPath, isFolder);
+  for (const p of op.params) initial[p.name] = initialValue(p, manifest, op, targetPath, isFolder, remembered, targetName);
 
   // Initial connection-name options, parsed from the (prefilled) connection-file.
   const hasConnFile = op.params.some((p) => p.name === "connection-file");
@@ -114,9 +160,20 @@ export function openParamDialog(
         panel.webview.postMessage({ type: "browsed", param: msg.param, path: picked[0].fsPath });
       }
     } else if (msg.type === "execute") {
+      const values = msg.values ?? {};
+      // Remember scalar values so they default into other operations sharing the name.
+      if (rememberEnabled()) {
+        const toStore: RememberedMap = {};
+        for (const p of op.params) {
+          if (p.role !== "scalar") continue;
+          const v = values[p.name];
+          toStore[p.name] = p.type === "boolean" ? !!v : v === undefined || v === null ? "" : String(v);
+        }
+        await updateRemembered(context, toStore);
+      }
       const shell = detectShell();
       const cli = resolveCli(manifest, shell);
-      const command = buildCommand(cli, opName, op, msg.values ?? {}, shell);
+      const command = buildCommand(cli, opName, op, values, shell);
       runInTerminal(command);
       panel.dispose();
     } else if (msg.type === "cancel") {
@@ -161,7 +218,7 @@ function renderHtml(
       const desc = `<div class="desc">${esc(p.description)}</div>`;
       let control: string;
       if (isConnectionNameDropdown(op, p)) {
-        control = `<select id="f_${esc(p.name)}" data-name="${esc(p.name)}" data-type="string">${connectionOptions(
+        control = `<select class="conn-dropdown" id="f_${esc(p.name)}" data-name="${esc(p.name)}" data-type="string">${connectionOptions(
           connectionNames,
           String(val ?? ""),
         )}</select>`;
@@ -234,20 +291,20 @@ function renderHtml(
     });
     return values;
   }
-  // Rebuild the connection-name dropdown from a fresh list, preserving the selection if still valid.
+  // Rebuild every connection dropdown from a fresh list, preserving each selection if still valid.
   function applyConnectionNames(names) {
-    const sel = document.querySelector('select[data-name="connection-name"]');
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = '';
-    const ph = document.createElement('option');
-    ph.value = ''; ph.textContent = '(select a connection)';
-    sel.appendChild(ph);
-    names.forEach((n) => {
-      const o = document.createElement('option');
-      o.value = n; o.textContent = n;
-      if (n === current) o.selected = true;
-      sel.appendChild(o);
+    document.querySelectorAll('select.conn-dropdown').forEach((sel) => {
+      const current = sel.value;
+      sel.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = '(select a connection)';
+      sel.appendChild(ph);
+      names.forEach((n) => {
+        const o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        if (n === current) o.selected = true;
+        sel.appendChild(o);
+      });
     });
   }
   function notifyConnectionFile() {

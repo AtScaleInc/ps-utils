@@ -5,6 +5,7 @@
  * `.vscode/settings.json` and prefill operation dialogs.
  */
 import * as vscode from "vscode";
+import { clearRemembered, getRemembered, type RememberedMap } from "./remembered";
 
 interface SettingField {
   key: string;
@@ -52,10 +53,14 @@ export function openSettingsPanel(context: vscode.ExtensionContext): void {
   const current: Record<string, string> = {};
   for (const f of FIELDS) current[f.key] = cfg.get<string>(f.key) ?? "";
 
-  panel.webview.html = renderHtml(current);
+  panel.webview.html = renderHtml(current, getRemembered(context));
 
   panel.webview.onDidReceiveMessage(async (msg) => {
-    if (msg.type === "browse") {
+    if (msg.type === "clearRemembered") {
+      await clearRemembered(context);
+      vscode.window.showInformationMessage("PS-Utils: cleared remembered parameters.");
+      panel.webview.html = renderHtml(current, {});
+    } else if (msg.type === "browse") {
       const picked = await vscode.window.showOpenDialog({
         canSelectFiles: true,
         canSelectFolders: false,
@@ -85,7 +90,7 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function renderHtml(current: Record<string, string>): string {
+function renderHtml(current: Record<string, string>, remembered: RememberedMap): string {
   const nonce = String(Math.random()).slice(2) + String(Date.now());
 
   const fields = FIELDS.map((f) => {
@@ -100,6 +105,21 @@ function renderHtml(current: Record<string, string>): string {
       <div class="desc">${esc(f.description)}</div>
     </div>`;
   }).join("\n");
+
+  const rememberedKeys = Object.keys(remembered).sort();
+  const rememberedRows = rememberedKeys
+    .map((k) => `<tr><td><code>${esc(k)}</code></td><td>${esc(String(remembered[k]))}</td></tr>`)
+    .join("");
+  const rememberedSection = `<div class="field">
+      <label>Remembered parameters</label>
+      <div class="desc">Last values entered per parameter, reused across operations. Explicit pins in <code>psUtils.commonParams</code> take precedence.</div>
+      ${
+        rememberedKeys.length
+          ? `<table class="remembered"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>${rememberedRows}</tbody></table>
+             <div class="row" style="justify-content:flex-start"><button type="button" class="secondary" id="clearRemembered">Clear remembered parameters</button></div>`
+          : `<div class="desc"><em>Nothing remembered yet.</em></div>`
+      }
+    </div>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -121,11 +141,16 @@ function renderHtml(current: Record<string, string>): string {
   button.secondary, button.browse { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
   .actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: 1rem;
     padding-top: 1rem; border-top: 1px solid var(--vscode-panel-border); }
+  table.remembered { width: 100%; border-collapse: collapse; margin: .35rem 0 .5rem; }
+  table.remembered th, table.remembered td { text-align: left; padding: .25rem .5rem;
+    border-bottom: 1px solid var(--vscode-panel-border); font-size: .9em; }
+  code { background: var(--vscode-textCodeBlock-background); padding: 0 .25rem; border-radius: 2px; }
 </style>
 </head>
 <body>
   <h1>PS-Utils Project Settings</h1>
   <form id="form">${fields}</form>
+  ${rememberedSection}
   <div class="actions">
     <button type="button" class="secondary" id="cancel">Cancel</button>
     <button type="button" id="save">Save</button>
@@ -142,6 +167,8 @@ function renderHtml(current: Record<string, string>): string {
   document.querySelectorAll('.browse').forEach((btn) => {
     btn.addEventListener('click', () => vscode.postMessage({ type: 'browse', key: btn.getAttribute('data-key') }));
   });
+  const clearBtn = document.getElementById('clearRemembered');
+  if (clearBtn) clearBtn.addEventListener('click', () => vscode.postMessage({ type: 'clearRemembered' }));
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (m.type === 'browsed') {

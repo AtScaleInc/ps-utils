@@ -2,7 +2,7 @@
   "name": "atscale-ps-utils",
   "displayName": "AtScale PS-Utils",
   "description": "Run AtScale ps-utils operations from the VS Code Explorer context menu.",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "publisher": "atscale-ps",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -62,10 +62,15 @@
         "psUtils.commonParams": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Additional parameter values consistent across the project, keyed by kebab-case parameter name (e.g. `{ \"catalog-name\": \"sales\" }`). Prefilled into operation dialogs when a matching parameter exists.",
+          "markdownDescription": "Additional parameter values consistent across the project, keyed by kebab-case parameter name (e.g. `{ \"catalog-name\": \"sales\" }`). Prefilled into operation dialogs when a matching parameter exists. These explicit pins take precedence over auto-remembered values.",
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "psUtils.rememberParameters": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Remember the last value entered for each scalar parameter when an operation is executed, and prefill it into any other operation that has a parameter of the same name (e.g. reuse a `--model-name` across operations). Stored per workspace. Clear the remembered values from the **Settings…** panel."
         }
       }
     },

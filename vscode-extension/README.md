@@ -14,16 +14,20 @@ operations that make sense for that target, grouped exactly as in the main READM
 - A **General** group (operations that need neither, such as the `atscale-list-*` commands) and
   **Settings…** appear on both.
 
-Project-wide files (connection file, style config) are treated as settings, not operands, so they
-never force an operation onto the file menu — they're just prefilled from your saved settings.
+Project-wide files (connection file, style config) are prefilled from your saved settings. For an
+operation whose only file parameter is such a settings file (e.g. `atscale-list-repos`, which just
+needs a `--connection-file`), right-clicking a **file** fills that parameter with the clicked file,
+overriding the setting — so you can point it at a specific connections file directly.
 
 Choosing an operation opens a dialog with every parameter for that operation. The clicked
 path and your project settings (connection file, style file, common params) are prefilled.
 **Execute** runs the CLI in a reused `PS-Utils` terminal; **Cancel** closes the dialog.
 
-When an operation has both a `--connection-file` and a `--connection-name`, the connection name
-is a **dropdown** populated from the connections file. Change or Browse to a different connection
-file and the dropdown refreshes to that file's connections.
+When an operation has a `--connection-file` and a connection-name parameter — `--connection-name`,
+`--atscale-connection-name`, or `--target-connection-name` — that parameter is a **dropdown**
+populated from the connections file. Change or Browse to a different connection file and the
+dropdown(s) refresh to that file's connections. (`--new-connection-name`, which names a connection
+being created, stays free-text.)
 
 Works on **Windows, macOS, and Linux**. Command arguments are quoted for the terminal's shell —
 PowerShell on Windows and POSIX (bash/zsh) elsewhere by default; override with
@@ -67,7 +71,7 @@ PowerShell on Windows and POSIX (bash/zsh) elsewhere by default; override with
    - **CLI (any OS):**
 
      ```bash
-     code --install-extension atscale-ps-utils-0.1.6.vsix
+     code --install-extension atscale-ps-utils-0.1.9.vsix
      ```
 
      On Windows, `code` is the VS Code CLI (available if "Add to PATH" was selected during
@@ -109,7 +113,20 @@ Set via the **Settings…** menu item (writes workspace `.vscode/settings.json`)
 | `psUtils.modelName` | Prefilled into `--model-name` |
 | `psUtils.cliCommand` | Override the CLI invocation (blank = auto-detect) |
 | `psUtils.shell` | Terminal shell for argument quoting: `auto` (default), `bash`, `powershell`, or `cmd` |
-| `psUtils.commonParams` | Map of `param-name` → value prefilled into any matching dialog |
+| `psUtils.commonParams` | Map of `param-name` → value prefilled into any matching dialog (explicit pins) |
+| `psUtils.rememberParameters` | Remember the last value entered for each scalar parameter and reuse it across operations (default `true`) |
+
+### Remembered parameters (cross-operation defaults)
+
+When you execute an operation, the values you entered for its scalar parameters (not files/folders) are
+remembered per workspace. The next time you open **any** operation that has a parameter of the same name,
+that value is prefilled — so a `--model-name` or `--connection-name` chosen in one operation defaults into
+the next. Toggle with `psUtils.rememberParameters`; view and **Clear remembered parameters** from the
+**Settings…** panel.
+
+Prefill precedence, highest first: the clicked file/folder → `psUtils.commonParams` (explicit pins) →
+remembered last-used value → a dedicated setting (`connectionFile` / `styleFile` / `modelName`) → the
+operation's default.
 
 CLI resolution when `cliCommand` is blank: local `node_modules/.bin/atscale-utils` (`atscale-utils.cmd` on Windows) → `npx --yes @atscale-ps/ps-utils`.
 
