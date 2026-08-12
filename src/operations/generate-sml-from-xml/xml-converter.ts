@@ -848,7 +848,7 @@ interface DatasetPhysical {
   tableName?: string;
   sql?: string;
   connectionName?: string;
-  columns?: Array<{ name: string; dataType: string }>;
+  columns?: Array<{ name: string; dataType: string; sql?: string }>;
   immutable?: boolean;
 }
 
@@ -1315,17 +1315,23 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const immutableStr = s(first(arr(physSec.immutable)));
   const immutable = immutableStr === "true" ? true : undefined;
 
-  // Column definitions from <column><name>...</name><type>...</type></column>. Source
-  // XML can genuinely declare the same column twice (a copy-paste artifact) — dedupe by
-  // name, keeping the first occurrence, since a duplicate column name is invalid SML.
-  const columns: Array<{ name: string; dataType: string }> = [];
+  // Column definitions from <column><name>...</name><type>...</type></column>, optionally
+  // <sql>...</sql> for a computed column (an expression aliased under this column name,
+  // rather than a direct passthrough of a real table column) — without it, the computed
+  // column's own name would be queried against the real table as if it existed there
+  // directly. Source XML can genuinely declare the same column twice (a copy-paste
+  // artifact) — dedupe by name, keeping the first occurrence, since a duplicate column
+  // name is invalid SML.
+  const columns: Array<{ name: string; dataType: string; sql?: string }> = [];
   const seenColumnNames = new Set<string>();
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
+    const colSqlRaw = s(first(arr((col as Record<string, unknown>).sql)));
+    const colSql = colSqlRaw ? unescapeHtml(colSqlRaw).replace(/\t/g, "  ") : undefined;
     if (colName && !seenColumnNames.has(colName)) {
       seenColumnNames.add(colName);
-      columns.push({ name: colName, dataType: mapDataType(colType) });
+      columns.push({ name: colName, dataType: mapDataType(colType), sql: colSql });
     }
   }
   const colsResult = columns.length ? columns : undefined;
@@ -1382,8 +1388,8 @@ function buildDatasetYaml(
     obj.table = phys.tableName ?? dsName;
   }
 
-  const columns: Array<{ name: string; data_type: string }> =
-    phys.columns?.map((c) => ({ name: c.name, data_type: c.dataType })) ?? [];
+  const columns: Array<{ name: string; data_type: string; sql?: string }> =
+    phys.columns?.map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) })) ?? [];
 
   if (referencedColumns?.size) {
     const known = new Set(columns.map((c) => c.name));
