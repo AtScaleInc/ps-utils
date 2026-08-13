@@ -1,0 +1,36 @@
+unique_name: Query Results
+object_type: dimension
+label: Query Results
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: query_id
+    label: Query
+    dataset: query_results.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: finished
+    label: Finished
+    dataset: query_results.dataset
+    name_column: finished
+    key_columns:
+      - finished
+  - unique_name: succeeded
+    label: Succeeded
+    dataset: query_results.dataset
+    name_column: succeeded
+    key_columns:
+      - succeeded
+  - unique_name: result_size
+    label: Result Size
+    dataset: query_results.dataset
+    name_column: result_size
+    key_columns:
+      - result_size
+  - unique_name: failure_message
+    label: Failure Message
+    dataset: query_results.dataset
+    name_column: failure_message
+    key_columns:
+      - failure_message

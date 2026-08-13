@@ -2,7 +2,7 @@
   "name": "atscale-ps-utils",
   "displayName": "AtScale PS-Utils",
   "description": "Run AtScale ps-utils operations from the VS Code Explorer context menu.",
-  "version": "0.1.9",
+  "version": "0.2.2",
   "publisher": "atscale-ps",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -28,11 +28,6 @@
     "configuration": {
       "title": "AtScale PS-Utils",
       "properties": {
-        "psUtils.cliCommand": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Command used to invoke the ps-utils CLI. Leave blank to auto-detect: a local `node_modules/.bin/atscale-utils` (`.cmd` on Windows), then `npx --yes @atscale-ps/ps-utils`."
-        },
         "psUtils.shell": {
           "type": "string",
           "enum": [
@@ -71,9 +66,69 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Remember the last value entered for each scalar parameter when an operation is executed, and prefill it into any other operation that has a parameter of the same name (e.g. reuse a `--model-name` across operations). Stored per workspace. Clear the remembered values from the **Settings…** panel."
+        },
+        "psUtils.smlEnabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Provide SML schema support for `.yml`/`.yaml` files — completion, hover documentation and validation, chosen per file from its `object_type`. Set this in a project's `.vscode/settings.json` to control SML support per project, or use **PS-Utils → SML Support** in the Explorer context menu.\n\nRequires the [YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml), since VS Code has no built-in YAML schema validation.\n\n**Note:** this does not affect SML *syntax highlighting*, which comes from a TextMate grammar injection that the editor resolves statically and cannot be toggled at runtime. To turn highlighting off for one project, use **Extensions: Disable (Workspace)** on this extension."
+        },
+        "psUtils.smlUnknownKeys": {
+          "type": "string",
+          "enum": [
+            "warning",
+            "information",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Report undocumented keys as warnings.",
+            "Report undocumented keys as hints in the Problems panel, without an editor squiggle.",
+            "Do not report undocumented keys."
+          ],
+          "default": "warning",
+          "scope": "window",
+          "markdownDescription": "Report keys an SML file uses that the specification does not document — typically typos — with a quick fix when a documented property is close enough to suggest.\n\nThis is deliberately a *warning* rather than a schema error: the SML schemas are permissive because the published specification lags the implementation, so an undocumented key is sometimes a real gap rather than a mistake. Known gaps are allowlisted from the generator, and unlike the rest of SML validation this works without the YAML extension installed.\n\nGated by `#psUtils.smlEnabled#`."
         }
       }
     },
+    "yamlValidation": [
+      {
+        "fileMatch": "catalog.yml",
+        "url": "./media/sml-schema/catalog.schema.json"
+      },
+      {
+        "fileMatch": "connections/*.yml",
+        "url": "./media/sml-schema/connection.schema.json"
+      },
+      {
+        "fileMatch": "datasets/*.yml",
+        "url": "./media/sml-schema/dataset.schema.json"
+      },
+      {
+        "fileMatch": "dimensions/*.yml",
+        "url": "./media/sml-schema/dimension.schema.json"
+      },
+      {
+        "fileMatch": "metrics/*.yml",
+        "url": "./media/sml-schema/metric.schema.json"
+      },
+      {
+        "fileMatch": "calculations/*.yml",
+        "url": "./media/sml-schema/calculation.schema.json"
+      }
+    ],
+    "grammars": [
+      {
+        "scopeName": "source.yaml.sml.injection",
+        "path": "./syntaxes/sml.injection.tmLanguage.json",
+        "injectTo": [
+          "source.yaml"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.sql": "sql"
+        }
+      }
+    ],
     "commands": [
       {
         "command": "psUtils.op.extract-model-from-atscale",
@@ -289,6 +344,26 @@
         "command": "psUtils.settings",
         "title": "Settings…",
         "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.installYamlExtension",
+        "title": "☐ SML Support (install YAML extension)",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.enable",
+        "title": "☐ SML Support",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.disable",
+        "title": "☑ SML Support",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.toggle",
+        "title": "Toggle SML Support for this Project",
+        "category": "PS-Utils"
       }
     ],
     "submenus": [
@@ -365,6 +440,21 @@
         {
           "command": "psUtils.settings",
           "group": "9_settings@1"
+        },
+        {
+          "command": "psUtils.sml.installYamlExtension",
+          "group": "9_settings@2",
+          "when": "!psUtils.yamlExtensionInstalled"
+        },
+        {
+          "command": "psUtils.sml.enable",
+          "group": "9_settings@2",
+          "when": "psUtils.yamlExtensionInstalled && !psUtils.smlEnabled"
+        },
+        {
+          "command": "psUtils.sml.disable",
+          "group": "9_settings@2",
+          "when": "psUtils.yamlExtensionInstalled && psUtils.smlEnabled"
         }
       ],
       "psUtils.group.visualization-and-namespace-processing": [
@@ -571,6 +661,23 @@
         {
           "command": "psUtils.op.version",
           "group": "1_ops@10"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "psUtils.sml.installYamlExtension",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.enable",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.disable",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.toggle"
         }
       ]
     }

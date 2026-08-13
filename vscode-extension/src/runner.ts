@@ -9,7 +9,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import type { Manifest, ManifestOperation } from "./manifest";
+import type { ManifestOperation } from "./manifest";
 
 const TERMINAL_NAME = "PS-Utils";
 let terminal: vscode.Terminal | undefined;
@@ -71,35 +71,53 @@ export function quoteArg(value: string, shell: ShellFamily): string {
 }
 
 /**
- * Resolve the base CLI invocation for the given shell.
- * Order: explicit `psUtils.cliCommand` setting (used verbatim) → local
- * `node_modules/.bin` executable → `npx --yes <package>`.
+ * Absolute path to the CLI bundle shipped inside this extension.
  *
- * On Windows the local bin is a `.cmd`/`.exe` shim; when its path needs quoting,
- * PowerShell requires the call operator (`& '<path>'`) to execute it.
+ * The extension carries its own copy of ps-utils (built by `npm run bundle:cli`
+ * in the ps-utils repo) and there is deliberately no setting to point at an
+ * external one: a separately installed CLI is what allowed the extension's
+ * frozen operation catalogue to drift from the CLI actually executing.
  */
-export function resolveCli(manifest: Manifest, shell: ShellFamily): string {
-  const configured = vscode.workspace.getConfiguration("psUtils").get<string>("cliCommand")?.trim();
-  if (configured) return configured;
+export function bundledCliPath(context: vscode.ExtensionContext): string {
+  return path.join(context.extensionPath, "cli", "cli.cjs");
+}
 
-  const root = workspaceRoot();
-  if (root) {
-    const candidates =
-      process.platform === "win32"
-        ? [`${manifest.cliBin}.cmd`, `${manifest.cliBin}.exe`, manifest.cliBin]
-        : [manifest.cliBin];
-    for (const name of candidates) {
-      const localBin = path.join(root, "node_modules", ".bin", name);
-      if (fs.existsSync(localBin)) {
-        const quoted = quoteArg(localBin, shell);
-        // PowerShell only runs a quoted path when invoked with the call operator.
-        if (shell === "powershell" && quoted.startsWith("'")) return `& ${quoted}`;
-        return quoted;
-      }
-    }
+/** Version of the bundled CLI, read from the manifest written at bundle time. */
+export function bundledCliVersion(context: vscode.ExtensionContext): string | undefined {
+  try {
+    const meta = JSON.parse(
+      fs.readFileSync(path.join(context.extensionPath, "cli", "BUNDLE.json"), "utf8"),
+    ) as { name?: string; version?: string };
+    return meta.version;
+  } catch {
+    return undefined;
   }
-  // npx is the most reliable fallback when the package is a project dependency.
-  return `npx --yes ${manifest.cliPackage}`;
+}
+
+/**
+ * Resolve the base CLI invocation for the given shell.
+ *
+ * The bundle is plain JavaScript and needs a Node runtime. Rather than depend
+ * on the user having `node` on PATH — an environment problem they could no
+ * longer work around, now that the override setting is gone — it runs on the
+ * Node that ships inside VS Code itself. `process.execPath` is the VS Code
+ * binary; `ELECTRON_RUN_AS_NODE=1` makes it behave as a plain Node interpreter.
+ *
+ * The env var has to be set per shell family because the command is sent to the
+ * integrated terminal as text rather than spawned with an env block.
+ */
+export function resolveCli(context: vscode.ExtensionContext, shell: ShellFamily): string {
+  const node = quoteArg(process.execPath, shell);
+  const script = quoteArg(bundledCliPath(context), shell);
+  switch (shell) {
+    case "posix":
+      return `ELECTRON_RUN_AS_NODE=1 ${node} ${script}`;
+    case "powershell":
+      // & is required to execute a quoted path; $env: scopes to this invocation.
+      return `$env:ELECTRON_RUN_AS_NODE=1; & ${node} ${script}`;
+    case "cmd":
+      return `set ELECTRON_RUN_AS_NODE=1 && ${node} ${script}`;
+  }
 }
 
 /**

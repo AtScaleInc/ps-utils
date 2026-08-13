@@ -227,7 +227,8 @@ The `docs/` directory contains extended reference material:
 | [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
 | [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
 | [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
-| [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu (install & usage) |
+| [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu, plus SML schema validation and highlighting (install & usage) |
+| [resources/sml-reference/UPSTREAM.md](resources/sml-reference/UPSTREAM.md) | Vendored SML language specification — source, pinned revision, and how to refresh it |
 
 ---
 
@@ -1909,8 +1910,12 @@ connections:
 Validates an SML model and lists any structural or engine-level problems.
 
 Runs in two phases:
-1. **Structural** — local cross-reference check of all SML YAML files (datasets, dimensions, level attributes, model relationships).
+1. **Structural** — local cross-reference check of all SML YAML files (datasets, dimensions, level attributes, model relationships, and each dataset's `connection_id`).
 2. **Engine** (if Phase 1 passes) — calls `POST /catalog/validate-model` to validate column joinability and uniqueness against the actual data warehouse.
+
+Each engine check is sent to the connection group of the dataset it applies to: the dataset's `connection_id` names a file in `connections/`, whose `as_connection`, `database` and `schema` are what the engine receives. Checks are batched one request per distinct connection group / database / schema, so a model spanning several connections is validated correctly. A relationship whose two sides sit on different connections is reported as a warning and skipped — the engine cannot join across connection groups in a single request.
+
+The `as_connection` value must match a connection group that already exists on the target instance (see [`atscale-list-data-sources`](#atscale-list-data-sources)). If it does not, the engine returns `500 … ConnectionGroup ConnectionGroupIdentity(<name>) not found` and Phase 2 is reported as a warning.
 
 Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 

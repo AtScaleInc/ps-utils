@@ -4,17 +4,38 @@
     {
       "type": "npm",
       "script": "compile",
-      "problemMatcher": ["$esbuild"],
       "group": "build",
-      "label": "npm: compile"
+      "label": "npm: compile",
+      "problemMatcher": {
+        "owner": "esbuild",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^\\s*(?:✘|▲)\\s*\\[(ERROR|WARNING)\\]\\s*(.*)$",
+          "severity": 1,
+          "message": 2
+        }
+      }
     },
     {
       "type": "npm",
       "script": "watch",
-      "problemMatcher": ["$esbuild-watch"],
-      "isBackground": true,
       "group": "build",
-      "label": "npm: watch"
+      "label": "npm: watch",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^\\s*(?:✘|▲)\\s*\\[(ERROR|WARNING)\\]\\s*(.*)$",
+          "severity": 1,
+          "message": 2
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[watch\\] build started",
+          "endsPattern": "^\\[watch\\] build finished"
+        }
+      }
     }
   ]
 }

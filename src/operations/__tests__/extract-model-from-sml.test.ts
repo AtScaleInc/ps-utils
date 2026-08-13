@@ -9,6 +9,23 @@ import { ExtractModelFromSMLOperation } from "../extract-model-from-sml/ExtractM
 
 const tempDirs: string[] = [];
 
+/** The model label used by every fixture below, and therefore the output key. */
+const MODEL_LABEL = "Sales Model";
+
+/**
+ * The single model entry in the output.
+ *
+ * model.yaml is keyed by the model's **label**, not its `unique_name` — matching
+ * `extract-model-from-atscale`, which keys by the AtScale model name (see
+ * `example/model.yaml`, keyed `Telemetry`). Asserting the key here rather than
+ * indexing optionally means a change to that contract fails with the key it
+ * actually produced, instead of an `undefined` several assertions later.
+ */
+function modelEntry(parsed: Record<string, any>): Record<string, any> {
+  expect(Object.keys(parsed)).toEqual([MODEL_LABEL]);
+  return parsed[MODEL_LABEL];
+}
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -56,10 +73,10 @@ describe("ExtractModelFromSMLOperation", () => {
     });
 
     const parsed = parse(fs.readFileSync(outputFile, "utf8"));
-    const metrics = parsed.sales_model?.mdx?.metrics ?? [];
+    const model = modelEntry(parsed);
 
-    expect(metrics).toHaveLength(1);
-    expect(metrics[0].query_name).toBe("sales_calc");
+    expect(model.mdx.metrics).toHaveLength(1);
+    expect(model.mdx.metrics[0].query_name).toBe("sales_calc");
   });
 
   it("resolves dimension refs when the model uses object entries for dimensions", async () => {
@@ -122,7 +139,7 @@ describe("ExtractModelFromSMLOperation", () => {
     });
 
     const parsed = parse(fs.readFileSync(outputFile, "utf8"));
-    const attributes = parsed.sales_model?.mdx?.attributes ?? {};
+    const attributes = modelEntry(parsed).mdx.attributes;
 
     expect(attributes.Region).toBeDefined();
     expect(attributes.Region["Region Hierarchy"]).toBeDefined();

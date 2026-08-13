@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/dataset.schema.json",
+  "title": "SML Dataset",
+  "description": "Generated from resources/sml-reference/dataset.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "unique_name": {
+      "description": "The unique name of the dataset. This must be unique across all repositories and subrepositories.",
+      "type": "string"
+    },
+    "object_type": {
+      "description": "The type of object defined by the file. For datasets, the value of this property must be `dataset`.",
+      "const": "dataset"
+    },
+    "label": {
+      "description": "The name of the dataset, as it appears in the consumption tool. This value does not need to be unique.",
+      "type": "string"
+    },
+    "connection_id": {
+      "description": "The `unique_name` of the connection object that defines the database and schema in which the dataset is stored.",
+      "type": "string",
+      "x-sml-ref": {
+        "kind": "connection"
+      }
+    },
+    "sql": {
+      "description": "A SQL query used to pull data from a specific connection defined within the repository, similar to a database view. This determines whether the dataset file defines a query dataset. If you want to run the query on other types of databases, use the `dialects` property to define additional dialects for it to run in.\n\n**Required:** Required if `table` is not defined",
+      "type": "string"
+    },
+    "dialects": {
+      "description": "Defines alternate dialects for the `sql` statement so that it can run on other types of databases. You can define as many alternate dialects as needed.",
+      "items": {
+        "$ref": "#/$defs/Dialect"
+      },
+      "type": "array"
+    },
+    "table": {
+      "description": "The name of the table in the database that the dataset is based on.\n\n**Required:** Required if `sql` is not defined",
+      "type": "string"
+    },
+    "columns": {
+      "description": "Defines the columns available in the dataset. **Note:** You should define _all_ columns available in the dataset. This is especially important for dataset files that are shared across multiple repositories.",
+      "items": {
+        "$ref": "#/$defs/Column"
+      },
+      "type": "array"
+    },
+    "description": {
+      "description": "A description of the dataset.",
+      "type": "string"
+    },
+    "incremental": {
+      "description": "Enables incremental builds for the dataset. When the engine performs an incremental rebuild of an aggregate table, it appends new rows and updates existing rows that fall within a specified period of time (called the grace period).",
+      "$ref": "#/$defs/Incremental"
+    },
+    "immutable": {
+      "description": "Determines whether the dataset changes often or not. The semantic engine uses this information when running incremental builds of aggregates that use joins on dimensions that do not change often.",
+      "type": "boolean"
+    },
+    "qds_materialization": {
+      "description": "Enables QDS (Query Dataset) materialization for the dataset. When set to `true`, the engine can materialize query results as an aggregate table for improved query performance. Only applicable to query datasets (those defined with `sql` rather than `table`).\n\n**Added in:** v1.8",
+      "type": "boolean"
+    },
+    "alternate": {
+      "description": "_Not described in the SML reference prose; adopted from the specification's own entity-relationship diagram._",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unique_name",
+    "object_type",
+    "label",
+    "connection_id",
+    "columns"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "Dialect": {
+      "type": "object",
+      "properties": {
+        "dialect": {
+          "description": "An alternate SQL dialect.",
+          "type": "string",
+          "enum": [
+            "Snowflake",
+            "Postgresql",
+            "DatabricksSQL",
+            "BigQuery",
+            "Iris"
+          ]
+        },
+        "sql": {
+          "description": "The alternate SQL statement.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dialect",
+        "sql"
+      ],
+      "additionalProperties": true
+    },
+    "MapColumn": {
+      "type": "object",
+      "properties": {
+        "field_terminator": {
+          "description": "The delimiter used to separate the key:value pairs. This must be in quotes (\").",
+          "type": "string"
+        },
+        "key_terminator": {
+          "description": "The delimiter used to separate the individual keys from their values. This must be in quotes (\").",
+          "type": "string"
+        },
+        "key_type": {
+          "description": "The data type of the map's keys.",
+          "type": "string"
+        },
+        "value_type": {
+          "description": "The data type of the map's values.",
+          "type": "string"
+        },
+        "is_prefixed": {
+          "description": "Is first character delimited.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "field_terminator",
+        "key_terminator",
+        "key_type",
+        "value_type"
+      ],
+      "additionalProperties": true
+    },
+    "Column": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the column.",
+          "type": "string"
+        },
+        "data_type": {
+          "description": "The data type of the values within the column.\n\n**Required:** Required unless this column is a `map`\n\n**Supported values:** `string`, `int`, `long`, `bigint`, `tinyint`, `float`, `double`, `decimal`, `decimal(x,y)`, `number`, `number(x,y)`, `numeric(x,y)`, `boolean`, `date`, `datetime`",
+          "type": "string"
+        },
+        "sql": {
+          "description": "Defines the column as a calculated column. Calculated columns enable you to add simple data transformations to the dataset. These can be used as the basis of model attributes, just like any other dataset column. The value of this property should be a valid SQL statement that can be run as part of the `SELECT` list of a query. The SQL statement is passed directly to the underlying database when the query runs, so it must be in a syntax that is supported by your chosen engine. If you want to run the query on other types of databases, use the `dialects` property to define additional dialects for it to run in.",
+          "type": "string"
+        },
+        "dialects": {
+          "description": "Defines alternate dialects for the `sql` statement so that it can run on other types of databases. You can define as many alternate dialects as needed.",
+          "items": {
+            "$ref": "#/$defs/Dialect"
+          },
+          "type": "array"
+        },
+        "map": {
+          "description": "Defines a map to use to create a calculated column.",
+          "$ref": "#/$defs/MapColumn"
+        },
+        "parent_column": {
+          "description": "For mapped columns only. Specifies the `map` column used to create this column.\n\n**Required:** Required for mapped columns",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "self"
+            }
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true
+    },
+    "Incremental": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "description": "The name of the dataset column to use as an incremental indicator. This column must have values that increase monotonically, such as a numeric UNIX timestamp showing seconds since epoch, or a Timestamp/DateTime. The values in this column enable the query engine both to append rows to an aggregate table and update rows during an incremental rebuild. The values of this column should be of one of the following data types: Long, Integer, Decimal (38,0) (Snowflake only), Timestamp, DateTime. If you do not have a column that meets this criteria, you may need to create a calculated column to transform string or datetime values into the right data type.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "self"
+            }
+          }
+        },
+        "grace_period": {
+          "description": "When the semantic engine starts an incremental build, the `grace_period` determines how far back in time the engine looks for updates to rows in the dataset; for example, one week or 15 days. The value of this property should be an integer, followed by the time unit. The time unit can be any of the following: `s` (second), `m` (minute), `h` (hour), `d` (day), `w` (week). For example, setting the value to `'100s'` sets the grace period to 100 seconds. Setting it to `'1w'` sets the grace period to one week.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "grace_period"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,14 @@
+unique_name: query_datasets.dataset
+object_type: dataset
+label: Query Datasets
+connection_id: testconn
+table: query_datasets
+columns:
+  - name: query_id
+    data_type: string
+  - name: dataset_id
+    data_type: string
+  - name: query_part
+    data_type: string
+  - name: dataset_uuid
+    data_type: string

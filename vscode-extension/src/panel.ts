@@ -172,7 +172,7 @@ export function openParamDialog(
         await updateRemembered(context, toStore);
       }
       const shell = detectShell();
-      const cli = resolveCli(manifest, shell);
+      const cli = resolveCli(context, shell);
       const command = buildCommand(cli, opName, op, values, shell);
       runInTerminal(command);
       panel.dispose();

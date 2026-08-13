@@ -23,5 +23,8 @@
     "excludeDirectories": [
       "**/node_modules"
     ]
-  }
+  },
+  "psUtils.connectionFile": "/home/ptoole/atscale/template/example/connections.yaml",
+  "psUtils.styleFile": "",
+  "psUtils.cliCommand": ""
 }

@@ -2,6 +2,35 @@
   "version": "0.2.0",
   "configurations": [
     {
+      // Everyday loop. `npm: watch` rebuilds on save, so a reload of the dev-host
+      // window (Ctrl+R / Cmd+R in that window) picks up code changes. Changes to
+      // package.json contributions — commands, menus, configuration — need the debug
+      // session restarted (Shift+F5 then F5), because contributions are registered
+      // once per application session. That restarts only the dev host, never the
+      // editor you are working in.
+      "name": "Run PS-Utils Extension (watch)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: watch"
+    },
+    {
+      // As above, but opens the committed SML corpus so there are real dimension,
+      // dataset, model and catalog files to exercise schema validation, hover and
+      // highlighting against immediately.
+      "name": "Run PS-Utils Extension (watch + SML corpus)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/../src/scripts/__tests__/fixtures/sml-corpus"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "preLaunchTask": "npm: watch"
+    },
+    {
+      // One-shot build, for when a watcher is not wanted.
       "name": "Run PS-Utils Extension",
       "type": "extensionHost",
       "request": "launch",

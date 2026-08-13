@@ -15,7 +15,8 @@
  *   explorer/context ──▶ submenu "PS-Utils"
  *                          ├─ submenu per group   (visible per group's file/folder mix)
  *                          │    └─ op command      (visible per op's file/folder context)
- *                          └─ "Settings…" command  (always visible)
+ *                          ├─ "Settings…" command  (always visible)
+ *                          └─ one SML support command (exactly one of three, see below)
  */
 import fs from "fs";
 import path from "path";
@@ -41,6 +42,58 @@ interface Manifest {
 
 const manifest: Manifest = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
 
+/**
+ * The SML support entry, sitting beside "Settings…" in the PS-Utils submenu.
+ *
+ * It reads as a **checkbox** that toggles the workspace-scoped
+ * `psUtils.sml.enabled` setting:
+ *
+ *   installed, on here       ──▶ "☑ SML Support"          (click turns it off)
+ *   installed, off here      ──▶ "☐ SML Support"          (click turns it on)
+ *   YAML extension missing   ──▶ "☐ SML Support (install YAML extension)"
+ *
+ * Three commands share the one slot because neither half of that is directly
+ * expressible: `contributes.menus` items support only `command`/`alt`/`when`/
+ * `group` — there is no `toggled` property, so an extension cannot get a native
+ * checkmark in a context menu — and a command's `title` is static, so the label
+ * can only change by swapping which command occupies the slot. The check is
+ * therefore drawn in the title, and `when` clauses over context keys the extension
+ * publishes at runtime (see setSmlContextKeys in
+ * vscode-extension/src/sml-schema.ts) keep exactly one visible.
+ *
+ * `paletteHidden` keeps these three out of the Command Palette, where `when`
+ * clauses on the *menu* entry do not apply: without an explicit `commandPalette`
+ * entry every contributed command is listed there, so all three states — including
+ * "install the YAML extension" when it is already installed — would be offered at
+ * once. The palette instead gets `psUtils.sml.toggle`, a plain verb, since a
+ * checkbox glyph reads badly in a search list.
+ */
+const SML_MENU = [
+  {
+    command: "psUtils.sml.installYamlExtension",
+    title: "☐ SML Support (install YAML extension)",
+    when: "!psUtils.yamlExtensionInstalled",
+    paletteHidden: true,
+  },
+  {
+    command: "psUtils.sml.enable",
+    title: "☐ SML Support",
+    when: "psUtils.yamlExtensionInstalled && !psUtils.smlEnabled",
+    paletteHidden: true,
+  },
+  {
+    command: "psUtils.sml.disable",
+    title: "☑ SML Support",
+    when: "psUtils.yamlExtensionInstalled && psUtils.smlEnabled",
+    paletteHidden: true,
+  },
+  {
+    command: "psUtils.sml.toggle",
+    title: "Toggle SML Support for this Project",
+    when: "false", // palette-only; never shown in the context menu
+  },
+];
+
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -59,6 +112,9 @@ for (const opName of Object.keys(manifest.operations)) {
   commands.push({ command: `psUtils.op.${opName}`, title: opName, category: "PS-Utils" });
 }
 commands.push({ command: "psUtils.settings", title: "Settings…", category: "PS-Utils" });
+for (const entry of SML_MENU) {
+  commands.push({ command: entry.command, title: entry.title, category: "PS-Utils" });
+}
 
 // ── submenus ────────────────────────────────────────────────────────────────
 const submenus: { id: string; label: string }[] = [{ id: "psUtils.root", label: "PS-Utils" }];
@@ -98,6 +154,18 @@ manifest.groups.forEach((group, gi) => {
 });
 
 menus["psUtils.root"].push({ command: "psUtils.settings", group: "9_settings@1" });
+for (const entry of SML_MENU) {
+  if (entry.when === "false") continue; // palette-only entries take no menu slot
+  menus["psUtils.root"].push({ command: entry.command, group: "9_settings@2", when: entry.when });
+}
+
+// Command Palette visibility. Only the SML commands are listed: every other
+// contributed command is palette-visible by default, which is the existing
+// behaviour and should stay that way.
+menus["commandPalette"] = SML_MENU.map((entry) => ({
+  command: entry.command,
+  when: entry.paletteHidden ? "false" : undefined,
+}));
 
 // Strip undefined `when` keys so the emitted JSON stays clean.
 function clean<T extends Record<string, unknown>>(obj: T): T {

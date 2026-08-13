@@ -33,6 +33,112 @@ Works on **Windows, macOS, and Linux**. Command arguments are quoted for the ter
 PowerShell on Windows and POSIX (bash/zsh) elsewhere by default; override with
 [`psUtils.shell`](#settings) if your default terminal differs (e.g. Git Bash or WSL on Windows).
 
+## SML editing support
+
+The extension also makes the editor understand [SML](https://github.com/semanticdatalayer/SML)
+itself, so hand-editing a model is not a matter of remembering property names.
+
+- **Completion and hover documentation** for every documented property of every SML object type,
+  with its type, whether it is required, the version it was added in, and the prose description
+  from the specification.
+- **Validation** — unknown enum values (a misspelled `calculation_method`), wrong value types, and
+  missing required properties are flagged as you type.
+- **Typo detection** — a key the specification does not document is warned about, with a quick fix
+  when a documented property is close enough to name (`colums` → `columns`). See
+  [Undocumented keys](#undocumented-keys) for why this is separate from validation.
+- **SML-aware syntax highlighting** — `object_type` and its value, and the keys that point at
+  other SML objects (`dataset`, `dimension`, `connection_id`, `key_columns`, …) are coloured
+  distinctly from ordinary YAML keys. SQL inside a dataset `sql: |` block is highlighted as SQL.
+
+The right schema is chosen **per file, from its `object_type`** rather than from its filename, so
+an unconventionally-named or unconventionally-located file still gets the correct one. Files with
+no `object_type` yet — the usual state of a file you are still writing — fall back to the
+conventional layout (`catalog.yml`, `dimensions/`, `datasets/`, `metrics/`, `calculations/`,
+`models/`, `connections/`).
+
+### Turning it on and off per project
+
+The **PS-Utils** context submenu has one SML entry next to **Settings…**, which behaves as a
+checkbox for the current project:
+
+| Menu item | Shown when | Clicking it |
+|-----------|-----------|-------------|
+| **☑ SML Support** | on for this project | writes `psUtils.smlEnabled: false` to the project's `.vscode/settings.json` |
+| **☐ SML Support** | off for this project | writes `psUtils.smlEnabled: true` there |
+| **☐ SML Support (install YAML extension)** | the YAML extension is missing | offers to install it, or opens it in the Marketplace |
+
+Because the setting is written at **workspace** scope, it applies to that project only, and takes
+effect immediately — no reload. With no folder open there is nowhere project-scoped to write, so
+the command offers to change the global setting instead.
+
+From the Command Palette the same toggle is **PS-Utils: Toggle SML Support for this Project** — a
+plain verb, since a checkbox glyph reads badly in a search list.
+
+The check is drawn in the label rather than being a real checkmark because `contributes.menus`
+supports only `command`, `alt`, `when` and `group`: VS Code has no `toggled` property for
+extension-contributed context menu items, and a command's `title` is static. Three commands
+therefore share the one slot, gated by `when` clauses, so exactly one is visible at a time.
+
+**Syntax highlighting is not covered by this switch.** It comes from a TextMate grammar
+*injection*, which the editor resolves statically from `package.json` at extension load; there is
+no API to register or unregister an injection at runtime and no `when` clause on the contribution
+point. So highlighting is on wherever the extension itself is enabled. In practice this matters
+little — the grammar only claims SML-specific keys, so an unrelated YAML file has almost nothing
+for it to match. To switch it off for one project, use **Extensions: Disable (Workspace)** on
+PS-Utils.
+
+### Requires the YAML extension
+
+VS Code has no built-in YAML schema validation, so the schema half of this feature needs
+[redhat.vscode-yaml](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml).
+It is intentionally **not** a hard dependency — most people install PS-Utils for the operations
+menu and should not have a second extension forced on them. Two paths lead to it: the menu item
+above, and a one-time prompt the first time you open a file that looks like SML without it
+installed (**Never** suppresses that prompt permanently).
+
+Syntax highlighting and [undocumented-key warnings](#undocumented-keys) do not depend on the YAML
+extension — both are produced by PS-Utils directly.
+
+### Where the schemas come from
+
+Upstream SML ships no machine-readable schema — the specification is ten hand-written Markdown
+documents. The schemas here are **generated** from a vendored, commit-pinned copy of those
+documents (`resources/sml-reference/` in the repo root) by `npm run generate:sml-schema`. See
+[How it stays in sync with the CLI](#how-it-stays-in-sync-with-the-cli).
+
+They are deliberately permissive about unknown properties: the specification prose lags the
+implementation in places, so a strict schema would put errors on valid files — including SML that
+ps-utils itself generates.
+
+### Undocumented keys
+
+Because the schemas accept any extra property, the YAML extension will never report a typo'd key —
+`patreick: string` in a dataset validates cleanly. PS-Utils reports those itself, in its own
+diagnostics channel, at **warning** severity:
+
+> `` `colums` `` is not a documented property of SML `dataset`. Did you mean `` `columns` ``?
+
+Where a documented property is close enough, a quick fix (<kbd>Ctrl</kbd>+<kbd>.</kbd>) renames the
+key. Closeness is measured with an edit distance that counts a transposition as one edit, so
+`tabel` still finds `table`; when nothing is near enough, or two candidates tie, no suggestion is
+offered rather than a misleading one.
+
+The severity is the point of the design. Making the schema strict would report the same keys as
+*errors*, indistinguishable from a genuinely broken file, and there is no way to say "this rule is
+softer than that one" in JSON Schema. A warning says what it means: probably a typo, possibly the
+specification lagging the implementation. Keys already known to be the latter — such as
+`visualize_in_bi_tool` on a hierarchy level — are allowlisted by the schema generator, scoped to the
+object type and the class they occur on, so a key that is documented elsewhere still gets checked
+everywhere else.
+
+The walk is conservative by construction: it reports a key only where the schema explicitly
+declares the surrounding object's properties, and stops descending at anything it cannot resolve.
+It also does not look inside a key it has already reported, so one stray key produces one warning
+rather than a cascade.
+
+Set [`psUtils.smlUnknownKeys`](#settings) to `information` to keep the findings in the Problems
+panel without an editor squiggle, or `off` to disable them. `psUtils.smlEnabled` gates them too.
+
 ## Requirements
 
 - **VS Code** 1.85 or newer.
@@ -40,19 +146,31 @@ PowerShell on Windows and POSIX (bash/zsh) elsewhere by default; override with
   whose `undici` dependency needs the `File` global (added in Node 18.20 / 20). This package pins
   `undici` to v5 via an `overrides` entry so packaging also works on older Node 18.x; without it,
   `vsce` fails with `ReferenceError: File is not defined` on those runtimes.
-- **The `ps-utils` CLI must be reachable.** By default the extension runs it via:
-  1. a local `node_modules/.bin/atscale-utils` (`atscale-utils.cmd` on Windows) if the workspace
-     has `@atscale-ps/ps-utils` installed, otherwise
-  2. `npx --yes @atscale-ps/ps-utils` (downloads on first use).
+- **No separate CLI install.** The extension ships its own copy of `ps-utils`, bundled into
+  `cli/cli.cjs` at package time, and always runs that copy. There is deliberately no setting to
+  point at an external CLI: a separately installed one could be any version, and the extension's
+  operation catalogue and parameter dialogs are generated from the version it was packaged with.
+  Bundling makes a version mismatch impossible rather than merely detectable.
 
-  If you install the CLI globally or want a custom invocation, set `psUtils.cliCommand`
-  (see [Settings](#settings)). **Node.js** is required for either path.
+  You do **not** need Node.js on your `PATH`. The bundle runs on the Node runtime inside VS Code
+  itself (`process.execPath` with `ELECTRON_RUN_AS_NODE=1`), which is why the command echoed into
+  the terminal names the VS Code binary rather than `node`.
 
 ## Installation
 
 ### Option A — install a packaged `.vsix` (recommended for users)
 
-1. Build the extension package (produces `atscale-ps-utils-<version>.vsix`):
+1. Build the CLI bundle from the repo root. `npm run build` does this as its last step, or run
+   it alone:
+
+   ```bash
+   npm run bundle:cli     # writes vscode-extension/cli/ — required before packaging
+   ```
+
+   `cli/` is a build artifact and is git-ignored; packaging without it produces an extension that
+   cannot run anything.
+
+2. Build the extension package (produces `atscale-ps-utils-<version>.vsix`, ~2 MB):
 
    ```bash
    cd vscode-extension
@@ -65,7 +183,7 @@ PowerShell on Windows and POSIX (bash/zsh) elsewhere by default; override with
    `ReferenceError: File is not defined`, your Node is older than 18.20 — the pinned `undici`
    override normally prevents this; run `npm install` again to ensure it took effect.
 
-2. Install it into VS Code, either from the UI or the command line:
+3. Install it into VS Code, either from the UI or the command line:
 
    - **UI:** Extensions view → `⋯` menu → **Install from VSIX…** → pick the `.vsix`.
    - **CLI (any OS):**
@@ -77,7 +195,7 @@ PowerShell on Windows and POSIX (bash/zsh) elsewhere by default; override with
      On Windows, `code` is the VS Code CLI (available if "Add to PATH" was selected during
      install); otherwise use the full path or run it from a Developer/VS Code terminal.
 
-3. Reload VS Code. Right-click a file or folder in the Explorer to see the **PS-Utils** menu.
+4. Reload VS Code. Right-click a file or folder in the Explorer to see the **PS-Utils** menu.
 
 To share the extension, distribute that single `.vsix` file — teammates install it the same way.
 
@@ -88,19 +206,51 @@ packaging).
 
 ## How it stays in sync with the CLI
 
+**The extension ships the CLI it was built against.** `npm run bundle:cli` writes
+`cli/cli.cjs` — a single-file esbuild bundle of ps-utils, with its `.ejs` templates beside it under
+`cli/operations/` — and the extension runs only that copy. The menus, the parameter dialogs and the
+executing CLI are therefore generated from one build by construction, and there is no setting that
+can point at a different one.
+
+This replaced an earlier arrangement where the extension resolved a CLI at run time (a workspace
+`node_modules/.bin` entry, else `npx`) while its operation catalogue stayed frozen at package time.
+Those two could disagree on a client machine in ways that were invisible: a parameter added to the
+CLI simply never appeared in a dialog, and a behavior change appeared as a wrong answer with nothing
+in the output identifying which build produced it.
+
 The menu, operations, and parameters are read from `media/operations.manifest.json`, which is
-generated from the ps-utils operation registry and the shared `OPERATION_GROUPS` list:
+generated from the same ps-utils operation registry and the shared `OPERATION_GROUPS` list:
 
 ```bash
 # from the repo root
-npm run build            # regenerates the manifest + this extension's menu contributions
+npm run build            # regenerates the manifest + menu contributions + the CLI bundle
 # or individually:
 npm run generate:extension-manifest
 npm run generate:extension-contributes
+npm run bundle:cli
 ```
 
 `generate-extension-contributes` rewrites this package's `contributes.commands/submenus/menus`
 from the manifest, so adding or changing an operation in the CLI automatically updates the menus.
+It preserves every other field, so the `configuration`, `yamlValidation` and `grammars`
+contributions are hand-maintained and safe to edit.
+
+The SML schemas and the injection grammar are generated too, from the vendored specification:
+
+```bash
+npm run generate:sml-schema     # also part of npm run build
+```
+
+That writes `media/sml-schema/*.schema.json` (one per SML object type, plus `index.json`) and
+`syntaxes/sml.injection.tmLanguage.json`. **Do not edit those by hand.** To pick up a new SML
+release, refresh `resources/sml-reference/` per its `UPSTREAM.md` and regenerate; the generator
+fails loudly rather than quietly dropping properties if the documents change shape.
+
+`index.json` also carries `knownUndocumented`, the allowlist behind
+[undocumented-key warnings](#undocumented-keys). It comes from the generator's `KNOWN_UNDOCUMENTED`
+table, which is checked on every run: naming a class that no longer exists, or one that has since
+gained the property, fails the build rather than leaving a stale entry that would suppress real
+typos.
 
 ## Settings
 
@@ -111,10 +261,11 @@ Set via the **Settings…** menu item (writes workspace `.vscode/settings.json`)
 | `psUtils.connectionFile` | Prefilled into `--connection-file` |
 | `psUtils.styleFile` | Prefilled into `--sml-config-file` |
 | `psUtils.modelName` | Prefilled into `--model-name` |
-| `psUtils.cliCommand` | Override the CLI invocation (blank = auto-detect) |
 | `psUtils.shell` | Terminal shell for argument quoting: `auto` (default), `bash`, `powershell`, or `cmd` |
 | `psUtils.commonParams` | Map of `param-name` → value prefilled into any matching dialog (explicit pins) |
 | `psUtils.rememberParameters` | Remember the last value entered for each scalar parameter and reuse it across operations (default `true`) |
+| `psUtils.smlEnabled` | [SML schema support](#sml-editing-support) — completion, hover docs and validation for SML YAML files (default `true`). Set per project; see [Turning it on and off per project](#turning-it-on-and-off-per-project) |
+| `psUtils.smlUnknownKeys` | Severity for [keys the specification does not document](#undocumented-keys): `warning` (default), `information`, or `off` |
 
 ### Remembered parameters (cross-operation defaults)
 
@@ -139,14 +290,53 @@ the classic Command Prompt, so paths with spaces are quoted correctly.
 ```bash
 cd vscode-extension
 npm install
-npm run compile        # bundle to dist/extension.js
 ```
 
-Then press **F5** (or run the "Run PS-Utils Extension" launch config) to open an Extension
-Development Host. Open a workspace, right-click a file/folder, and try an operation.
+Then press **F5**. That launches an **Extension Development Host** — a second VS Code window
+running the extension straight from `dist/`, entirely separate from the editor you are working in.
+Three launch configurations are provided:
+
+| Configuration | Use |
+|---|---|
+| **Run PS-Utils Extension (watch)** | everyday loop; rebuilds on save |
+| **Run PS-Utils Extension (watch + SML corpus)** | same, and opens the committed SML fixture corpus so there are real SML files to test against |
+| **Run PS-Utils Extension** | one-shot build, no watcher |
+
+### The reload rules
+
+What you changed determines what you have to do — and none of it involves restarting your own
+editor:
+
+| Changed | To pick it up |
+|---|---|
+| TypeScript under `src/` | **Ctrl+R** / **Cmd+R** in the dev-host window (the watcher has already rebuilt) |
+| `package.json` contributions — `commands`, `menus`, `configuration`, `grammars`, `yamlValidation` | **Shift+F5** then **F5** — restart the debug session |
+| SML schemas or the grammar | `npm run generate:sml-schema` from the repo root, then restart the debug session |
+
+The second row is the one that catches people. `contributes.configuration` and the menu
+contributions are registered **once per application session**, not per window, so a window reload
+will not see them — and neither will a brand-new window, since every window shares the
+application's extension scan. Restarting the debug session is enough because each launch is a
+*fresh* dev-host application.
+
+### Do not install a `.vsix` to test changes
+
+Installing the packaged extension into your main VS Code is the *distribution* path, not the
+development path. Because contributions are registered per application session, replacing an
+already-installed extension leaves your running editor with the previous version's contributions —
+its code updates on reload while its settings and menus do not, which produces confusing
+half-updated behaviour (a menu item that appears but whose setting "is not a registered
+configuration"). Fixing that genuinely does require quitting VS Code completely.
+
+Use F5 while developing. Package and install only to verify the final artifact, and expect to
+fully restart VS Code when you do.
 
 Package a `.vsix`:
 
 ```bash
 npm run package
 ```
+
+Bump `version` in `package.json` first: VS Code **silently skips** installing a `.vsix` whose
+version matches what is already installed, so reusing a version number looks exactly like a build
+that did not take effect.

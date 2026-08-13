@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/package.schema.json",
+  "title": "SML Package",
+  "description": "Generated from resources/sml-reference/package.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "version": {
+      "description": "The schema version for the file. The value of this property should be `1`.",
+      "type": "number"
+    },
+    "packages": {
+      "description": "A list of the Git repositories that the current repository can use objects from.",
+      "items": {
+        "$ref": "#/$defs/Package"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "version",
+    "packages"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "Package": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the repository.",
+          "type": "string"
+        },
+        "url": {
+          "description": "The URL for the repository.",
+          "type": "string"
+        },
+        "branch": {
+          "description": "The specific branch from the repository to use.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The ID for a specific commit to use. This should begin with `commit:` followed by 8-40 alphanumeric characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "branch",
+        "version"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

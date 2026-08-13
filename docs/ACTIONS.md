@@ -1687,8 +1687,8 @@ Either `repo-id` or `repo-name` must be provided. When only `repo-name` is given
 Validates an SML model against the AtScale engine and reports any problems.
 
 Runs two validation phases:
-1. **Structural** (always) — local YAML cross-reference check: verifies that all datasets, columns, dimensions, and level attributes referenced in the model and relationships actually exist in the SML files.
-2. **Engine** (if Phase 1 passes) — POSTs column-joinability and uniqueness checks to AtScale's `POST /catalog/validate-model` API; reports `Incorrect` results as errors and `Warning` results as warnings.
+1. **Structural** (always) — local YAML cross-reference check: verifies that all datasets, columns, dimensions, and level attributes referenced in the model and relationships actually exist in the SML files, and that every dataset's `connection_id` resolves to a file in `connections/`.
+2. **Engine** (if Phase 1 passes) — POSTs column-joinability and uniqueness checks to AtScale's `POST /catalog/validate-model` API; reports `Incorrect` results as errors and `Warning` results as warnings. Each check goes to the connection group named by its dataset's `connection_id` (via that connection's `as_connection`, `database` and `schema`), batched one request per distinct connection group. The `as_connection` must already exist as a connection group on the target instance, or the engine returns `ConnectionGroup … not found`.
 
 **Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
 
