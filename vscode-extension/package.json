@@ -477,7 +477,8 @@
       "psUtils.group.testing-query-processing": [
         {
           "command": "psUtils.op.generate-queries-from-sml",
-          "group": "1_ops@1"
+          "group": "1_ops@1",
+          "when": "explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.generate-queries-from-model",
