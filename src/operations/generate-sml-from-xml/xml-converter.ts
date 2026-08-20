@@ -326,6 +326,11 @@ export async function convertXmlToSml(
     }
   }
 
+  // User Defined Aggregates reference dimension attributes by id, with an optional
+  // ref-path for attributes reached through a snowflake/embedded relationship rather than
+  // hosted natively — resolve both mappings once, up front, for all dimensions.
+  const { attrIdToDimName, refIdToHostDimName } = collectAttributeDimensionOwnership(allDims);
+
   // We emit dimension YAMLs after processing cubes (so we know which dims are referenced)
   const referencedDimNames = new Set<string>();
   // inferRelationships already determines, per cube, whether a dimension is degenerate
@@ -401,6 +406,10 @@ export async function convertXmlToSml(
     // (e.g. a visible=false leftover from a rename) — dedupe by the transformed unique_name
     // so the model's metrics: list never contains the same entry twice.
     const seenMetricNames = new Set<string>();
+    // User Defined Aggregates reference measures/calc members by attribute id — record each
+    // emitted metric's id alongside its transformed unique_name so aggregate parsing (below)
+    // can resolve them the same way the reference converter does.
+    const attrIdToMetricUniqueName = new Map<string, string>();
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -483,6 +492,7 @@ export async function convertXmlToSml(
             continue;
           }
           seenMetricNames.add(uniqueName);
+          attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -505,6 +515,7 @@ export async function convertXmlToSml(
             continue;
           }
           seenMetricNames.add(uniqueName);
+          attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
@@ -544,6 +555,7 @@ export async function convertXmlToSml(
           continue;
         }
         seenMetricNames.add(uniqueName);
+        attrIdToMetricUniqueName.set(refId!, uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
@@ -553,6 +565,73 @@ export async function convertXmlToSml(
         logger.log(`  → calculations/${fname}.yml`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
         rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: false });
+      }
+    }
+
+    // Phase 8: User Defined Aggregates (hinted aggregate tables)
+    //
+    // <cube><aggregates><aggregate id name><attributes><attribute-ref id>[<ref-path><ref id>]>
+    // mixes dimension attributes and measures in the same <attributes> list — there is no
+    // separate <metrics> element in the source XML. Each attribute-ref id is resolved
+    // against whatever this cube already emitted/knows about: a measure/calc-member id
+    // (attrIdToMetricUniqueName) routes to the aggregate's metrics: list; a dimension
+    // keyed-attribute id (attrIdToDimName) routes to attributes: as {name, dimension}. A
+    // ref-path present on the attribute-ref means the attribute is reached through a
+    // snowflake/embedded relationship rather than hosted natively — its host dimension is
+    // looked up via refIdToHostDimName and combined into relationships_path.
+    const aggregates: AggregateDef[] = [];
+    for (const aggsSec of arr(cube.aggregates)) {
+      for (const aggEl of arr((aggsSec as Record<string, unknown>).aggregate)) {
+        const aggName = a(aggEl, "name");
+        if (!aggName) continue;
+
+        const attributes: AggregateDef["attributes"] = [];
+        const metrics: string[] = [];
+
+        for (const attrsWrap of arr((aggEl as Record<string, unknown>).attributes)) {
+          for (const attrRef of arr((attrsWrap as Record<string, unknown>)["attribute-ref"])) {
+            const refAttrId = a(attrRef, "id");
+            if (!refAttrId) continue;
+
+            const metricUniqueName = attrIdToMetricUniqueName.get(refAttrId);
+            if (metricUniqueName) {
+              metrics.push(metricUniqueName);
+              continue;
+            }
+
+            const kaDef = attrDef.get(refAttrId);
+            const targetDimName = attrIdToDimName.get(refAttrId);
+            if (!kaDef || !targetDimName) {
+              rptOmissions.push({
+                category: "User Defined Aggregate",
+                item: `${aggName} → ${refAttrId}`,
+                reason: "Could not resolve this attribute-ref to a known measure or dimension attribute — the id may point at a schema element this converter does not yet parse.",
+                recommendation: `Verify attribute id ${refAttrId} manually and add it to models/*.yml aggregates[].attributes or .metrics if needed.`,
+              });
+              continue;
+            }
+
+            const attrOut: AggregateDef["attributes"][number] = { name: kaDef.name, dimension: targetDimName };
+
+            const refPathEl = first(arr((attrRef as Record<string, unknown>)["ref-path"])) as
+              | Record<string, unknown>
+              | undefined;
+            const pathRefId = refPathEl ? a(first(arr(refPathEl.ref)) as Record<string, unknown> | undefined ?? {}, "id") : undefined;
+            if (pathRefId) {
+              const hostDimName = refIdToHostDimName.get(pathRefId);
+              if (hostDimName) {
+                attrOut.relationshipsPath = [
+                  `${hostDimName.replace(/\s+/g, "")}_${targetDimName.replace(/\s+/g, "")}`,
+                ];
+              }
+            }
+
+            attributes.push(attrOut);
+          }
+        }
+
+        if (attributes.length === 0 && metrics.length === 0) continue;
+        aggregates.push({ uniqueName: aggName, label: aggName, attributes, metrics });
       }
     }
 
@@ -625,7 +704,7 @@ export async function convertXmlToSml(
     const cubeVisible = cubeProps ? s(first(arr(cubeProps.visible))) !== "false" : true;
 
     // Emit model file
-    const modelYaml = buildModelYaml(cubeName, relationships, cubeDimNames, metricNames, !cubeVisible, includeDefaultDrillthrough);
+    const modelYaml = buildModelYaml(cubeName, relationships, cubeDimNames, metricNames, aggregates, !cubeVisible, includeDefaultDrillthrough);
     const fname = safeFilename(cubeName);
     output.set(`models/${fname}.yml`, modelYaml);
     logger.log(`  → models/${fname}.yml`);
@@ -645,6 +724,7 @@ export async function convertXmlToSml(
       relationshipCount: relationships.length,
       dimensionCount: cubeDimNames.length,
       metricCount: metricNames.length,
+      aggregateCount: aggregates.length,
       hasDefaultDrillthrough: includeDefaultDrillthrough,
       isHidden: !cubeVisible,
       factDatasets: cubeBoundDatasets,
@@ -900,12 +980,21 @@ interface ModelRecord {
   relationshipCount: number;
   dimensionCount: number;
   metricCount: number;
+  aggregateCount: number;
   hasDefaultDrillthrough: boolean;
   isHidden: boolean;
   /** Datasets explicitly bound to this cube as fact tables (cube data-set-refs). */
   factDatasets: string[];
   /** Datasets used by the model's dimensions but not listed as cube fact tables. */
   dimensionDatasets: string[];
+}
+
+/** A User Defined Aggregate (hinted aggregate table) declared on a cube. */
+interface AggregateDef {
+  uniqueName: string;
+  label: string;
+  attributes: Array<{ name: string; dimension: string; relationshipsPath?: string[] }>;
+  metrics: string[];
 }
 
 interface OmissionRecord {
@@ -1401,6 +1490,48 @@ function buildDatasetYaml(
   if (columns.length) obj.columns = columns;
 
   return toYaml(obj);
+}
+
+/**
+ * Resolves which dimension "owns" each attribute id, for User Defined Aggregate parsing.
+ *
+ * An attribute is hosted natively by whichever dimension references it via a plain
+ * `<keyed-attribute-ref attribute-id="X">` with no `ref-id` (the same distinction
+ * buildDimensionYaml already uses to separate secondary attributes from skipped
+ * cross-dimension refs). When a `ref-id` IS present, the id is instead an opaque
+ * "path token" pairing the CURRENT (host) dimension with a foreign attribute reached via
+ * a snowflake/embedded relationship — there is no separate declaration to look up, so the
+ * ref-id itself is recorded against the host dimension's name for later synthesis of
+ * `relationships_path` as `{hostDimension}_{targetDimensionNoSpaces}`.
+ */
+function collectAttributeDimensionOwnership(
+  allDims: Map<string, Record<string, unknown>>,
+): { attrIdToDimName: Map<string, string>; refIdToHostDimName: Map<string, string> } {
+  const attrIdToDimName = new Map<string, string>();
+  const refIdToHostDimName = new Map<string, string>();
+
+  for (const [dimName, dimEl] of allDims) {
+    for (const hierEl of arr(dimEl.hierarchy)) {
+      for (const levelEl of arr(hierEl.level)) {
+        const primaryAttrUuid = a(levelEl, "primary-attribute");
+        if (primaryAttrUuid && !attrIdToDimName.has(primaryAttrUuid)) {
+          attrIdToDimName.set(primaryAttrUuid, dimName);
+        }
+        for (const kref of arr(levelEl["keyed-attribute-ref"])) {
+          const attrId = a(kref, "attribute-id");
+          const refId = a(kref, "ref-id");
+          if (!attrId) continue;
+          if (refId) {
+            if (!refIdToHostDimName.has(refId)) refIdToHostDimName.set(refId, dimName);
+          } else if (!attrIdToDimName.has(attrId)) {
+            attrIdToDimName.set(attrId, dimName);
+          }
+        }
+      }
+    }
+  }
+
+  return { attrIdToDimName, refIdToHostDimName };
 }
 
 // ============================================================
@@ -2046,6 +2177,7 @@ function buildModelYaml(
   relationships: RelationshipDef[],
   dimNames: string[],
   metricNames: Array<{ uniqueName: string; folder?: string }>,
+  aggregates: AggregateDef[] = [],
   isHidden = false,
   includeDefaultDrillthrough = false,
 ): string {
@@ -2083,6 +2215,24 @@ function buildModelYaml(
       const mObj: Record<string, unknown> = { unique_name: m.uniqueName };
       if (m.folder) mObj.folder = m.folder;
       return mObj;
+    });
+  }
+
+  if (aggregates.length > 0) {
+    obj.aggregates = aggregates.map((agg) => {
+      const aggObj: Record<string, unknown> = {
+        unique_name: agg.uniqueName,
+        label: agg.label,
+      };
+      if (agg.attributes.length > 0) {
+        aggObj.attributes = agg.attributes.map((attr) => {
+          const attrObj: Record<string, unknown> = { name: attr.name, dimension: attr.dimension };
+          if (attr.relationshipsPath?.length) attrObj.relationships_path = attr.relationshipsPath;
+          return attrObj;
+        });
+      }
+      if (agg.metrics.length > 0) aggObj.metrics = agg.metrics;
+      return aggObj;
     });
   }
 
@@ -2257,6 +2407,8 @@ function buildReadme(
   lines.push(`| Calculated Measures | ${calcMeasures.length} |`);
   lines.push(`| Calculated Members | ${calcMembers.length} |`);
   lines.push(`| Models | ${models.length} |`);
+  const aggregateTotal = models.reduce((sum, m) => sum + m.aggregateCount, 0);
+  if (aggregateTotal > 0) lines.push(`| User Defined Aggregates | ${aggregateTotal} |`);
   lines.push(`| Omissions | ${omissions.length} |`);
   lines.push("", "---", "");
 
@@ -2323,13 +2475,17 @@ function buildReadme(
   if (models.length === 0) {
     lines.push("_No models were converted._", "");
   } else {
-    lines.push("| Model | File | Relationships | Dimensions | Metrics | Notes |");
-    lines.push("|-------|------|---------------|------------|---------|-------|");
+    const hasAggregates = models.some((m) => m.aggregateCount > 0);
+    const aggHeader = hasAggregates ? " Aggregates |" : "";
+    const aggSep = hasAggregates ? "-----------|" : "";
+    lines.push(`| Model | File | Relationships | Dimensions | Metrics |${aggHeader} Notes |`);
+    lines.push(`|-------|------|---------------|------------|---------|${aggSep}-------|`);
     for (const m of models) {
       const notes: string[] = [];
       if (m.isHidden) notes.push("hidden");
       if (m.hasDefaultDrillthrough) notes.push("drillthrough");
-      lines.push(`| ${m.name} | \`${m.file}\` | ${m.relationshipCount} | ${m.dimensionCount} | ${m.metricCount} | ${notes.join(", ")} |`);
+      const aggCell = hasAggregates ? ` ${m.aggregateCount} |` : "";
+      lines.push(`| ${m.name} | \`${m.file}\` | ${m.relationshipCount} | ${m.dimensionCount} | ${m.metricCount} |${aggCell} ${notes.join(", ")} |`);
     }
     lines.push("");
   }
