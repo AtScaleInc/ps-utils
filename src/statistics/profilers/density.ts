@@ -59,7 +59,12 @@ export async function profileFactJoins(
     if (!fkCol || !dimKeyCol) continue;
 
     const factTable  = qualifyTable(fact.sourceSchema, fact.sourceTable);
-    const dimTable   = qualifyTable(dim.sourceSchema,   dim.sourceTable);
+    // Snowflake-schema hierarchies normalize the leaf level into its own table
+    // (e.g. dimproduct, distinct from the dimension's root-level table like
+    // dimproductcategory) — query the leaf's own table when one is recorded.
+    const dimTable   = leafLevel.sourceTable
+      ? qualifyTable(leafLevel.sourceSchema ?? dim.sourceSchema, leafLevel.sourceTable)
+      : qualifyTable(dim.sourceSchema, dim.sourceTable);
 
     // ── Null FK fraction ─────────────────────────────────────────────────────
     const nullRows = await runner.query(`

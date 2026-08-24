@@ -368,6 +368,13 @@ export class SqlService extends ServiceProvider {
       : undefined;
     const privateKeyBase64 = userEntry?.privateKeyBase64?.replace(/\s+/g, "");
 
+    // Programmatic Access Token (PAT) auth — a password-replacement token
+    // generated in Snowsight (User → Programmatic Access Tokens) that doesn't
+    // require MFA or a key-pair to be assigned to the user. Takes priority
+    // over a plain password when both are present, but yields to key-pair
+    // auth so existing JWT-based connections keep working unchanged.
+    const token = userEntry?.token ?? userEntry?.pat;
+
     if (privateKeyPath || privateKeyBase64) {
       connConfig.authenticator = "SNOWFLAKE_JWT";
       connConfig.privateKey = privateKeyPath
@@ -376,10 +383,15 @@ export class SqlService extends ServiceProvider {
       if (userEntry?.privateKeyPassword) {
         connConfig.privateKeyPass = userEntry.privateKeyPassword;
       }
+    } else if (token) {
+      connConfig.authenticator = "PROGRAMMATIC_ACCESS_TOKEN";
+      connConfig.token = token;
     } else if (password) {
       connConfig.password = password;
     } else {
-      throw new Error("Snowflake connection requires a password or private key.");
+      throw new Error(
+        "Snowflake connection requires a password, private key, or programmatic access token (PAT).",
+      );
     }
 
     this.logger?.verbose(`[SqlService] Connecting to Snowflake: ${account}/${database}/${schema}`);

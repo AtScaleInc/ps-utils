@@ -794,6 +794,8 @@ The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include
 
 Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
 
+Supports both star-schema (every hierarchy level denormalized into one dimension table) and snowflake-schema (each level normalized into its own physical table, resolved from the SML model's per-level datasets and `relationships` block) layouts — see [Snowflake-schema hierarchies](docs/STATISTICS.md#snowflake-schema-hierarchies) in STATISTICS.md.
+
 No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
 
 Large fact tables are automatically sampled via `TABLESAMPLE SYSTEM` or a `LIMIT`-based fallback (see `--target-fact-rows` and `--no-tablesample`). Sample sizes are computed using the Cochran formula (z² × 0.25 / e²) with finite-population correction, guaranteeing statistical significance without reading the entire table.
@@ -2115,6 +2117,19 @@ users:
     # privateKeyBase64: "<base64-der-pkcs8>"
 ```
 
+#### Programmatic access token authentication (Snowflake)
+
+An alternative to key-pair auth for accounts where you cannot assign a key pair to your user. Generate a token in Snowsight under **User → Programmatic Access Tokens**, then reference it as `token` (or `pat`) on the user entry:
+
+```yaml
+users:
+  snowflake_pat_user:
+    username: USER@EXAMPLE.COM
+    token: "<programmatic-access-token>"
+```
+
+Requires no key file and no MFA prompt. Note that the token's associated user must be covered by a network policy (account-level or user-level) unless an authentication policy explicitly waives that requirement — see [Snowflake's PAT documentation](https://docs.snowflake.com/en/user-guide/programmatic-access-tokens). If both `privateKeyPath`/`privateKeyBase64` and `token` are present on the same user entry, key-pair auth takes priority.
+
 #### Personal access token (Databricks)
 
 ```yaml
@@ -2196,7 +2211,9 @@ connections:
 | `snowflake_user` | Yes | | Key from `users` section |
 | `role` | No | | Snowflake role (e.g. `SYSADMIN`) |
 
-#### Full Snowflake example
+The referenced `users` entry authenticates via, in priority order: key-pair (`privateKeyPath` / `privateKeyBase64`), programmatic access token (`token` / `pat`), or plain `password`. See [User credentials](#user-credentials) above.
+
+#### Full Snowflake example — key-pair auth
 
 ```yaml
 users:
@@ -2204,6 +2221,26 @@ users:
     username: USER@EXAMPLE.COM
     privateKeyPath: resources/keys/snowflake_key.p8
     privateKeyPassword: ""
+
+connections:
+  snow_demo:
+    sql:
+      dialect: snowflake
+      account: da37161
+      warehouse: COMPUTE_WH
+      database: MY_DATABASE
+      schema: MY_SCHEMA
+      role: SYSADMIN
+      snowflake_user: snowflake_user
+```
+
+#### Full Snowflake example — programmatic access token (PAT) auth
+
+```yaml
+users:
+  snowflake_user:
+    username: USER@EXAMPLE.COM
+    token: "<programmatic-access-token>"
 
 connections:
   snow_demo:
