@@ -1,6 +1,6 @@
 {
   "name": "@atscale-ps/ps-utils",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
   "type": "module",
   "license": "Apache-2.0",

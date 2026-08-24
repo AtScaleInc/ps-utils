@@ -123,6 +123,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`atScaleListDeployments`](#atscalelistdeployments)
   - [`atScaleDeployCatalog`](#atscaledeploycatalog)
   - [`atScaleListModelErrors`](#atscalelistmodelerrors)
+  - [`getDsoCount`](#getDsoCount)
 - [Web Services](#web-services)
   - [`executeWebServices`](#executewebservices)
 - [Utilities](#utilities)
@@ -1427,6 +1428,39 @@ function atScaleListModelErrors(
 | `branch` | `string` | No | | Branch to validate (defaults to repository default branch) |
 | `modelName` | `string` | No | | Model to validate (defaults to first model found) |
 | `insecure` | `boolean` | No | | Skip TLS certificate verification |
+
+---
+
+### `getDsoCount`
+
+[↑ Table of Contents](#table-of-contents)
+
+Gests the unique and total DSO count for the specified model or catalog or entire system if none specified.
+
+```typescript
+import { getDsoCount } from "@atscale-ps/ps-utils";
+
+await getDsoCount({
+  connectionFile:   "connections.yaml",
+  connectionName:   "ats_prod",
+  catalog:            "Sales",
+  model:          "Sales",
+});
+```
+
+```typescript
+function getDsoCount(
+  params: GetDsoCountParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `connectionName` | `string` | Yes | | AtScale connection entry |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `catalog` | No | all available catalogs | Count only models from the specified catalog |
+| `model` | No | all available models | Count only the specified model |
 
 ---
 

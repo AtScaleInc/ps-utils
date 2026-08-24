@@ -157,6 +157,7 @@ flowchart LR
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
     - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
+    - [`get-dso-count`](#get-dso-count)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
   - Utilities
@@ -1735,6 +1736,37 @@ Supports two source modes — provide exactly one:
 † Provide exactly one of `sml-dir`, `repo-name`, or `repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each with `phase`, `severity`, `message`, optional `location`), and `summary` counts.
+
+---
+
+### `get-dso-count`
+
+[↑ Table of Contents](#table-of-contents)
+
+Gets the DSO count for a specified model or catalog if supplied or the entire system if none are specified.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the AtScale connection entry and a `sql:` block on the SQL connection entry. The API token is automatically exchanged for a JWT via `POST /v1/token`.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: get-dso-count
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: my_atscale
+    catalog: sales
+    model: sales_demo
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `catalog` | No | all available catalogs | Count only models from the specified catalog |
+| `model` | No | all available models | Count only the specified model |
+
+**Output:** The unique and total DSO count for the available models.
 
 ---
 

@@ -950,7 +950,7 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
       yamlConfig = parseYaml(raw) as Record<string, any>;
     }
 
-    const proxyConfig: Record<string, any> = {};
+    let proxyConfig: any = {};
     if (yamlConfig.proxy && yamlConfig.proxy.host) {
       proxyConfig.host = yamlConfig.proxy.host;
       if (yamlConfig.proxy.password) {
@@ -971,6 +971,9 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
           proxyConfig.password = yamlConfig.proxy.password;
         }
       }
+    }
+    else if (yamlConfig.proxy === false) {
+      proxyConfig = false
     }
 
     // ── Determine task list ──────────────────────────────────────────────────

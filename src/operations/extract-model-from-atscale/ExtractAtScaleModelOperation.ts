@@ -333,7 +333,7 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       );
     }
 
-    const proxyConfig: Record<string, any> = {};
+    let proxyConfig: any = {};
     if (connection.proxy && connection.proxy.host) {
       proxyConfig.host = connection.proxy.host;
       if (connection.proxy.password) {
@@ -354,6 +354,9 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
           proxyConfig.password = connection.proxy.password;
         }
       }
+    }
+    else if (connection.proxy === false) {
+      proxyConfig = false
     }
 
     const user = (connectionFile.users ?? {})[connection.mdx.user] ?? {};
