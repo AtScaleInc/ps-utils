@@ -7,13 +7,14 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { EjsTemplateService } from "../../services/EjsTemplateService.js";
+import { operationAssetDir } from "../../assets.js";
 import fs from "fs";
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
+
+/** Directory of this operation's .ejs templates (dist tree or bundled assets). */
+const templateDir = (): string => operationAssetDir(() => import.meta.url, "generate-tableau-from-namespace");
 
 class GenerateTableauParameterSet extends TemplateParameterSet {
   parameters = [
@@ -114,7 +115,7 @@ schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin
     this.logger.verbose("Reading overview namespace: " + params["namespace-file"]);
     const overviewData = yaml.readFromFile<Record<string, unknown>>(params["namespace-file"]);
 
-    const templatePath = `${__dirname}/tableau.${version}.twb.ejs`;
+    const templatePath = `${templateDir()}/tableau.${version}.twb.ejs`;
     this.logger.verbose(`Reading EJS template: ${templatePath}`);
     const template = fs.readFileSync(templatePath, "utf8");
 

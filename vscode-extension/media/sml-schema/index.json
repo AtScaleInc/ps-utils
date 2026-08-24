@@ -1,0 +1,57 @@
+{
+  "_generated": "src/scripts/generate-sml-schema.ts — do not edit by hand",
+  "description": "Maps an SML object_type (and its conventional directory) to the schema that validates it, and lists the keys the extension's unknown-key linter must not warn about.",
+  "knownUndocumented": [
+    {
+      "key": "visualize_in_bi_tool",
+      "objectType": "dimension",
+      "class": "Level",
+      "where": "hierarchy level references, emitted by src/algorithm/sml-serializer.ts"
+    },
+    {
+      "key": "is_unique_key",
+      "objectType": "dimension",
+      "class": "SecondaryAttribute",
+      "where": "secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key"
+    }
+  ],
+  "objectTypes": {
+    "catalog": {
+      "schema": "catalog.schema.json"
+    },
+    "connection": {
+      "schema": "connection.schema.json",
+      "directory": "connections"
+    },
+    "dataset": {
+      "schema": "dataset.schema.json",
+      "directory": "datasets"
+    },
+    "dimension": {
+      "schema": "dimension.schema.json",
+      "directory": "dimensions"
+    },
+    "metric": {
+      "schema": "metric.schema.json",
+      "directory": "metrics"
+    },
+    "metric_calc": {
+      "schema": "calculation.schema.json",
+      "directory": "calculations"
+    },
+    "model": {
+      "schema": "model.schema.json",
+      "directory": "models"
+    },
+    "composite_model": {
+      "schema": "composite-model.schema.json",
+      "directory": "models"
+    },
+    "row_security": {
+      "schema": "row-security.schema.json"
+    },
+    "package": {
+      "schema": "package.schema.json"
+    }
+  }
+}

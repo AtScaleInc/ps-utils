@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/connection.schema.json",
+  "title": "SML Connection",
+  "description": "Generated from resources/sml-reference/connection.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "unique_name": {
+      "description": "A unique name for the database and the schema. This must be unique across all repositories and subrepositories.",
+      "type": "string"
+    },
+    "object_type": {
+      "description": "The type of object defined by this file. For connections, this value must be `connection`.",
+      "const": "connection"
+    },
+    "label": {
+      "description": "The name of the database connection as it appears in the consumption tool. This value does not need to be unique.",
+      "type": "string"
+    },
+    "as_connection": {
+      "description": "The name of the database connection itself, excluding the schema.",
+      "type": "string"
+    },
+    "database": {
+      "description": "The source database is required when used in the table datasets, but it is not necessary for query datasets.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "The source schema is required when used in the table datasets, but it is not necessary for query datasets.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unique_name",
+    "object_type",
+    "label",
+    "as_connection"
+  ],
+  "additionalProperties": true
+}

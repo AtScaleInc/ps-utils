@@ -1,0 +1,357 @@
+unique_name: Query Details
+object_type: dimension
+label: Query Details
+type: standard
+hierarchies:
+  - unique_name: date_hierarchy
+    label: Date Hierarchy
+    levels:
+      - unique_name: receive_time
+      - unique_name: finished
+        visualize_in_bi_tool: false
+        secondary_attributes:
+          - unique_name: query_id
+            label: Query
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - query_id
+            name_column: query_id
+          - unique_name: user_id
+            label: User
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - user_id
+            name_column: user_id
+          - unique_name: session_id
+            label: Session
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - session_id
+            name_column: session_id
+          - unique_name: remote_address
+            label: Remote Address
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - remote_address
+            name_column: remote_address
+          - unique_name: organization_id
+            label: Organization
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - organization_id
+            name_column: organization_id
+          - unique_name: environment_id
+            label: Environment
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - environment_id
+            name_column: environment_id
+          - unique_name: project_id
+            label: Project
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - project_id
+            name_column: project_id
+          - unique_name: cube_id
+            label: Cube
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - cube_id
+            name_column: cube_id
+          - unique_name: cube_name
+            label: Cube Name
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - cube_name
+            name_column: cube_name
+          - unique_name: query_language
+            label: Query Language
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - query_language
+            name_column: query_language
+          - unique_name: receive_time
+            label: Receive Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - receive_time
+            name_column: receive_time
+          - unique_name: succeeded
+            label: Succeeded
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - succeeded
+            name_column: succeeded
+          - unique_name: finished_sa
+            label: Finished
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - finished
+            name_column: finished
+          - unique_name: wall_time
+            label: Wall Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - wall_time
+            name_column: wall_time
+          - unique_name: plan_time
+            label: Plan Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - plan_time
+            name_column: plan_time
+          - unique_name: post_plan_time
+            label: Post Plan Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - post_plan_time
+            name_column: post_plan_time
+          - unique_name: estimated_post_plan_time
+            label: Estimated Post Plan Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - estimated_post_plan_time
+            name_column: estimated_post_plan_time
+          - unique_name: subquery_count
+            label: Subquery Count
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - subquery_count
+            name_column: subquery_count
+          - unique_name: local_cache_subquery_hits
+            label: Local Cache Subquery Hits
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - local_cache_subquery_hits
+            name_column: local_cache_subquery_hits
+          - unique_name: partial_local_cache_hit
+            label: Partial Local Cache Hit
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - partial_local_cache_hit
+            name_column: partial_local_cache_hit
+          - unique_name: full_local_cache_hit
+            label: Full Local Cache Hit
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - full_local_cache_hit
+            name_column: full_local_cache_hit
+          - unique_name: sql_exec_time
+            label: Sql Exec Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - sql_exec_time
+            name_column: sql_exec_time
+          - unique_name: sql_fetch_time
+            label: Sql Fetch Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - sql_fetch_time
+            name_column: sql_fetch_time
+          - unique_name: sql_wall_time
+            label: Sql Wall Time
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - sql_wall_time
+            name_column: sql_wall_time
+          - unique_name: failure_message
+            label: Failure Message
+            contains_unique_names: false
+            dataset: query_details.dataset
+            is_unique_key: false
+            key_columns:
+              - failure_message
+            name_column: failure_message
+level_attributes:
+  - unique_name: receive_time
+    label: Receive Time
+    dataset: query_details.dataset
+    name_column: receive_time
+    key_columns:
+      - receive_time
+  - unique_name: finished
+    label: Finished
+    dataset: query_details.dataset
+    name_column: finished
+    key_columns:
+      - finished
+  - unique_name: query_id
+    label: Query
+    dataset: query_details.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: user_id
+    label: User
+    dataset: query_details.dataset
+    name_column: user_id
+    key_columns:
+      - user_id
+  - unique_name: session_id
+    label: Session
+    dataset: query_details.dataset
+    name_column: session_id
+    key_columns:
+      - session_id
+  - unique_name: remote_address
+    label: Remote Address
+    dataset: query_details.dataset
+    name_column: remote_address
+    key_columns:
+      - remote_address
+  - unique_name: organization_id
+    label: Organization
+    dataset: query_details.dataset
+    name_column: organization_id
+    key_columns:
+      - organization_id
+  - unique_name: environment_id
+    label: Environment
+    dataset: query_details.dataset
+    name_column: environment_id
+    key_columns:
+      - environment_id
+  - unique_name: project_id
+    label: Project
+    dataset: query_details.dataset
+    name_column: project_id
+    key_columns:
+      - project_id
+  - unique_name: cube_id
+    label: Cube
+    dataset: query_details.dataset
+    name_column: cube_id
+    key_columns:
+      - cube_id
+  - unique_name: query_language
+    label: Query Language
+    dataset: query_details.dataset
+    name_column: query_language
+    key_columns:
+      - query_language
+  - unique_name: succeeded
+    label: Succeeded
+    dataset: query_details.dataset
+    name_column: succeeded
+    key_columns:
+      - succeeded
+  - unique_name: wall_time
+    label: Wall Time
+    dataset: query_details.dataset
+    name_column: wall_time
+    key_columns:
+      - wall_time
+  - unique_name: plan_time
+    label: Plan Time
+    dataset: query_details.dataset
+    name_column: plan_time
+    key_columns:
+      - plan_time
+  - unique_name: post_plan_time
+    label: Post Plan Time
+    dataset: query_details.dataset
+    name_column: post_plan_time
+    key_columns:
+      - post_plan_time
+  - unique_name: estimated_post_plan_time
+    label: Estimated Post Plan Time
+    dataset: query_details.dataset
+    name_column: estimated_post_plan_time
+    key_columns:
+      - estimated_post_plan_time
+  - unique_name: subquery_count
+    label: Subquery Count
+    dataset: query_details.dataset
+    name_column: subquery_count
+    key_columns:
+      - subquery_count
+  - unique_name: local_cache_subquery_hits
+    label: Local Cache Subquery Hits
+    dataset: query_details.dataset
+    name_column: local_cache_subquery_hits
+    key_columns:
+      - local_cache_subquery_hits
+  - unique_name: partial_local_cache_hit
+    label: Partial Local Cache Hit
+    dataset: query_details.dataset
+    name_column: partial_local_cache_hit
+    key_columns:
+      - partial_local_cache_hit
+  - unique_name: full_local_cache_hit
+    label: Full Local Cache Hit
+    dataset: query_details.dataset
+    name_column: full_local_cache_hit
+    key_columns:
+      - full_local_cache_hit
+  - unique_name: sql_exec_time
+    label: Sql Exec Time
+    dataset: query_details.dataset
+    name_column: sql_exec_time
+    key_columns:
+      - sql_exec_time
+  - unique_name: sql_fetch_time
+    label: Sql Fetch Time
+    dataset: query_details.dataset
+    name_column: sql_fetch_time
+    key_columns:
+      - sql_fetch_time
+  - unique_name: sql_wall_time
+    label: Sql Wall Time
+    dataset: query_details.dataset
+    name_column: sql_wall_time
+    key_columns:
+      - sql_wall_time
+  - unique_name: failure_message
+    label: Failure Message
+    dataset: query_details.dataset
+    name_column: failure_message
+    key_columns:
+      - failure_message

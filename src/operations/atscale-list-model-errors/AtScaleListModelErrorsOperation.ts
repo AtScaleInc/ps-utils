@@ -177,11 +177,29 @@ type Problem = {
 };
 
 function validateStructure(
-  dimensionsMap: Map<string, any>,
-  datasetsMap:   Map<string, any>,
-  modelData:     any,
+  dimensionsMap:  Map<string, any>,
+  datasetsMap:    Map<string, any>,
+  connectionsMap: Map<string, any>,
+  modelData:      any,
 ): Problem[] {
   const problems: Problem[] = [];
+
+  // Every dataset must name a connection that exists — an unresolved reference
+  // is what sends engine checks to a connection group the instance does not have.
+  const connectionNames = new Set<string>();
+  for (const [, conn] of connectionsMap) {
+    const name = conn.unique_name ?? conn.label;
+    if (name) connectionNames.add(name);
+  }
+  for (const [, ds] of datasetsMap) {
+    const dsName = ds.unique_name ?? ds.label ?? "(unnamed)";
+    if (!ds.connection_id) {
+      problems.push({ phase: "structural", severity: "error", message: `Dataset '${dsName}': missing 'connection_id'`, location: `datasets/${dsName}` });
+    } else if (!connectionNames.has(ds.connection_id)) {
+      const known = [...connectionNames].join(", ") || "(none)";
+      problems.push({ phase: "structural", severity: "error", message: `Dataset '${dsName}': connection_id '${ds.connection_id}' not found in connections/. Known: ${known}`, location: `datasets/${dsName}` });
+    }
+  }
 
   const datasetColumns = new Map<string, Set<string>>();
   for (const [, ds] of datasetsMap) {
@@ -302,20 +320,76 @@ function toEngineDataType(smlType: string): string {
   return map[smlType.toLowerCase()] ?? "String";
 }
 
+/**
+ * Resolved coordinates for one SML `connection` object.
+ *
+ * `as_connection` — not `unique_name` — is the name of the connection group as
+ * the engine knows it; `unique_name` only identifies the database+schema pair
+ * within the repository. Sending the wrong one yields a 500 with
+ * "ConnectionGroup ConnectionGroupIdentity(<name>) not found".
+ */
+type ConnectionInfo = {
+  connectionId: string;
+  database:     string;
+  schema:       string;
+  isSnowflake:  boolean;
+};
+
+/** Index SML connection objects by their `unique_name` (what datasets reference). */
+function buildConnectionLookup(connectionsMap: Map<string, any>): Map<string, ConnectionInfo> {
+  const lookup = new Map<string, ConnectionInfo>();
+  for (const [, conn] of connectionsMap) {
+    const key = conn.unique_name ?? conn.label;
+    if (!key) continue;
+    lookup.set(key, {
+      connectionId: conn.as_connection ?? conn.unique_name ?? "",
+      database:     conn.database ?? "",
+      schema:       conn.schema ?? "",
+      isSnowflake:  (conn.connection_type ?? "").toLowerCase() === "snowflake",
+    });
+  }
+  return lookup;
+}
+
 function buildEngineChecks(
   modelData: any, dimensionsMap: Map<string, any>, datasetsMap: Map<string, any>,
-  connectionId: string, database: string, schema: string, isSnowflake: boolean,
-): ValidationCheck[] {
+  connectionLookup: Map<string, ConnectionInfo>,
+): { checks: ValidationCheck[]; problems: Problem[] } {
   const checks: ValidationCheck[] = [];
+  const problems: Problem[] = [];
 
   const datasetColTypes = new Map<string, Map<string, string>>();
+  // Dataset unique_name → the `unique_name` of the connection object it names.
+  const datasetConnection = new Map<string, string>();
   for (const [, ds] of datasetsMap) {
     const name = ds.unique_name ?? ds.label;
     if (!name) continue;
     const colMap = new Map<string, string>();
     for (const col of (ds.columns ?? [])) colMap.set(col.name, toEngineDataType(col.data_type ?? "string"));
     datasetColTypes.set(name, colMap);
+    if (ds.connection_id) datasetConnection.set(name, ds.connection_id);
   }
+
+  /**
+   * Resolve the connection a dataset sits on. Reports a problem and returns
+   * undefined when the dataset names no connection or an unknown one — a check
+   * built on a guessed connection is worse than no check, since the engine
+   * either rejects it or silently validates the wrong tables.
+   */
+  const connectionFor = (dsName: string, context: string): ConnectionInfo | undefined => {
+    const connName = datasetConnection.get(dsName);
+    if (!connName) {
+      problems.push({ phase: "structural", severity: "error", message: `${context}: dataset '${dsName}' has no 'connection_id'`, location: `datasets/${dsName}` });
+      return undefined;
+    }
+    const info = connectionLookup.get(connName);
+    if (!info) {
+      const known = [...connectionLookup.keys()].join(", ") || "(none)";
+      problems.push({ phase: "structural", severity: "error", message: `${context}: dataset '${dsName}' references connection '${connName}', which is not defined in connections/. Known: ${known}`, location: `datasets/${dsName}` });
+      return undefined;
+    }
+    return info;
+  };
 
   const dimLaLookup = new Map<string, Map<string, any>>();
   for (const [, dim] of dimensionsMap) {
@@ -340,18 +414,34 @@ function buildEngineChecks(
     const keyCols   = la.key_columns ?? [];
     if (!toDataset || keyCols.length === 0) continue;
 
+    const relName  = rel.unique_name ?? "(unnamed)";
+    const fromConn = connectionFor(fromDataset, `Relationship '${relName}'`);
+    const toConn   = connectionFor(toDataset,   `Relationship '${relName}'`);
+    if (!fromConn || !toConn) continue;
+    // The engine joins both sides inside a single connection group, so a
+    // relationship spanning two of them cannot be checked in one request.
+    if (fromConn.connectionId !== toConn.connectionId || fromConn.database !== toConn.database || fromConn.schema !== toConn.schema) {
+      problems.push({
+        phase: "engine", severity: "warning",
+        message: `Relationship '${relName}': '${fromDataset}' and '${toDataset}' are on different connections (${fromConn.connectionId}/${fromConn.database}.${fromConn.schema} vs ${toConn.connectionId}/${toConn.database}.${toConn.schema}) — skipping joinability check`,
+        location: `models/ → ${relName}`,
+      });
+      continue;
+    }
+
     const fromTypes = datasetColTypes.get(fromDataset) ?? new Map();
     const toTypes   = datasetColTypes.get(toDataset) ?? new Map();
     checks.push({
       id: randomUUID(), checkType: "child_parent_key",
       from: { dsId: fromDataset, dsType: "data_set_table", columns: joinCols.map((c: string) => ({ name: c, type: "simple-column", dataType: fromTypes.get(c) ?? "varchar" })) },
       to:   { dsId: toDataset,   dsType: "data_set_table", columns: keyCols.map((c: string)  => ({ name: c, type: "simple-column", dataType: toTypes.get(c) ?? "varchar" })) },
-      connectionId, database, schema, isSnowflake,
+      connectionId: fromConn.connectionId, database: fromConn.database, schema: fromConn.schema, isSnowflake: fromConn.isSnowflake,
     });
   }
 
   const seen = new Set<string>();
   for (const [, dim] of dimensionsMap) {
+    const dimName = dim.unique_name ?? dim.label ?? "(unnamed)";
     for (const la of (dim.level_attributes ?? [])) {
       if (!la.is_unique_key) continue;  // only check PK / unique-key level attributes
       const dsName  = la.dataset;
@@ -362,12 +452,19 @@ function buildEngineChecks(
       const key = `${dsName}.[${keyCols.join(",")}]`;
       if (seen.has(key)) continue;
       seen.add(key);
+      const conn = connectionFor(dsName, `Dimension '${dimName}' la '${la.unique_name ?? "(unnamed)"}'`);
+      if (!conn) continue;
       const columns = keyCols.map((kc: string) => ({ name: kc, type: "simple-column", dataType: datasetColTypes.get(dsName)?.get(kc) ?? "String" }));
-      checks.push({ id: randomUUID(), checkType: "column_unique", from: { dsId: dsName, dsType: "data_set_table", columns }, to: { dsId: dsName, dsType: "data_set_table", columns }, connectionId, database, schema, isSnowflake });
+      checks.push({
+        id: randomUUID(), checkType: "column_unique",
+        from: { dsId: dsName, dsType: "data_set_table", columns },
+        to:   { dsId: dsName, dsType: "data_set_table", columns },
+        connectionId: conn.connectionId, database: conn.database, schema: conn.schema, isSnowflake: conn.isSnowflake,
+      });
     }
   }
 
-  return checks;
+  return { checks, problems };
 }
 
 // ── Operation ─────────────────────────────────────────────────────────────────
@@ -493,7 +590,7 @@ export class AtScaleListModelErrorsOperation extends Operation<Params> {
 
     // Phase 1: structural
     this.logger.verbose("Phase 1: structural validation…");
-    const structuralErrors = validateStructure(dimensionsMap, datasetsMap, modelData);
+    const structuralErrors = validateStructure(dimensionsMap, datasetsMap, connectionsMap, modelData);
     allProblems.push(...structuralErrors);
 
     if (structuralErrors.length > 0) {
@@ -501,30 +598,27 @@ export class AtScaleListModelErrorsOperation extends Operation<Params> {
     } else {
       this.logger.verbose("Phase 1 passed — running Phase 2 engine validation…");
 
-      let connectionId = "";
-      let schema       = "";
-      let database     = "";
-      let isSnowflake  = false;
-      for (const [, conn] of connectionsMap) {
-        connectionId = conn.as_connection ?? conn.unique_name ?? "";
-        schema       = conn.schema ?? "";
-        database     = conn.database ?? "";
-        isSnowflake  = (conn.connection_type ?? "").toLowerCase() === "snowflake";
-        break;
-      }
+      const connectionLookup = buildConnectionLookup(connectionsMap);
+      this.logger.verbose(`Loaded ${connectionLookup.size} connection(s): ${[...connectionLookup.keys()].join(", ") || "(none)"}`);
 
-      const checks = buildEngineChecks(modelData, dimensionsMap, datasetsMap, connectionId, database, schema, isSnowflake);
+      const { checks, problems: checkProblems } = buildEngineChecks(modelData, dimensionsMap, datasetsMap, connectionLookup);
+      allProblems.push(...checkProblems);
       this.logger.verbose(`Built ${checks.length} engine check(s).`);
 
       if (checks.length > 0) {
+        // Each check carries its own connection group, database and schema —
+        // one request per distinct triple, since validate-model takes a single
+        // set for the whole batch.
         const byConnection = new Map<string, ValidationCheck[]>();
         for (const check of checks) {
-          if (!byConnection.has(check.connectionId)) byConnection.set(check.connectionId, []);
-          byConnection.get(check.connectionId)!.push(check);
+          const key = `${check.connectionId} ${check.database} ${check.schema}`;
+          if (!byConnection.has(key)) byConnection.set(key, []);
+          byConnection.get(key)!.push(check);
         }
 
-        for (const [cid, connChecks] of byConnection) {
-          this.logger.verbose(`Phase 2: POSTing ${connChecks.length} check(s) for connectionId='${cid}'`);
+        for (const connChecks of byConnection.values()) {
+          const { connectionId: cid, database, schema } = connChecks[0];
+          this.logger.verbose(`Phase 2: POSTing ${connChecks.length} check(s) for connectionId='${cid}' ${database}.${schema}`);
           try {
             const result = await atScaleSvc.validateModel(env, { connectionId: cid, database, schema, checks: connChecks });
             const checkById = new Map(connChecks.map(c => [c.id, c]));

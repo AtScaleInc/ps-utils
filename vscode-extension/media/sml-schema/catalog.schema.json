@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/catalog.schema.json",
+  "title": "SML Catalog",
+  "description": "Generated from resources/sml-reference/catalog.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "unique_name": {
+      "description": "The name of the repository. This must be unique across all repositories and subrepositories.",
+      "type": "string"
+    },
+    "object_type": {
+      "description": "The type of object defined by the file. For `catalog.yml`, this must be `catalog`.",
+      "const": "catalog"
+    },
+    "label": {
+      "description": "The name of the repository, as it appears in the consumption tool. This value does not need to be unique.",
+      "type": "string"
+    },
+    "version": {
+      "description": "The version of SML being used.",
+      "type": "number"
+    },
+    "hidden_models": {
+      "description": "**Use case:** When deploying a composite model the referenced component models may not need to be accessible as separate models. A list of the models that will be excluded from the deploy. Cannot reference composite models, only regular models.\n\n**Note:** catalog.md marks this `Required: Y`, but it was `Added in v1.2`, so every catalog predating it is valid without it, its own Use case bullet describes an opt-in deploy optimisation, and src/algorithm/sml-serializer.ts does not emit it.\n\n**Added in:** v1.2",
+      "items": {
+        "type": "string"
+      },
+      "type": "array",
+      "x-sml-ref": {
+        "kind": "model",
+        "lenient": true
+      }
+    },
+    "aggressive_agg_promotion": {
+      "description": "Enables/disables aggressive aggregate promotion for the repository. When enabled, all aggregates referenced by a query are considered for promotion, regardless of whether a join to other non-preferred or non-aggregate datasets was required.",
+      "type": "boolean"
+    },
+    "build_speculative_aggs": {
+      "description": "Enables/disables speculative aggregates for the repository. When enabled, the query engine automatically creates aggregate tables that it anticipates being useful based on your models. These are intended to improve the performance of queries from client BI tools faster than with demand-defined aggregates alone. **Note:** Speculative aggregates are also called prediction-defined aggregates.",
+      "type": "boolean"
+    },
+    "dataset_properties": {
+      "description": "Defines dataset properties to use within the repository.",
+      "$ref": "#/$defs/CatalogDatasetProperties"
+    },
+    "description": {
+      "description": "A description of the catalog.\n\n**Added in:** v1.6",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unique_name",
+    "object_type",
+    "label",
+    "version",
+    "aggressive_agg_promotion",
+    "build_speculative_aggs"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "CatalogDatasetProperties": {
+      "type": "object",
+      "properties": {
+        "allow_aggregates": {
+          "description": "Enables the query engine to create aggregates for datasets in the repository.",
+          "type": "boolean"
+        },
+        "allow_local_aggs": {
+          "description": "Enables local aggregation for datasets in the repository.",
+          "type": "boolean"
+        },
+        "allow_peer_aggs": {
+          "description": "Enables aggregation on data derived from datasets in data warehouses that are different from the source dataset.",
+          "type": "boolean"
+        },
+        "allow_preferred_aggs": {
+          "description": "Allow aggregates to be built in preferred storage.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

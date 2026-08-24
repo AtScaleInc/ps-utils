@@ -7,13 +7,14 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { EjsTemplateService } from "../../services/EjsTemplateService.js";
+import { operationAssetDir } from "../../assets.js";
 import fs from "fs";
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
+
+/** Directory of this operation's .ejs templates (dist tree or bundled assets). */
+const templateDir = (): string => operationAssetDir(() => import.meta.url, "generate-notebook-from-connection");
 
 class GenerateNotebookParameterSet extends TemplateParameterSet {
   parameters = [
@@ -74,7 +75,7 @@ export class GenerateNotebookFromConnectionOperation extends TemplateOperation<G
       throw new Error(`User '${connection.mdx.user}' not found in ${connectionFile}`);
     }
 
-    const templatePath = `${__dirname}/notebook.ejs`;
+    const templatePath = `${templateDir()}/notebook.ejs`;
     this.logger.verbose(`Reading EJS template: ${templatePath}`);
     const template = fs.readFileSync(templatePath, "utf8");
 

@@ -4,13 +4,14 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { EjsTemplateService } from "../../services/EjsTemplateService.js";
+import { operationAssetDir } from "../../assets.js";
 import crypto from 'node:crypto';
 import fs from "fs";
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
+/** Directory of this operation's .ejs templates (dist tree or bundled assets). */
+const templateDir = (): string => operationAssetDir(() => import.meta.url, "generate-powerbi-from-namespace");
 
 class GeneratePowerBIParameterSet extends TemplateParameterSet {
   parameters = [
@@ -97,13 +98,13 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
       fs.mkdirSync(`${outDir}/${folderName}.Report/definition`, { recursive: true });
       fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages`, { recursive: true });
 
-      let template = fs.readFileSync(`${__dirname}/pbip.ejs`, "utf8");
+      let template = fs.readFileSync(`${templateDir()}/pbip.ejs`, "utf8");
       let output = ejs.render(template, {
         targetFolder: folderName
       });
       fs.writeFileSync(`${outDir}/${folderName}.pbip`, output, "utf8");
 
-      template = fs.readFileSync(`${__dirname}/definition.pbism.ejs`, "utf8");
+      template = fs.readFileSync(`${templateDir()}/definition.pbism.ejs`, "utf8");
       output = ejs.render(template, {
       });
       fs.writeFileSync(`${outDir}/${folderName}.SemanticModel/definition.pbism`, output, "utf8");
@@ -113,28 +114,28 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
         throw new Error(`User '${connection.mdx.user}' not found in ${connectionFile}`);
       }
       const baseUrl = connection.mdx.url.replace(/\/$/, "");
-      const token = mdxUser.xmla_token ? `/${mdxUser.xmla_token}` : "";
+      const token = mdxUser.token ? `/${mdxUser.token}` : "";
       const connectionString = connection.installer
         ? `${baseUrl}:10502/xmla/${connection.mdx.organization_id}${token}`
         : `${baseUrl}/engine/xmla${token}`;
-      template = fs.readFileSync(`${__dirname}/modelReference.ejs`, "utf8");
+      template = fs.readFileSync(`${templateDir()}/modelReference.ejs`, "utf8");
       output = ejs.render(template, {
         model, connection, connectionString
       });
       fs.writeFileSync(`${outDir}/${folderName}.SemanticModel/modelReference.json`, output, "utf8");
 
-      template = fs.readFileSync(`${__dirname}/definition.pbir.ejs`, "utf8");
+      template = fs.readFileSync(`${templateDir()}/definition.pbir.ejs`, "utf8");
       output = ejs.render(template, {
         targetFolder: folderName
       });
       fs.writeFileSync(`${outDir}/${folderName}.Report/definition.pbir`, output, "utf8");
 
-      template = fs.readFileSync(`${__dirname}/report.ejs`, "utf8");
+      template = fs.readFileSync(`${templateDir()}/report.ejs`, "utf8");
       output = ejs.render(template, {
       });
       fs.writeFileSync(`${outDir}/${folderName}.Report/definition/report.json`, output, "utf8");
 
-      template = fs.readFileSync(`${__dirname}/version.ejs`, "utf8");
+      template = fs.readFileSync(`${templateDir()}/version.ejs`, "utf8");
       output = ejs.render(template, {
       });
       fs.writeFileSync(`${outDir}/${folderName}.Report/definition/version.json`, output, "utf8");
@@ -145,7 +146,7 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
         let pageName = crypto.randomUUID();
         pageNames.push(pageName);
         fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}`, { recursive: true });
-        template = fs.readFileSync(`${__dirname}/page.ejs`, "utf8");
+        template = fs.readFileSync(`${templateDir()}/page.ejs`, "utf8");
         output = ejs.render(template, {
           pageName,
           dashboard
@@ -167,15 +168,15 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
             else {
               visualType = 'barChart'
             }
-            template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
+            template = fs.readFileSync(`${templateDir()}/graph.ejs`, "utf8");
           }
           else if (worksheet.graphType == 'line') {
             visualType = 'lineChart'
-            template = fs.readFileSync(`${__dirname}/graph.ejs`, "utf8");
+            template = fs.readFileSync(`${templateDir()}/graph.ejs`, "utf8");
           }
           else {
             visualType = 'cardVisual'
-            template = fs.readFileSync(`${__dirname}/card.ejs`, "utf8");
+            template = fs.readFileSync(`${templateDir()}/card.ejs`, "utf8");
           }
           output = ejs.render(template, {
             visualName,
@@ -191,7 +192,7 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
           let visualName = crypto.randomUUID();
           let visualType = 'textbox'
           fs.mkdirSync(`${outDir}/${folderName}.Report/definition/pages/${pageName}/visuals/${visualName}`, { recursive: true });
-          let template = fs.readFileSync(`${__dirname}/textbox.ejs`, "utf8");
+          let template = fs.readFileSync(`${templateDir()}/textbox.ejs`, "utf8");
           output = ejs.render(template, {
             visualName,
             visualType,
@@ -202,7 +203,7 @@ export class GeneratePowerBIFromNamespaceOperation extends TemplateOperation<Gen
         });
       });
 
-      template = fs.readFileSync(`${__dirname}/pages.ejs`, "utf8");
+      template = fs.readFileSync(`${templateDir()}/pages.ejs`, "utf8");
       output = ejs.render(template, {
         pageNames,
       });

@@ -1,0 +1,889 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/dimension.schema.json",
+  "title": "SML Dimension",
+  "description": "Generated from resources/sml-reference/dimension.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "unique_name": {
+      "description": "The unique name of the dimension. This must be unique across all repositories and subrepositories.",
+      "type": "string"
+    },
+    "object_type": {
+      "description": "The type of object defined by the file. For dimensions, this value must be `dimension`.",
+      "const": "dimension"
+    },
+    "label": {
+      "description": "The name of the dimension, as it appears in the consunmption tool. This value does not need to be unique.",
+      "type": "string"
+    },
+    "description": {
+      "description": "A description of the dimension.",
+      "type": "string"
+    },
+    "type": {
+      "description": "The type of dimension defined by this file.\n\n- `standard` — Can have any type of hierarchy.\n- `time` — Must have a time hierarchy.",
+      "type": "string",
+      "enum": [
+        "standard",
+        "time"
+      ]
+    },
+    "is_degenerate": {
+      "description": "Determines whether the dimension is degenerate.",
+      "type": "boolean"
+    },
+    "hierarchies": {
+      "description": "Defines the hierarchies within the dimension. Hierarchies organize the dimension attributes into categories or levels, where each level is a subdivision of the level above. Every logical dimension you create has at least one hierarchy with at least one level.",
+      "items": {
+        "$ref": "#/$defs/Hierarchy"
+      },
+      "type": "array"
+    },
+    "level_attributes": {
+      "description": "Level attributes are attributes associated with a particular dimension hierarchy. Every hierarchy has a key level attribute, which is the most granular representation of the dimension's data. Only level attributes can be used to define relationships between datasets and other dimensions.",
+      "items": {
+        "$ref": "#/$defs/LevelAttribute"
+      },
+      "type": "array"
+    },
+    "relationships": {
+      "description": "The `relationships` property in a dimension file defines the relationships to embedded and snowflake dimensions. **Note:** The relationships between the model's fact datasets and first order dimensions (fact relationships) are defined in model files.",
+      "items": {
+        "$ref": "#/$defs/Relationship"
+      },
+      "type": "array"
+    },
+    "calculation_groups": {
+      "description": "The `calculation_groups` property in a dimension file defines calculation groups to use in the dimension. Dimension calculation groups offer a simplifying alternative to calculated metrics by enabling the expression of boiler-plate calculations across multiple metrics. This feature defines calculations as dimension members and removes static references to individual measures.",
+      "items": {
+        "$ref": "#/$defs/CalculationGroup"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "unique_name",
+    "object_type",
+    "label",
+    "hierarchies",
+    "level_attributes"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "Relationship": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The unique name of the relationship. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "from": {
+          "description": "Defines the side of the relationship that contains the physical dataset that you want to connect to another dimension.",
+          "$ref": "#/$defs/From"
+        },
+        "to": {
+          "description": "Defines the dimension that the `from` dataset is linked to.",
+          "$ref": "#/$defs/To"
+        },
+        "type": {
+          "description": "Defines the relationship as either embedded or snowflake.\n\n- `embedded` — A secondary relationship, or one that connects a primary dimension to a secondary dimension.\n- `snowflake` — A relationship that connects one of several underlying physical datasets together to create a snowflake dimension.",
+          "type": "string",
+          "enum": [
+            "embedded",
+            "snowflake"
+          ]
+        },
+        "role_play": {
+          "description": "For role-playing relationships only. Defines the role-playing template for the relationship. The role-playing template is the prefix or suffix that is added to every attribute in the role-played dimension. You can also specify both a prefix and a suffix. This value must be in one of the following formats (including quotation marks): **Prefix:** `\"<prefix> {0}\"` **Suffix:** `\"{0} <suffix>\"` **Prefix and suffix:** `\"<prefix> {0} <suffix>\"` For example, if you wanted to use the prefix **Order**, you would set `role_play` to `\"Order {0}\"`.",
+          "type": "string"
+        },
+        "m2m": {
+          "description": "Defines a many-to-many relationship. The property is supported only for embedded relationships.\n\n**Default:** `false`\n\n**Added in:** v1.2",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
+      "additionalProperties": true
+    },
+    "From": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "description": "The physical dataset you want to link to a dimension.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dataset"
+          }
+        },
+        "join_columns": {
+          "description": "The column(s) within the `dataset` that you want to use for the join.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "hierarchy": {
+          "description": "The hierarchy within the dimension from which the relationship should originate.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "hierarchy",
+            "in": {
+              "dimension": "self"
+            }
+          }
+        },
+        "level": {
+          "description": "The level within the `hierarchy` from which the relationship should originate.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "level",
+            "in": {
+              "hierarchy": "0/hierarchy"
+            }
+          }
+        }
+      },
+      "required": [
+        "dataset",
+        "join_columns"
+      ],
+      "additionalProperties": true
+    },
+    "To": {
+      "type": "object",
+      "properties": {
+        "dimension": {
+          "description": "The name of the dimension the `from` dataset is linked to.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dimension"
+          }
+        },
+        "level": {
+          "description": "The key level within the dimension to use for the relationship.\n\n**Required:** required if `row_security` is undefined",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "level",
+            "in": {
+              "dimension": "0/dimension"
+            }
+          }
+        },
+        "row_security": {
+          "description": "For security relationships, the row security object that the `from` dataset is linked to.\n\n**Required:** required if `level` is undefined",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "row_security"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "CalculationGroup": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The name of the calculation group. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The name of the calculation group, as it appears in the BI consumer. This value does not need to be unique.",
+          "type": "string"
+        },
+        "calculated_members": {
+          "description": "Defines the individual calculated members in the group. **Note:** The first in the list is considered the default member of the group.",
+          "items": {
+            "$ref": "#/$defs/CalculatedMembers"
+          },
+          "type": "array"
+        },
+        "description": {
+          "description": "A description of the calculation group.",
+          "type": "string"
+        },
+        "is_hidden": {
+          "description": "Determines whether the calculation group is visible in BI tools.",
+          "type": "boolean"
+        },
+        "folder": {
+          "description": "The name of the folder in which the calculation group is displayed in BI tools.",
+          "type": "string"
+        },
+        "precedence": {
+          "description": "Update to \"Precedence\" explicitly defines the order of Calculation Group evaluation, making it consistent across BI tools.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "unique_name",
+        "label",
+        "calculated_members"
+      ],
+      "additionalProperties": true
+    },
+    "CalculatedMembers": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The name of the calculated member. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "description": {
+          "description": "A description of the calculated member.",
+          "type": "string"
+        },
+        "template": {
+          "description": "Sets the calculation to one of SML's built-in MDX expression templates. Supported templates: `Current`, `Previous`, `Current vs Previous`, `Current vs Previous Pct`, `Next`, `Current vs Next`, `Current vs Next Pct`, `Pct of Total`, `Pct of Parent`, `Last Year`, `Current vs Last Year`, `Current vs Last Year Pct`, `Year to Date`, `Quarter to Date`, `Month to Date`, `Month Moving Average 3 Month`, `Moving Average 30 Period`, `Moving Average 5 Period`, `Moving Std Dev 30 Period`, `Moving Std Dev 5 Period` If you do not want to use a built-in template, you can define a custom expression using the `expression` property (see below).\n\n**Required:** Required if `expression` is not specified.",
+          "type": "string"
+        },
+        "is_hidden": {
+          "description": "Determines whether the attribute is visible in BI tools.",
+          "type": "boolean"
+        },
+        "expression": {
+          "description": "The MDX expression for the calculated member. This value should be quoted. **Note:** If you plan on referencing a calculation via the `Aggregate` MDX function in your calculated member, ensure that the computed metric has an aggregation function set. You can do this by including the `mdx_aggregation_function` property in the calculation file. If you do not set an aggregation function, you may encounter errors at query time. You can alternatively use the `template` property (see above) to use one of SML's built-in MDX expression templates instead of a custom one.\n\n**Required:** Required if `template` is not specified.",
+          "type": "string"
+        },
+        "format": {
+          "description": "The format in which query results are returned. You can use one of SML's built-in named formats or a custom format string. Supported named formats: `fixed`,`general number`, `none`, `percent`, `scientific`, `standard` Custom format strings should be in quotes and contain one to four sections, separated by semicolons. You can alternatively configure the calculated member to return results in the format defined for input metric by including the `use_input_metric_format` property (see below).",
+          "type": "string"
+        },
+        "use_input_metric_format": {
+          "description": "When `true`, query results always use the formatting defined for the input metric. This is useful for calculations that can't have a standard output format. When `false`, the results are formatted according to the `format` property.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "unique_name"
+      ],
+      "additionalProperties": true
+    },
+    "Hierarchy": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The unique name of the hierarchy. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The name of the hierarchy. This value does not need to be unique.",
+          "type": "string"
+        },
+        "description": {
+          "description": "A description of the hierarchy.",
+          "type": "string"
+        },
+        "folder": {
+          "description": "The name of the folder in which to display this hierarchy in BI tools. If your model has a lot of dimensional hierarchies, folders are a good way to organize them.",
+          "type": "string"
+        },
+        "filter_empty": {
+          "description": "Configures the join behavior for the hierarchy, which determines how empty values are handled in client BI tools. The value you specify must be in quotes.",
+          "type": "string"
+        },
+        "default_member": {
+          "description": "Defines a default member for the hierarchy. Default members of dimensional hierarchies serve together as a default filter for MDX queries on the model. When adding default hierarchies, be aware of the following: If a query specifies a level in a hierarchy that has a default member, the default is not used. Default hierarchy members are _not_ used in queries that populate select fields and filter dialogs in BI clients. You cannot specify secondary attributes as default dimension members. Doing so will cause queries to fail. Setting default members on dimensions with multiple hierarchies can produce unexpected results, as it is easy to forget about the default member filtering on another hierarchy.",
+          "$ref": "#/$defs/DefaultMember"
+        },
+        "levels": {
+          "description": "Defines the levels within the hierarchy. You can include as many levels as needed in the list.",
+          "items": {
+            "$ref": "#/$defs/Level"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "unique_name",
+        "label",
+        "levels"
+      ],
+      "additionalProperties": true
+    },
+    "DefaultMember": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "description": "An MDX expression that specifies the default member. This value must be quoted.",
+          "type": "string"
+        },
+        "apply_only_when_in_query": {
+          "description": "When `true`, the default hierarchical member is only applied when it is explicitly included in a query. This enables you to selectively apply default constraints for meta dimensions (calculation groups or similar dimensions) that represent calculations or parameters, rather than data.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expression"
+      ],
+      "additionalProperties": true
+    },
+    "Level": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "Specifies the unique name of the level. This must be unique within the dimension.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "level_attribute",
+            "in": {
+              "dimension": "self"
+            }
+          }
+        },
+        "secondary_attributes": {
+          "description": "Defines secondary attributes for the dimension level. Secondary attributes are dimensional attributes that are not the dimension's key, and are not part of a hierarchy. SML supports the following types of secondary attributes: **Dimensional:** Provides an independent \"dimensional\" attribute for grouping metric data. This is the default type of secondary attribute. **Level alias:** Enables the creation of tabular reports that select hierarchical expressions without forcing the user to drill down a hierarchy. **Note:** Secondary attributes cannot be used to create relationships between datasets and dimensions.",
+          "items": {
+            "$ref": "#/$defs/SecondaryAttribute"
+          },
+          "type": "array",
+          "x-sml-ref": {
+            "kind": "secondary_attribute",
+            "in": {
+              "dimension": "self"
+            }
+          }
+        },
+        "aliases": {
+          "description": "Defines secondary attributes that can be used as aliases for specific hierarchy levels within BI tools.",
+          "items": {
+            "$ref": "#/$defs/Alias"
+          },
+          "type": "array"
+        },
+        "metrics": {
+          "description": "Defines metrics for the level.",
+          "items": {
+            "$ref": "#/$defs/MetricalAttribute"
+          },
+          "type": "array"
+        },
+        "parallel_periods": {
+          "description": "For levels in time dimensions only. Defines a custom parallel period for the level. You can use custom parallel periods to compare members in different levels of a time hierarchy that aren't in the same relative child position; for example, the last week of a 53-week year to that of a 52-week year. You can define as many parallel periods for a level as needed.",
+          "items": {
+            "$ref": "#/$defs/ParallelPeriods"
+          },
+          "type": "array"
+        },
+        "is_hidden": {
+          "description": "Determines whether the level is visible in BI tools.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "unique_name"
+      ],
+      "additionalProperties": true
+    },
+    "SecondaryAttribute": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The unique name of the secondary attribute. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The name of the secondary attribute, as it appears in the BI consumer. This value does not need to be unique.",
+          "type": "string"
+        },
+        "description": {
+          "description": "A description of the secondary attribute.",
+          "type": "string"
+        },
+        "folder": {
+          "description": "The name of the folder in which the attribute is displayed in BI tools.",
+          "type": "string"
+        },
+        "is_hidden": {
+          "description": "Determines whether the attribute is visible in BI tools.",
+          "type": "boolean"
+        },
+        "contains_unique_names": {
+          "description": "Determines whether each member of this attribute has a unique name. Do not enable this functionality if two members have different keys but the same name.",
+          "type": "boolean"
+        },
+        "dataset": {
+          "description": "The dataset that contains the `key_columns` the secondary attribute is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dataset"
+          }
+        },
+        "name_column": {
+          "description": "The dataset column that the attribute is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "key_columns": {
+          "description": "A list of the key columns that the attribute is based on. If the attribute has a compound key, you should specify all columns that make up the key as a list.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "sort_column": {
+          "description": "The column used to sort the attribute's values in result sets. (This only applies to MDX queries.)\n\n**Note:** dimension.md types this as `array`, but the doc's own mermaid says `String`, both sibling definitions (Alias.sort_column, LevelAttribute.sort_column) say string, and src/algorithm/sml-serializer.ts declares `sort_column?: string`.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "allowed_calcs_for_dma": {
+          "description": "A list of the calculation types that can be used to create dimensionally modified aggregates for the secondary attribute. Note that when working with a time dimension, you can only define calculation types if the `time_unit` property for the level is set to `day` or longer.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "exclude_from_dim_agg": {
+          "description": "Excludes this attribute from system generated dimension-only aggregates. This is useful if the attribute contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "is_aggregatable": {
+          "description": "Determines whether the attribute's member values can be aggregated. When enabled, an `All` member is created for the attribute, whose value is the aggregation of all of the attribute's member values. The `All` member sits at the top of the attribute's hierarchy, though it is not a part of the attribute itself. It often serves as the attribute's default member.",
+          "type": "boolean"
+        },
+        "exclude_from_fact_agg": {
+          "description": "Excludes this attribute from system generated fact-based aggregates. This is useful if the attribute contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "custom_empty_member": {
+          "description": "Defines a custom empty member for the attribute. This feature allows fact data with missing or invalid foreign key values to be isolated and independently aggregated from those with valid foreign key values. Because fact records with invalid foreign keys are aggregated separately from records referencing valid dimension members, analysts can easily spot data integrity problems and further investigate them. Use this feature to ensure that un-joinable values are included in query results and aggregated under a specially designated dimension member called the Custom Empty Member.",
+          "$ref": "#/$defs/CustomEmptyMember"
+        },
+        "is_excel_pivot_table_property": {
+          "description": "If set to false (default true) Excel users are not able to use the attribute in the Pivot Table Designer. Note: The attribute will still be usable with other interfaces like SQL and DAX if the \"visible\" property is true.\n\n**Default:** `true`\n\n**Added in:** v1.5",
+          "type": "boolean"
+        },
+        "is_user_defined_property": {
+          "description": "If set to true Excel and MDX users can retrieve the attribute as a Member Property using the .Properties function and Property MDX syntax\n\n**Default:** `true`\n\n**Added in:** v1.5",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "unique_name",
+        "label",
+        "dataset",
+        "name_column",
+        "key_columns"
+      ],
+      "additionalProperties": true
+    },
+    "Alias": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The unique name of the alias. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The name of the alias as it appears in the consunmption tool and BI tools. This value does not need to be unique.",
+          "type": "string"
+        },
+        "description": {
+          "description": "A description of the alias.",
+          "type": "string"
+        },
+        "folder": {
+          "description": "The name of the folder in which the alias appears in BI tools.",
+          "type": "string"
+        },
+        "format": {
+          "description": "The format in which query results are returned. You can use one of SML's built-in named formats or a custom format string. Supported named formats: `fixed`,`general number`, `none`, `percent`, `scientific`, `standard` Custom format strings should be in quotes and contain one to four sections, separated by semicolons.",
+          "type": "string"
+        },
+        "dataset": {
+          "description": "The source dataset that contains the column that the alias is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dataset"
+          }
+        },
+        "name_column": {
+          "description": "The dataset column that the alias is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "sort_column": {
+          "description": "The column to use to sort the values in result sets. This applies to MDX queries only (queries received through the XMLA interface).",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "is_hidden": {
+          "description": "Determines whether the alias is visible in BI tools.",
+          "type": "boolean"
+        },
+        "exclude_from_dim_agg": {
+          "description": "Excludes this level attribute from system generated dimension-only aggregates. This is useful if the alias contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "is_aggregatable": {
+          "description": "Determines whether the alias's member values can be aggregated. When enabled, an `All` member is created for the alias, whose value is the aggregation of all of the alias's member values. The `All` member sits at the top of the alias's hierarchy, though it is not a part of the alias itself. It often serves as the alias's default member.",
+          "type": "boolean"
+        },
+        "exclude_from_fact_agg": {
+          "description": "Excludes this level attribute from system generated fact-based aggregates. This is useful if the alias contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "custom_empty_member": {
+          "description": "Defines custom empty member values for the alias. This feature allows fact data with missing or invalid foreign key values to be isolated and independently aggregated from those with valid foreign key values. Because fact records with invalid foreign keys are aggregated separately from records referencing valid dimension members, analysts can easily spot data integrity problems and further investigate them. Use this feature to ensure that un-joinable values are included in query results and aggregated under a specially designated dimension member called the Custom Empty Member.",
+          "$ref": "#/$defs/CustomEmptyMember"
+        },
+        "is_excel_pivot_table_property": {
+          "description": "If set to false (default true) Excel users are not able to use the attribute in the Pivot Table Designer. Note: The attribute will still be usable with other interfaces like SQL and DAX if the \"visible\" property is true.\n\n**Default:** `true`\n\n**Added in:** v1.5",
+          "type": "boolean"
+        },
+        "is_user_defined_property": {
+          "description": "If set to true Excel and MDX users can retrieve the attribute as a Member Property using the .Properties function and Property MDX syntax\n\n**Default:** `true`\n\n**Added in:** v1.5",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "unique_name",
+        "label",
+        "dataset",
+        "name_column",
+        "sort_column"
+      ],
+      "additionalProperties": true
+    },
+    "MetricalAttribute": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The unique name of the metrical attribute. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The name of the metrical attribute as it appears in the consunmption tool. This value does not need to be unique.",
+          "type": "string"
+        },
+        "description": {
+          "description": "A description of the metrical attribute.",
+          "type": "string"
+        },
+        "folder": {
+          "description": "The name of the folder in which the metrical attribute appears in BI tools.",
+          "type": "string"
+        },
+        "format": {
+          "description": "The format in which query results are returned. You can use one of SML's built-in named formats or a custom format string. Supported named formats: `fixed`,`general number`, `none`, `percent`, `scientific`, `standard` Custom format strings should be in quotes and contain one to four sections, separated by semicolons.",
+          "type": "string"
+        },
+        "dataset": {
+          "description": "The source dataset that contains the column that the metrical attribute is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dataset"
+          }
+        },
+        "column": {
+          "description": "The dataset column that the metrical attribute is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "calculation_method": {
+          "description": "The calculation to apply to the data.",
+          "type": "string"
+        },
+        "is_hidden": {
+          "description": "Determines whether the alias is visible in BI tools.",
+          "type": "boolean"
+        },
+        "exclude_from_dim_agg": {
+          "description": "Excludes this level attribute from system generated dimension-only aggregates. This is useful if the metrical attribute contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "is_aggregatable": {
+          "description": "Determines whether the metrical attribute's member values can be aggregated. When enabled, an `All` member is created for the attribute, whose value is the aggregation of all of the attribute's member values. The `All` member sits at the top of the attribute's hierarchy, though it is not a part of the attribute itself. It often serves as the metrical attribute's default member.",
+          "type": "boolean"
+        },
+        "exclude_from_fact_agg": {
+          "description": "Excludes this level attribute from system generated fact-based aggregates. This is useful if the metrical attribute contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "custom_empty_member": {
+          "description": "Defines custom empty member values for the metrical attribute. This feature allows fact data with missing or invalid foreign key values to be isolated and independently aggregated from those with valid foreign key values. Because fact records with invalid foreign keys are aggregated separately from records referencing valid dimension members, analysts can easily spot data integrity problems and further investigate them. Use this feature to ensure that un-joinable values are included in query results and aggregated under a specially designated dimension member called the Custom Empty Member.",
+          "$ref": "#/$defs/CustomEmptyMember"
+        },
+        "unrelated_dimensions_handling": {
+          "description": "Determines how the query engine behaves when all of the following conditions are true: A client queries a model that contains multiple fact datasets. The data in each fact dataset are at a different level of granularity than the data in the other fact datasets. The query references dimensions that are not related to the metrics being queried.",
+          "type": "string"
+        },
+        "allowed_calcs_for_dma": {
+          "description": "_Not described in the SML reference prose; adopted from the specification's own entity-relationship diagram._",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "unique_name",
+        "label",
+        "dataset",
+        "column",
+        "calculation_method"
+      ],
+      "additionalProperties": true
+    },
+    "ParallelPeriods": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "description": "The level to compare the current level to. Both levels must be in the same time hierarchy.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "level",
+            "in": {
+              "dimension": "self"
+            }
+          }
+        },
+        "key_columns": {
+          "description": "The key column(s) in the dimension's source table that contain key values pointing to the desired parallel period.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "level",
+        "key_columns"
+      ],
+      "additionalProperties": true
+    },
+    "LevelAttribute": {
+      "type": "object",
+      "properties": {
+        "unique_name": {
+          "description": "The unique name of the level attribute. This must be unique within the dimension.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The name of the level attribute, as it appears in the consumption tool. This value does not need to be unique.",
+          "type": "string"
+        },
+        "dataset": {
+          "description": "The source dataset that contains the columns that this level attribute is based on.\n\n**Required:** Required if `shared_degenerate_columns` is not specified.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dataset"
+          }
+        },
+        "name_column": {
+          "description": "The column whose values appear for this level in BI tools. For example, the key may be a product ID number, but you want users to see product names instead.\n\n**Required:** Required if `shared_degenerate_columns` is not specified.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "key_columns": {
+          "description": "The dataset column that the level attribute is based on. If the level has a compound key, list all columns that make up the key. If the key consists of one column, the values in that column must be unique. If the key is a compound key, the columns together must provide unique values.\n\n**Required:** Required if `shared_degenerate_columns` is not specified.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "constraint_translation_rank": {
+          "description": "**Range:** should be a valid 32 bit integer Defines the translation of dimension filter constraints into fact table partition column constraints. This can significantly improve query performance for cases where fact-based aggregates are not used.",
+          "type": "integer"
+        },
+        "shared_degenerate_columns": {
+          "description": "Defines the dimension as a shared degenerate dimension (one composed of data from multiple fact datasets). Shared degenerate dimensions must meet the following requirements: You must use the same number of columns from each fact dataset. The data types across the columns used must be consistent: The name columns must all have the same data type. The key columns must all have the same data type. If you set a sort column on one dataset, you must set them on all other datasets. Additionally, all sort columns on all datasets must have the same data type. If an order column is selected in one dataset, the order column from each of the other fact datasets must also be selected. For shared degenerate dimensions with multiple levels, all levels must be defined using the same datasets as the other levels. Shared degenerate dimensions cannot contain secondary attributes.\n\n**Required:** Required if `dataset`, `name_column`, and `key_columns` are not specified.",
+          "items": {
+            "$ref": "#/$defs/SharedDegenerateColumns"
+          },
+          "type": "array"
+        },
+        "description": {
+          "description": "A description of the level attribute.",
+          "type": "string"
+        },
+        "is_hidden": {
+          "description": "Determines whether the level attribute is visible in BI tools.",
+          "type": "boolean"
+        },
+        "is_unique_key": {
+          "description": "Determines whether the `key_columns` values are unique for each row.",
+          "type": "boolean"
+        },
+        "contains_unique_names": {
+          "description": "Determines whether each member of this level attribute has a unique name. Do not enable this functionality if two members have different keys but the same name.",
+          "type": "boolean"
+        },
+        "exclude_from_dim_agg": {
+          "description": "Excludes this level attribute from system generated dimension-only aggregates. This is useful if the attribute contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "is_aggregatable": {
+          "description": "Determines whether the level attribute's member values can be aggregated. When enabled, an `All` member is created for the attribute, whose value is the aggregation of all of the attribute's member values. The `All` member sits at the top of the attribute's hierarchy, though it is not a part of the attribute itself. It often serves as the level attribute's default member.",
+          "type": "boolean"
+        },
+        "exclude_from_fact_agg": {
+          "description": "Excludes this level attribute from system generated fact-based aggregates. This is useful if the attribute contains a large number (millions) of distinct values that you don't want to aggregate.",
+          "type": "boolean"
+        },
+        "sort_column": {
+          "description": "Defines the column to sort query results on. By default, this is the `name_column`; however, you can optionally use this property to specify a different column. **Note:** This only applies to MDX queries (queries received through the XMLA interface).",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "allowed_calcs_for_dma": {
+          "description": "A list of the calculations that can be used when creating dimensionally modified aggregates for the level attribute.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "time_unit": {
+          "description": "For time dimensions only. The unit of time to use.",
+          "type": "string"
+        },
+        "custom_empty_member": {
+          "description": "_Not described in the SML reference prose; adopted from the specification's own entity-relationship diagram._",
+          "type": "string"
+        }
+      },
+      "required": [
+        "unique_name",
+        "label"
+      ],
+      "additionalProperties": true
+    },
+    "SharedDegenerateColumns": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "description": "A fact dataset the shared degenerate dimension is based on.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dataset"
+          }
+        },
+        "name_column": {
+          "description": "The column from the dataset whose values appear for the dimension in the consumption tool. For example, you can use a product ID column as they `key_columns`, but use a product name column as the `name_column`. All name columns must have the same data type.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "key_columns": {
+          "description": "The column from the dataset that the shared degenerate dimension is based on. You can only include one `key_columns` value per dataset. All key columns must have the same data type.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "sort_column": {
+          "description": "Defines the column from the dataset that is used to sort query results. If this property is specified for one dataset, it must be specified for all others. Additionally, all sort columns must have the same data type.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "column",
+            "in": {
+              "dataset": "0/dataset"
+            }
+          }
+        },
+        "is_unique_key": {
+          "description": "Determines whether values of the `key_columns` column are unique for each row.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dataset",
+        "name_column",
+        "key_columns"
+      ],
+      "additionalProperties": true
+    },
+    "CustomEmptyMember": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "A list of the empty member values to use for key fields.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "The empty member value to use for name fields.",
+          "type": "string"
+        },
+        "sort_name": {
+          "description": "The empty member value to use for the attribute's sort column, if one is specified.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SML (injected)",
+  "scopeName": "source.yaml.sml.injection",
+  "injectionSelector": "L:source.yaml -comment",
+  "_generated": "src/scripts/generate-sml-schema.ts — do not edit by hand",
+  "patterns": [
+    {
+      "include": "#sml-object-type"
+    },
+    {
+      "include": "#sml-structural-key"
+    },
+    {
+      "include": "#sml-reference-key"
+    },
+    {
+      "include": "#sml-role-play"
+    },
+    {
+      "include": "#sml-embedded-sql"
+    }
+  ],
+  "repository": {
+    "sml-object-type": {
+      "match": "(?<=^|\\s)(object_type)(\\s*:\\s*)(catalog|connection|dataset|dimension|metric|metric_calc|model|composite_model|row_security)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.sml"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.sml"
+        },
+        "3": {
+          "name": "entity.name.type.sml"
+        }
+      }
+    },
+    "sml-structural-key": {
+      "match": "(?<=^|\\s)(object_type|unique_name|label)(?=\\s*:)",
+      "name": "keyword.control.sml"
+    },
+    "sml-reference-key": {
+      "match": "(?<=^|\\s)(secondary_attributes|dataset_properties|relationships_path|filter_key_column|connection_id|hidden_models|parent_column|from_columns|join_columns|row_security|key_columns|name_column|sort_column|ids_column|query_name|dimension|hierarchy|dataset|column|level)(?=\\s*:)",
+      "name": "support.type.sml"
+    },
+    "sml-role-play": {
+      "match": "\\{0\\}",
+      "name": "constant.character.format.placeholder.sml"
+    },
+    "sml-embedded-sql": {
+      "begin": "^(\\s*)(sql)(\\s*:\\s*)([|>][-+]?\\d*)\\s*$",
+      "beginCaptures": {
+        "2": {
+          "name": "keyword.control.sml"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.sml"
+        },
+        "4": {
+          "name": "keyword.control.flow.block-scalar.yaml"
+        }
+      },
+      "while": "^(?:\\1\\s+\\S|\\s*$)",
+      "contentName": "meta.embedded.block.sql",
+      "patterns": [
+        {
+          "include": "source.sql"
+        }
+      ]
+    }
+  }
+}

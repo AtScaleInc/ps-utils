@@ -1,0 +1,18 @@
+unique_name: Query Estimates
+object_type: dimension
+label: Query Estimates
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: query_id
+    label: Query
+    dataset: query_estimates.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: estimated_post_plan_time
+    label: Estimated Post Plan Time
+    dataset: query_estimates.dataset
+    name_column: estimated_post_plan_time
+    key_columns:
+      - estimated_post_plan_time

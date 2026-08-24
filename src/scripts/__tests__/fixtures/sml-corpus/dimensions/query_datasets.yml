@@ -1,0 +1,30 @@
+unique_name: Query Datasets
+object_type: dimension
+label: Query Datasets
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: query_id
+    label: Query
+    dataset: query_datasets.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: dataset_id
+    label: Dataset
+    dataset: query_datasets.dataset
+    name_column: dataset_id
+    key_columns:
+      - dataset_id
+  - unique_name: query_part
+    label: Query Part
+    dataset: query_datasets.dataset
+    name_column: query_part
+    key_columns:
+      - query_part
+  - unique_name: dataset_uuid
+    label: Dataset Uuid
+    dataset: query_datasets.dataset
+    name_column: dataset_uuid
+    key_columns:
+      - dataset_uuid

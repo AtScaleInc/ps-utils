@@ -1,0 +1,56 @@
+unique_name: query_details.dataset
+object_type: dataset
+label: Query Details
+connection_id: testconn
+table: query_details
+columns:
+  - name: query_id
+    data_type: string
+  - name: user_id
+    data_type: string
+  - name: session_id
+    data_type: string
+  - name: remote_address
+    data_type: string
+  - name: organization_id
+    data_type: string
+  - name: environment_id
+    data_type: string
+  - name: project_id
+    data_type: string
+  - name: cube_id
+    data_type: string
+  - name: cube_name
+    data_type: string
+  - name: query_language
+    data_type: string
+  - name: receive_time
+    data_type: datetime
+  - name: succeeded
+    data_type: boolean
+  - name: finished
+    data_type: datetime
+  - name: wall_time
+    data_type: string
+  - name: plan_time
+    data_type: string
+  - name: post_plan_time
+    data_type: string
+  - name: estimated_post_plan_time
+    data_type: string
+  - name: subquery_count
+    data_type: string
+  - name: local_cache_subquery_hits
+    data_type: string
+  - name: partial_local_cache_hit
+    data_type: boolean
+  - name: full_local_cache_hit
+    data_type: boolean
+  - name: sql_exec_time
+    data_type: string
+  - name: sql_fetch_time
+    data_type: string
+  - name: sql_wall_time
+    data_type: string
+  - name: failure_message
+    data_type: string
