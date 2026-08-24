@@ -468,11 +468,17 @@ export async function convertXmlToSml(
 
           const colRef = attrMap.get(attrId);
           const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
-          if (!column || !factDatasetName) {
+          // A cube can bind multiple fact datasets (data-set-refs); factDatasetName is only
+          // the first one and is a last-resort fallback for name-guessed columns with no
+          // resolved reference. Whenever the key-ref/attribute-ref actually resolved, prefer
+          // ITS dataset — otherwise every measure in a multi-fact cube silently gets bound to
+          // the first fact table regardless of which one its own column actually lives in.
+          const measureDatasetName = keyRefAuthEntry?.datasetName ?? colRef?.datasetName ?? factDatasetName;
+          if (!column || !measureDatasetName) {
             rptOmissions.push({
               category: "Metric",
               item: attrNameRaw,
-              reason: !factDatasetName
+              reason: !measureDatasetName
                 ? "No fact dataset could be identified for this cube"
                 : "Could not resolve the measure column reference from attribute-ref mapping",
               recommendation: "Add this measure manually to the appropriate metrics/*.yml file after verifying the fact table column name.",
@@ -496,7 +502,7 @@ export async function convertXmlToSml(
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
-            buildMetricYaml(uniqueName, label, aggregation, factDatasetName, column, format, folder, visible, description),
+            buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
@@ -1303,7 +1309,12 @@ function collectMeasureColumns(
 
         const colRef = attrMap.get(attrId);
         const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
-        if (column) addReferencedColumn(factDatasetName, column);
+        // Mirror the dataset resolution used at emission time (see the Phase 4 measure
+        // loop) — otherwise a multi-fact cube's measures get their referenced columns
+        // recorded against the wrong dataset, which manufactures a "phantom" column on
+        // the cube's first fact dataset instead of the one the measure actually lives on.
+        const measureDatasetName = keyRefAuthEntry?.datasetName ?? colRef?.datasetName ?? factDatasetName;
+        if (column) addReferencedColumn(measureDatasetName, column);
       }
     }
   }
