@@ -331,6 +331,11 @@ export async function convertXmlToSml(
   // hosted natively — resolve both mappings once, up front, for all dimensions.
   const { attrIdToDimName, refIdToHostDimName } = collectAttributeDimensionOwnership(allDims);
 
+  // A composite key's default name_column (below) needs to know which of its columns are
+  // themselves the sole key of some OTHER level elsewhere in the schema — see
+  // collectSoleKeyColumns for the reasoning.
+  const soleKeyColumns = collectSoleKeyColumns(allDims, attrDef, keyMap);
+
   // We emit dimension YAMLs after processing cubes (so we know which dims are referenced)
   const referencedDimNames = new Set<string>();
   // inferRelationships already determines, per cube, whether a dimension is degenerate
@@ -743,7 +748,7 @@ export async function convertXmlToSml(
     // dimension used by multiple cubes could be degenerate in one and properly joined
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1534,6 +1539,87 @@ function collectAttributeDimensionOwnership(
   return { attrIdToDimName, refIdToHostDimName };
 }
 
+/**
+ * Collects every column that is, on its own, the entire (single-column) key of some level
+ * anywhere in the schema — used to pick a sane default name_column for a DIFFERENT level
+ * whose own key is composite.
+ *
+ * A composite key is typically a coarser identifier concatenated with the level's own
+ * column (e.g. a "cube" level keyed on [org_id, project_id, cube_id], where org_id and
+ * project_id belong to separate ORG/PROJECT dimensions/levels and only cube_id is this
+ * level's own identity). Defaulting name_column to the first key column — which happens
+ * to be correct when nothing is composite, or when a composite key mixes columns that are
+ * never independently a level's own key elsewhere — is wrong whenever a column in the key
+ * IS independently the sole key of another level: that column represents a foreign
+ * identity, not this level's own name, so it should be excluded from consideration in
+ * favor of whichever column remains.
+ */
+function collectSoleKeyColumns(
+  allDims: Map<string, Record<string, unknown>>,
+  attrDef: Map<string, AttrDefEntry>,
+  keyMap: Map<string, KeyRefEntry[]>,
+): Set<string> {
+  const soleKeyColumns = new Set<string>();
+
+  for (const dimEl of allDims.values()) {
+    for (const hierEl of arr(dimEl.hierarchy)) {
+      for (const levelEl of arr(hierEl.level)) {
+        const primaryAttrUuid = a(levelEl, "primary-attribute");
+        if (!primaryAttrUuid) continue;
+        const def = attrDef.get(primaryAttrUuid);
+        if (!def) continue;
+        const keyEntries = keyMap.get(def.keyUuid) ?? [];
+        const authEntry = keyEntries.find((e) => e.complete === "true") ?? keyEntries[0];
+        if (authEntry?.columns.length === 1) {
+          soleKeyColumns.add(authEntry.columns[0]);
+        }
+      }
+    }
+  }
+
+  return soleKeyColumns;
+}
+
+/**
+ * Default name_column for a level's (possibly composite) key: exclude any column that is
+ * either (a) independently the sole key of some other level in the schema (see
+ * collectSoleKeyColumns) or (b) a date/datetime-typed column, then take the last
+ * remaining column — composite keys are built coarse-to-fine, so after removing
+ * foreign/borrowed identity columns and pure date qualifiers, the last of what's left is
+ * this level's own most granular, nameable column.
+ *
+ * Both exclusions are needed together: a column can be the sole key of another dimension
+ * (e.g. an account or customer's own id) yet still be the right name_column for THIS
+ * level, when the only other candidate is a date column tacked on purely to scope a
+ * snapshot (e.g. "account as of month-end") — a date is essentially never what a user
+ * wants as a dimension member's display name. Conversely a column can be a perfectly
+ * ordinary string/id with no date involved, yet still need excluding because it belongs
+ * to a genuinely separate dimension (e.g. an org id inside a project/cube/perspective
+ * key). Excluding only one of the two signals produces wrong answers for the other
+ * pattern, so both apply and whichever columns end up excluded are removed together.
+ *
+ * If every column ends up excluded, or nothing does, there is no positive signal to act
+ * on, so the original first-column default is kept unchanged.
+ */
+function defaultNameColumn(
+  keyColumns: string[],
+  datasetName: string,
+  soleKeyColumns: Set<string>,
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
+): string {
+  if (keyColumns.length <= 1) return keyColumns[0];
+  const physColumns = datasetNameToPhysical.get(datasetName)?.columns;
+  const isDateLike = (col: string): boolean => {
+    const dataType = physColumns?.find((c) => c.name === col)?.dataType;
+    return dataType === "date" || dataType === "datetime";
+  };
+  const remaining = keyColumns.filter((c) => !soleKeyColumns.has(c) && !isDateLike(c));
+  if (remaining.length > 0 && remaining.length < keyColumns.length) {
+    return remaining[remaining.length - 1];
+  }
+  return keyColumns[0];
+}
+
 // ============================================================
 // Phase 3: Dimension YAML
 // ============================================================
@@ -1573,6 +1659,11 @@ function buildDimensionYaml(
    * in any cube that uses it) — the single source of truth for is_degenerate/type, so it
    * can never disagree with the model's own dimensions:/relationships: placement. */
   isDegenerate: boolean,
+  /** Columns that are the sole key of some other level in the schema — see
+   * collectSoleKeyColumns/defaultNameColumn for how this refines a composite key's
+   * default name_column. */
+  soleKeyColumns: Set<string>,
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -1667,7 +1758,7 @@ function buildDimensionYaml(
       //   role="name"|"label"  → overrides name_column for the primary level attribute
       //   role="sort"          → sets sort_column for the primary level attribute
       //   no role / ref-id set → secondary attribute (or cross-dim ref, skipped if ref-id present)
-      let nameColumn = keyColumns[0];
+      let nameColumn = defaultNameColumn(keyColumns, authEntry.datasetName, soleKeyColumns, datasetNameToPhysical);
       let sortColumn: string | undefined;
       const secondaryAttrs: SecondaryAttrDef[] = [];
 
