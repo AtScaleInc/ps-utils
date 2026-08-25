@@ -478,7 +478,7 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
       ) as Record<string, any>;
     }
 
-    const proxyConfig: Record<string, any> = {};
+    let proxyConfig: any = {};
     if (yamlConfig.proxy && yamlConfig.proxy.host) {
       proxyConfig.host = yamlConfig.proxy.host;
       if (yamlConfig.proxy.password) {
@@ -499,6 +499,9 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
           proxyConfig.password = yamlConfig.proxy.password;
         }
       }
+    }
+    else if (yamlConfig.proxy === false) {
+      proxyConfig = false
     }
     // ── Select matching queries ───────────────────────────────────────────────
     const allQueries = loadQueries(params["query-file"]);

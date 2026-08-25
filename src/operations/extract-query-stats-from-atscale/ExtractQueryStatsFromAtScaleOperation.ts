@@ -475,7 +475,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       );
     }
 
-    const proxyConfig: Record<string, any> = {};
+    let proxyConfig: any = {};
     if (connection.proxy && connection.proxy.host) {
       proxyConfig.host = connection.proxy.host;
       if (connection.proxy.password) {
@@ -496,6 +496,9 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
           proxyConfig.password = connection.proxy.password;
         }
       }
+    }
+    else if (connection.proxy === false) {
+      proxyConfig = false
     }
 
     const { installer, mdx } = connection;

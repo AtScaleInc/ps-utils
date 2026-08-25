@@ -52,6 +52,7 @@
     - [`atscaleListDeployments`](#atscalelistdeployments)
     - [`atscaleDeployCatalog`](#atscaledeploycatalog)
     - [`atscaleListModelErrors`](#atscalelistmodelerrors)
+    - [`getDsoCount`](#getDsoCount)
   - Web Services
 - [Full SDL](#full-sdl)
 

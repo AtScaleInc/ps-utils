@@ -954,6 +954,25 @@ export async function atScaleListModelErrors(p: AtScaleListModelErrorsParams, o:
   } finally { cleanup(); }
 }
 
+export type GetDsoCountParams = {
+  connectionFile: FileInput;
+  connectionName: string;
+  catalog?: string;
+  model?: string;
+};
+
+export async function getDsoCount(p: GetDsoCountParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+  });
+  try {
+    await run("get-dso-count", Object.assign({
+      "connection-file": "connections.yaml",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 export type VersionParams = Record<string, never>;

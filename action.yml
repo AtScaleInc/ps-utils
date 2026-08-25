@@ -47,6 +47,7 @@ inputs:
         generate-sml-docs
         deploy-atscale-microk8s
         execute-web-services
+        get-dso-count
     required: true
 
   # ── Shared ────────────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ inputs:
       Used by: extract-model-from-atscale, generate-sml-from-connection,
                generate-tableau-from-namespace, execute-sql-on-connection,
                extract-ddl-from-connection, extract-data-shape-from-connection,
-               generate-data-from-data-shape-to-connection.
+               generate-data-from-data-shape-to-connection, get-dso-count.
     required: false
   connection-name:
     description: >
@@ -64,13 +65,22 @@ inputs:
       Used by: extract-model-from-atscale, generate-sml-from-connection,
                generate-sml-from-ddl, generate-tableau-from-namespace,
                execute-sql-on-connection, extract-ddl-from-connection,
-               extract-data-shape-from-connection,
+               extract-data-shape-from-connection, get-dso-count,
                generate-data-from-data-shape-to-connection.
     required: false
 
-  # ── extract-model-from-atscale ────────────────────────────────────────────
+  # ── extract-model-from-atscale / get-dso-count────────────────────────────────────────────
   model:
-    description: AtScale model identifier (cube name).
+    description: 
+      AtScale model identifier (cube name).
+      Used by: extract-model-from-atscale, get-dso-count.
+    required: false
+
+# ── get-dso-count ────────────────────────────────────────────
+  model:
+    description: 
+      AtScale catalog identifier.
+      Used by: get-dso-count.
     required: false
 
   # ── extract-model-from-sml / generate-sml-from-connection / generate-sml-from-ddl / atscale-list-model-errors
@@ -856,6 +866,7 @@ runs:
          inputs.operation == 'atscale-list-deployments' ||
          inputs.operation == 'atscale-deploy-catalog' ||
          inputs.operation == 'atscale-list-model-errors' ||
+         inputs.operation == 'get-dso-count' ||
          inputs.operation == 'generate-ddl-from-atscale' ||
          inputs.operation == 'extract-data-shape-from-connection' ||
          inputs.operation == 'generate-data-from-data-shape-to-connection' ||
@@ -1249,6 +1260,21 @@ runs:
         [[ -n "${{ inputs.repo-id }}"    ]] && ARGS+=(--repo-id    "${{ inputs.repo-id }}")
         [[ -n "${{ inputs.branch }}"     ]] && ARGS+=(--branch     "${{ inputs.branch }}")
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
+      shell: bash
+
+    # ── get-dso-count ───────────────────────────────────────────────────
+    - name: Get DSO Count
+      if: inputs.operation == 'get-dso-count'
+      run: |
+         ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog }}"  ]] && ARGS+=(--catalog  "${{ inputs.catalog }}")
+        [[ -n "${{ inputs.model }}"    ]] && ARGS+=(--model    "${{ inputs.model }}")
         node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
       shell: bash
 
