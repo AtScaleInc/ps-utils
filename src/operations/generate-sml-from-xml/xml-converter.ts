@@ -411,6 +411,9 @@ export async function convertXmlToSml(
     // (e.g. a visible=false leftover from a rename) — dedupe by the transformed unique_name
     // so the model's metrics: list never contains the same entry twice.
     const seenMetricNames = new Set<string>();
+    // Tracks, per emitted measure unique_name, whether its column actually resolved to a
+    // declared physical column on its dataset — see the duplicate-measure handling below.
+    const metricHasKnownColumn = new Map<string, boolean>();
     // User Defined Aggregates reference measures/calc members by attribute id — record each
     // emitted metric's id alongside its transformed unique_name so aggregate parsing (below)
     // can resolve them the same way the reference converter does.
@@ -493,16 +496,35 @@ export async function convertXmlToSml(
 
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
           if (seenMetricNames.has(uniqueName)) {
-            rptOmissions.push({
-              category: "Metric",
-              item: attrNameRaw,
-              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
-              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
-            });
+            // The source XML can define the same measure name twice, bound to different
+            // columns — e.g. a stale duplicate whose column was never actually declared on
+            // its dataset. Silently keeping "whichever came first" can pin the measure to a
+            // column SML can't type (falls back to string), breaking any calc that does
+            // arithmetic with it. Prefer whichever duplicate resolves to a real declared
+            // physical column, matching the reference converter's own dedup behavior.
+            if (isKnownColumn && !metricHasKnownColumn.get(uniqueName)) {
+              attrIdToMetricUniqueName.set(attrId, uniqueName);
+              metricHasKnownColumn.set(uniqueName, true);
+              const fname = safeFilename(uniqueName);
+              output.set(
+                `metrics/${fname}.yml`,
+                buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description),
+              );
+              logger.log(`  → metrics/${fname}.yml (replacing an earlier duplicate with an unresolved column)`);
+            } else {
+              rptOmissions.push({
+                category: "Metric",
+                item: attrNameRaw,
+                reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+                recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+              });
+            }
             continue;
           }
           seenMetricNames.add(uniqueName);
+          metricHasKnownColumn.set(uniqueName, isKnownColumn);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
