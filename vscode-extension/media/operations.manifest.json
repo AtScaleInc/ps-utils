@@ -46,7 +46,8 @@
       "operations": [
         "generate-tableau-from-namespace",
         "generate-excel-from-namespace",
-        "generate-powerbi-from-namespace"
+        "generate-powerbi-from-namespace",
+        "generate-notebook-from-connection"
       ]
     },
     {
@@ -73,7 +74,6 @@
     {
       "name": "General",
       "operations": [
-        "generate-notebook-from-connection",
         "echo-connection-metadata",
         "atscale-list-data-sources",
         "atscale-create-data-source",
@@ -195,7 +195,7 @@
     },
     "generate-notebook-from-connection": {
       "description": "Generate a Notebook from a namespace (stub)",
-      "group": "General",
+      "group": "BI Tool Integration",
       "contexts": [
         "file"
       ],

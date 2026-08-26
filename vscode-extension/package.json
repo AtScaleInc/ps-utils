@@ -562,6 +562,11 @@
         {
           "command": "psUtils.op.generate-powerbi-from-namespace",
           "group": "1_ops@3"
+        },
+        {
+          "command": "psUtils.op.generate-notebook-from-connection",
+          "group": "1_ops@4",
+          "when": "!explorerResourceIsFolder"
         }
       ],
       "psUtils.group.testing-query-processing": [
@@ -623,44 +628,40 @@
       ],
       "psUtils.group.general": [
         {
-          "command": "psUtils.op.generate-notebook-from-connection",
+          "command": "psUtils.op.echo-connection-metadata",
           "group": "1_ops@1"
         },
         {
-          "command": "psUtils.op.echo-connection-metadata",
+          "command": "psUtils.op.atscale-list-data-sources",
           "group": "1_ops@2"
         },
         {
-          "command": "psUtils.op.atscale-list-data-sources",
+          "command": "psUtils.op.atscale-create-data-source",
           "group": "1_ops@3"
         },
         {
-          "command": "psUtils.op.atscale-create-data-source",
+          "command": "psUtils.op.atscale-list-repos",
           "group": "1_ops@4"
         },
         {
-          "command": "psUtils.op.atscale-list-repos",
+          "command": "psUtils.op.atscale-create-repo",
           "group": "1_ops@5"
         },
         {
-          "command": "psUtils.op.atscale-create-repo",
+          "command": "psUtils.op.atscale-list-deployments",
           "group": "1_ops@6"
         },
         {
-          "command": "psUtils.op.atscale-list-deployments",
+          "command": "psUtils.op.get-dso-count",
           "group": "1_ops@7"
         },
         {
-          "command": "psUtils.op.get-dso-count",
+          "command": "psUtils.op.execute-web-services",
           "group": "1_ops@8"
         },
         {
-          "command": "psUtils.op.execute-web-services",
-          "group": "1_ops@9"
-        },
-        {
           "command": "psUtils.op.version",
-          "group": "1_ops@10"
+          "group": "1_ops@9"
         }
       ],
       "commandPalette": [

@@ -403,7 +403,8 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       connection.mdx.organization_id,
       connection.mdx.catalog_name,
       _params.model,
-      proxyConfig);
+      proxyConfig,
+      certConfig);
 
     this.logger.info("Fetching Attributes...");
     const attributes = await this.getAttributes(token, connection.installer,

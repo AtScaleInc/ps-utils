@@ -542,15 +542,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Auth ---
     this.logger.info("Authenticating…");
     const token = await this.getToken(
-      installer, atscaleUrl, organizationId, user.username, user.password, proxyConfig
+      installer, atscaleUrl, organizationId, user.username, user.password, proxyConfig, certConfig
     );
 
     // --- Discover model schema ---
     this.logger.info("Fetching measure and attribute names from DMV…");
     const [measureNames, levelMetaRows, ids] = await Promise.all([
-      this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
-      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
-      this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig),
+      this.getMeasureNames(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig, certConfig),
+      this.getLevelMetadataRows(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig, certConfig),
+      this.getIds(token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig, certConfig),
     ]);
     const attributeNames = levelMetaRows.map((r) => r.LEVEL_NAME).filter(Boolean);
 
@@ -614,7 +614,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     this.logger.info(`Collecting query stats from ${startTime} to ${endTime}…`);
     const { occurrenceDict } = await this.processQueries(
       installer, atscaleUrl, token, organizationId,
-      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig
+      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig, certConfig
     );
 
     // Build occurrence CSV: cross-product of attributes × measures
@@ -751,7 +751,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         this.logger.info(`  ${MONTHS[month]} ${year}…`);
         const { occurrenceDict: mDict } = await this.processQueries(
           installer, atscaleUrl, token, organizationId,
-          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig
+          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig
         );
         monthlyDicts.push(mDict);
       }

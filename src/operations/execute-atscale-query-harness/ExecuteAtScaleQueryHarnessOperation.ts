@@ -1114,11 +1114,11 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
           this.logger.info(`  XMLA URL: ${cfg.url}`);
           const token = cfg.isContainer
             ? ""
-            : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, false, proxyConfig);
+            : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, false, proxyConfig, certConfig);
 
           // All XMLA workers share the same stateless HTTP execute function.
           executePerWorker = Array.from({ length: concurrency }, () =>
-            (q: QueryRecord) => executeXmlaQuery(q, cfg, token, httpConfig),
+            (q: QueryRecord) => executeXmlaQuery(q, cfg, token, proxyConfig, certConfig),
           );
         } else {
           const { connectionConfig, connectionName } = isProperties
