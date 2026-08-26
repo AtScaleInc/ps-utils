@@ -545,15 +545,6 @@ export async function convertXmlToSml(
         const refId = a(cmRef, "id");
         const def = refId ? calcMemberDefs.get(refId) : undefined;
         if (!def) continue;
-        if (!def.visible) {
-          rptOmissions.push({
-            category: "Calculated Member",
-            item: def.name,
-            reason: "Marked as not visible (visible=false) in the source XML — excluded from output",
-            recommendation: `If this calculated member is needed, create \`calculations/${safeFilename(truncateUniqueName(safeName(def.name).toLowerCase()))}.yml\` manually with \`is_hidden_from_ui: false\`.`,
-          });
-          continue;
-        }
         const label = def.caption ?? def.name;
         const uniqueName = truncateUniqueName(safeName(def.name).toLowerCase());
         if (seenMetricNames.has(uniqueName)) {
@@ -575,7 +566,7 @@ export async function convertXmlToSml(
         );
         logger.log(`  → calculations/${fname}.yml`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
-        rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: false });
+        rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
       }
     }
 
