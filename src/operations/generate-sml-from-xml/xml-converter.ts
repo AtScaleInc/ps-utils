@@ -1494,7 +1494,14 @@ function buildDatasetYaml(
   }
 
   const columns: Array<{ name: string; data_type: string; sql?: string }> =
-    phys.columns?.map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) })) ?? [];
+    (phys.columns ?? [])
+      // A column whose XML type has no SML equivalent (e.g. Snowflake BINARY) is only
+      // safe to keep if something actually references it (a key/relationship column);
+      // otherwise it's dead physical metadata that fails catalog validation outright —
+      // drop it, matching the reference converter's own "unused, will be removed"
+      // behavior for these columns.
+      .filter((c) => !c.dataType.startsWith("binary") || referencedColumns?.has(c.name))
+      .map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) }));
 
   if (referencedColumns?.size) {
     const known = new Set(columns.map((c) => c.name));
