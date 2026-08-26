@@ -15,6 +15,7 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import axios from "axios";
+import https from 'https';
 import { Parser } from "xml2js";
 import fs from "fs";
 import path from "path";
@@ -138,11 +139,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     username: string,
     password: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<string> {
     const config: Record<string, any> = {}
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
     }
     if (installer) {
       const url = `${atscaleUrl}:10500/${organizationId}/auth`;
@@ -159,7 +164,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       params.append("grant_type", "password");
       params.append("username", username);
       params.append("password", password);
-      const response = await axios.post(url, params);
+      const response = await axios.post(url, params, config);
       return response.data.access_token as string;
     }
   }
@@ -176,7 +181,8 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<Record<string, string>[]> {
     const data = `<?xml version="1.0" encoding="UTF-8"?>
     <Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
@@ -203,6 +209,9 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     const config: Record<string, any> = {}
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
     }
     config.headers = {
       'Content-Type': 'text/xml',
@@ -231,12 +240,13 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<string[]> {
     const statement =
       "SELECT MEASURE_NAME FROM $system.MDSCHEMA_MEASURES WHERE [CUBE_NAME] = @CubeName";
     const rows = await this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
     return rows.map((r) => r.MEASURE_NAME).filter(Boolean);
   }
@@ -249,10 +259,11 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<string[]> {
     const rows = await this.getLevelMetadataRows(
-      token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig
+      token, installer, atscaleUrl, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
     return rows.map((r) => r.LEVEL_NAME).filter(Boolean);
   }
@@ -268,14 +279,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<Record<string, string>[]> {
     const statement =
       "SELECT DIMENSION_UNIQUE_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NAME " +
       "FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName " +
       "and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
     return this.getDmvData(
-      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig
+      token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
   }
 
@@ -294,12 +306,13 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<{ catalogId: string; modelId: string }> {
     const catalogStatement =
       `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = '${catalogName}'`;
     const catalogRows = await this.getDmvData(
-      token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName, proxyConfig
+      token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
     const catalogId = catalogRows[0]?.CATALOG_GUID ?? "";
 
@@ -307,7 +320,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = '${catalogName}' ` +
       `and [CUBE_NAME] = '${modelName}'`;
     const modelRows = await this.getDmvData(
-      token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName, proxyConfig
+      token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
     const modelId = modelRows[0]?.CUBE_GUID ?? "";
 
@@ -341,7 +354,8 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     endTime: string,
     limit: number,
     numQueries: number,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<{
     occurrenceDict: Map<PairKey, number>;
     sampleQueryIds: Map<PairKey, Array<[string, string[]]>>;
@@ -352,6 +366,9 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     const config: Record<string, any> = {}
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
     }
     config.headers = {
       'Content-Type': 'text/xml',
@@ -499,6 +516,22 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     }
     else if (connection.proxy === false) {
       proxyConfig = false
+    }
+
+    let certConfig: Record<string, any> = {};
+    if (connection.cert) {
+      if (connection.cert.ca) {
+        certConfig.ca = fs.readFileSync(connection.cert.ca);
+      }
+      if (connection.cert.cert) {
+        certConfig.cert = fs.readFileSync(connection.cert.cert);
+      }
+      if (connection.cert.key) {
+        certConfig.key = fs.readFileSync(connection.cert.key);
+      }
+      if (connection.cert.rejectUnauthorized === false) {
+        certConfig.rejectUnauthorized = false;
+      }
     }
 
     const { installer, mdx } = connection;
