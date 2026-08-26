@@ -115,7 +115,10 @@ inputs:
       For generate-data-from-data-shape: CSV output directory (default: data/).
     required: false
   schema:
-    description: Database schema to scope SML generation to.
+    description: >
+      Database schema to scope SML generation to. For extract-ddl-from-connection,
+      accepts a comma-separated list (e.g. "DIM, SYSTEM") to introspect multiple
+      schemas in one run; other operations accept a single schema name.
     required: false
   catalog-name:
     description: Catalog (database) name for the SML project.

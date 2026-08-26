@@ -558,6 +558,7 @@ function splitStatements(ddl: string): string[] {
 export class DdlDatabaseMetaData implements DatabaseMetaData {
   private readonly tables = new Map<string, ParsedTable>();
   private readonly views = new Map<string, ParsedView>();
+  private readonly duplicateTableWarnings: string[] = [];
 
   private constructor() {}
 
@@ -582,7 +583,14 @@ export class DdlDatabaseMetaData implements DatabaseMetaData {
       if (/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMPORARY\s+)?TABLE/i.test(upper)) {
         const table = parseCreateTable(stmt);
         if (table) {
-          instance.tables.set(table.tableName.toUpperCase(), table);
+          const key = table.tableName.toUpperCase();
+          const existing = instance.tables.get(key);
+          if (existing && (existing.schemaName ?? "").toUpperCase() !== (table.schemaName ?? "").toUpperCase()) {
+            instance.duplicateTableWarnings.push(
+              `Table "${table.tableName}" is defined in both schema "${existing.schemaName ?? "(none)"}" and schema "${table.schemaName ?? "(none)"}" — this DDL parser keys tables by name only, so the schema "${table.schemaName ?? "(none)"}" definition overwrote the earlier one and both will be treated as a single table during semantic model inference.`,
+            );
+          }
+          instance.tables.set(key, table);
         }
       } else if (/^CREATE\s+(?:UNIQUE\s+)?(?:CLUSTERED\s+|NONCLUSTERED\s+|HASHED\s+)?INDEX/i.test(upper)) {
         const result = parseCreateIndex(stmt);
@@ -639,6 +647,16 @@ export class DdlDatabaseMetaData implements DatabaseMetaData {
   /** Returns all view names found in the DDL (original casing). */
   getViewNames(): string[] {
     return Array.from(this.views.values()).map((v) => v.viewName);
+  }
+
+  /**
+   * Returns warnings for table names that appear in more than one schema
+   * within the parsed DDL. Tables are keyed by name only (schema-unaware),
+   * so a name collision across schemas silently merges two distinct tables
+   * into one during inference — surfacing it here lets callers log it.
+   */
+  getDuplicateTableWarnings(): string[] {
+    return [...this.duplicateTableWarnings];
   }
 
   // ----------------------------------------------------------

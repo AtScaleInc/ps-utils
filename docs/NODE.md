@@ -237,7 +237,7 @@ function executeSQLOnConnection(
 
 [↑ Table of Contents](#table-of-contents)
 
-Connects to a live database and writes `CREATE TABLE` DDL statements for each table in the target schema.
+Connects to a live database and writes `CREATE TABLE` DDL statements for each table in the target schema(s). `schema` accepts a comma-separated list (e.g. `"DIM, SYSTEM"`) to extract from multiple schemas in one call — when more than one is given, table names (and any foreign keys crossing a schema boundary) are qualified as `<schema>.<table>` in the output.
 
 ```typescript
 import { extractDDLFromConnection } from "@atscale-ps/ps-utils";
@@ -259,7 +259,7 @@ function extractDDLFromConnection(
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `connectionName` | `string` | Yes | | Connection name in the file |
-| `schema` | `string` | Yes | | Database schema to introspect |
+| `schema` | `string` | Yes | | Database schema(s) to introspect. Comma-separated for multiple (e.g. `"DIM, SYSTEM"`) when fact and dimension tables live in different schemas. |
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
 | `tables` | `string` | No | | Comma-separated table names or wildcard patterns |
 | `outputFile` | `FileOutput` | No | | Output path for DDL, or a `Writable` to receive it (stdout if omitted) |

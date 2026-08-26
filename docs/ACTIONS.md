@@ -299,7 +299,9 @@ Reads a SQL file, splits it into individual statements (handling string literals
 
 [↑ Table of Contents](#table-of-contents)
 
-Connects to a live database, reads schema metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file. Use `--tables` to limit extraction to specific tables or wildcard patterns.
+Connects to a live database, reads schema metadata for each table in the target schema(s), and writes `CREATE TABLE` DDL statements to a file. Use `--tables` to limit extraction to specific tables or wildcard patterns.
+
+`schema` accepts a comma-separated list (e.g. `"DIM, SYSTEM"`) to extract from multiple schemas in one run — useful when fact and dimension tables are split across schemas. When more than one schema is given, table names in the output (and any foreign keys that cross a schema boundary) are qualified as `<schema>.<table>`.
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
@@ -328,6 +330,18 @@ With table filtering:
     schema: PUBLIC
     tables: "Dim*,FactInternetSales"
     case-insensitive: "true"
+    output-file: schema/extracted.ddl
+```
+
+Extracting multiple schemas in one pass:
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: extract-ddl-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+    schema: "DIM, SYSTEM"
     output-file: schema/extracted.ddl
 ```
 

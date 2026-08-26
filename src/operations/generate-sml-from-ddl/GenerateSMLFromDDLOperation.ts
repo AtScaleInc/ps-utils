@@ -188,6 +188,9 @@ export class GenerateSMLFromDDLOperation extends Operation<Params> {
     this.logger.log(
       `[GenerateSMLFromDDL] Found ${tableNames.length} table(s) and ${viewNames.length} view(s)`,
     );
+    for (const warning of db.getDuplicateTableWarnings()) {
+      this.logger.log(`  ⚠  ${warning}`);
+    }
 
     // ---- Merge CLI params + sml.style.yaml ----
     const styleFileConfig = loadSmlStyleConfig(params["sml-config-file"]);

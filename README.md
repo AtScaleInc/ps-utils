@@ -335,7 +335,7 @@ Skip failed statements and continue:
 
 [↑ Table of Contents](#table-of-contents)
 
-Connects to a live database, reads schema metadata for each table in the target schema, and writes `CREATE TABLE` DDL statements to a file (or stdout). Useful for capturing schema snapshots, seeding DDL files for `generate-sml-from-ddl`, or comparing schema drift.
+Connects to a live database, reads schema metadata for each table in the target schema(s), and writes `CREATE TABLE` DDL statements to a file (or stdout). Useful for capturing schema snapshots, seeding DDL files for `generate-sml-from-ddl`, or comparing schema drift.
 
 ```bash
 ./atscale-utils extract-ddl-from-connection \
@@ -356,10 +356,20 @@ Extract only specific tables or wildcard patterns:
   --output-file "./schema.ddl"
 ```
 
+`--schema` accepts a comma-separated list to extract from multiple schemas in one pass — useful when fact and dimension tables are split across schemas (e.g. `"DIM, SYSTEM"`). When more than one schema is given, table names in the output (and any foreign keys that cross a schema boundary) are qualified as `<schema>.<table>` so `generate-sml-from-ddl` can tell same-named tables in different schemas apart:
+
+```bash
+./atscale-utils extract-ddl-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo" \
+  --schema "DIM, SYSTEM" \
+  --output-file "./schema.ddl"
+```
+
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--connection-name` | Yes | | Connection name in the file |
-| `--schema` | Yes | | Database schema to introspect |
+| `--schema` | Yes | | Database schema(s) to introspect. Comma-separated for multiple (e.g. `"DIM, SYSTEM"`) when fact and dimension tables live in different schemas. |
 | `--connection-file` | No | `connections.yaml` | Path to connections file |
 | `--tables` | No | All tables | Comma-separated table names or wildcard patterns (`*` = any chars, `?` = one char). Matching is case-sensitive by default. |
 | `--case-insensitive` | No | `false` | Match table names case-insensitively |

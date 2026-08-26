@@ -2,8 +2,16 @@
  * ExtractDDLFromConnection
  *
  * Connects to a live database, reads schema metadata for each table in the
- * target schema, and writes the equivalent CREATE TABLE DDL to a file (or
+ * target schema(s), and writes the equivalent CREATE TABLE DDL to a file (or
  * stdout).
+ *
+ * Schema filtering:
+ *   --schema accepts one or more comma-separated schema names, e.g.
+ *   --schema "DIM, SYSTEM". When more than one schema is given, output table
+ *   names (and any foreign keys that cross schema boundaries) are qualified
+ *   as "<schema>.<table>" so generate-sml-from-ddl can tell same-named tables
+ *   in different schemas apart. With a single schema, output stays
+ *   unqualified, matching prior behavior.
  *
  * Table filtering:
  *   --tables accepts a comma-separated list of table names or wildcard
@@ -45,7 +53,7 @@ class ExtractDDLFromConnectionParamsSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "schema";
-      description = "Database schema to introspect";
+      description = 'Database schema(s) to introspect. Comma-separated for multiple (e.g. "DIM, SYSTEM") when fact and dimension tables live in different schemas.';
       required    = true;
     })(),
     new (class extends StringParameter {
@@ -115,22 +123,28 @@ type ColumnInfo = {
   isPrimaryKey:     boolean;
 };
 
-/** Fetch columns and PK flags for all tables in one pair of bulk queries. */
+/** Build a composite map key from a schema + table name pair. */
+function rowKey(schema: string, table: string): string {
+  return `${schema}\u0001${table}`;
+}
+
+/** Fetch columns and PK flags for all tables (across one or more schemas) in one pair of bulk queries. */
 async function fetchAllColumns(
   sql: SqlService,
   conn: SqlConnection,
-  schema: string,
+  schemas: string[],
   tableNames: string[],
 ): Promise<Map<string, ColumnInfo[]>> {
-  const inList = tableNames.map((t) => `'${t}'`).join(", ");
+  const inList       = tableNames.map((t) => `'${t}'`).join(", ");
+  const schemaInList = schemas.map((s) => `'${s}'`).join(", ");
 
   const colRows = await sql.query(
     conn,
-    `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, IS_NULLABLE
+    `SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, IS_NULLABLE
        FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = '${schema}'
+      WHERE TABLE_SCHEMA IN (${schemaInList})
         AND TABLE_NAME IN (${inList})
-      ORDER BY TABLE_NAME, ORDINAL_POSITION`,
+      ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`,
   );
 
   // Build per-table PK sets in one query.
@@ -138,21 +152,23 @@ async function fetchAllColumns(
   try {
     const pkRows = await sql.query(
       conn,
-      `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME
+      `SELECT tc.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME
          FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
          JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
            ON  tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
            AND tc.TABLE_SCHEMA    = kcu.TABLE_SCHEMA
            AND tc.TABLE_NAME      = kcu.TABLE_NAME
         WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-          AND tc.TABLE_SCHEMA    = '${schema}'
-          AND tc.TABLE_NAME IN (${inList})`,
+          AND tc.TABLE_SCHEMA    IN (${schemaInList})
+          AND tc.TABLE_NAME      IN (${inList})`,
     );
     for (const r of pkRows) {
-      const tName = String(r["TABLE_NAME"]  ?? r["table_name"]  ?? "");
-      const cName = String(r["COLUMN_NAME"] ?? r["column_name"] ?? "").toUpperCase();
-      if (!pkMap.has(tName)) pkMap.set(tName, new Set());
-      pkMap.get(tName)!.add(cName);
+      const tSchema = String(r["TABLE_SCHEMA"] ?? r["table_schema"] ?? "");
+      const tName   = String(r["TABLE_NAME"]   ?? r["table_name"]   ?? "");
+      const cName   = String(r["COLUMN_NAME"]  ?? r["column_name"]  ?? "").toUpperCase();
+      const key = rowKey(tSchema, tName);
+      if (!pkMap.has(key)) pkMap.set(key, new Set());
+      pkMap.get(key)!.add(cName);
     }
   } catch {
     // KEY_COLUMN_USAGE may not be accessible (e.g. Snowflake privilege restrictions).
@@ -160,16 +176,18 @@ async function fetchAllColumns(
 
   const result = new Map<string, ColumnInfo[]>();
   for (const r of colRows) {
-    const tName = String(r["TABLE_NAME"]  ?? r["table_name"]  ?? "");
-    const cName = String(r["COLUMN_NAME"] ?? r["column_name"] ?? "");
-    if (!result.has(tName)) result.set(tName, []);
-    result.get(tName)!.push({
+    const tSchema = String(r["TABLE_SCHEMA"] ?? r["table_schema"] ?? "");
+    const tName   = String(r["TABLE_NAME"]   ?? r["table_name"]   ?? "");
+    const cName   = String(r["COLUMN_NAME"]  ?? r["column_name"]  ?? "");
+    const key = rowKey(tSchema, tName);
+    if (!result.has(key)) result.set(key, []);
+    result.get(key)!.push({
       columnName:       cName,
       dataType:         String(r["DATA_TYPE"] ?? r["data_type"] ?? "VARCHAR"),
       characterMaxLen:  r["CHARACTER_MAXIMUM_LENGTH"] != null ? Number(r["CHARACTER_MAXIMUM_LENGTH"] ?? r["character_maximum_length"]) : null,
       numericPrecision: r["NUMERIC_PRECISION"] != null ? Number(r["NUMERIC_PRECISION"] ?? r["numeric_precision"]) : null,
       nullable:         String(r["IS_NULLABLE"] ?? r["is_nullable"] ?? "YES").toUpperCase() !== "NO",
-      isPrimaryKey:     (pkMap.get(tName) ?? new Set()).has(cName.toUpperCase()),
+      isPrimaryKey:     (pkMap.get(key) ?? new Set()).has(cName.toUpperCase()),
     });
   }
   return result;
@@ -179,25 +197,28 @@ type ForeignKeyInfo = {
   constraintName:   string;
   columnName:       string;
   referencedTable:  string;
+  referencedSchema: string;
   referencedColumn: string;
   ordinalPosition:  number;
 };
 
-/** Fetch foreign keys for all tables in one bulk query. */
+/** Fetch foreign keys for all tables (across one or more schemas) in one bulk query. */
 async function fetchAllForeignKeys(
   sql: SqlService,
   conn: SqlConnection,
-  schema: string,
+  schemas: string[],
   tableNames: string[],
 ): Promise<Map<string, ForeignKeyInfo[]>> {
   const result = new Map<string, ForeignKeyInfo[]>();
   try {
-    const inList = tableNames.map((t) => `'${t}'`).join(", ");
+    const inList       = tableNames.map((t) => `'${t}'`).join(", ");
+    const schemaInList = schemas.map((s) => `'${s}'`).join(", ");
     const rows = await sql.query(
       conn,
-      `SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME,
-              ccu.TABLE_NAME  AS REFERENCED_TABLE_NAME,
-              ccu.COLUMN_NAME AS REFERENCED_COLUMN_NAME,
+      `SELECT tc.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME,
+              ccu.TABLE_SCHEMA AS REFERENCED_TABLE_SCHEMA,
+              ccu.TABLE_NAME   AS REFERENCED_TABLE_NAME,
+              ccu.COLUMN_NAME  AS REFERENCED_COLUMN_NAME,
               kcu.ORDINAL_POSITION
          FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
          JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
@@ -212,19 +233,22 @@ async function fetchAllForeignKeys(
            AND rc.UNIQUE_CONSTRAINT_SCHEMA = ccu.CONSTRAINT_SCHEMA
            AND kcu.ORDINAL_POSITION        = ccu.ORDINAL_POSITION
         WHERE tc.CONSTRAINT_TYPE = 'FOREIGN KEY'
-          AND tc.TABLE_SCHEMA    = '${schema}'
-          AND tc.TABLE_NAME IN (${inList})
-        ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`,
+          AND tc.TABLE_SCHEMA    IN (${schemaInList})
+          AND tc.TABLE_NAME      IN (${inList})
+        ORDER BY tc.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`,
     );
     for (const r of rows) {
-      const tName = String(r["TABLE_NAME"] ?? r["table_name"] ?? "");
-      if (!result.has(tName)) result.set(tName, []);
-      result.get(tName)!.push({
-        constraintName:   String(r["CONSTRAINT_NAME"]        ?? r["constraint_name"]        ?? ""),
-        columnName:       String(r["COLUMN_NAME"]            ?? r["column_name"]            ?? ""),
-        referencedTable:  String(r["REFERENCED_TABLE_NAME"]  ?? r["referenced_table_name"]  ?? ""),
-        referencedColumn: String(r["REFERENCED_COLUMN_NAME"] ?? r["referenced_column_name"] ?? ""),
-        ordinalPosition:  Number(r["ORDINAL_POSITION"]       ?? r["ordinal_position"]       ?? 0),
+      const tSchema = String(r["TABLE_SCHEMA"] ?? r["table_schema"] ?? "");
+      const tName   = String(r["TABLE_NAME"]   ?? r["table_name"]   ?? "");
+      const key = rowKey(tSchema, tName);
+      if (!result.has(key)) result.set(key, []);
+      result.get(key)!.push({
+        constraintName:   String(r["CONSTRAINT_NAME"]         ?? r["constraint_name"]         ?? ""),
+        columnName:       String(r["COLUMN_NAME"]             ?? r["column_name"]             ?? ""),
+        referencedTable:  String(r["REFERENCED_TABLE_NAME"]   ?? r["referenced_table_name"]   ?? ""),
+        referencedSchema: String(r["REFERENCED_TABLE_SCHEMA"] ?? r["referenced_table_schema"] ?? tSchema),
+        referencedColumn: String(r["REFERENCED_COLUMN_NAME"]  ?? r["referenced_column_name"]  ?? ""),
+        ordinalPosition:  Number(r["ORDINAL_POSITION"]        ?? r["ordinal_position"]        ?? 0),
       });
     }
   } catch {
@@ -252,7 +276,13 @@ function ddlType(col: ColumnInfo): string {
   return t;
 }
 
-function buildCreateTable(tableName: string, cols: ColumnInfo[], fks: ForeignKeyInfo[]): string {
+function buildCreateTable(
+  tableName: string,
+  cols: ColumnInfo[],
+  fks: ForeignKeyInfo[],
+  qualifySchemas: boolean,
+  ownSchema: string,
+): string {
   const pkCols = cols.filter((c) => c.isPrimaryKey).map((c) => c.columnName);
 
   const lines = cols.map((c) => {
@@ -273,7 +303,10 @@ function buildCreateTable(tableName: string, cols: ColumnInfo[], fks: ForeignKey
   }
   for (const group of fkGroups.values()) {
     const localCols = group.map((f) => f.columnName).join(", ");
-    const refTable  = group[0].referencedTable;
+    const refSchema = group[0].referencedSchema;
+    const refTable  = qualifySchemas && refSchema && refSchema !== ownSchema
+      ? `${refSchema}.${group[0].referencedTable}`
+      : group[0].referencedTable;
     const refCols   = group.map((f) => f.referencedColumn).join(", ");
     lines.push(`    FOREIGN KEY (${localCols}) REFERENCES ${refTable} (${refCols})`);
   }
@@ -302,54 +335,66 @@ export class ExtractDDLFromConnectionOperation extends Operation<Params> {
     const config = yaml.readFromFile<ConnectionConfig>(params["connection-file"]);
     const conn   = await sql.connect(config, connectionName);
 
-    const schema = params.schema;
+    // --schema accepts one or more comma-separated schemas (e.g. "DIM, SYSTEM")
+    // so DDL can be extracted in one pass for databases that split fact and
+    // dimension tables across schemas.
+    const schemas = params.schema.split(",").map((s) => s.trim()).filter(Boolean);
+    if (schemas.length === 0) {
+      throw new Error('--schema must name at least one schema (comma-separated for multiple, e.g. "DIM, SYSTEM").');
+    }
+    const multiSchema = schemas.length > 1;
 
     // Parse table filter patterns
     const filterPatterns = params.tables
       ? params.tables.split(",").map((p) => p.trim()).filter(Boolean)
       : [];
 
-    this.logger.log(`[ExtractDDLFromConnection] Connected to "${connectionName}" (schema: ${schema})`);
+    this.logger.log(`[ExtractDDLFromConnection] Connected to "${connectionName}" (schema${multiSchema ? "s" : ""}: ${schemas.join(", ")})`);
 
     try {
+      const schemaInList = schemas.map((s) => `'${s}'`).join(", ");
       const tableRows = await sql.query(
         conn,
-        `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-          WHERE TABLE_SCHEMA = '${schema}'
+        `SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+          WHERE TABLE_SCHEMA IN (${schemaInList})
             AND TABLE_TYPE   = 'BASE TABLE'
-          ORDER BY TABLE_NAME`,
+          ORDER BY TABLE_SCHEMA, TABLE_NAME`,
       );
-      const allTableNames: string[] = tableRows.map(
-        (r) => String(r["TABLE_NAME"] ?? r["table_name"] ?? ""),
-      ).filter(Boolean);
+      const allTables = tableRows.map((r) => ({
+        schema: String(r["TABLE_SCHEMA"] ?? r["table_schema"] ?? ""),
+        name:   String(r["TABLE_NAME"]   ?? r["table_name"]   ?? ""),
+      })).filter((t) => t.schema && t.name);
 
-      const tableNames = filterPatterns.length > 0
-        ? allTableNames.filter((name) => matchesFilter(name, filterPatterns, params["case-insensitive"]))
-        : allTableNames;
+      const tableEntries = filterPatterns.length > 0
+        ? allTables.filter((t) => matchesFilter(t.name, filterPatterns, params["case-insensitive"]))
+        : allTables;
 
-      if (tableNames.length === 0) {
+      if (tableEntries.length === 0) {
         this.logger.log("[ExtractDDLFromConnection] No tables matched — nothing to extract.");
         return;
       }
 
-      this.logger.log(`[ExtractDDLFromConnection] Extracting DDL for ${tableNames.length} table(s)…`);
+      this.logger.log(`[ExtractDDLFromConnection] Extracting DDL for ${tableEntries.length} table(s)…`);
 
+      const uniqueTableNames = Array.from(new Set(tableEntries.map((t) => t.name)));
       const [allColumns, allForeignKeys] = await Promise.all([
-        fetchAllColumns(sql, conn, schema, tableNames),
-        fetchAllForeignKeys(sql, conn, schema, tableNames),
+        fetchAllColumns(sql, conn, schemas, uniqueTableNames),
+        fetchAllForeignKeys(sql, conn, schemas, uniqueTableNames),
       ]);
 
       const blocks: string[] = [];
 
-      for (const tableName of tableNames) {
-        const cols = allColumns.get(tableName) ?? [];
+      for (const { schema: tableSchema, name: tableName } of tableEntries) {
+        const key = rowKey(tableSchema, tableName);
+        const cols = allColumns.get(key) ?? [];
+        const displayName = multiSchema ? `${tableSchema}.${tableName}` : tableName;
         if (cols.length === 0) {
-          this.logger.log(`  ⚠  ${tableName}: no columns returned — skipped`);
+          this.logger.log(`  ⚠  ${displayName}: no columns returned — skipped`);
           continue;
         }
-        const fks = allForeignKeys.get(tableName) ?? [];
-        blocks.push(buildCreateTable(tableName, cols, fks));
-        this.logger.log(`  → ${tableName} (${cols.length} column(s), ${fks.length} FK(s))`);
+        const fks = allForeignKeys.get(key) ?? [];
+        blocks.push(buildCreateTable(displayName, cols, fks, multiSchema, tableSchema));
+        this.logger.log(`  → ${displayName} (${cols.length} column(s), ${fks.length} FK(s))`);
       }
 
       const ddl = blocks.join("\n\n") + "\n";

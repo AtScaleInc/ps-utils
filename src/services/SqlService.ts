@@ -357,7 +357,27 @@ export class SqlService extends ServiceProvider {
       throw new Error("Snowflake connection requires a username.");
     }
 
-    const connConfig: Record<string, any> = { account, username, warehouse, database, schema };
+    // `schema` may list multiple comma-separated schemas (e.g. "DIM, SYSTEM")
+    // when a connection is shared across schemas that split fact/dimension
+    // tables. Snowflake's connect-time `schema` option sets the session's
+    // single default schema — passing a comma-separated value through
+    // verbatim makes the driver try (and fail) to USE a schema literally
+    // named "DIM, SYSTEM", so the whole connection would error out. When more
+    // than one schema is listed we connect without a default schema instead;
+    // callers that need a specific schema qualify it explicitly in their own
+    // queries (e.g. ExtractDDLFromConnectionOperation's --schema list).
+    const schemaList = schema
+      ? String(schema).split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const connConfig: Record<string, any> = { account, username, warehouse, database };
+    if (schemaList.length === 1) {
+      connConfig.schema = schemaList[0];
+    } else if (schemaList.length > 1) {
+      this.logger?.verbose(
+        `[SqlService] Connection schema "${schema}" lists multiple schemas (${schemaList.join(", ")}) — connecting without a default session schema.`,
+      );
+    }
     if (role) connConfig.role = role;
 
     // Private key auth
