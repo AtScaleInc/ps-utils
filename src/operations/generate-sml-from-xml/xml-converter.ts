@@ -613,7 +613,7 @@ export async function convertXmlToSml(
               continue;
             }
 
-            const attrOut: AggregateDef["attributes"][number] = { name: kaDef.name, dimension: targetDimName };
+            const attrOut: AggregateDef["attributes"][number] = { name: truncateUniqueName(kaDef.name), dimension: targetDimName };
 
             const refPathEl = first(arr((attrRef as Record<string, unknown>)["ref-path"])) as
               | Record<string, unknown>
@@ -1485,7 +1485,14 @@ function buildDatasetYaml(
   }
 
   const columns: Array<{ name: string; data_type: string; sql?: string }> =
-    phys.columns?.map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) })) ?? [];
+    (phys.columns ?? [])
+      // A column whose XML type has no SML equivalent (e.g. Snowflake BINARY) is only
+      // safe to keep if something actually references it (a key/relationship column);
+      // otherwise it's dead physical metadata that fails catalog validation outright —
+      // drop it, matching the reference converter's own "unused, will be removed"
+      // behavior for these columns.
+      .filter((c) => !c.dataType.startsWith("binary") || referencedColumns?.has(c.name))
+      .map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) }));
 
   if (referencedColumns?.size) {
     const known = new Set(columns.map((c) => c.name));
@@ -1797,7 +1804,7 @@ function buildDimensionYaml(
           const saDataset = `${kaAuthEntry.datasetName}.dataset`;
           const saNameCol = resolvedCol ?? saKeyColumns[0];
           secondaryAttrs.push({
-            uniqueName: kaDef.name,
+            uniqueName: truncateUniqueName(kaDef.name),
             label: kaDef.caption ?? kaDef.name,
             dataset: saDataset,
             keyColumns: saKeyColumns,
