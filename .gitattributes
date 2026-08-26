@@ -1,0 +1,17 @@
+# Normalize line endings to LF for all text files, regardless of platform or a
+# contributor's local core.autocrlf setting.
+#
+# Without this, a Windows checkout (the common default: core.autocrlf=true)
+# converts every LF-committed text file to CRLF on checkout. That does two
+# things:
+#   1. Every line of every text file shows as changed in `git diff`/`git status`
+#      for no real reason, even when nothing was touched.
+#   2. src/scripts/generate-sml-schema.ts's mermaid `classDiagram` detection in
+#      resources/sml-reference/*.md expects LF and silently fails to find any
+#      diagrams when the files are CRLF, which aborts `npm run build` before it
+#      reaches the extension-manifest/bundle steps.
+* text=auto eol=lf
+
+# Binary assets: never touch line endings, never diff as text.
+*.png binary
+*.pptx binary
