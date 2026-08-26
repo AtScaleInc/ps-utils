@@ -63,6 +63,7 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "generate-tableau-from-namespace",
       "generate-excel-from-namespace",
       "generate-powerbi-from-namespace",
+      "generate-notebook-from-connection",
     ],
   },
   {
@@ -89,6 +90,7 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "atscale-list-deployments",
       "atscale-deploy-catalog",
       "atscale-list-model-errors",
+      "get-dso-count",
     ],
   },
   {

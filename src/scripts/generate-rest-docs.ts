@@ -16,10 +16,10 @@ import type { OpMeta, ParamMeta } from "../operations/execute-web-services/graph
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(__dirname, "../../docs/REST.md");
 
-const nullLogger = { log: () => {}, info: () => {}, error: () => {}, verbose: () => {} };
+const nullLogger = { log: () => { }, info: () => { }, error: () => { }, verbose: () => { } };
 
 const registry = await buildRegistry(nullLogger, { includeSql: false });
-const metas    = buildOpMetas(registry);
+const metas = buildOpMetas(registry);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // curl example builders
@@ -114,6 +114,7 @@ const GROUPS: [string, string[]][] = [
   ["Visualization and Namespace Processing", [
     "generate-namespace-from-model", "generate-tableau-from-namespace",
     "generate-excel-from-namespace", "generate-powerbi-from-namespace",
+    "generate-notebook-from-connection",
   ]],
   ["Testing / Query Processing", [
     "generate-queries-from-sml", "generate-queries-from-model",
@@ -126,6 +127,7 @@ const GROUPS: [string, string[]][] = [
     "atscale-create-data-source", "atscale-list-repos",
     "atscale-create-repo", "atscale-list-deployments",
     "atscale-deploy-catalog", "atscale-list-model-errors",
+    "get-dso-count"
   ]],
   ["Web Services", ["execute-web-services"]],
 ];

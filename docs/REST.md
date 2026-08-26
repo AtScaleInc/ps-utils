@@ -33,6 +33,7 @@
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+    - [`generate-notebook-from-connection`](#generate-notebook-from-connection)
   - Testing / Query Processing
     - [`generate-queries-from-sml`](#generate-queries-from-sml)
     - [`generate-queries-from-model`](#generate-queries-from-model)
@@ -51,6 +52,7 @@
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+    - [`get-dso-count`](#get-dso-count)
   - Web Services
 
 ---
@@ -965,6 +967,55 @@ curl -X POST http://localhost:4000/rest/generate-powerbi-from-namespace \
 
 ---
 
+### `generate-notebook-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Generate a Notebook from a namespace (stub)
+
+**Endpoint:** `POST /rest/generate-notebook-from-connection`  |  **GraphQL:** `generateNotebookFromConnection`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `namespaceFile` | `String` | No | The file where the namespace is contained |
+| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
+| `namespaceFileUpload` | file field | No | Multipart upload — alternative to `namespaceFile` |
+| `modelFile` | `String` | No | The file where the models are defined |
+| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
+| `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
+| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
+| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
+| `aliasesFileUpload` | file field | No | Multipart upload — alternative to `aliasesFile` |
+| `connectionName` | `String` | No | The name of the connection to use |
+| `targetFile` | `String` | No | Target file to output the notebook |
+| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
+| `targetFileUpload` | file field | No | Multipart upload — alternative to `targetFile` |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
+  -H "Content-Type: application/json" \
+  -d '{
+      "namespaceFileContent": "--- # inline YAML/file content",
+      "modelFileContent": "--- # inline YAML/file content",
+      "connectionFileContent": "--- # inline YAML/file content",
+      "aliasesFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
+  -F "namespaceFileUpload=@/path/to/file" \
+  -F "modelFileUpload=@/path/to/file"
+```
+
+---
+
 #### Testing / Query Processing
 
 ### `generate-queries-from-sml`
@@ -1670,56 +1721,44 @@ curl -X POST http://localhost:4000/rest/atscale-list-model-errors \
 
 ---
 
-#### Other
-
-### `generate-notebook-from-connection`
+### `get-dso-count`
 
 [↑ Table of Contents](#table-of-contents)
 
-> Generate a Notebook from a namespace (stub)
+> Get the DSO count from models
 
-**Endpoint:** `POST /rest/generate-notebook-from-connection`  |  **GraphQL:** `generateNotebookFromConnection`
+**Endpoint:** `POST /rest/get-dso-count`  |  **GraphQL:** `getDsoCount`
 
 | Field (JSON key) | Type | Required | Description |
 |-----------------|------|----------|-------------|
-| `namespaceFile` | `String` | No | The file where the namespace is contained |
-| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
-| `namespaceFileUpload` | file field | No | Multipart upload — alternative to `namespaceFile` |
-| `modelFile` | `String` | No | The file where the models are defined |
-| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
-| `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
-| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFile` | `String` | No | File that defines all the connections |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
-| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
-| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
-| `aliasesFileUpload` | file field | No | Multipart upload — alternative to `aliasesFile` |
-| `connectionName` | `String` | No | The name of the connection to use |
-| `targetFile` | `String` | No | Target file to output the notebook |
-| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
-| `targetFileUpload` | file field | No | Multipart upload — alternative to `targetFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
+| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
 
 **curl (JSON):**
 
 ```bash
-curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
+curl -X POST http://localhost:4000/rest/get-dso-count \
   -H "Content-Type: application/json" \
   -d '{
-      "namespaceFileContent": "--- # inline YAML/file content",
-      "modelFileContent": "--- # inline YAML/file content",
       "connectionFileContent": "--- # inline YAML/file content",
-      "aliasesFileContent": "--- # inline YAML/file content"
+      "connectionName": "value"
   }'
 ```
 
 ```bash
 # With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
-  -F "namespaceFileUpload=@/path/to/file" \
-  -F "modelFileUpload=@/path/to/file"
+curl -X POST http://localhost:4000/rest/get-dso-count \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "connectionName=value"
 ```
 
 ---
+
+#### Other
 
 ### `echo-connection-metadata`
 
@@ -1822,43 +1861,6 @@ curl -X POST http://localhost:4000/rest/generate-sml-docs \
 curl -X POST http://localhost:4000/rest/generate-sml-docs \
   -F "outputFileUpload=@/path/to/file" \
   -F "smlDir=value"
-```
-
----
-
-### `get-dso-count`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Get the DSO count from models
-
-**Endpoint:** `POST /rest/get-dso-count`  |  **GraphQL:** `getDsoCount`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `connectionFile` | `String` | No | File that defines all the connections |
-| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
-| `connectionName` | `String` | Yes | The name of the connection in the connection file |
-| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
-| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/get-dso-count \
-  -H "Content-Type: application/json" \
-  -d '{
-      "connectionFileContent": "--- # inline YAML/file content",
-      "connectionName": "value"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/get-dso-count \
-  -F "connectionFileUpload=@/path/to/file" \
-  -F "connectionName=value"
 ```
 
 ---

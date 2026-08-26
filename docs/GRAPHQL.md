@@ -34,6 +34,7 @@
     - [`generateTableauFromNamespace`](#generatetableaufromnamespace)
     - [`generateExcelFromNamespace`](#generateexcelfromnamespace)
     - [`generatePowerbiFromNamespace`](#generatepowerbifromnamespace)
+    - [`generateNotebookFromConnection`](#generatenotebookfromconnection)
   - Testing / Query Processing
     - [`generateQueriesFromSml`](#generatequeriesfromsml)
     - [`generateQueriesFromModel`](#generatequeriesfrommodel)
@@ -52,7 +53,7 @@
     - [`atscaleListDeployments`](#atscalelistdeployments)
     - [`atscaleDeployCatalog`](#atscaledeploycatalog)
     - [`atscaleListModelErrors`](#atscalelistmodelerrors)
-    - [`getDsoCount`](#getDsoCount)
+    - [`getDsoCount`](#getdsocount)
   - Web Services
 - [Full SDL](#full-sdl)
 
@@ -1180,6 +1181,66 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateNotebookFromConnection`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Generate a Notebook from a namespace (stub)
+
+**CLI name:** `generate-notebook-from-connection`  |  **REST:** `POST /rest/generate-notebook-from-connection`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `namespaceFile` | `String` | No | The file where the namespace is contained |
+| `namespaceFileUpload` | `Upload` | No | Multipart upload — alternative to `namespaceFile` |
+| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
+| `modelFile` | `String` | No | The file where the models are defined |
+| `modelFileUpload` | `Upload` | No | Multipart upload — alternative to `modelFile` |
+| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
+| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
+| `aliasesFileUpload` | `Upload` | No | Multipart upload — alternative to `aliasesFile` |
+| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
+| `connectionName` | `String` | No | The name of the connection to use |
+| `targetFile` | `String` | No | Target file to output the notebook |
+| `targetFileUpload` | `Upload` | No | Multipart upload — alternative to `targetFile` |
+| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateNotebookFromConnection(input: {
+    namespaceFileContent: "--- # file content"
+    modelFileContent: "--- # file content"
+    connectionFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateNotebookFromConnection(input:{namespaceFileContent: \"--- # file content\", modelFileContent: \"--- # file content\", connectionFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateNotebookFromConnection(input:{namespaceFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 #### Testing / Query Processing
 
 ### `generateQueriesFromSml`
@@ -2065,43 +2126,30 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
-#### Other
-
-### `generateNotebookFromConnection`
+### `getDsoCount`
 
 [↑ Table of Contents](#table-of-contents)
 
-> Generate a Notebook from a namespace (stub)
+> Get the DSO count from models
 
-**CLI name:** `generate-notebook-from-connection`  |  **REST:** `POST /rest/generate-notebook-from-connection`
+**CLI name:** `get-dso-count`  |  **REST:** `POST /rest/get-dso-count`
 
 | Input field | GraphQL type | Required | Description |
 |-------------|-------------|----------|-------------|
-| `namespaceFile` | `String` | No | The file where the namespace is contained |
-| `namespaceFileUpload` | `Upload` | No | Multipart upload — alternative to `namespaceFile` |
-| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
-| `modelFile` | `String` | No | The file where the models are defined |
-| `modelFileUpload` | `Upload` | No | Multipart upload — alternative to `modelFile` |
-| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
-| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFile` | `String` | No | File that defines all the connections |
 | `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
-| `aliasesFileUpload` | `Upload` | No | Multipart upload — alternative to `aliasesFile` |
-| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
-| `connectionName` | `String` | No | The name of the connection to use |
-| `targetFile` | `String` | No | Target file to output the notebook |
-| `targetFileUpload` | `Upload` | No | Multipart upload — alternative to `targetFile` |
-| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
+| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
 
 **GraphQL:**
 
 ```graphql
 mutation {
-  generateNotebookFromConnection(input: {
-    namespaceFileContent: "--- # file content"
-    modelFileContent: "--- # file content"
+  getDsoCount(input: {
     connectionFileContent: "--- # file content"
+    connectionName: "value"
   }) {
     success output error
     file { filename content mimeType }
@@ -2114,18 +2162,20 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateNotebookFromConnection(input:{namespaceFileContent: \"--- # file content\", modelFileContent: \"--- # file content\", connectionFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{getDsoCount(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateNotebookFromConnection(input:{namespaceFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'operations={"query":"mutation($f:Upload!){getDsoCount(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
 
 ---
+
+#### Other
 
 ### `echoConnectionMetadata`
 
@@ -2263,55 +2313,6 @@ curl -X POST http://localhost:4000/graphql \
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
   -F 'operations={"query":"mutation($f:Upload!){generateSmlDocs(input:{outputFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `getDsoCount`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Get the DSO count from models
-
-**CLI name:** `get-dso-count`  |  **REST:** `POST /rest/get-dso-count`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `connectionFile` | `String` | No | File that defines all the connections |
-| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
-| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `connectionName` | `String` | Yes | The name of the connection in the connection file |
-| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
-| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  getDsoCount(input: {
-    connectionFileContent: "--- # file content"
-    connectionName: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{getDsoCount(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){getDsoCount(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
