@@ -495,7 +495,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     let proxyConfig: any = {};
     if (connection.proxy && connection.proxy.host) {
       proxyConfig.host = connection.proxy.host;
-      if (connection.proxy.password) {
+      if (connection.proxy.port) {
         proxyConfig.port = connection.proxy.port;
       }
       else {
