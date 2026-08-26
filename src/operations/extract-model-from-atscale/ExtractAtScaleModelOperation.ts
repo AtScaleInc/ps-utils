@@ -7,6 +7,8 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import axios from 'axios';
+import https from 'https';
+import fs from "fs";
 import { Parser } from 'xml2js';
 import { stringify } from "yaml";
 
@@ -80,12 +82,16 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     organizationId: string,
     username: string,
     password: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<any> {
     try {
       const config: Record<string, any> = {}
       if (Object.keys(proxyConfig).length != 0) {
         config.proxy = proxyConfig
+      }
+      if (Object.keys(certConfig).length != 0) {
+        config.httpsAgent = new https.Agent(certConfig);
       }
       if (installer) {
         const url = `${atscaleUrl}:10500/${organizationId}/auth`;
@@ -125,7 +131,8 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<any[]> {
     this.logger.verbose("XMLA Request Data: " + atscaleUrl);
 
@@ -158,6 +165,9 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
     }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
+    }
     config.headers = {
       'Content-Type': 'text/xml',
       'Authorization': `Bearer ${token}`
@@ -189,10 +199,11 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<any[]> {
     const statement = "SELECT MEASURE_NAME, DATA_TYPE, MEASURE_CAPTION, MEASURE_AGGREGATOR, MEASURE_DISPLAY_FOLDER, DEFAULT_FORMAT_STRING, DESCRIPTION FROM $system.MDSCHEMA_MEASURES WHERE [CUBE_NAME] = @CubeName";
-    const rows = await this.getDmvData(token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig);
+    const rows = await this.getDmvData(token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig, certConfig);
 
     this.logger.verbose("Metric Rows: " + rows);
     return rows ? rows.map((row) => {
@@ -224,14 +235,15 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     organizationId: string,
     catalogName: string,
     modelName: string,
-    proxyConfig: Record<string, any>
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<Record<string, any>> {
     const levelStatement = "SELECT LEVEL_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NUMBER, LEVEL_CAPTION, DESCRIPTION, LEVEL_DBTYPE FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
     const hierStatement = "SELECT HIERARCHY_UNIQUE_NAME, HIERARCHY_DISPLAY_FOLDER FROM $system.MDSCHEMA_HIERARCHIES WHERE [CUBE_NAME] = @CubeName";
 
     const [levelRows, hierRows] = await Promise.all([
-      this.getDmvData(token, installer, atscaleUrl, levelStatement, organizationId, catalogName, modelName, proxyConfig),
-      this.getDmvData(token, installer, atscaleUrl, hierStatement, organizationId, catalogName, modelName, proxyConfig)
+      this.getDmvData(token, installer, atscaleUrl, levelStatement, organizationId, catalogName, modelName, proxyConfig, certConfig),
+      this.getDmvData(token, installer, atscaleUrl, hierStatement, organizationId, catalogName, modelName, proxyConfig, certConfig)
     ]);
 
     const folderLookup: Record<string, string> = {};
@@ -336,7 +348,7 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     let proxyConfig: any = {};
     if (connection.proxy && connection.proxy.host) {
       proxyConfig.host = connection.proxy.host;
-      if (connection.proxy.password) {
+      if (connection.proxy.port) {
         proxyConfig.port = connection.proxy.port;
       }
       else {
@@ -359,6 +371,22 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       proxyConfig = false
     }
 
+    let certConfig: Record<string, any> = {};
+    if (connection.cert) {
+      if (connection.cert.ca) {
+        certConfig.ca = fs.readFileSync(connection.cert.ca);
+      }
+      if (connection.cert.cert) {
+        certConfig.cert = fs.readFileSync(connection.cert.cert);
+      }
+      if (connection.cert.key) {
+        certConfig.key = fs.readFileSync(connection.cert.key);
+      }
+      if (connection.cert.rejectUnauthorized === false) {
+        certConfig.rejectUnauthorized = false;
+      }
+    }
+
     const user = (connectionFile.users ?? {})[connection.mdx.user] ?? {};
     this.logger.verbose("User detail: " + user.username);
     // Auth is against the AtScale base host, not the XMLA endpoint (mdx.url
@@ -366,7 +394,7 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     const authUrl = connection.atscale?.url ?? connection.mdx.url;
     const token = await this.getToken(connection.installer,
       authUrl,
-      connection.mdx.organization_id, user.username, user.password, proxyConfig);
+      connection.mdx.organization_id, user.username, user.password, proxyConfig, certConfig);
 
 
     this.logger.info("Fetching Metrics...");
@@ -383,7 +411,8 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       connection.mdx.organization_id,
       connection.mdx.catalog_name,
       _params.model,
-      proxyConfig);
+      proxyConfig,
+      certConfig);
 
     const output = { metrics, attributes };
 

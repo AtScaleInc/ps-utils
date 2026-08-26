@@ -26,6 +26,7 @@ import { SqlService, type ConnectionConfig, type SqlConnection } from "../../ser
 import { parsePropertiesFile, parseJdbcPostgresUrl } from "../extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import type { QueryRecord } from "../extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import axios from "axios";
+import https from 'https';
 import { createHash, randomBytes, randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -540,7 +541,8 @@ async function getBearerToken(
   username: string,
   password: string,
   isContainer: boolean,
-  proxyConfig: Record<string, any>
+  proxyConfig: Record<string, any>,
+  certConfig: Record<string, any>
 ): Promise<string> {
   if (isContainer) {
     // Container mode: token is embedded in the XMLA URL, no auth call needed.
@@ -553,6 +555,9 @@ async function getBearerToken(
     }
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
     }
     const response = await axios.get(authUrl, config);
     return String(response.data).trim();
@@ -601,7 +606,8 @@ async function executeXmlaQuery(
   query: QueryRecord,
   cfg: XmlaConfig,
   token: string,
-  proxyConfig: Record<string, any>
+  proxyConfig: Record<string, any>,
+  certConfig: Record<string, any>
 ): Promise<{ status: "SUCCEEDED" | "FAILED"; durationMs: number; rowCount: number; checksum: string; error: string }> {
   const envelope = buildSoapEnvelope(query.originalText, cfg);
   const headers: Record<string, string> = {
@@ -621,6 +627,9 @@ async function executeXmlaQuery(
     }
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
     }
     const response = await axios.post(cfg.url, envelope, config);
 
@@ -953,7 +962,7 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
     let proxyConfig: any = {};
     if (yamlConfig.proxy && yamlConfig.proxy.host) {
       proxyConfig.host = yamlConfig.proxy.host;
-      if (yamlConfig.proxy.password) {
+      if (yamlConfig.proxy.port) {
         proxyConfig.port = yamlConfig.proxy.port;
       }
       else {
@@ -974,6 +983,22 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
     }
     else if (yamlConfig.proxy === false) {
       proxyConfig = false
+    }
+
+    let certConfig: Record<string, any> = {};
+    if (yamlConfig.cert) {
+      if (yamlConfig.cert.ca) {
+        certConfig.ca = fs.readFileSync(yamlConfig.cert.ca);
+      }
+      if (yamlConfig.cert.cert) {
+        certConfig.cert = fs.readFileSync(yamlConfig.cert.cert);
+      }
+      if (yamlConfig.cert.key) {
+        certConfig.key = fs.readFileSync(yamlConfig.cert.key);
+      }
+      if (yamlConfig.cert.rejectUnauthorized === false) {
+        certConfig.rejectUnauthorized = false;
+      }
     }
 
     // ── Determine task list ──────────────────────────────────────────────────
@@ -1093,7 +1118,7 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
 
           // All XMLA workers share the same stateless HTTP execute function.
           executePerWorker = Array.from({ length: concurrency }, () =>
-            (q: QueryRecord) => executeXmlaQuery(q, cfg, token, proxyConfig),
+            (q: QueryRecord) => executeXmlaQuery(q, cfg, token, httpConfig),
           );
         } else {
           const { connectionConfig, connectionName } = isProperties

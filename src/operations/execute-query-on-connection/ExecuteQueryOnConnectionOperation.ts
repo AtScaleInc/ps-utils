@@ -38,6 +38,7 @@ import {
   type QueryRecord,
 } from "../extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import axios from "axios";
+import https from 'https';
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -253,7 +254,8 @@ async function getBearerToken(
   authUrl: string,
   username: string,
   password: string,
-  proxyConfig: Record<string, any>
+  proxyConfig: Record<string, any>,
+  certConfig: Record<string, any>
 ): Promise<string> {
   try {
     const config: Record<string, any> = {
@@ -261,6 +263,9 @@ async function getBearerToken(
     }
     if (Object.keys(proxyConfig).length != 0) {
       config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
     }
     const response = await axios.get(authUrl, config);
     return String(response.data).trim();
@@ -481,7 +486,7 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
     let proxyConfig: any = {};
     if (yamlConfig.proxy && yamlConfig.proxy.host) {
       proxyConfig.host = yamlConfig.proxy.host;
-      if (yamlConfig.proxy.password) {
+      if (yamlConfig.proxy.port) {
         proxyConfig.port = yamlConfig.proxy.port;
       }
       else {
@@ -503,6 +508,23 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
     else if (yamlConfig.proxy === false) {
       proxyConfig = false
     }
+
+    let certConfig: Record<string, any> = {};
+    if (yamlConfig.cert) {
+      if (yamlConfig.cert.ca) {
+        certConfig.ca = fs.readFileSync(yamlConfig.cert.ca);
+      }
+      if (yamlConfig.cert.cert) {
+        certConfig.cert = fs.readFileSync(yamlConfig.cert.cert);
+      }
+      if (yamlConfig.cert.key) {
+        certConfig.key = fs.readFileSync(yamlConfig.cert.key);
+      }
+      if (yamlConfig.cert.rejectUnauthorized === false) {
+        certConfig.rejectUnauthorized = false;
+      }
+    }
+
     // ── Select matching queries ───────────────────────────────────────────────
     const allQueries = loadQueries(params["query-file"]);
     const matched = allQueries.filter((q) => wildcardMatch(pattern, q.queryName));
@@ -543,7 +565,7 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
       // Authenticate once and reuse the token for all queries in the batch.
       const token = cfg.isContainer
         ? ""
-        : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, proxyConfig);
+        : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, proxyConfig, certConfig);
 
       const headers: Record<string, string> = {
         "Content-Type": "text/xml; charset=UTF-8",
@@ -564,7 +586,9 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
         if (Object.keys(proxyConfig).length != 0) {
           config.proxy = proxyConfig
         }
-
+        if (Object.keys(certConfig).length != 0) {
+          config.httpsAgent = new https.Agent(certConfig);
+        }
         const start = Date.now();
         const response = await axios.post(cfg.url, envelope, config);
         const durationMs = Date.now() - start;

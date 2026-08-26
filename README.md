@@ -2090,6 +2090,17 @@ connections:
       user: <user_key>          # key from users block, or use username/password inline
       # username: admin         # alternative: inline credentials
       # password: secret
+    proxy:
+      host: proxy.com
+      port: 8080
+      protocol: https
+      username: admin
+      password: secret
+    cert:
+      ca: /path/to/cacerts.pem
+      cert: /path/to/client.crt
+      key: /path/to/client.key
+      rejectUnauthorized: false
 ```
 
 ---
