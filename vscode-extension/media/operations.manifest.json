@@ -1127,7 +1127,7 @@
         },
         {
           "name": "schema",
-          "description": "Database schema to introspect",
+          "description": "Database schema(s) to introspect. Comma-separated for multiple (e.g. \"DIM, SYSTEM\") when fact and dimension tables live in different schemas.",
           "type": "string",
           "role": "scalar",
           "required": true,
