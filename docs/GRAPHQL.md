@@ -52,7 +52,6 @@
     - [`atscaleListDeployments`](#atscalelistdeployments)
     - [`atscaleDeployCatalog`](#atscaledeploycatalog)
     - [`atscaleListModelErrors`](#atscalelistmodelerrors)
-    - [`getDsoCount`](#getDsoCount)
   - Web Services
 - [Full SDL](#full-sdl)
 
@@ -313,7 +312,7 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionName` | `String` | Yes | Name of the connection entry in the connections.yaml file |
-| `schema` | `String` | Yes | Database schema to introspect |
+| `schema` | `String` | Yes | Database schema(s) to introspect. Comma-separated for multiple (e.g. "DIM, SYSTEM") when fact and dimension tables live in different schemas. |
 | `tables` | `String` | No | Comma-separated list of table names or wildcard patterns to include (e.g. "Dim*,FactSales"). Omit to extract all tables. |
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `caseInsensitive` | `Boolean` | No | Match table names case-insensitively. Default is case-sensitive matching. |
@@ -2781,7 +2780,7 @@ input ExtractDdlFromConnectionInput {
   connectionFileContent: String
   """Name of the connection entry in the connections.yaml file"""
   connectionName: String!
-  """Database schema to introspect"""
+  """Database schema(s) to introspect. Comma-separated for multiple (e.g. "DIM, SYSTEM") when fact and dimension tables live in different schemas."""
   schema: String!
   """Comma-separated list of table names or wildcard patterns to include (e.g. "Dim*,FactSales"). Omit to extract all tables."""
   tables: String
