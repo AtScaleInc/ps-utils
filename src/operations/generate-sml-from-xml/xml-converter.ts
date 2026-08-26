@@ -622,7 +622,7 @@ export async function convertXmlToSml(
               continue;
             }
 
-            const attrOut: AggregateDef["attributes"][number] = { name: kaDef.name, dimension: targetDimName };
+            const attrOut: AggregateDef["attributes"][number] = { name: truncateUniqueName(kaDef.name), dimension: targetDimName };
 
             const refPathEl = first(arr((attrRef as Record<string, unknown>)["ref-path"])) as
               | Record<string, unknown>
@@ -1813,7 +1813,7 @@ function buildDimensionYaml(
           const saDataset = `${kaAuthEntry.datasetName}.dataset`;
           const saNameCol = resolvedCol ?? saKeyColumns[0];
           secondaryAttrs.push({
-            uniqueName: kaDef.name,
+            uniqueName: truncateUniqueName(kaDef.name),
             label: kaDef.caption ?? kaDef.name,
             dataset: saDataset,
             keyColumns: saKeyColumns,
