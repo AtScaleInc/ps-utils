@@ -1678,6 +1678,7 @@ interface LevelAttrDef {
   isUniqueKey?: boolean;
   folder?: string;
   description?: string;
+  allowedCalcsForDma?: string[];
 }
 
 function buildDimensionYaml(
@@ -1864,6 +1865,7 @@ function buildDimensionYaml(
           isUniqueKey: isUniqueKey || undefined,
           folder: def.folder,
           description: def.description,
+          allowedCalcsForDma: def.allowedCalcTypes,
         });
       }
 
@@ -1956,6 +1958,7 @@ function buildDimensionYaml(
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
       if (la.isHiddenFromUi) laObj.is_hidden = true;
+      if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
     });
   }
