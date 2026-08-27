@@ -1919,7 +1919,7 @@ function buildDimensionYaml(
       if (h.defaultMember) hierObj.default_member = h.defaultMember;
       hierObj.levels = h.levels.map((l) => {
         const lObj: Record<string, unknown> = { unique_name: l.uniqueName };
-        if (l.isHidden) lObj.is_hidden_from_ui = true;
+        if (l.isHidden) lObj.is_hidden = true;
         if (l.secondaryAttributes?.length) {
           lObj.secondary_attributes = l.secondaryAttributes.map((sa) => {
             const saObj: Record<string, unknown> = {
@@ -1957,7 +1957,7 @@ function buildDimensionYaml(
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
-      if (la.isHiddenFromUi) laObj.is_hidden_from_ui = true;
+      if (la.isHiddenFromUi) laObj.is_hidden = true;
       if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
     });
@@ -2000,7 +2000,7 @@ function buildMetricYaml(
   if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
-  if (!visible) obj.is_hidden_from_ui = true;
+  if (!visible) obj.is_hidden = true;
   return toYaml(obj);
 }
 
@@ -2022,7 +2022,7 @@ function buildCalcMetricYaml(
   if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
-  if (!visible) obj.is_hidden_from_ui = true;
+  if (!visible) obj.is_hidden = true;
   return toYaml(obj);
 }
 
@@ -2048,7 +2048,7 @@ function buildCalcMemberYaml(
   if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
-  if (!visible) obj.is_hidden_from_ui = true;
+  if (!visible) obj.is_hidden = true;
   return toYaml(obj);
 }
 
@@ -2312,7 +2312,9 @@ function buildModelYaml(
     label: modelName,
   };
 
-  if (isHidden) obj.is_hidden_from_ui = true;
+  // Models use visible (default true), not is_hidden — a different property
+  // from every other SML object type that carries a hidden flag.
+  if (isHidden) obj.visible = false;
   if (includeDefaultDrillthrough) obj.include_default_drillthrough = true;
 
   obj.relationships = relationships.map((r) => {
