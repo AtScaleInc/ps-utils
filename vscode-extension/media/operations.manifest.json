@@ -2573,11 +2573,9 @@
       "description": "Read an SML directory and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness",
       "group": "Testing / Query Processing",
       "contexts": [
-        "file",
         "folder"
       ],
       "targetParam": {
-        "file": "xmla-output-file",
         "folder": "sml-dir"
       },
       "params": [
@@ -2609,7 +2607,7 @@
           "name": "xmla-output-file",
           "description": "Path to write the XMLA (MDX) query JSON file",
           "type": "string",
-          "role": "input-file",
+          "role": "output-file",
           "required": true,
           "default": null
         },
@@ -2617,7 +2615,7 @@
           "name": "sql-output-file",
           "description": "Path to write the SQL query JSON file",
           "type": "string",
-          "role": "input-file",
+          "role": "output-file",
           "required": true,
           "default": null
         }
@@ -2661,7 +2659,7 @@
           "name": "xmla-output-file",
           "description": "Path to write the XMLA (MDX) query JSON file",
           "type": "string",
-          "role": "input-file",
+          "role": "output-file",
           "required": true,
           "default": null
         },
@@ -2669,7 +2667,7 @@
           "name": "sql-output-file",
           "description": "Path to write the SQL query JSON file",
           "type": "string",
-          "role": "input-file",
+          "role": "output-file",
           "required": true,
           "default": null
         }

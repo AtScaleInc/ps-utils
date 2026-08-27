@@ -189,7 +189,6 @@ curl -X POST http://localhost:4000/rest/extract-model-from-atscale \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/extract-model-from-atscale \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputModelFileUpload=@/path/to/file" \
   -F "model=value" \
   -F "connectionName=value"
 ```
@@ -218,13 +217,6 @@ curl -X POST http://localhost:4000/rest/extract-model-from-sml \
   -d '{
       "smlDir": "value"
   }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/extract-model-from-sml \
-  -F "outputModelFileUpload=@/path/to/file" \
-  -F "smlDir=value"
 ```
 
 ---
@@ -309,7 +301,6 @@ curl -X POST http://localhost:4000/rest/extract-ddl-from-connection \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/extract-ddl-from-connection \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file" \
   -F "connectionName=value" \
   -F "schema=value"
 ```
@@ -562,7 +553,6 @@ curl -X POST http://localhost:4000/rest/generate-ddl-from-atscale \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-ddl-from-atscale \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file" \
   -F "atscaleConnectionName=value" \
   -F "dataSourceName=value" \
   -F "database=value"
@@ -653,7 +643,6 @@ curl -X POST http://localhost:4000/rest/extract-data-shape-from-connection \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/extract-data-shape-from-connection \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file" \
   -F "connectionName=value" \
   -F "smlPath=value"
 ```
@@ -689,8 +678,7 @@ curl -X POST http://localhost:4000/rest/generate-ddl-from-data-shape \
 ```bash
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-ddl-from-data-shape \
-  -F "inputFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file"
+  -F "inputFileUpload=@/path/to/file"
 ```
 
 ---
@@ -815,8 +803,7 @@ curl -X POST http://localhost:4000/rest/generate-namespace-from-model \
 ```bash
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-namespace-from-model \
-  -F "modelFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file"
+  -F "modelFileUpload=@/path/to/file"
 ```
 
 ---
@@ -1031,14 +1018,6 @@ curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
-| `xmlaOutputFile` | `String` | Yes\* | Path to write the XMLA (MDX) query JSON file |
-| `xmlaOutputFileContent` | `String` | No | Raw string content — alternative to `xmlaOutputFile` |
-| `xmlaOutputFileUpload` | file field | No | Multipart upload — alternative to `xmlaOutputFile` |
-| `sqlOutputFile` | `String` | Yes\* | Path to write the SQL query JSON file |
-| `sqlOutputFileContent` | `String` | No | Raw string content — alternative to `sqlOutputFile` |
-| `sqlOutputFileUpload` | file field | No | Multipart upload — alternative to `sqlOutputFile` |
-
-\* Required when neither the `Content` nor `Upload` variant is provided.
 
 **curl (JSON):**
 
@@ -1046,18 +1025,8 @@ curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
 curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
   -H "Content-Type: application/json" \
   -d '{
-      "smlDir": "value",
-      "xmlaOutputFileContent": "--- # inline YAML/file content",
-      "sqlOutputFileContent": "--- # inline YAML/file content"
+      "smlDir": "value"
   }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
-  -F "xmlaOutputFileUpload=@/path/to/file" \
-  -F "sqlOutputFileUpload=@/path/to/file" \
-  -F "smlDir=value"
 ```
 
 ---
@@ -1077,12 +1046,6 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
 | `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
-| `xmlaOutputFile` | `String` | Yes\* | Path to write the XMLA (MDX) query JSON file |
-| `xmlaOutputFileContent` | `String` | No | Raw string content — alternative to `xmlaOutputFile` |
-| `xmlaOutputFileUpload` | file field | No | Multipart upload — alternative to `xmlaOutputFile` |
-| `sqlOutputFile` | `String` | Yes\* | Path to write the SQL query JSON file |
-| `sqlOutputFileContent` | `String` | No | Raw string content — alternative to `sqlOutputFile` |
-| `sqlOutputFileUpload` | file field | No | Multipart upload — alternative to `sqlOutputFile` |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
 
@@ -1092,17 +1055,14 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
 curl -X POST http://localhost:4000/rest/generate-queries-from-model \
   -H "Content-Type: application/json" \
   -d '{
-      "modelFileContent": "--- # inline YAML/file content",
-      "xmlaOutputFileContent": "--- # inline YAML/file content",
-      "sqlOutputFileContent": "--- # inline YAML/file content"
+      "modelFileContent": "--- # inline YAML/file content"
   }'
 ```
 
 ```bash
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-queries-from-model \
-  -F "modelFileUpload=@/path/to/file" \
-  -F "xmlaOutputFileUpload=@/path/to/file"
+  -F "modelFileUpload=@/path/to/file"
 ```
 
 ---
@@ -1854,13 +1814,6 @@ curl -X POST http://localhost:4000/rest/generate-sml-docs \
   -d '{
       "smlDir": "value"
   }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-sml-docs \
-  -F "outputFileUpload=@/path/to/file" \
-  -F "smlDir=value"
 ```
 
 ---
