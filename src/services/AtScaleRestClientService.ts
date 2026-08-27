@@ -48,6 +48,7 @@
  *   });
  */
 import https from "https";
+import { readFileSync } from "node:fs";
 import axios from "axios";
 import { ServiceProvider } from "./ServiceProvider.js";
 import { RestClientService, KeycloakEnvironment, RestRequest, type RestAuth } from "./RestClientService.js";
@@ -189,8 +190,11 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
       return this.exchangeApiToken();
     }
     // Acquire the cookie automatically via the Keycloak authorization-code flow.
-    const cookie = await this.acquireSessionCookie();
-    return { type: "cookie", name: "auth_session", value: cookie };
+    // Returns a full Cookie header: 2026.5.x sets `auth_session`, while
+    // 2026.7.x (better-auth) sets `__Secure-better-auth.session_token` and
+    // friends — the server needs the whole jar, so send everything we got.
+    const cookieHeader = await this.acquireSessionCookie();
+    return { type: "cookie-header", value: cookieHeader };
   }
 
   private async exchangeApiToken(): Promise<RestAuth> {
@@ -305,20 +309,24 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
       ? rawLocation
       : `${this.baseUrl}${rawLocation}`;
 
-    // Step 4: GET /signin/callback?code=… → Set-Cookie: auth_session=…
+    // Step 4: GET /signin/callback?code=… → session cookie(s).
+    // 2026.5.x: Set-Cookie: auth_session=…
+    // 2026.7.x: better-auth cookies (__Secure-better-auth.session_token, …)
     const r4 = await req({ url: callbackUrl, headers: { Cookie: cookieHdr() } });
     addCookies(r4.headers);
 
-    const sessionValue = cookies["auth_session"];
-    if (!sessionValue) {
+    const sessionCookieName = ["auth_session", "__Secure-better-auth.session_token"]
+      .find((n) => cookies[n]);
+    if (!sessionCookieName) {
       throw new Error(
-        `[REST:Auth] /signin/callback did not set an auth_session cookie ` +
-        `(status ${r4.status}). The Keycloak code exchange may have failed.`,
+        `[REST:Auth] /signin/callback did not set a session cookie ` +
+        `(expected auth_session or __Secure-better-auth.session_token; status ${r4.status}). ` +
+        `The Keycloak code exchange may have failed.`,
       );
     }
 
-    this.logger?.verbose(`[REST:Auth] auth_session cookie acquired`);
-    return sessionValue;
+    this.logger?.verbose(`[REST:Auth] session cookie acquired (${sessionCookieName})`);
+    return cookieHdr();
   }
 }
 
@@ -461,10 +469,12 @@ class CreateDataSourceRequest extends RestRequest<CreateDataSourceArgs, CreateDa
     }
     const sql = { ...(entry.sql ?? entry) };
 
-    // Resolve user key → users block (same pattern as AtScale connections)
-    if (sql.user) {
+    // Resolve user key → users block (same pattern as AtScale connections).
+    // snowctl fragments reference the users block via `snowflake_user`.
+    const userKey = sql.user ?? sql.snowflake_user;
+    if (userKey) {
       const users: Record<string, any> = (config as any).users ?? {};
-      const userEntry = users[sql.user];
+      const userEntry = users[userKey];
       if (userEntry) {
         sql.username ??= userEntry.username;
         sql.password ??= userEntry.password;
@@ -511,18 +521,26 @@ class CreateDataSourceRequest extends RestRequest<CreateDataSourceArgs, CreateDa
   private snowflakeBody(args: CreateDataSourceArgs, sql: Record<string, any>): unknown {
     const roles = args.queryRoles ?? DEFAULT_QUERY_ROLES;
     const password   = sql.password;
-    const privateKey = sql.private_key;
+    // key-pair auth: accept inline PEM (private_key) or a path
+    // (privateKeyPath, as emitted into `users:` blocks by snowctl fragments)
+    const keyPath    = sql.privateKeyPath ?? sql.private_key_path;
+    const privateKey = sql.private_key ?? (keyPath ? readFileSync(keyPath, "utf8") : undefined);
     return {
       name:            args.name,
       connectionId:    args.connectionId,
       database:        sql.database,
       aggregateSchema: args.aggregateSchema,
       access:          args.access,
+      // required by the 2026.7.x data-warehouse API (validation 400s without them)
+      isImpersonationEnabled: false,
+      isCanaryAlwaysEnabled:  false,
+      isPartialAggHitEnabled: false,
       connections: [{
         name:        args.connectionName,
         queryRoles:  roles,
         hosts:       sql.account,
         username:    sql.username ?? sql.user,
+        isKerberosClientEnabled: false,
         extraProperties: {
           warehouse:  sql.warehouse,
           accessType: sql.access_type,
@@ -531,7 +549,7 @@ class CreateDataSourceRequest extends RestRequest<CreateDataSourceArgs, CreateDa
         secretProperties: (password || privateKey) ? {
           password:   password,
           privateKey: privateKey,
-          passphrase: sql.private_key_passphrase,
+          passphrase: sql.private_key_passphrase ?? sql.privateKeyPassword,
         } : null,
         extraJdbcFlags: sql.extra_jdbc_flags ?? "",
       }],
