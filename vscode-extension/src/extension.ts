@@ -9,6 +9,10 @@
  * association for SML YAML files, giving completion, hover documentation and
  * validation. The SML-aware syntax highlighting alongside it is contributed
  * declaratively via package.json's `grammars`.
+ *
+ * And the SML directory monitor (see sml-monitor.ts), which re-runs the
+ * `atscale-list-model-errors` operation on every change to a watched directory —
+ * the cross-file and engine-level checks that a per-file schema cannot express.
  */
 import * as vscode from "vscode";
 import { loadManifest } from "./manifest";
@@ -16,11 +20,13 @@ import { openParamDialog } from "./panel";
 import { openSettingsPanel } from "./settings";
 import { registerTerminalCleanup } from "./runner";
 import { registerSmlSchemas } from "./sml-schema";
+import { registerSmlMonitor } from "./sml-monitor";
 
 export function activate(context: vscode.ExtensionContext): void {
   const manifest = loadManifest(context.extensionPath);
   registerTerminalCleanup(context);
   registerSmlSchemas(context);
+  registerSmlMonitor(context);
 
   for (const opName of Object.keys(manifest.operations)) {
     context.subscriptions.push(

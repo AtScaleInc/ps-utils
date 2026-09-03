@@ -63,8 +63,30 @@ export abstract class RestEnvironment {
    */
   insecure: boolean = false;
 
+  /**
+   * Per-request timeout in milliseconds; `undefined` waits indefinitely.
+   *
+   * It applies to **authentication as well as** the request itself. An
+   * unreachable host stalls on the token exchange long before it reaches the
+   * endpoint being called, so a timeout that covered only `dispatch` would not
+   * fire at all in the case it exists for.
+   *
+   * Left undefined by default because deploys and builds legitimately run for
+   * minutes; operations that want a bound set it explicitly.
+   */
+  timeoutMs?: number;
+
   /** Injected by RestClientService before each call. Used for verbose logging. */
   logger?: Logger;
+
+  /**
+   * Axios options every request through this environment should carry.
+   * Kept here so the auth paths, which build their own axios calls rather than
+   * going through `RestClientService`, cannot silently miss them.
+   */
+  protected requestDefaults(): { timeout?: number } {
+    return this.timeoutMs === undefined ? {} : { timeout: this.timeoutMs };
+  }
 
   private _cachedAuth: RestAuth | undefined;
 
@@ -148,7 +170,7 @@ export abstract class KeycloakEnvironment extends RestEnvironment {
       ` username=${this.username}`,
     );
     const response = await axios.post<{ access_token: string }>(
-      this.authUrl, params, { ...agentConfig, validateStatus: () => true },
+      this.authUrl, params, { ...agentConfig, ...this.requestDefaults(), validateStatus: () => true },
     );
     this.logger?.verbose(`[REST:Auth] ← ${response.status}`);
     if (response.status < 200 || response.status >= 300) {
@@ -307,6 +329,7 @@ export class RestClientService extends ServiceProvider {
       httpsAgent: environment.insecure
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined,
+      ...(environment.timeoutMs === undefined ? {} : { timeout: environment.timeoutMs }),
     };
 
     this.logger?.verbose(`[REST] → ${request.method} ${url}`);
