@@ -495,18 +495,26 @@ export async function convertXmlToSml(
           }
 
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
+          // Preserve the source XML's own casing (matching how dimensions/levels already
+          // behave, and the reference converter) — BI tools like Power BI/Excel/Tableau
+          // bind report fields to the exact unique_name string, so force-lowercasing here
+          // silently breaks every existing report built against a prior deployment.
+          // Duplicate detection below still normalizes to lowercase, so a same-name
+          // collision that only differs by case is still caught rather than producing two
+          // SML objects that a case-insensitive target might treat as duplicates anyway.
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          const dedupKey = uniqueName.toLowerCase();
           const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
-          if (seenMetricNames.has(uniqueName)) {
+          if (seenMetricNames.has(dedupKey)) {
             // The source XML can define the same measure name twice, bound to different
             // columns — e.g. a stale duplicate whose column was never actually declared on
             // its dataset. Silently keeping "whichever came first" can pin the measure to a
             // column SML can't type (falls back to string), breaking any calc that does
             // arithmetic with it. Prefer whichever duplicate resolves to a real declared
             // physical column, matching the reference converter's own dedup behavior.
-            if (isKnownColumn && !metricHasKnownColumn.get(uniqueName)) {
+            if (isKnownColumn && !metricHasKnownColumn.get(dedupKey)) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
-              metricHasKnownColumn.set(uniqueName, true);
+              metricHasKnownColumn.set(dedupKey, true);
               const fname = safeFilename(uniqueName);
               output.set(
                 `metrics/${fname}.yml`,
@@ -523,8 +531,8 @@ export async function convertXmlToSml(
             }
             continue;
           }
-          seenMetricNames.add(uniqueName);
-          metricHasKnownColumn.set(uniqueName, isKnownColumn);
+          seenMetricNames.add(dedupKey);
+          metricHasKnownColumn.set(dedupKey, isKnownColumn);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
@@ -537,8 +545,8 @@ export async function convertXmlToSml(
         } else if (exprEl) {
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = truncateUniqueName(safeName(attrNameRaw).toLowerCase());
-          if (seenMetricNames.has(uniqueName)) {
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (seenMetricNames.has(uniqueName.toLowerCase())) {
             rptOmissions.push({
               category: "Metric",
               item: attrNameRaw,
@@ -547,7 +555,7 @@ export async function convertXmlToSml(
             });
             continue;
           }
-          seenMetricNames.add(uniqueName);
+          seenMetricNames.add(uniqueName.toLowerCase());
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
@@ -568,8 +576,8 @@ export async function convertXmlToSml(
         const def = refId ? calcMemberDefs.get(refId) : undefined;
         if (!def) continue;
         const label = def.caption ?? def.name;
-        const uniqueName = truncateUniqueName(safeName(def.name).toLowerCase());
-        if (seenMetricNames.has(uniqueName)) {
+        const uniqueName = truncateUniqueName(safeName(def.name));
+        if (seenMetricNames.has(uniqueName.toLowerCase())) {
           rptOmissions.push({
             category: "Calculated Member",
             item: def.name,
@@ -578,7 +586,7 @@ export async function convertXmlToSml(
           });
           continue;
         }
-        seenMetricNames.add(uniqueName);
+        seenMetricNames.add(uniqueName.toLowerCase());
         attrIdToMetricUniqueName.set(refId!, uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
@@ -1154,7 +1162,7 @@ function buildMeasureRefMap(
 ): Map<string, string> {
   const map = new Map<string, string>();
   for (const def of calcMemberDefs.values()) {
-    map.set(def.name, truncateUniqueName(safeName(def.name).toLowerCase()));
+    map.set(def.name, truncateUniqueName(safeName(def.name)));
   }
   for (const cube of cubeEls) {
     for (const attrsSec of arr(cube.attributes)) {
@@ -1173,7 +1181,7 @@ function buildMeasureRefMap(
           arr(typeEl["count-nonnull"]).length > 0;
         const hasExpr = arr((attrEl as Record<string, unknown>).expression).length > 0;
         if (!isMeasure && !hasExpr) continue;
-        map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw).toLowerCase()));
+        map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw)));
       }
     }
   }
