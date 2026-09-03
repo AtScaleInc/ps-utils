@@ -418,6 +418,24 @@ export async function convertXmlToSml(
     // emitted metric's id alongside its transformed unique_name so aggregate parsing (below)
     // can resolve them the same way the reference converter does.
     const attrIdToMetricUniqueName = new Map<string, string>();
+    // Semi-additive measures (<additivity>) reference a dimension level via attribute-ref,
+    // which only resolves to a model relationship's unique_name once Phase 5 has run — so
+    // emission here is provisional and gets overwritten with the resolved semi_additive
+    // block once relationships are known (see the fixup loop after inferRelationships).
+    const pendingSemiAdditiveMetrics: Array<{
+      fname: string;
+      uniqueName: string;
+      label: string;
+      aggregation: string;
+      measureDatasetName: string;
+      column: string;
+      format?: string;
+      folder?: string;
+      visible: boolean;
+      description?: string;
+      position: string;
+      attrRefIds: string[];
+    }> = [];
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -494,6 +512,36 @@ export async function convertXmlToSml(
             continue;
           }
 
+          // Semi-additive measures: <additivity><subspace><aggregation-function>...
+          // </aggregation-function><attribute-ref id="..."/></subspace></additivity> marks
+          // the dimension level(s) that should not be summarized. The attribute-ref only
+          // resolves to a model relationship once Phase 5 (inferRelationships) has run, so
+          // record it here and finalize via pendingSemiAdditiveMetrics below.
+          let semiAdditive: { position: string; attrRefIds: string[] } | undefined;
+          if (measureEl) {
+            const additivityEl = first(arr(measureEl.additivity)) as Record<string, unknown> | undefined;
+            const subspaceEl = additivityEl
+              ? (first(arr(additivityEl.subspace)) as Record<string, unknown> | undefined)
+              : undefined;
+            if (subspaceEl) {
+              const aggFnText = s(first(arr(subspaceEl["aggregation-function"])));
+              const position = aggFnText ? mapAdditivityPosition(aggFnText) : undefined;
+              const attrRefIds = arr(subspaceEl["attribute-ref"])
+                .map((r) => a(r as Record<string, unknown>, "id"))
+                .filter((id): id is string => !!id);
+              if (position && attrRefIds.length > 0) {
+                semiAdditive = { position, attrRefIds };
+              } else {
+                rptOmissions.push({
+                  category: "Metric",
+                  item: attrNameRaw,
+                  reason: `Semi-additive aggregation function "${aggFnText}" has no SML equivalent, or its non-summarized attribute could not be identified — converted as a plain ${aggregation} metric instead.`,
+                  recommendation: "Verify whether this measure needs a manually-added semi_additive block after conversion.",
+                });
+              }
+            }
+          }
+
           const label = caption ?? toTitleCase(attrNameRaw);
           // Preserve the source XML's own casing (matching how dimensions/levels already
           // behave, and the reference converter) — BI tools like Power BI/Excel/Tableau
@@ -520,6 +568,9 @@ export async function convertXmlToSml(
                 `metrics/${fname}.yml`,
                 buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description),
               );
+              if (semiAdditive) {
+                pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, ...semiAdditive });
+              }
               logger.log(`  → metrics/${fname}.yml (replacing an earlier duplicate with an unresolved column)`);
             } else {
               rptOmissions.push({
@@ -539,6 +590,9 @@ export async function convertXmlToSml(
             `metrics/${fname}.yml`,
             buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description),
           );
+          if (semiAdditive) {
+            pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, ...semiAdditive });
+          }
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
@@ -715,6 +769,39 @@ export async function convertXmlToSml(
 
     // Phase 5: Infer relationships
     const { relationships, degenerateDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
+
+    // Resolve semi-additive measures deferred from Phase 4: each attribute-ref names a
+    // dimension level (via attrDef), which is matched against this cube's own relationships
+    // by (fromDataset, toLevel) to find the relationship unique_name semi_additive.relationships
+    // needs. A level with no matching relationship (e.g. a degenerate dimension, which SML
+    // would instead require via semi_additive.degenerate_dimensions) is reported rather than
+    // silently emitted with an empty/wrong relationships list.
+    for (const pm of pendingSemiAdditiveMetrics) {
+      const resolvedRelationshipNames: string[] = [];
+      for (const refId of pm.attrRefIds) {
+        const levelDef = attrDef.get(refId);
+        const rel = levelDef
+          ? relationships.find((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelDef.name)
+          : undefined;
+        if (rel) resolvedRelationshipNames.push(rel.uniqueName);
+      }
+      if (resolvedRelationshipNames.length === 0) {
+        rptOmissions.push({
+          category: "Metric",
+          item: pm.uniqueName,
+          reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship (it may be a degenerate dimension) — converted without a semi_additive block.",
+          recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, using relationships or degenerate_dimensions as appropriate.`,
+        });
+        continue;
+      }
+      output.set(
+        `metrics/${pm.fname}.yml`,
+        buildMetricYaml(pm.uniqueName, pm.label, pm.aggregation, pm.measureDatasetName, pm.column, pm.format, pm.folder, pm.visible, pm.description, {
+          position: pm.position,
+          relationships: resolvedRelationshipNames,
+        }),
+      );
+    }
 
     // The model's flat dimensions: list only holds dimensions with no relationship (they
     // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
@@ -1230,6 +1317,19 @@ function mapAggregation(raw: string): string {
     case "DISTINCT_COUNT_ESTIMATE":
     case "DISTINCTCOUNTESTIMATE":         return "estimated count distinct";
     default:               return "sum";
+  }
+}
+
+/** Map XML <additivity><subspace><aggregation-function> → SML semi_additive.position. Returns
+ *  undefined for XMLA aggregation functions (e.g. ByAccount, AverageOfChildren, None) that have
+ *  no SML equivalent, so the caller can fall back to a plain (fully-additive) metric. */
+function mapAdditivityPosition(raw: string): string | undefined {
+  switch (raw) {
+    case "LastNonEmpty":  return "last";
+    case "FirstNonEmpty": return "first";
+    case "LastChild":     return "last_child";
+    case "FirstChild":    return "first_child";
+    default:              return undefined;
   }
 }
 
@@ -1996,15 +2096,21 @@ function buildMetricYaml(
   folder?: string,
   visible = true,
   description?: string,
+  semiAdditive?: { position: string; relationships: string[] },
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
     object_type: "metric",
     label,
     calculation_method: calculationMethod,
-    dataset: `${factDatasetName}.dataset`,
-    column,
   };
+  // Matches the field order production deployments use: semi_additive sits between
+  // calculation_method and dataset/column.
+  if (semiAdditive) {
+    obj.semi_additive = { position: semiAdditive.position, relationships: semiAdditive.relationships };
+  }
+  obj.dataset = `${factDatasetName}.dataset`;
+  obj.column = column;
   if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
