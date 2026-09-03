@@ -39,7 +39,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { execSync } from "child_process";
 import { Operation } from "../Operation.js";
-import { ParameterSet, StringParameter, BooleanParameter } from "../../Parameters.js";
+import { ParameterSet, StringParameter, BooleanParameter, NumberParameter } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
@@ -95,6 +95,28 @@ class AtScaleListModelErrorsParamsSet extends ParameterSet {
       description  = "Skip TLS certificate verification (overrides the connections file value). Defaults to true.";
       required     = false;
     })(),
+    // ── Check selection ────────────────────────────────────────────────────
+    // `isFlag` so these work bare (`--skip-engine-checks`) as well as with an
+    // explicit value. The VS Code extension's buildCommand emits booleans as bare
+    // flags, so without it every generated command line would be rejected.
+    new (class extends BooleanParameter {
+      name         = "skip-engine-checks";
+      description  = "Run only the structural checks (phase 1) and skip the engine checks (phase 2). Phase 1 is local and needs no AtScale instance, so this makes the operation fast and offline — the right mode for editor file-watching and for pre-commit hooks.";
+      required     = false;
+      isFlag       = true;
+    })(),
+    new (class extends BooleanParameter {
+      name         = "skip-structural-checks";
+      description  = "Skip the structural checks (phase 1) and run only the engine checks (phase 2). Normally phase 2 runs only when phase 1 passes; use this to re-test joinability and uniqueness against the warehouse without re-validating cross-references.";
+      required     = false;
+      isFlag       = true;
+    })(),
+    new (class extends NumberParameter {
+      name         = "timeout";
+      description  = "Seconds to wait for any single AtScale request, authentication included, before failing. Defaults to 60. Use 0 to wait indefinitely.";
+      required     = false;
+      defaultValue = 60;
+    })(),
   ];
 }
 
@@ -107,6 +129,9 @@ type Params = {
   "branch"?:     string;
   "model-name"?: string;
   "insecure"?:   boolean;
+  "skip-engine-checks"?:     boolean;
+  "skip-structural-checks"?: boolean;
+  "timeout"?:                number;
 };
 export type AtScaleListModelErrorsParams = Params;
 
@@ -116,6 +141,7 @@ function resolveAtScaleEnv(
   config: Record<string, any>,
   connectionName: string,
   insecureOverride?: boolean,
+  timeoutMs?: number,
 ): AtScaleEnvironment {
   const connections: Record<string, any> = config.connections ?? {};
   const entry = connections[connectionName];
@@ -149,6 +175,7 @@ function resolveAtScaleEnv(
     apiToken:      atscale.apiToken,
     sessionCookie: atscale.sessionCookie,
     insecure:      insecureOverride ?? atscale.insecure,
+    timeoutMs,
   });
 }
 
@@ -482,8 +509,26 @@ export class AtScaleListModelErrorsOperation extends Operation<Params> {
     const yaml       = this.services.get<YamlService>("yaml");
     const atScaleSvc = this.services.get<AtScaleRestClientService>("atscale-rest");
 
+    if (params["skip-engine-checks"] && params["skip-structural-checks"]) {
+      throw new Error(
+        "Skipping both phases leaves nothing to check. Drop one of " +
+        "--skip-engine-checks / --skip-structural-checks.",
+      );
+    }
+
+    // 0 means "wait indefinitely", matching the historical behaviour; anything
+    // else bounds every request including the token exchange, which is where an
+    // unreachable instance actually stalls.
+    const timeoutSeconds = params["timeout"] ?? 60;
+    const timeoutMs = timeoutSeconds > 0 ? timeoutSeconds * 1_000 : undefined;
+
     const config = yaml.readFromFile<Record<string, any>>(params["connection-file"]);
-    const env    = resolveAtScaleEnv(config, params["atscale-connection-name"], params["insecure"]);
+    const env    = resolveAtScaleEnv(
+      config,
+      params["atscale-connection-name"],
+      params["insecure"],
+      timeoutMs,
+    );
 
     // ── Resolve SML directory ────────────────────────────────────────────────
     const hasLocal = Boolean(params["sml-dir"]);
@@ -587,13 +632,25 @@ export class AtScaleListModelErrorsOperation extends Operation<Params> {
     this.logger.info(`Validating model: ${modelLabel}`);
 
     const allProblems: Problem[] = [];
+    const skipStructural = params["skip-structural-checks"] === true;
+    const skipEngine     = params["skip-engine-checks"] === true;
 
     // Phase 1: structural
-    this.logger.verbose("Phase 1: structural validation…");
-    const structuralErrors = validateStructure(dimensionsMap, datasetsMap, connectionsMap, modelData);
-    allProblems.push(...structuralErrors);
+    let structuralErrors: Problem[] = [];
+    if (skipStructural) {
+      this.logger.info("Phase 1 (structural) skipped by --skip-structural-checks.");
+    } else {
+      this.logger.verbose("Phase 1: structural validation…");
+      structuralErrors = validateStructure(dimensionsMap, datasetsMap, connectionsMap, modelData);
+      allProblems.push(...structuralErrors);
+    }
 
-    if (structuralErrors.length > 0) {
+    // Phase 2 still only follows a *passing* phase 1: engine checks are built
+    // from the same references phase 1 validates, so running them over a model
+    // with dangling references produces confusing failures rather than useful ones.
+    if (skipEngine) {
+      this.logger.info("Phase 2 (engine) skipped by --skip-engine-checks.");
+    } else if (structuralErrors.length > 0) {
       this.logger.info(`Phase 1 found ${structuralErrors.length} structural problem(s). Skipping Phase 2.`);
     } else {
       this.logger.verbose("Phase 1 passed — running Phase 2 engine validation…");

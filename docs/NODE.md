@@ -1409,6 +1409,13 @@ await atScaleListModelErrors({
   atscaleConnectionName: "ats_prod",
   smlDir:                "./sml-output",
 });
+
+// Structural checks only — local, offline, and fast enough for a pre-commit hook.
+await atScaleListModelErrors({
+  atscaleConnectionName: "ats_prod",
+  smlDir:                "./sml-output",
+  skipEngineChecks:      true,
+});
 ```
 
 ```typescript
@@ -1428,6 +1435,19 @@ function atScaleListModelErrors(
 | `branch` | `string` | No | | Branch to validate (defaults to repository default branch) |
 | `modelName` | `string` | No | | Model to validate (defaults to first model found) |
 | `insecure` | `boolean` | No | | Skip TLS certificate verification |
+| `skipEngineChecks` | `boolean` | No | `false` | Run only the structural checks (phase 1). Local and offline — no AtScale instance needed |
+| `skipStructuralChecks` | `boolean` | No | `false` | Run only the engine checks (phase 2), without first validating cross-references |
+| `timeout` | `number` | No | `60` | Seconds to wait for any single AtScale request, authentication included. `0` waits indefinitely |
+
+Validation runs in two phases. **Phase 1 (structural)** parses the SML and resolves cross-file
+references — datasets, dimensions, level attributes, relationship join columns — entirely locally.
+**Phase 2 (engine)** POSTs joinability and uniqueness checks to AtScale, which runs SQL against the
+warehouse; it runs only when phase 1 passes, since checks built from dangling references produce
+confusing failures rather than useful ones.
+
+`skipEngineChecks` is what makes the operation suitable for a file watcher or a pre-commit hook:
+phase 1 completes in about a second and needs no reachable instance, while phase 2 is bounded only
+by how long the warehouse takes. Passing both skip flags is an error.
 
 ---
 

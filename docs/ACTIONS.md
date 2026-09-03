@@ -1722,6 +1722,22 @@ Supports two source modes — provide exactly one:
     model-name: sales_demo
 ```
 
+#### Structural-only mode (fast gate, no instance required)
+
+Phase 1 is a local YAML cross-reference check and needs no reachable AtScale instance, so it can
+run on every pull request without a live environment — and fail in about a second rather than
+waiting on the warehouse:
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: atscale-list-model-errors
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    sml-dir: ./sml
+    skip-engine-checks: "true"
+```
+
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
@@ -1732,8 +1748,15 @@ Supports two source modes — provide exactly one:
 | `model-name` | No | first model found | Model `label` or `unique_name` to validate |
 | `connection-file` | Yes | `connections.yaml` | Contents of the connections YAML (pass via secret) |
 | `insecure` | No | `true` | Skip TLS certificate verification |
+| `skip-engine-checks` | No | `false` | Run only the structural checks (Phase 1). Local and offline |
+| `skip-structural-checks` | No | `false` | Run only the engine checks (Phase 2) |
+| `timeout` | No | `60` | Seconds to wait for any single AtScale request, authentication included. `0` waits indefinitely |
 
-† Provide exactly one of `sml-dir`, `repo-name`, or `repo-id`.
+† Provide exactly one of `sml-dir`, `repo-name`, or `repo-id`. Passing both skip flags is an error.
+
+`timeout` bounds authentication as well as the request, which is where an unreachable instance
+stalls — without it a runner blocks until the job's own timeout kills it. An engine call that times
+out is reported as a Phase 2 warning, so structural results are still produced.
 
 **Output:** JSON with `model`, `problems` array (each with `phase`, `severity`, `message`, optional `location`), and `summary` counts.
 

@@ -88,6 +88,19 @@
           "default": "warning",
           "scope": "window",
           "markdownDescription": "Report keys an SML file uses that the specification does not document — typically typos — with a quick fix when a documented property is close enough to suggest.\n\nThis is deliberately a *warning* rather than a schema error: the SML schemas are permissive because the published specification lags the implementation, so an undocumented key is sometimes a real gap rather than a mistake. Known gaps are allowlisted from the generator, and unlike the rest of SML validation this works without the YAML extension installed.\n\nGated by `#psUtils.smlEnabled#`."
+        },
+        "psUtils.smlMonitorTimeout": {
+          "type": "number",
+          "default": 120,
+          "minimum": 5,
+          "scope": "window",
+          "markdownDescription": "Seconds a **Monitor SML Directory** validation run may take before it is cancelled.\n\nThis is the outer backstop. The operation is also passed `--timeout` at half this value, which bounds each individual AtScale request; the kill here only fires if that fails to.\n\nRaise it if a large model is being cancelled mid-run."
+        },
+        "psUtils.smlMonitorEngineChecks": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "Run the phase 2 **engine** checks on every change while monitoring, as well as the phase 1 structural checks.\n\nOff by default. Phase 1 resolves cross-file references locally in about a second and needs no AtScale instance. Phase 2 asks the engine to run SQL against the warehouse to test joinability and uniqueness — far too slow and too expensive to repeat on every save, and it blocks entirely when the instance is unreachable.\n\nLeave this off for editing and use **Validate now** (click the monitored folder again) for a full check, or the `atscale-list-model-errors` operation from the context menu."
         }
       }
     },
@@ -364,6 +377,31 @@
         "command": "psUtils.sml.toggle",
         "title": "Toggle SML Support for this Project",
         "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.monitor",
+        "title": "☐ Monitor SML Directory",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.monitorActive",
+        "title": "☑ Monitor SML Directory",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.monitorPick",
+        "title": "Monitor an SML Directory…",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.stopMonitor",
+        "title": "Stop Monitoring SML Directory",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.showMonitorLog",
+        "title": "Show SML Validation Log",
+        "category": "PS-Utils"
       }
     ],
     "submenus": [
@@ -455,6 +493,16 @@
           "command": "psUtils.sml.disable",
           "group": "9_settings@2",
           "when": "psUtils.yamlExtensionInstalled && psUtils.smlEnabled"
+        },
+        {
+          "command": "psUtils.sml.monitor",
+          "group": "9_settings@3",
+          "when": "explorerResourceIsFolder && !(resourcePath in psUtils.smlMonitoredDirs)"
+        },
+        {
+          "command": "psUtils.sml.monitorActive",
+          "group": "9_settings@3",
+          "when": "explorerResourceIsFolder && resourcePath in psUtils.smlMonitoredDirs"
         }
       ],
       "psUtils.group.visualization-and-namespace-processing": [
@@ -680,6 +728,24 @@
         },
         {
           "command": "psUtils.sml.toggle"
+        },
+        {
+          "command": "psUtils.sml.monitor",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.monitorActive",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.monitorPick"
+        },
+        {
+          "command": "psUtils.sml.stopMonitor"
+        },
+        {
+          "command": "psUtils.sml.showMonitorLog",
+          "when": "false"
         }
       ]
     }

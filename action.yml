@@ -740,6 +740,31 @@ inputs:
     required: false
     default: "true"
 
+  # ── atscale-list-model-errors ────────────────────────────────────────────
+  skip-engine-checks:
+    description: >
+      Run only the structural checks (phase 1) and skip the engine checks (phase 2).
+      Phase 1 is a local cross-reference check needing no reachable AtScale instance,
+      so this is the fast pre-merge gate; phase 2 waits on the warehouse.
+      Used by: atscale-list-model-errors.
+    required: false
+    default: "false"
+  skip-structural-checks:
+    description: >
+      Skip the structural checks (phase 1) and run only the engine checks (phase 2).
+      Passing this together with skip-engine-checks is an error.
+      Used by: atscale-list-model-errors.
+    required: false
+    default: "false"
+  timeout:
+    description: >
+      Seconds to wait for any single AtScale request, authentication included,
+      before failing. Defaults to 60; 0 waits indefinitely. Without a bound an
+      unreachable instance blocks until the job's own timeout kills it.
+      Used by: atscale-list-model-errors.
+    required: false
+    default: "60"
+
   # ── atscale-create-repo / atscale-list-model-errors ──────────────────────
   repo-name:
     description: >
@@ -1260,6 +1285,9 @@ runs:
         [[ -n "${{ inputs.repo-id }}"    ]] && ARGS+=(--repo-id    "${{ inputs.repo-id }}")
         [[ -n "${{ inputs.branch }}"     ]] && ARGS+=(--branch     "${{ inputs.branch }}")
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.timeout }}"    ]] && ARGS+=(--timeout    "${{ inputs.timeout }}")
+        [[ "${{ inputs.skip-engine-checks }}"     == "true" ]] && ARGS+=(--skip-engine-checks)
+        [[ "${{ inputs.skip-structural-checks }}" == "true" ]] && ARGS+=(--skip-structural-checks)
         node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
       shell: bash
 

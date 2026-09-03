@@ -1919,6 +1919,18 @@ Each engine check is sent to the connection group of the dataset it applies to: 
 
 The `as_connection` value must match a connection group that already exists on the target instance (see [`atscale-list-data-sources`](#atscale-list-data-sources)). If it does not, the engine returns `500 … ConnectionGroup ConnectionGroupIdentity(<name>) not found` and Phase 2 is reported as a warning.
 
+**Selecting phases.** Phase 1 is local and finishes in about a second; Phase 2 waits on the engine
+running SQL against the warehouse. `--skip-engine-checks` runs Phase 1 alone, which needs no
+reachable AtScale instance at all — the right mode for a pre-commit hook, a CI fast-fail gate, or
+the VS Code extension's directory monitor. `--skip-structural-checks` does the reverse, re-testing
+joinability and uniqueness without re-validating cross-references. Passing both is an error.
+
+**Timeouts.** `--timeout` (default 60 seconds) bounds every AtScale request, including the token
+exchange that authenticates it — which is where an unreachable instance actually stalls. Without it
+a stopped VM or a dropped VPN leaves the operation waiting indefinitely. An engine call that times
+out is reported as a Phase 2 warning, so the structural results still come back. Use `--timeout 0`
+to wait indefinitely.
+
 Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
 **Local mode** (validate SML files on disk):
@@ -1952,8 +1964,21 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 | `--model-name` | No | first model | Model `label` or `unique_name` to validate |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--insecure` | No | `true` | Skip TLS certificate verification |
+| `--skip-engine-checks` | No | `false` | Run only the structural checks (Phase 1). Local and offline |
+| `--skip-structural-checks` | No | `false` | Run only the engine checks (Phase 2) |
+| `--timeout` | No | `60` | Seconds to wait for any single AtScale request, authentication included. `0` waits indefinitely |
 
 † Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
+
+**Structural-only mode** (no AtScale instance required):
+
+```bash
+./atscale-utils atscale-list-model-errors \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --sml-dir "./sml" \
+  --skip-engine-checks
+```
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
 

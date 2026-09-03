@@ -1,4 +1,4 @@
-# CLAUDE.md — Project conventions for Claude Code
+# AGENTS.md — Project conventions for Codex
 
 ## Documentation — always keep in sync with code
 

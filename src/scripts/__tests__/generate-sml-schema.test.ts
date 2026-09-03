@@ -502,10 +502,13 @@ describe("extension contribution wiring", () => {
   });
 
   it("registers every SML command it contributes", () => {
-    const source = fs.readFileSync(
-      path.join(ROOT, "vscode-extension/src/sml-schema.ts"),
-      "utf8",
-    );
+    // Every module that owns `psUtils.sml.*` commands. A menu item whose command
+    // was never registered renders normally and does nothing when clicked, so the
+    // failure is invisible without this check — which is why the list of sources
+    // has to grow whenever the commands do.
+    const source = ["sml-schema.ts", "sml-monitor.ts"]
+      .map((file) => fs.readFileSync(path.join(ROOT, "vscode-extension/src", file), "utf8"))
+      .join("\n");
     const contributed = pkg.contributes.commands
       .map((c: { command: string }) => c.command)
       .filter((id: string) => id.startsWith("psUtils.sml."));

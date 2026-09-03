@@ -1660,6 +1660,9 @@ curl -X POST http://localhost:4000/rest/atscale-deploy-catalog \
 | `branch` | `String` | No | Branch to validate when using --repo-name / --repo-id. Defaults to the repository's defaultBranch. |
 | `modelName` | `String` | No | Model label or unique_name to validate (defaults to the first model found) |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+| `skipEngineChecks` | `Boolean` | No | Run only the structural checks (phase 1) and skip the engine checks (phase 2). Phase 1 is local and needs no AtScale instance, so this makes the operation fast and offline — the right mode for editor file-watching and for pre-commit hooks. |
+| `skipStructuralChecks` | `Boolean` | No | Skip the structural checks (phase 1) and run only the engine checks (phase 2). Normally phase 2 runs only when phase 1 passes; use this to re-test joinability and uniqueness against the warehouse without re-validating cross-references. |
+| `timeout` | `Int` | No | Seconds to wait for any single AtScale request, authentication included, before failing. Defaults to 60. Use 0 to wait indefinitely. |
 
 **curl (JSON):**
 

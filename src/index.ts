@@ -939,6 +939,9 @@ export type AtScaleListModelErrorsParams = {
   branch?: string;
   modelName?: string;
   insecure?: boolean;
+  skipEngineChecks?: boolean;
+  skipStructuralChecks?: boolean;
+  timeout?: number;
 };
 
 export async function atScaleListModelErrors(p: AtScaleListModelErrorsParams, o: LibraryOptions = {}) {
@@ -949,6 +952,7 @@ export async function atScaleListModelErrors(p: AtScaleListModelErrorsParams, o:
   try {
     await run("atscale-list-model-errors", Object.assign({
       "connection-file": "connections.yaml",
+      "timeout": 60,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }

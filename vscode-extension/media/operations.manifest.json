@@ -2054,6 +2054,30 @@
           "role": "scalar",
           "required": false,
           "default": null
+        },
+        {
+          "name": "skip-engine-checks",
+          "description": "Run only the structural checks (phase 1) and skip the engine checks (phase 2). Phase 1 is local and needs no AtScale instance, so this makes the operation fast and offline — the right mode for editor file-watching and for pre-commit hooks.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "skip-structural-checks",
+          "description": "Skip the structural checks (phase 1) and run only the engine checks (phase 2). Normally phase 2 runs only when phase 1 passes; use this to re-test joinability and uniqueness against the warehouse without re-validating cross-references.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "timeout",
+          "description": "Seconds to wait for any single AtScale request, authentication included, before failing. Defaults to 60. Use 0 to wait indefinitely.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 60
         }
       ]
     },

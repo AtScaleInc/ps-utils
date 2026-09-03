@@ -14,6 +14,7 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": [
+    "src/operations/generate-powerbi-from-namespace/**",
     // Tests are run by vitest, which transpiles them itself. Excluding them keeps
     // them out of the published dist/ and lets them import from vscode-extension/,
     // which `rootDir: "src"` would otherwise reject.
