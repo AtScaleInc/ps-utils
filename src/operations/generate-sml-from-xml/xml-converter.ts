@@ -373,6 +373,23 @@ export async function convertXmlToSml(
   // calculation expressions referencing other metrics by name can be rewritten to match.
   const measureRefMap = buildMeasureRefMap(cubeEls, calcMemberDefs);
 
+  // Determine, across every cube up front, which dimensions may validly use SML's
+  // shared-degenerate mechanism — a decision made cube-by-cube can't see a dimension's
+  // bindings in OTHER cubes, but SML's constraints (every level of the dimension sharing
+  // the same set of fact datasets; every dataset's key/name column for a shared level having
+  // the same physical type) can only be verified with the full picture. See
+  // computeEligibleDegenerateDimensions for what disqualifies a dimension.
+  const { eligible: eligibleDegenerateDimNames, rejected: rejectedDegenerateDims } =
+    computeEligibleDegenerateDimensions(cubeEls, schemaDims, keyMap, attrDef, datasetIdToName, datasetNameToPhysical);
+  for (const r of rejectedDegenerateDims) {
+    rptOmissions.push({
+      category: "Dimension",
+      item: r.dimName,
+      reason: r.reason,
+      recommendation: "Review this dimension's fact-table bindings manually — some levels may need a relationship instead of a direct column, or the source data types must be reconciled before it can be modeled as a shared degenerate dimension.",
+    });
+  }
+
   // ---------------------------------------------------------------
   // Phase 4+5+Model: Process each cube
   // ---------------------------------------------------------------
@@ -696,31 +713,10 @@ export async function convertXmlToSml(
     }
 
     // Build per-cube relevant dims: this cube's inline dims + schema-level shared dims
-    const cubeLevelDims = new Map<string, Record<string, unknown>>();
-    for (const dimsSec of arr(cube.dimensions)) {
-      for (const dim of arr(dimsSec.dimension)) {
-        const name = a(dim, "name");
-        if (name) cubeLevelDims.set(name, dim as Record<string, unknown>);
-      }
-    }
-    // Schema-level dims referenced via dimension-ref
-    for (const dimsSec of arr(cube.dimensions)) {
-      for (const dimRef of arr(dimsSec["dimension-ref"])) {
-        const refId = a(dimRef, "id");
-        if (!refId) continue;
-        // Find the schema dim with this id
-        for (const [dname, del] of schemaDims) {
-          if (a(del, "id") === refId) {
-            cubeLevelDims.set(dname, del);
-            break;
-          }
-        }
-      }
-    }
-    const relevantDims = new Map([...schemaDims, ...cubeLevelDims]);
+    const relevantDims = buildRelevantDims(cube, schemaDims);
 
     // Phase 5: Infer relationships
-    const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
+    const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName, eligibleDegenerateDimNames);
 
     // The model's flat dimensions: list only holds dimensions with no relationship (they
     // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
@@ -2204,16 +2200,58 @@ interface DegenerateBinding {
   keyColumns: string[];
 }
 
-function inferRelationships(
+/** A single (dimension, level, fact-dataset) binding found in one cube — the common raw
+ *  material both the cross-cube eligibility pre-pass and inferRelationships itself need. */
+interface DimensionBinding {
+  dimName: string;
+  toLevel: string;
+  role: CubeKeyRole;
+  dimDataset: string | undefined;
+  isSelfReferencing: boolean;
+}
+
+/** This cube's inline dimensions plus schema-level shared dimensions referenced via
+ *  dimension-ref — the set of dimensions relevant to inferring this cube's relationships. */
+function buildRelevantDims(
+  cube: Record<string, unknown>,
+  schemaDims: Map<string, Record<string, unknown>>,
+): Map<string, Record<string, unknown>> {
+  const cubeLevelDims = new Map<string, Record<string, unknown>>();
+  for (const dimsSec of arr(cube.dimensions)) {
+    for (const dim of arr(dimsSec.dimension)) {
+      const name = a(dim, "name");
+      if (name) cubeLevelDims.set(name, dim as Record<string, unknown>);
+    }
+  }
+  // Schema-level dims referenced via dimension-ref
+  for (const dimsSec of arr(cube.dimensions)) {
+    for (const dimRef of arr(dimsSec["dimension-ref"])) {
+      const refId = a(dimRef, "id");
+      if (!refId) continue;
+      for (const [dname, del] of schemaDims) {
+        if (a(del, "id") === refId) {
+          cubeLevelDims.set(dname, del);
+          break;
+        }
+      }
+    }
+  }
+  return new Map([...schemaDims, ...cubeLevelDims]);
+}
+
+/**
+ * For one cube, find every (dimension, level, fact-dataset) binding — the raw material
+ * inferRelationships uses to decide relationships vs. degenerate treatment, and that the
+ * cross-cube eligibility pre-pass (computeEligibleDegenerateDimensions) uses to check SML's
+ * shared-degenerate constraints before any cube commits to either treatment.
+ */
+function gatherDimensionBindings(
   cubeEl: Record<string, unknown>,
-  factDatasetName: string | undefined,
   keyMap: Map<string, KeyRefEntry[]>,
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
   datasetIdToName: Map<string, string>,
-): { relationships: RelationshipDef[]; degenerateDimNames: string[]; degenerateBindings: DegenerateBinding[] } {
-  if (!factDatasetName) return { relationships: [], degenerateDimNames: [], degenerateBindings: [] };
-
+): DimensionBinding[] {
   // Build the set of ids that appear in this cube's data-set-ref logical sections, mapped to
   // every distinct role that id represents. Role-played FKs (e.g. "Order Date" and "Ship
   // Date" both pointing at the same Date Dimension level) share the same outer <key-ref id>
@@ -2263,12 +2301,7 @@ function inferRelationships(
     }
   }
 
-  const relationships: RelationshipDef[] = [];
-  const degenerateDimNames: string[] = [];
-  const degenerateBindings: DegenerateBinding[] = [];
-  const seen = new Set<string>();
-  const usedNames = new Set<string>();
-
+  const bindings: DimensionBinding[] = [];
   for (const [dimName, dimEl] of relevantDims) {
     // Find every level (across every hierarchy) of this dimension matching the cube's
     // key-refs — a dimension can have multiple hierarchies each needing their own
@@ -2277,15 +2310,6 @@ function inferRelationships(
     const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles);
     if (matches.length === 0) continue; // Dimension not used by this cube
 
-    // Gather every (level, role) binding for this dimension before deciding whether it's
-    // degenerate — a dimension is either wholly relationship-based or wholly degenerate in
-    // a given model (SML's is_degenerate is a single flag on the dimension object, and a
-    // dimension can only appear in one of relationships:/dimensions: per model), so one
-    // self-referencing role (a fact dataset providing a level IS the same dataset the
-    // dimension's own key resolves to — a relationship there would be a self-join) means
-    // ALL of this dimension's bindings for this cube fold into degenerate treatment, even
-    // ones that would otherwise look like a normal cross-dataset relationship.
-    const bindings: Array<{ toLevel: string; role: CubeKeyRole; dimDataset: string | undefined; isSelfReferencing: boolean }> = [];
     for (const { matchId, toLevel, dimKeyUuid } of matches) {
       const roles = cubeKeyRoles.get(matchId) ?? [];
       const dimKeyEntries = dimKeyUuid ? keyMap.get(dimKeyUuid) ?? [] : [];
@@ -2307,14 +2331,129 @@ function inferRelationships(
         ? new Set([dimTrueEntry.datasetName])
         : new Set(dimKeyEntries.map((e) => e.datasetName));
       for (const role of roles) {
-        bindings.push({ toLevel, role, dimDataset, isSelfReferencing: selfReferencingDatasets.has(role.datasetName) });
+        bindings.push({ dimName, toLevel, role, dimDataset, isSelfReferencing: selfReferencingDatasets.has(role.datasetName) });
       }
     }
-    if (bindings.length === 0) continue;
+  }
+  return bindings;
+}
 
-    const isDegenerate = bindings.some((b) => b.isSelfReferencing);
+/**
+ * Determines which dimensions may validly use SML's shared-degenerate mechanism, checked
+ * globally across every cube before any single cube commits to relationships vs. degenerate
+ * treatment. A per-cube decision can't see a dimension's bindings in OTHER cubes, but SML's
+ * own constraints can only be verified with the full picture:
+ *   - Every level of a shared degenerate dimension must be backed by the exact same set of
+ *     fact datasets (a dimension with one level on two fact tables and another level on only
+ *     one can't be modeled this way at all — Design Center rejects the mix outright).
+ *   - For a level spanning multiple fact datasets, every dataset's key/name column must have
+ *     the same physical data type (two fact tables computing "the same" degenerate column
+ *     with different declared types, e.g. one raw and one CAST to a different type, can't be
+ *     reconciled by the converter — this is a source-schema inconsistency to flag, not fix).
+ * A dimension failing either constraint falls back to ordinary relationships entirely, the
+ * same as if this feature didn't exist for it — exactly its pre-existing behavior.
+ */
+function computeEligibleDegenerateDimensions(
+  cubeEls: Record<string, unknown>[],
+  schemaDims: Map<string, Record<string, unknown>>,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrDef: Map<string, AttrDefEntry>,
+  datasetIdToName: Map<string, string>,
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
+): { eligible: Set<string>; rejected: Array<{ dimName: string; reason: string }> } {
+  const byDim = new Map<string, DimensionBinding[]>();
+  for (const cube of cubeEls) {
+    const factDatasetName = getFactDatasetName(cube, datasetIdToName);
+    if (!factDatasetName) continue;
+    const relevantDims = buildRelevantDims(cube, schemaDims);
+    for (const b of gatherDimensionBindings(cube, keyMap, attrDef, relevantDims, datasetIdToName)) {
+      const list = byDim.get(b.dimName) ?? [];
+      list.push(b);
+      byDim.set(b.dimName, list);
+    }
+  }
 
-    if (isDegenerate) {
+  const eligible = new Set<string>();
+  const rejected: Array<{ dimName: string; reason: string }> = [];
+  const setKey = (keys: Iterable<string>) => Array.from(keys).sort().join("|");
+
+  for (const [dimName, bindings] of byDim) {
+    if (!bindings.some((b) => b.isSelfReferencing)) continue; // never degenerate — leave as relationships
+
+    const byLevel = new Map<string, Map<string, string[]>>();
+    for (const b of bindings) {
+      const byDataset = byLevel.get(b.toLevel) ?? new Map<string, string[]>();
+      byDataset.set(b.role.datasetName, b.role.columns);
+      byLevel.set(b.toLevel, byDataset);
+    }
+
+    const levelSetKeys = Array.from(byLevel.values(), (m) => setKey(m.keys()));
+    if (!levelSetKeys.every((k) => k === levelSetKeys[0])) {
+      rejected.push({
+        dimName,
+        reason: "Degenerate on more than one fact table, but its levels don't all share the same set of fact tables — SML requires every level of a shared degenerate dimension to use identical datasets, so this dimension was left as ordinary relationships instead.",
+      });
+      continue;
+    }
+
+    let typeMismatch: string | undefined;
+    for (const byDataset of byLevel.values()) {
+      if (byDataset.size <= 1) continue;
+      const types = new Map<string, string>();
+      for (const [dsName, cols] of byDataset) {
+        for (const col of cols) {
+          types.set(`${dsName}.${col}`, datasetNameToPhysical.get(dsName)?.columns?.find((c) => c.name === col)?.dataType ?? "unknown");
+        }
+      }
+      if (new Set(types.values()).size > 1) {
+        typeMismatch = Array.from(types, ([k, v]) => `${k}: ${v}`).join(", ");
+        break;
+      }
+    }
+    if (typeMismatch) {
+      rejected.push({
+        dimName,
+        reason: `Degenerate on more than one fact table, but the underlying columns have inconsistent data types across those tables (${typeMismatch}) — SML requires them to match, so this dimension was left as ordinary relationships instead.`,
+      });
+      continue;
+    }
+
+    eligible.add(dimName);
+  }
+
+  return { eligible, rejected };
+}
+
+function inferRelationships(
+  cubeEl: Record<string, unknown>,
+  factDatasetName: string | undefined,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrDef: Map<string, AttrDefEntry>,
+  relevantDims: Map<string, Record<string, unknown>>,
+  datasetIdToName: Map<string, string>,
+  eligibleDegenerateDimNames: Set<string>,
+): { relationships: RelationshipDef[]; degenerateDimNames: string[]; degenerateBindings: DegenerateBinding[] } {
+  if (!factDatasetName) return { relationships: [], degenerateDimNames: [], degenerateBindings: [] };
+
+  const byDim = new Map<string, DimensionBinding[]>();
+  for (const b of gatherDimensionBindings(cubeEl, keyMap, attrDef, relevantDims, datasetIdToName)) {
+    const list = byDim.get(b.dimName) ?? [];
+    list.push(b);
+    byDim.set(b.dimName, list);
+  }
+
+  const relationships: RelationshipDef[] = [];
+  const degenerateDimNames: string[] = [];
+  const degenerateBindings: DegenerateBinding[] = [];
+  const seen = new Set<string>();
+  const usedNames = new Set<string>();
+
+  for (const [dimName, bindings] of byDim) {
+    // Whether this dimension is degenerate is decided once, globally, by
+    // computeEligibleDegenerateDimensions — not re-derived per cube — so a dimension's
+    // relationships:/dimensions: placement can never disagree with its own dimension file's
+    // is_degenerate flag, and every cube treats the same dimension the same way.
+    if (eligibleDegenerateDimNames.has(dimName)) {
       degenerateDimNames.push(dimName);
       for (const { toLevel, role } of bindings) {
         degenerateBindings.push({ dimName, toLevel, dataset: role.datasetName, keyColumns: role.columns });
