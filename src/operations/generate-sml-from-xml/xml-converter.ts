@@ -2380,6 +2380,22 @@ function computeEligibleDegenerateDimensions(
   for (const [dimName, bindings] of byDim) {
     if (!bindings.some((b) => b.isSelfReferencing)) continue; // never degenerate — leave as relationships
 
+    // A name shared across cubes can resolve to genuinely different underlying attributes —
+    // e.g. one cube's "Org Channel Name" hosted on a real snowflake dataset (a normal
+    // relationship) while another cube's own same-named dimension is degenerate on its fact
+    // table directly. Mixing the two into one shared_degenerate_columns array would silently
+    // fold a real relationship's dataset in as if it were just another fact table, discarding
+    // whatever transformation (e.g. an UPPER() case-normalization) made it a separate lookup
+    // table in the first place. Same rule the rest of this file already applies globally: a
+    // real relationship anywhere wins over degenerate treatment for that name everywhere.
+    if (bindings.some((b) => !b.isSelfReferencing)) {
+      rejected.push({
+        dimName,
+        reason: "Some of its bindings are a genuine relationship to a separate dataset while others are degenerate directly on a fact table — these are very likely different underlying attributes that happen to share this display name across cubes, so it was left as ordinary relationships instead of risking an incorrect merge.",
+      });
+      continue;
+    }
+
     const byLevel = new Map<string, Map<string, string[]>>();
     for (const b of bindings) {
       const byDataset = byLevel.get(b.toLevel) ?? new Map<string, string[]>();
