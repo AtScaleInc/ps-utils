@@ -348,6 +348,12 @@ export async function convertXmlToSml(
   // degenerate overall, so the relationship set takes precedence when both are present.
   const globalDegenerateDimNames = new Set<string>();
   const globalRelationshipDimNames = new Set<string>();
+  // Degenerate dimensions can draw the same level from more than one fact dataset (e.g. a
+  // flag column present on both a cube's primary fact table and its YTD fact table) — SML's
+  // shared_degenerate_columns models exactly this. Aggregated across every cube in the file
+  // (dimName -> levelName -> datasetName -> keyColumns) so buildDimensionYaml can tell a
+  // single-dataset degenerate level (plain dataset/key_columns) from a shared one.
+  const globalDegenerateBindings = new Map<string, Map<string, Map<string, string[]>>>();
 
   // ---------------------------------------------------------------
   // Phase 7: Schema-level calculated members
@@ -714,7 +720,7 @@ export async function convertXmlToSml(
     const relevantDims = new Map([...schemaDims, ...cubeLevelDims]);
 
     // Phase 5: Infer relationships
-    const { relationships, degenerateDimNames } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
+    const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName);
 
     // The model's flat dimensions: list only holds dimensions with no relationship (they
     // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
@@ -730,6 +736,13 @@ export async function convertXmlToSml(
     for (const rel of relationships) referencedDimNames.add(rel.toDimension);
     for (const n of degenerateDimNames) globalDegenerateDimNames.add(n);
     for (const rel of relationships) globalRelationshipDimNames.add(rel.toDimension);
+    for (const b of degenerateBindings) {
+      const byLevel = globalDegenerateBindings.get(b.dimName) ?? new Map<string, Map<string, string[]>>();
+      const byDataset = byLevel.get(b.toLevel) ?? new Map<string, string[]>();
+      if (!byDataset.has(b.dataset)) byDataset.set(b.dataset, b.keyColumns);
+      byLevel.set(b.toLevel, byDataset);
+      globalDegenerateBindings.set(b.dimName, byLevel);
+    }
 
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
@@ -775,7 +788,8 @@ export async function convertXmlToSml(
     // dimension used by multiple cubes could be degenerate in one and properly joined
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical);
+    const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, degenerateBindingsForDim);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1687,6 +1701,10 @@ interface LevelAttrDef {
   folder?: string;
   description?: string;
   allowedCalcsForDma?: string[];
+  /** Set instead of dataset/keyColumns/nameColumn when this level is degenerate on more
+   *  than one fact dataset (e.g. a flag column present on both a cube's primary fact table
+   *  and its YTD fact table) — SML's shared_degenerate_columns, one entry per fact dataset. */
+  sharedDegenerateColumns?: Array<{ dataset: string; keyColumns: string[]; nameColumn: string }>;
 }
 
 function buildDimensionYaml(
@@ -1704,6 +1722,11 @@ function buildDimensionYaml(
    * default name_column. */
   soleKeyColumns: Set<string>,
   datasetNameToPhysical: Map<string, DatasetPhysical>,
+  /** Per-level fact-dataset bindings gathered across every cube that uses this dimension
+   * (levelName -> datasetName -> keyColumns), only meaningful when isDegenerate is true. A
+   * level backed by more than one distinct dataset here emits shared_degenerate_columns
+   * instead of a single dataset/key_columns/name_column. */
+  degenerateBindingsForDim?: Map<string, Map<string, string[]>>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -1859,6 +1882,20 @@ function buildDimensionYaml(
       })();
       const timeUnit = mapLevelType(levelTypeRaw) ?? (isTime ? inferTimeUnitFromName(levelName) : undefined);
 
+      // A degenerate level backed by more than one distinct fact dataset (e.g. a flag column
+      // present on both a cube's primary fact table and its YTD fact table) needs
+      // shared_degenerate_columns instead of a single dataset/key_columns/name_column —
+      // one dataset alone (the common case) keeps the plain fields, unchanged from before.
+      const datasetBindings = isDegenerate ? degenerateBindingsForDim?.get(levelUniqueName) : undefined;
+      const sharedDegenerateColumns =
+        datasetBindings && datasetBindings.size > 1
+          ? Array.from(datasetBindings, ([bindingDataset, bindingColumns]) => ({
+              dataset: `${bindingDataset}.dataset`,
+              keyColumns: bindingColumns,
+              nameColumn: defaultNameColumn(bindingColumns, bindingDataset, soleKeyColumns, datasetNameToPhysical),
+            }))
+          : undefined;
+
       // Build or merge the level attribute entry (de-duplicated by unique name)
       if (!levelAttrMap.has(levelUniqueName)) {
         levelAttrMap.set(levelUniqueName, {
@@ -1874,6 +1911,7 @@ function buildDimensionYaml(
           folder: def.folder,
           description: def.description,
           allowedCalcsForDma: def.allowedCalcTypes,
+          sharedDegenerateColumns,
         });
       }
 
@@ -1956,10 +1994,21 @@ function buildDimensionYaml(
       const laObj: Record<string, unknown> = {
         unique_name: la.uniqueName,
         label: la.label,
-        dataset: la.dataset,
-        name_column: la.nameColumn,
-        key_columns: la.keyColumns,
       };
+      // shared_degenerate_columns and dataset/name_column/key_columns are mutually
+      // exclusive per the SML spec — a level backed by more than one fact dataset uses the
+      // former instead of the latter.
+      if (la.sharedDegenerateColumns) {
+        laObj.shared_degenerate_columns = la.sharedDegenerateColumns.map((sdc) => ({
+          dataset: sdc.dataset,
+          name_column: sdc.nameColumn,
+          key_columns: sdc.keyColumns,
+        }));
+      } else {
+        laObj.dataset = la.dataset;
+        laObj.name_column = la.nameColumn;
+        laObj.key_columns = la.keyColumns;
+      }
       if (la.description) laObj.description = la.description;
       if (la.sortColumn && la.sortColumn !== la.nameColumn) laObj.sort_column = la.sortColumn;
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
@@ -2145,6 +2194,16 @@ function findCubeMatchingLevels(
   return matches;
 }
 
+/** One fact dataset's binding for a degenerate dimension's level — the raw material for
+ *  either a plain level_attributes dataset/key_columns pair (one binding) or a
+ *  shared_degenerate_columns array (multiple distinct fact datasets for the same level). */
+interface DegenerateBinding {
+  dimName: string;
+  toLevel: string;
+  dataset: string;
+  keyColumns: string[];
+}
+
 function inferRelationships(
   cubeEl: Record<string, unknown>,
   factDatasetName: string | undefined,
@@ -2152,8 +2211,8 @@ function inferRelationships(
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
   datasetIdToName: Map<string, string>,
-): { relationships: RelationshipDef[]; degenerateDimNames: string[] } {
-  if (!factDatasetName) return { relationships: [], degenerateDimNames: [] };
+): { relationships: RelationshipDef[]; degenerateDimNames: string[]; degenerateBindings: DegenerateBinding[] } {
+  if (!factDatasetName) return { relationships: [], degenerateDimNames: [], degenerateBindings: [] };
 
   // Build the set of ids that appear in this cube's data-set-ref logical sections, mapped to
   // every distinct role that id represents. Role-played FKs (e.g. "Order Date" and "Ship
@@ -2206,6 +2265,7 @@ function inferRelationships(
 
   const relationships: RelationshipDef[] = [];
   const degenerateDimNames: string[] = [];
+  const degenerateBindings: DegenerateBinding[] = [];
   const seen = new Set<string>();
   const usedNames = new Set<string>();
 
@@ -2217,57 +2277,77 @@ function inferRelationships(
     const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles);
     if (matches.length === 0) continue; // Dimension not used by this cube
 
-    let isDegenerate = false;
-
+    // Gather every (level, role) binding for this dimension before deciding whether it's
+    // degenerate — a dimension is either wholly relationship-based or wholly degenerate in
+    // a given model (SML's is_degenerate is a single flag on the dimension object, and a
+    // dimension can only appear in one of relationships:/dimensions: per model), so one
+    // self-referencing role (a fact dataset providing a level IS the same dataset the
+    // dimension's own key resolves to — a relationship there would be a self-join) means
+    // ALL of this dimension's bindings for this cube fold into degenerate treatment, even
+    // ones that would otherwise look like a normal cross-dataset relationship.
+    const bindings: Array<{ toLevel: string; role: CubeKeyRole; dimDataset: string | undefined; isSelfReferencing: boolean }> = [];
     for (const { matchId, toLevel, dimKeyUuid } of matches) {
       const roles = cubeKeyRoles.get(matchId) ?? [];
-      if (roles.length === 0) continue;
-
+      const dimKeyEntries = dimKeyUuid ? keyMap.get(dimKeyUuid) ?? [] : [];
       // Dimension dataset: the complete=true side of the dimension's own key (the lookup
       // table) — distinct from matchId, which may be a cube-local role-play identifier.
-      const dimDataset = dimKeyUuid
-        ? keyMap.get(dimKeyUuid)?.find((e) => e.complete === "true")?.datasetName
-        : undefined;
-
+      const dimTrueEntry = dimKeyEntries.find((e) => e.complete === "true");
+      const dimDataset = dimTrueEntry?.datasetName;
+      // When a complete=true entry exists somewhere, it's the dimension's one real lookup
+      // table, and every OTHER entry under the same key-ref id is just a foreign-key
+      // reference from a fact table TO that table — a genuine relationship, not degenerate,
+      // no matter what its own completeness marker says. Only when NO complete=true entry
+      // exists anywhere for this key (this schema uses "false" and "partial" for values
+      // other than "true", not just a plain complete/incomplete binary) does the dimension
+      // have no separate physical home at all, so every fact dataset registered under this
+      // key hosts the data directly and self-referencing must be checked against all of them
+      // — otherwise a role landing on a "partial"-only key silently reads as a real
+      // relationship and produces a spurious self-join.
+      const selfReferencingDatasets = dimTrueEntry
+        ? new Set([dimTrueEntry.datasetName])
+        : new Set(dimKeyEntries.map((e) => e.datasetName));
       for (const role of roles) {
-        // Degenerate dimensions (their own dataset IS the role's own fact-side dataset)
-        // attach directly via is_degenerate — a relationship here would be a self-join.
-        if (dimDataset === role.datasetName) {
-          isDegenerate = true;
-          continue;
-        }
-
-        const relKey = `${dimName}|${toLevel}|${role.datasetName}|${role.columns.join(",")}`;
-        if (seen.has(relKey)) continue;
-        seen.add(relKey);
-
-        const baseName = `${safeName(role.datasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
-        let relUniqueName = baseName;
-        let suffix = 1;
-        while (usedNames.has(relUniqueName)) {
-          relUniqueName = `${baseName}_${++suffix}`;
-        }
-        usedNames.add(relUniqueName);
-
-        relationships.push({
-          uniqueName: relUniqueName,
-          fromDataset: role.datasetName,
-          fromColumns: role.columns,
-          toDimension: dimName,
-          toLevel,
-          rolePlay: role.rolePlay,
-          dimensionDataset: dimDataset,
-        });
+        bindings.push({ toLevel, role, dimDataset, isSelfReferencing: selfReferencingDatasets.has(role.datasetName) });
       }
     }
+    if (bindings.length === 0) continue;
 
-    // A dimension in the flat dimensions: list is implicitly degenerate (no relationship
-    // needed); one referenced only via relationships[].to.dimension must not also appear
-    // there, so only degenerate dims are tracked here.
-    if (isDegenerate) degenerateDimNames.push(dimName);
+    const isDegenerate = bindings.some((b) => b.isSelfReferencing);
+
+    if (isDegenerate) {
+      degenerateDimNames.push(dimName);
+      for (const { toLevel, role } of bindings) {
+        degenerateBindings.push({ dimName, toLevel, dataset: role.datasetName, keyColumns: role.columns });
+      }
+      continue;
+    }
+
+    for (const { toLevel, role, dimDataset } of bindings) {
+      const relKey = `${dimName}|${toLevel}|${role.datasetName}|${role.columns.join(",")}`;
+      if (seen.has(relKey)) continue;
+      seen.add(relKey);
+
+      const baseName = `${safeName(role.datasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
+      let relUniqueName = baseName;
+      let suffix = 1;
+      while (usedNames.has(relUniqueName)) {
+        relUniqueName = `${baseName}_${++suffix}`;
+      }
+      usedNames.add(relUniqueName);
+
+      relationships.push({
+        uniqueName: relUniqueName,
+        fromDataset: role.datasetName,
+        fromColumns: role.columns,
+        toDimension: dimName,
+        toLevel,
+        rolePlay: role.rolePlay,
+        dimensionDataset: dimDataset,
+      });
+    }
   }
 
-  return { relationships, degenerateDimNames };
+  return { relationships, degenerateDimNames, degenerateBindings };
 }
 
 // ============================================================
