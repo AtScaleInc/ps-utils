@@ -98,6 +98,13 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
     break;
   }
 
+  // Datasets reference the SML connection object's unique_name; the engine
+  // expects the AtScale data-warehouse connection id (`as_connection`).
+  const asConnectionId = (connId: string | undefined): string => {
+    if (!connId) return "default";
+    return connectionsMap.get(connId)?.as_connection ?? connId;
+  };
+
   // ── Collect model relationships ──────────────────────────────────────────────
   const relationships: Array<{
     fromDataset: string;
@@ -279,7 +286,7 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
 
   const dimDatasetsXml = dimDatasets.map(({ datasetName, ds, dsId, ka }) => {
     const tableName = ds.table ?? datasetName.replace(/\.dataset$/, "");
-    const connId    = ds.connection_id ?? "default";
+    const connId    = asConnectionId(ds.connection_id);
     const database  = defaultDatabase;
     const schema    = defaultSchema;
 
@@ -308,7 +315,7 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
 
   const factDatasetsXml = [...factDatasetsMap.values()].map(({ datasetName, ds, dsId }) => {
     const tableName = ds.table ?? datasetName.replace(/\.dataset$/, "");
-    const connId    = ds.connection_id ?? "default";
+    const connId    = asConnectionId(ds.connection_id);
     const database  = defaultDatabase;
     const schema    = defaultSchema;
 

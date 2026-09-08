@@ -1,0 +1,10 @@
+unique_name: query_estimates.dataset
+object_type: dataset
+label: Query Estimates
+connection_id: testconn
+table: query_estimates
+columns:
+  - name: query_id
+    data_type: string
+  - name: estimated_post_plan_time
+    data_type: string

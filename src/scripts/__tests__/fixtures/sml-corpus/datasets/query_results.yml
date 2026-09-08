@@ -1,0 +1,16 @@
+unique_name: query_results.dataset
+object_type: dataset
+label: Query Results
+connection_id: testconn
+table: query_results
+columns:
+  - name: query_id
+    data_type: string
+  - name: finished
+    data_type: datetime
+  - name: succeeded
+    data_type: boolean
+  - name: result_size
+    data_type: string
+  - name: failure_message
+    data_type: string

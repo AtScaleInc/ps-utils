@@ -1,0 +1,20 @@
+unique_name: query_aggregate_usage.dataset
+object_type: dataset
+label: Query Aggregate Usage
+connection_id: testconn
+table: query_aggregate_usage
+columns:
+  - name: organization_id
+    data_type: string
+  - name: query_id
+    data_type: string
+  - name: aggregate_definition_id
+    data_type: string
+  - name: used_at
+    data_type: datetime
+  - name: service
+    data_type: string
+  - name: aggregate_instance_table_name
+    data_type: string
+  - name: query_part
+    data_type: string

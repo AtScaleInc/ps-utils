@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/metric.schema.json",
+  "title": "SML Metric",
+  "description": "Generated from resources/sml-reference/metric.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "unique_name": {
+      "description": "The unique name of the metric. This must be unique across all repositories and subrepositories.",
+      "type": "string"
+    },
+    "object_type": {
+      "description": "The type of object defined by the file. For metrics, the value of this property must be `metric`.",
+      "const": "metric"
+    },
+    "label": {
+      "description": "The name of the metric, as it appears in the consunmption tool. This value does not need to be unique.",
+      "type": "string"
+    },
+    "calculation_method": {
+      "description": "The method used to aggregate query results for the metric.",
+      "type": "string",
+      "enum": [
+        "average",
+        "count distinct",
+        "count non-null",
+        "estimated count distinct",
+        "maximum",
+        "minimum",
+        "percentile",
+        "stddev_pop",
+        "stddev_samp",
+        "sum",
+        "sum distinct",
+        "var_pop",
+        "var_samp"
+      ]
+    },
+    "dataset": {
+      "description": "The source dataset that contains the column the metric is based on.",
+      "type": "string",
+      "x-sml-ref": {
+        "kind": "dataset"
+      }
+    },
+    "column": {
+      "description": "The specific column within the `dataset` that the metric is based on.",
+      "type": "string",
+      "x-sml-ref": {
+        "kind": "column",
+        "in": {
+          "dataset": "0/dataset"
+        }
+      }
+    },
+    "description": {
+      "description": "A description of the metric.",
+      "type": "string"
+    },
+    "semi_additive": {
+      "description": "Defines the metric as a semi-additive metric.",
+      "$ref": "#/$defs/SemiAdditive"
+    },
+    "compression": {
+      "description": "Only for non-additive metrics using a `calulation_method` of `percentile`. Defines the compression score the semantic engine uses when estimating percentile values for query results. You can specify a value 1 - 50,000. Using a higher compression score yields more accurate query results but requires more memory from the engine to process. You may need to run tests to determine the right level of compression for your needs.\n\n**Required:** Required if `calculation_method` is `percentile`\n\n**Added in:** v1.5",
+      "type": "number"
+    },
+    "named_quantiles": {
+      "description": "Only for non-additive metrics using a `calulation_method` of `percentile`. Defines the quantile to use for query results.\n\n**Required:** Required if `calculation_method` is `percentile`\n\n**Added in:** v1.5",
+      "type": "string",
+      "enum": [
+        "quartiles",
+        "median",
+        "deciles"
+      ]
+    },
+    "custom_quantiles": {
+      "description": "Only for non-additive metrics using a `calulation_method` of `percentile`. Defines custom quantile to use for query results. Array values must be numbers between 0 and 1.\n\n**Required:** Required if `calculation_method` is `percentile`\n\n**Added in:** v1.5",
+      "items": {
+        "type": "number"
+      },
+      "type": "array"
+    },
+    "format": {
+      "description": "The format in which query results are returned. You can use one of SML's built-in named formats or a custom format string. Supported named formats: `fixed` `general number` `none` `percent` `scientific` `standard` Custom format strings should be in quotes and contain one to four sections, separated by semicolons.",
+      "type": "string"
+    },
+    "unrelated_dimensions_handling": {
+      "description": "Determines how the semantic engine behaves when all of the following conditions are true: A client queries a model that contains multiple fact datasets. The data in each fact dataset are at a different level of granularity than the data in the other fact datasets. The query references dimensions that are not related to the metrics being queried.",
+      "type": "string"
+    },
+    "is_hidden": {
+      "description": "Determines whether the metric is visible in BI tools.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "unique_name",
+    "object_type",
+    "label",
+    "calculation_method",
+    "dataset",
+    "column"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "SemiAdditiveDegenerateDimensions": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The unique name of the degenerate dimension.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "dimension"
+          }
+        },
+        "level": {
+          "description": "The specific level within the degenerate dimension.",
+          "type": "string",
+          "x-sml-ref": {
+            "kind": "level",
+            "in": {
+              "dimension": "0/name"
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "level"
+      ],
+      "additionalProperties": true
+    },
+    "SemiAdditive": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "description": "Determines whether the metric is First Non-Empty, Last Non-Empty, First Child or Last Child.",
+          "type": "string",
+          "enum": [
+            "first",
+            "last"
+          ]
+        },
+        "relationships": {
+          "description": "A list of the relationships connecting to the dimensional attributes whose values should not be summarized by the metric. You can define as many as needed in the list. **Note:** This list should not include relationships to degenerate dimensions; those must be defined via the `degenerate_dimensions` property (see below). Relationships to embedded dimensions must be defined as indented lists, whose subitems construct the path to the nested dimension: In the above example, `relationship1`, `relationship2`, and `relationship5` all define relationships to attributes in first-level dimensions. The third item in the list defines the path to an embedded dimension, connected to the fact table via `relationship3` and `relationship4`. **Note:** For semi-additive metrics that contain embedded dimensions, the following restrictions apply to the non-additive component of first non-empty/last non-empty value metrics: Only the leaf levels of the embedded dimension hierarchies can be referenced. Note that this does not restrict the ability to query at higher levels of the embedded dimension hierarchy. Embedded dimensions cannot be referenced via many-to-many relationships. Embedded dimensions cannot be referenced through a path that involves role-playing.\n\n**Required:** Required if `degenerate_dimensions` is undefined; otherwise, it is optional.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array"
+              }
+            ]
+          },
+          "type": "array",
+          "x-sml-ref": {
+            "kind": "relationship"
+          }
+        },
+        "degenerate_dimensions": {
+          "description": "A list of degenerate dimensions whose values should not be summarized. **Note:** This list must only include degenerate dimensions; non-degenerate dimensions must be defined via the `relationships` property (see above).\n\n**Required:** Required if `relationships` is undefined; otherwise, it is optional.",
+          "items": {
+            "$ref": "#/$defs/SemiAdditiveDegenerateDimensions"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "position"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

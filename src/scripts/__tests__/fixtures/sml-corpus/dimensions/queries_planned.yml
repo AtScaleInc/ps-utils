@@ -1,0 +1,119 @@
+unique_name: Queries Planned
+object_type: dimension
+label: Queries Planned
+type: standard
+hierarchies:
+  - unique_name: date_hierarchy
+    label: Date Hierarchy
+    levels:
+      - unique_name: planning_started
+      - unique_name: planning_completed
+        visualize_in_bi_tool: false
+        secondary_attributes:
+          - unique_name: query_id
+            label: Query
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - query_id
+            name_column: query_id
+          - unique_name: planning_started
+            label: Planning Started
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - planning_started
+            name_column: planning_started
+          - unique_name: planning_completed_sa
+            label: Planning Completed
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - planning_completed
+            name_column: planning_completed
+          - unique_name: project_id
+            label: Project
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - project_id
+            name_column: project_id
+          - unique_name: cube_id
+            label: Cube
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - cube_id
+            name_column: cube_id
+          - unique_name: cube_name
+            label: Cube Name
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - cube_name
+            name_column: cube_name
+          - unique_name: logical_plan
+            label: Logical Plan
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - logical_plan
+            name_column: logical_plan
+          - unique_name: physical_plan
+            label: Physical Plan
+            contains_unique_names: false
+            dataset: queries_planned.dataset
+            is_unique_key: false
+            key_columns:
+              - physical_plan
+            name_column: physical_plan
+level_attributes:
+  - unique_name: planning_started
+    label: Planning Started
+    dataset: queries_planned.dataset
+    name_column: planning_started
+    key_columns:
+      - planning_started
+  - unique_name: planning_completed
+    label: Planning Completed
+    dataset: queries_planned.dataset
+    name_column: planning_completed
+    key_columns:
+      - planning_completed
+  - unique_name: query_id
+    label: Query
+    dataset: queries_planned.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: project_id
+    label: Project
+    dataset: queries_planned.dataset
+    name_column: project_id
+    key_columns:
+      - project_id
+  - unique_name: cube_id
+    label: Cube
+    dataset: queries_planned.dataset
+    name_column: cube_id
+    key_columns:
+      - cube_id
+  - unique_name: logical_plan
+    label: Logical Plan
+    dataset: queries_planned.dataset
+    name_column: logical_plan
+    key_columns:
+      - logical_plan
+  - unique_name: physical_plan
+    label: Physical Plan
+    dataset: queries_planned.dataset
+    name_column: physical_plan
+    key_columns:
+      - physical_plan

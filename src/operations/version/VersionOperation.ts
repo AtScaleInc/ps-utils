@@ -1,7 +1,5 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { resolve, dirname } from "node:path";
 import { Operation } from "../Operation.js";
+import { packageVersion } from "../../assets.js";
 import { ParameterSet } from "../../Parameters.js";
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
@@ -23,8 +21,7 @@ export class VersionOperation extends Operation<Params> {
   }
 
   run(_params: Params): void {
-    const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), "../../../package.json");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string; name: string };
+    const pkg = packageVersion(() => import.meta.url);
     this.logger.log(`${pkg.name}@${pkg.version}`);
   }
 }

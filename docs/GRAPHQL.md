@@ -34,6 +34,7 @@
     - [`generateTableauFromNamespace`](#generatetableaufromnamespace)
     - [`generateExcelFromNamespace`](#generateexcelfromnamespace)
     - [`generatePowerbiFromNamespace`](#generatepowerbifromnamespace)
+    - [`generateNotebookFromConnection`](#generatenotebookfromconnection)
   - Testing / Query Processing
     - [`generateQueriesFromSml`](#generatequeriesfromsml)
     - [`generateQueriesFromModel`](#generatequeriesfrommodel)
@@ -52,6 +53,7 @@
     - [`atscaleListDeployments`](#atscalelistdeployments)
     - [`atscaleDeployCatalog`](#atscaledeploycatalog)
     - [`atscaleListModelErrors`](#atscalelistmodelerrors)
+    - [`getDsoCount`](#getdsocount)
   - Web Services
 - [Full SDL](#full-sdl)
 
@@ -229,14 +231,6 @@ mutation {
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation{extractModelFromSml(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){extractModelFromSml(input:{outputModelFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
 ```
 
 ---
@@ -495,8 +489,8 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from XML if omitted) |
 | `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
 | `catalogName` | `String` | No | Override the catalog label (defaults to the XML schema name) |
-| `connectionDb` | `String` | No | Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object |
-| `connectionSchema` | `String` | No | Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object |
+| `connectionDb` | `String` | No | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connectionSchema` | `String` | No | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
 
@@ -1179,6 +1173,66 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateNotebookFromConnection`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Generate a Notebook from a namespace (stub)
+
+**CLI name:** `generate-notebook-from-connection`  |  **REST:** `POST /rest/generate-notebook-from-connection`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `namespaceFile` | `String` | No | The file where the namespace is contained |
+| `namespaceFileUpload` | `Upload` | No | Multipart upload — alternative to `namespaceFile` |
+| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
+| `modelFile` | `String` | No | The file where the models are defined |
+| `modelFileUpload` | `Upload` | No | Multipart upload — alternative to `modelFile` |
+| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
+| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
+| `aliasesFileUpload` | `Upload` | No | Multipart upload — alternative to `aliasesFile` |
+| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
+| `connectionName` | `String` | No | The name of the connection to use |
+| `targetFile` | `String` | No | Target file to output the notebook |
+| `targetFileUpload` | `Upload` | No | Multipart upload — alternative to `targetFile` |
+| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateNotebookFromConnection(input: {
+    namespaceFileContent: "--- # file content"
+    modelFileContent: "--- # file content"
+    connectionFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateNotebookFromConnection(input:{namespaceFileContent: \"--- # file content\", modelFileContent: \"--- # file content\", connectionFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateNotebookFromConnection(input:{namespaceFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 #### Testing / Query Processing
 
 ### `generateQueriesFromSml`
@@ -1194,14 +1248,8 @@ curl -X POST http://localhost:4000/graphql \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
-| `xmlaOutputFile` | `String` | Yes\* | Path to write the XMLA (MDX) query JSON file |
-| `xmlaOutputFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaOutputFile` |
-| `xmlaOutputFileContent` | `String` | No | Raw string content — alternative to `xmlaOutputFile` |
-| `sqlOutputFile` | `String` | Yes\* | Path to write the SQL query JSON file |
-| `sqlOutputFileUpload` | `Upload` | No | Multipart upload — alternative to `sqlOutputFile` |
-| `sqlOutputFileContent` | `String` | No | Raw string content — alternative to `sqlOutputFile` |
-
-\* Required when neither the `Upload` nor `Content` variant is provided.
+| `xmlaOutputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 
 **GraphQL:**
 
@@ -1209,8 +1257,6 @@ curl -X POST http://localhost:4000/graphql \
 mutation {
   generateQueriesFromSml(input: {
     smlDir: "value"
-    xmlaOutputFileContent: "--- # file content"
-    sqlOutputFileContent: "--- # file content"
   }) {
     success output error
     file { filename content mimeType }
@@ -1223,15 +1269,7 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateQueriesFromSml(input:{smlDir: \"value\", xmlaOutputFileContent: \"--- # file content\", sqlOutputFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateQueriesFromSml(input:{xmlaOutputFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
+  -d '{"query":"mutation{generateQueriesFromSml(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ---
@@ -1251,12 +1289,8 @@ curl -X POST http://localhost:4000/graphql \
 | `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
-| `xmlaOutputFile` | `String` | Yes\* | Path to write the XMLA (MDX) query JSON file |
-| `xmlaOutputFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaOutputFile` |
-| `xmlaOutputFileContent` | `String` | No | Raw string content — alternative to `xmlaOutputFile` |
-| `sqlOutputFile` | `String` | Yes\* | Path to write the SQL query JSON file |
-| `sqlOutputFileUpload` | `Upload` | No | Multipart upload — alternative to `sqlOutputFile` |
-| `sqlOutputFileContent` | `String` | No | Raw string content — alternative to `sqlOutputFile` |
+| `xmlaOutputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
 
@@ -1266,8 +1300,6 @@ curl -X POST http://localhost:4000/graphql \
 mutation {
   generateQueriesFromModel(input: {
     modelFileContent: "--- # file content"
-    xmlaOutputFileContent: "--- # file content"
-    sqlOutputFileContent: "--- # file content"
   }) {
     success output error
     file { filename content mimeType }
@@ -1280,7 +1312,7 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateQueriesFromModel(input:{modelFileContent: \"--- # file content\", xmlaOutputFileContent: \"--- # file content\", sqlOutputFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{generateQueriesFromModel(input:{modelFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
@@ -1668,6 +1700,8 @@ curl -X POST http://localhost:4000/graphql \
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `enableMcp` | `Boolean` | No | Enable the AtScale MCP server sub-chart (atscale-mcp.enabled). Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false. |
 | `minimal` | `Boolean` | No | Emit additional Helm values that reduce the hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes. |
+| `externalPostgres` | `Boolean` | No | Emit Helm values that point AtScale at an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and wires each service's externalDatabase block to Kubernetes secrets. The connection credentials (host/port/user/password) are NOT taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA) rather than `public`; the operator must create that schema before install (a CREATE SCHEMA statement is included in the emitted header comment). Verified against AtScale Helm chart 2026.5.0. |
+| `gatekeeperCompliant` | `Boolean` | No | Emit Helm values that satisfy common OPA Gatekeeper constraints: sets image.pullPolicy=Always and serviceAccount.create=true per subchart, and resource requests/limits via global.resourcesPreset (poc when combined with --minimal, otherwise prod). Some constraints cannot be met via values.yaml and require a namespace exemption; these are listed in a comment in the output. Verified against AtScale Helm chart 2026.5.0. |
 
 **GraphQL:**
 
@@ -2062,43 +2096,30 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
-#### Other
-
-### `generateNotebookFromConnection`
+### `getDsoCount`
 
 [↑ Table of Contents](#table-of-contents)
 
-> Generate a Notebook from a namespace (stub)
+> Get the DSO count from models
 
-**CLI name:** `generate-notebook-from-connection`  |  **REST:** `POST /rest/generate-notebook-from-connection`
+**CLI name:** `get-dso-count`  |  **REST:** `POST /rest/get-dso-count`
 
 | Input field | GraphQL type | Required | Description |
 |-------------|-------------|----------|-------------|
-| `namespaceFile` | `String` | No | The file where the namespace is contained |
-| `namespaceFileUpload` | `Upload` | No | Multipart upload — alternative to `namespaceFile` |
-| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
-| `modelFile` | `String` | No | The file where the models are defined |
-| `modelFileUpload` | `Upload` | No | Multipart upload — alternative to `modelFile` |
-| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
-| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFile` | `String` | No | File that defines all the connections |
 | `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
-| `aliasesFileUpload` | `Upload` | No | Multipart upload — alternative to `aliasesFile` |
-| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
-| `connectionName` | `String` | No | The name of the connection to use |
-| `targetFile` | `String` | No | Target file to output the notebook |
-| `targetFileUpload` | `Upload` | No | Multipart upload — alternative to `targetFile` |
-| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
+| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
 
 **GraphQL:**
 
 ```graphql
 mutation {
-  generateNotebookFromConnection(input: {
-    namespaceFileContent: "--- # file content"
-    modelFileContent: "--- # file content"
+  getDsoCount(input: {
     connectionFileContent: "--- # file content"
+    connectionName: "value"
   }) {
     success output error
     file { filename content mimeType }
@@ -2111,18 +2132,20 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateNotebookFromConnection(input:{namespaceFileContent: \"--- # file content\", modelFileContent: \"--- # file content\", connectionFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{getDsoCount(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateNotebookFromConnection(input:{namespaceFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'operations={"query":"mutation($f:Upload!){getDsoCount(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
 
 ---
+
+#### Other
 
 ### `echoConnectionMetadata`
 
@@ -2221,30 +2244,26 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
-### `getDsoCount`
+### `generateSmlDocs`
 
 [↑ Table of Contents](#table-of-contents)
 
-> Get the DSO count from models
+> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
 
-**CLI name:** `get-dso-count`  |  **REST:** `POST /rest/get-dso-count`
+**CLI name:** `generate-sml-docs`  |  **REST:** `POST /rest/generate-sml-docs`
 
 | Input field | GraphQL type | Required | Description |
 |-------------|-------------|----------|-------------|
-| `connectionFile` | `String` | No | File that defines all the connections |
-| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
-| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `connectionName` | `String` | Yes | The name of the connection in the connection file |
-| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
-| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
+| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
 
 **GraphQL:**
 
 ```graphql
 mutation {
-  getDsoCount(input: {
-    connectionFileContent: "--- # file content"
-    connectionName: "value"
+  generateSmlDocs(input: {
+    smlDir: "value"
   }) {
     success output error
     file { filename content mimeType }
@@ -2257,15 +2276,7 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{getDsoCount(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){getDsoCount(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
+  -d '{"query":"mutation{generateSmlDocs(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ---
@@ -2337,10 +2348,6 @@ input ExtractModelFromAtscaleInput {
   connectionName: String!
   """Output file path for extracted model"""
   outputModelFile: String
-  """Uploaded file — alternative to outputModelFile"""
-  outputModelFileUpload: Upload
-  """Raw file content as a string — alternative to outputModelFile"""
-  outputModelFileContent: String
 }
 
 """Generate a PowerBI workbook from a namespace (stub)"""
@@ -2565,9 +2572,9 @@ input GenerateSmlFromXmlInput {
   connectionType: String
   """Override the catalog label (defaults to the XML schema name)"""
   catalogName: String
-  """Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object"""
+  """Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionDb: String
-  """Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object"""
+  """Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionSchema: String
 }
 
@@ -2585,6 +2592,16 @@ input ApplyStyleToSmlInput {
   labelStyle: String
   """Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml."""
   catalogName: String
+}
+
+"""Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""
+input GenerateSmlDocsInput {
+  """Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)"""
+  smlDir: String!
+  """Output Markdown file. A relative path is written inside the SML directory; an absolute path is used as-is. Defaults to README.md."""
+  outputFile: String
+  """H1 title for the document. Defaults to the catalog label / unique_name."""
+  title: String
 }
 
 """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
@@ -2625,10 +2642,6 @@ input ExtractModelFromSmlInput {
   connectionName: String
   """Output file path for the model YAML (omit to print to stdout)"""
   outputModelFile: String
-  """Uploaded file — alternative to outputModelFile"""
-  outputModelFileUpload: Upload
-  """Raw file content as a string — alternative to outputModelFile"""
-  outputModelFileContent: String
 }
 
 """Generate a namespace YAML from a model.yaml file using analysis suggestions"""
@@ -2649,10 +2662,6 @@ input GenerateNamespaceFromModelInput {
   minScore: String
   """Output path for the namespace YAML (omit to print to stdout)"""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
 }
 
 """Generate ranked metric suggestions from a model.yaml file using the analysis-suggestions engine"""
@@ -2681,10 +2690,6 @@ input GenerateMetricsFromModelInput {
   format: String
   """Output path (omit to print to stdout)"""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
 }
 
 """Execute a SQL file against a named database connection"""
@@ -2725,10 +2730,6 @@ input ExtractDdlFromConnectionInput {
   tables: String
   """Output file path for the DDL. Omit to print to stdout."""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
   """Match table names case-insensitively. Default is case-sensitive matching."""
   caseInsensitive: Boolean
 }
@@ -2891,10 +2892,6 @@ input ExecuteQueryOnConnectionInput {
   queryName: String!
   """Path to write query results. SQL results are written as CSV; XMLA results are written as raw XML."""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
 }
 
 """Generate a Helm values.yaml for an AtScale Kubernetes deployment, optionally creating a self-signed TLS certificate for the provided hostname"""
@@ -2917,14 +2914,14 @@ input GenerateAtscaleInstallYamlInput {
   licenseKey: String
   """Output file path for the generated values.yaml"""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
   """Enable the AtScale MCP server sub-chart (atscale-mcp.enabled). Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false."""
   enableMcp: Boolean
   """Emit additional Helm values that reduce the hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes."""
   minimal: Boolean
+  """Emit Helm values that point AtScale at an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and wires each service's externalDatabase block to Kubernetes secrets. The connection credentials (host/port/user/password) are NOT taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA) rather than `public`; the operator must create that schema before install (a CREATE SCHEMA statement is included in the emitted header comment). Verified against AtScale Helm chart 2026.5.0."""
+  externalPostgres: Boolean
+  """Emit Helm values that satisfy common OPA Gatekeeper constraints: sets image.pullPolicy=Always and serviceAccount.create=true per subchart, and resource requests/limits via global.resourcesPreset (poc when combined with --minimal, otherwise prod). Some constraints cannot be met via values.yaml and require a namespace exemption; these are listed in a comment in the output. Verified against AtScale Helm chart 2026.5.0."""
+  gatekeeperCompliant: Boolean
 }
 
 """List data sources (data warehouses) registered in an AtScale instance"""
@@ -3087,10 +3084,6 @@ input GenerateDdlFromAtscaleInput {
   tables: String
   """Output file path for the generated DDL. Omit to print to stdout."""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
   """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
   insecure: Boolean
 }
@@ -3109,10 +3102,6 @@ input ExtractDataShapeFromConnectionInput {
   smlPath: String!
   """Output path for the fingerprint YAML (default: data-shape.yaml)"""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
   """Target row count when sampling large fact tables for density profiling (default: 100000; 0 = no sampling)"""
   targetFactRows: Int
   """Target row count for measure column distribution sampling (default: 10000; 0 = no sampling)"""
@@ -3135,10 +3124,6 @@ input GenerateDdlFromDataShapeInput {
   inputFileContent: String
   """Output path for the generated DDL.  Omit to write to stdout."""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
   """SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery"""
   dialect: String
   """Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true."""
@@ -3219,10 +3204,6 @@ input GenerateEnhancedQueryResultsInput {
   connectionName: String!
   """Output path for the enhanced CSV. Defaults to {results-file-stem}_enhanced.csv in the same directory."""
   outputFile: String
-  """Uploaded file — alternative to outputFile"""
-  outputFileUpload: Upload
-  """Raw file content as a string — alternative to outputFile"""
-  outputFileContent: String
   """Postgres schema prefix for the AtScale backend tables (e.g. 'engine' or 'atscale'). Auto-detected from the connection file when omitted (installer → 'atscale', container → 'engine')."""
   dbSchema: String
   """How far back in the AtScale query log to search (default: 7). Increase if the harness run was more than a week ago."""
@@ -3271,16 +3252,8 @@ input GenerateQueriesFromSmlInput {
   cubeName: String
   """Path to write the XMLA (MDX) query JSON file"""
   xmlaOutputFile: String
-  """Uploaded file — alternative to xmlaOutputFile"""
-  xmlaOutputFileUpload: Upload
-  """Raw file content as a string — alternative to xmlaOutputFile"""
-  xmlaOutputFileContent: String
   """Path to write the SQL query JSON file"""
   sqlOutputFile: String
-  """Uploaded file — alternative to sqlOutputFile"""
-  sqlOutputFileUpload: Upload
-  """Raw file content as a string — alternative to sqlOutputFile"""
-  sqlOutputFileContent: String
 }
 
 """Read a model.yaml file and generate XMLA and SQL query JSON files covering every metric (grand-total) and every hierarchy level (per-level breakdown), compatible with execute-atscale-query-harness"""
@@ -3297,16 +3270,8 @@ input GenerateQueriesFromModelInput {
   cubeName: String
   """Path to write the XMLA (MDX) query JSON file"""
   xmlaOutputFile: String
-  """Uploaded file — alternative to xmlaOutputFile"""
-  xmlaOutputFileUpload: Upload
-  """Raw file content as a string — alternative to xmlaOutputFile"""
-  xmlaOutputFileContent: String
   """Path to write the SQL query JSON file"""
   sqlOutputFile: String
-  """Uploaded file — alternative to sqlOutputFile"""
-  sqlOutputFileUpload: Upload
-  """Raw file content as a string — alternative to sqlOutputFile"""
-  sqlOutputFileContent: String
 }
 
 """Get the DSO count from models"""
@@ -3349,6 +3314,8 @@ type Mutation {
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
   """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
   applyStyleToSml(input: ApplyStyleToSmlInput): OperationResult!
+  """Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""
+  generateSmlDocs(input: GenerateSmlDocsInput): OperationResult!
   """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
   generateSharedModelPlan(input: GenerateSharedModelPlanInput): OperationResult!
   """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""

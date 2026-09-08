@@ -56,12 +56,12 @@ class GenerateSMLFromXMLParamsSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "connection-db";
-      description = "Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object";
+      description = "Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML";
       required    = false;
     })(),
     new (class extends StringParameter {
       name        = "connection-schema";
-      description = "Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object";
+      description = "Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML";
       required    = false;
     })(),
   ];

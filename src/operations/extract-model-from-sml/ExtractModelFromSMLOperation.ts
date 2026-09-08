@@ -6,6 +6,7 @@
  *
  *   <sml-dir>/
  *     catalog.yml
+ *     calculations/<metric-calc>.yml
  *     connections/<name>.yml
  *     datasets/<table>.yml
  *     dimensions/<dimension>.yml
@@ -154,14 +155,19 @@ export class ExtractModelFromSMLOperation extends Operation<Params> {
     const yaml = this.services.get<YamlService>("yaml");
 
     // ---- Load all SML sub-directories ----
-    const modelsMap     = this.readYamlDir(path.join(smlDir, "models"),      yaml);
-    const metricsMap    = this.readYamlDir(path.join(smlDir, "metrics"),     yaml);
-    const dimensionsMap = this.readYamlDir(path.join(smlDir, "dimensions"),  yaml);
-    const datasetsMap   = this.readYamlDir(path.join(smlDir, "datasets"),    yaml);
-    const connectionsMap = this.readYamlDir(path.join(smlDir, "connections"), yaml);
+    const modelsMap      = this.readYamlDir(path.join(smlDir, "models"),       yaml);
+    const metricsMap     = this.readYamlDir(path.join(smlDir, "metrics"),      yaml);
+    const calculationsMap = this.readYamlDir(path.join(smlDir, "calculations"), yaml);
+    const dimensionsMap  = this.readYamlDir(path.join(smlDir, "dimensions"),   yaml);
+    const datasetsMap    = this.readYamlDir(path.join(smlDir, "datasets"),     yaml);
+    const connectionsMap = this.readYamlDir(path.join(smlDir, "connections"),  yaml);
+
+    for (const [key, value] of calculationsMap) {
+      metricsMap.set(key, value);
+    }
 
     this.logger.info(
-      `Loaded ${modelsMap.size} model(s), ${metricsMap.size} metric(s), ` +
+      `Loaded ${modelsMap.size} model(s), ${metricsMap.size} metric/calculation(s), ` +
       `${dimensionsMap.size} dimension(s), ${datasetsMap.size} dataset(s)`,
     );
 
@@ -278,9 +284,14 @@ export class ExtractModelFromSMLOperation extends Operation<Params> {
     const relatedDimNames = new Set<string>(
       (modelData.relationships ?? [])
         .map((r: any) => r.to?.dimension)
-        .filter(Boolean),
+        .filter((value: unknown): value is string => typeof value === "string" && value.length > 0),
     );
-    const degenerateDims: string[] = modelData.dimensions ?? [];
+    const degenerateDims = (modelData.dimensions ?? [])
+      .map((dimension: any) => {
+        if (typeof dimension === "string") return dimension;
+        return dimension?.unique_name ?? dimension?.uniqueName;
+      })
+      .filter((value: unknown): value is string => typeof value === "string" && value.length > 0);
     const allDimNames = [...relatedDimNames, ...degenerateDims];
 
     const mdxAttributes: Record<string, Record<string, any[]>> = {};

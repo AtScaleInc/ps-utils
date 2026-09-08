@@ -1,0 +1,6 @@
+unique_name: testconn
+object_type: connection
+label: testconn
+as_connection: testconn
+database: atscale
+schema: atscale

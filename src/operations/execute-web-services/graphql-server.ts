@@ -71,16 +71,28 @@ function esc(s: string): string {
  * Returns true when the parameter is an output directory.
  * Convention: name ends with "-dir" AND contains "output" (e.g. "output-dir").
  */
-function isOutputDirParam(paramName: string): boolean {
+export function isOutputDirParam(paramName: string): boolean {
   return paramName.endsWith("-dir") && paramName.includes("output");
 }
 
 /**
  * Returns true when the parameter is an output file path.
- * Convention: equals "output-file" or starts with "output-" and ends with "-file".
+ * Convention: name ends with "-file" AND contains "output" — the same shape as
+ * the output-directory rule above, so "output-file", "output-model-file" and
+ * "xmla-output-file" are all recognized wherever the word sits in the name.
  */
-function isOutputFileParam(paramName: string): boolean {
-  return paramName === "output-file" || (paramName.startsWith("output-") && paramName.endsWith("-file"));
+export function isOutputFileParam(paramName: string): boolean {
+  return paramName.endsWith("-file") && paramName.includes("output");
+}
+
+/**
+ * File name for an injected output path, derived from the parameter name
+ * ("output-file" → "output", "xmla-output-file" → "xmla-output").
+ * Collected files are keyed by name when zipped, so operations writing more
+ * than one output file need distinct names or all but one are dropped.
+ */
+export function injectedOutputFileName(paramName: string): string {
+  return paramName.replace(/-file$/, "");
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -192,8 +204,13 @@ export interface OpMeta {
   params: ParamMeta[];
 }
 
-function isFileParam(paramName: string): boolean {
+export function isFileParam(paramName: string): boolean {
   return paramName.endsWith("-file");
+}
+
+/** Returns true when the parameter is a directory (input or output). */
+export function isDirParam(paramName: string): boolean {
+  return paramName.endsWith("-dir") || paramName.endsWith("-folder");
 }
 
 function gqlParamType(param: { isFlag: boolean; parse: (s: string) => unknown }): string {
@@ -210,16 +227,21 @@ export function buildOpMetas(registry: OperationRegistry): OpMeta[] {
     .map((op) => {
       const mutName = toCamel(op.name);
       const inputTypeName = toPascal(op.name) + "Input";
-      const params: ParamMeta[] = op.parameters.parameters.map((p) => ({
-        paramName: p.name,
-        fieldName: toCamel(p.name),
-        description: p.description,
-        gqlType: gqlParamType(p as Parameters<typeof gqlParamType>[0]),
-        required: p.required && p.defaultValue === undefined,
-        isFile: isFileParam(p.name),
-        isOutputDir: isOutputDirParam(p.name),
-        isOutputFile: isOutputFileParam(p.name),
-      }));
+      const params: ParamMeta[] = op.parameters.parameters.map((p) => {
+        const isOutputFile = isOutputFileParam(p.name);
+        return {
+          paramName: p.name,
+          fieldName: toCamel(p.name),
+          description: p.description,
+          gqlType: gqlParamType(p as Parameters<typeof gqlParamType>[0]),
+          required: p.required && p.defaultValue === undefined,
+          // An output file is written by the operation, never supplied by the
+          // caller, so it gets no Upload / Content variants.
+          isFile: isFileParam(p.name) && !isOutputFile,
+          isOutputDir: isOutputDirParam(p.name),
+          isOutputFile,
+        };
+      });
       return { opName: op.name, mutName, inputTypeName, description: op.description, params };
     });
 }
@@ -362,7 +384,7 @@ async function runOpWithOutputCollection(
     const tmpDir = join(tmpdir(), `out-${randomUUID()}`);
     await mkdir(tmpDir, { recursive: true });
     tempDirs.push(tmpDir);
-    rawParams[p.paramName] = join(tmpDir, "output");
+    rawParams[p.paramName] = join(tmpDir, injectedOutputFileName(p.paramName));
   }
 
   const result = await runOp(op, rawParams);

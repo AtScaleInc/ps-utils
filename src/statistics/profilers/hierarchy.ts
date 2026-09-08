@@ -34,7 +34,7 @@ export async function profileHierarchies(
   idMapper:  IdMapper,
 ): Promise<HierarchyFingerprint[]> {
   const results: HierarchyFingerprint[] = [];
-  const tableRef = qualifyTable(dim.sourceSchema, dim.sourceTable);
+  const defaultTableRef = qualifyTable(dim.sourceSchema, dim.sourceTable);
 
   for (const hier of dim.hierarchies) {
     const levelFps: LevelFingerprint[] = [];
@@ -43,6 +43,15 @@ export async function profileHierarchies(
       const level      = hier.levels[i]!;
       const parentLevel = i > 0 ? hier.levels[i - 1] : null;
       const keyCol      = level.keyColumns[0]!;
+
+      // Snowflake-schema hierarchies normalize each level into its own physical
+      // table (e.g. dimproductcategory → dimproductsubcategory → dimproduct).
+      // Query the level's OWN table when one is recorded; fall back to the
+      // dimension's default table for star-schema hierarchies where every
+      // level lives in one denormalized row.
+      const tableRef = level.sourceTable
+        ? qualifyTable(level.sourceSchema ?? dim.sourceSchema, level.sourceTable)
+        : defaultTableRef;
 
       // ── Cardinality + null fraction ──────────────────────────────────────
       const cardRows = await runner.query(`
@@ -68,9 +77,16 @@ export async function profileHierarchies(
       }
 
       // ── Rollup ratio from parent ─────────────────────────────────────────
+      // In a snowflake-schema hierarchy, the child level's own table already
+      // carries the FK column pointing at its parent (that's what makes it a
+      // child) — no cross-table JOIN is needed, just the right column name.
+      // `parentKeyColumn` (resolved from the dimension's `relationships`
+      // block) gives that FK column when it differs from the parent's own
+      // key column name; star-schema hierarchies (single shared table) fall
+      // back to the parent's key column name unchanged.
       let rollupFromParent: RollupEdgeFingerprint | undefined;
       if (parentLevel) {
-        const parentKeyCol = parentLevel.keyColumns[0]!;
+        const parentKeyCol = level.parentKeyColumn ?? parentLevel.keyColumns[0]!;
         rollupFromParent = await profileRollupEdge(
           runner, tableRef, parentKeyCol, keyCol,
         );

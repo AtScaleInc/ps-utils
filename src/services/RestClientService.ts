@@ -41,6 +41,7 @@ export type RestAuth =
   | { type: "basic"; username: string; password: string }
   | { type: "api-key"; header: string; value: string }
   | { type: "cookie"; name: string; value: string }
+  | { type: "cookie-header"; value: string }
   | { type: "none" };
 
 // ── RestEnvironment ────────────────────────────────────────────────────────────
@@ -370,6 +371,9 @@ export class RestClientService extends ServiceProvider {
         break;
       case "cookie":
         headers["Cookie"] = `${auth.name}=${auth.value}`;
+        break;
+      case "cookie-header":
+        headers["Cookie"] = auth.value;
         break;
       case "none":
         break;

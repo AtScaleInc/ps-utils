@@ -141,6 +141,17 @@ function makeKeyGen(): (title: string) => string {
   };
 }
 
+/** Return a deduplicating title-generation function (human-readable). */
+function makeTitleGen(): (title: string) => string {
+  const seen = new Map<string, number>();
+  return (title: string) => {
+    const key = title.toLowerCase();
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    return count === 1 ? title : `${title} (${count})`;
+  };
+}
+
 function buildNamespace(
   modelName:  string,
   modelData:  Record<string, any>,
@@ -162,7 +173,8 @@ function buildNamespace(
     return DATETIME_TYPES.has(dt);
   }
 
-  const keyGen = makeKeyGen();
+  const keyGen   = makeKeyGen();
+  const titleGen = makeTitleGen();
 
   // ---- Text (scorecard) worksheets — one per measure, capped at 6 ----
   const textWs: Record<string, any>  = {};
@@ -198,7 +210,7 @@ function buildNamespace(
       const hier      = s.hierarchies[0];
       const timeLevel = resolveLevel(hier.dimensionName, hier.levels[0]);
       const gran      = granularityFor(colTypeMap.get(timeLevel) ?? "DATETIME");
-      const wsTitle   = titleWithGranularity(s.title, gran);
+      const wsTitle   = titleGen(titleWithGranularity(s.title, gran));
       const ws: Record<string, any> = {
         title:             wsTitle,
         model:             modelName,
@@ -220,7 +232,7 @@ function buildNamespace(
       const otherHier = s.hierarchies.find((h) => h !== timeHier);
       const timeLevel = resolveLevel(timeHier.dimensionName, timeHier.levels[0]);
       const gran      = granularityFor(colTypeMap.get(timeLevel) ?? "DATETIME");
-      const wsTitle   = titleWithGranularity(s.title, gran);
+      const wsTitle   = titleGen(titleWithGranularity(s.title, gran));
 
       const ws: Record<string, any> = {
         title:             wsTitle,
@@ -242,7 +254,7 @@ function buildNamespace(
       const primaryLevel = resolveLevel(primaryHier.dimensionName, primaryHier.levels[0]);
 
       const ws: Record<string, any> = {
-        title:       s.title,
+        title:       titleGen(s.title),
         model:       modelName,
         graphType:   "bar",
         xAxis:       measureCol,

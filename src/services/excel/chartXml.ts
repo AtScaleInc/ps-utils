@@ -169,7 +169,8 @@ export function buildDrawingXml(anchors: DrawingAnchor[]): string {
     `<xdr:cNvGraphicFramePr>` +
     `<a:graphicFrameLocks noGrp="1"/>` +
     `</xdr:cNvGraphicFramePr>` +
-    `<xdr:nvPr/>` +
+    // CT_GraphicalObjectFrameNonVisual permits only cNvPr + cNvGraphicFramePr.
+    // An <xdr:nvPr/> here is invalid and triggers Excel's "Drawing shape" repair.
     `</xdr:nvGraphicFramePr>` +
     `<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>` +
     `<a:graphic><a:graphicData uri="${C_NS}">` +

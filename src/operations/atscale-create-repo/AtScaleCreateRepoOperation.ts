@@ -10,9 +10,9 @@ import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import {
   AtScaleRestClientService,
-  AtScaleEnvironment,
   type RepoType,
 } from "../../services/AtScaleRestClientService.js";
+import { resolveAtScaleEnv } from "../atscale-env.js";
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -77,61 +77,6 @@ export type AtScaleCreateRepoParams = Params;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resolveAtScaleEnv(
-  config: Record<string, any>,
-  connectionName: string,
-  insecureOverride?: boolean,
-): AtScaleEnvironment {
-  const connections: Record<string, any> = config.connections ?? {};
-  const entry = connections[connectionName];
-  if (!entry) {
-    throw new Error(`Connection '${connectionName}' not found in connections file`);
-  }
-  const atscale = entry.atscale;
-  if (!atscale) {
-    throw new Error(`Connection '${connectionName}' is missing an 'atscale:' block`);
-  }
-  const url = atscale.url;
-  if (!url) {
-    throw new Error(`Connection '${connectionName}'.atscale is missing 'url'`);
-  }
-  let username: string | undefined = atscale.username;
-  let password: string | undefined = atscale.password;
-  if (atscale.user) {
-    const users: Record<string, any> = config.users ?? {};
-    const userEntry = users[atscale.user];
-    if (userEntry) {
-      username ??= userEntry.username;
-      password ??= userEntry.password;
-    }
-  }
-  if (!atscale.apiToken) {
-    if (!username) {
-      throw new Error(
-        `Connection '${connectionName}'.atscale is missing 'username' (or a 'user' key referencing the users block). ` +
-        "Alternatively, set 'apiToken' to use a Design Center API token instead.",
-      );
-    }
-    if (!password) {
-      throw new Error(
-        `Connection '${connectionName}'.atscale is missing 'password'. ` +
-        "Alternatively, set 'apiToken' to use a Design Center API token instead.",
-      );
-    }
-  }
-  return new AtScaleEnvironment({
-    baseUrl:       url,
-    username,
-    password,
-    realm:         atscale.realm,
-    clientId:      atscale.clientId,
-    clientSecret:  atscale.clientSecret,
-    authType:      atscale.authType,
-    apiToken:      atscale.apiToken,
-    sessionCookie: atscale.sessionCookie,
-    insecure:      insecureOverride ?? atscale.insecure,
-  });
-}
 
 // ── Operation ─────────────────────────────────────────────────────────────────
 

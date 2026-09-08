@@ -1,0 +1,14 @@
+unique_name: query_parts.dataset
+object_type: dataset
+label: Query Parts
+connection_id: testconn
+table: query_parts
+columns:
+  - name: query_id
+    data_type: string
+  - name: query_part
+    data_type: string
+  - name: query_part_name
+    data_type: string
+  - name: parent_part
+    data_type: string

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atscale.com/schemas/sml/calculation.schema.json",
+  "title": "SML Calculation",
+  "description": "Generated from resources/sml-reference/calculation.md — do not edit by hand.\nRun `npm run generate:sml-schema` to regenerate; see resources/sml-reference/UPSTREAM.md\nfor the pinned specification revision.\n\n`additionalProperties` is true throughout: the specification prose lags the\nimplementation, so a closed schema would reject valid files. Known gaps: `visualize_in_bi_tool` (hierarchy level references, emitted by src/algorithm/sml-serializer.ts); `is_unique_key` (secondary attributes, emitted by src/algorithm/sml-serializer.ts. The reference documents this key on LevelAttribute and SharedDegenerateColumns but not here, which is why the allowlist is scoped by class rather than by key).",
+  "type": "object",
+  "properties": {
+    "unique_name": {
+      "description": "The unique name of the calculation. This must be unique across all repositories and subrepositories.",
+      "type": "string"
+    },
+    "object_type": {
+      "description": "The type of object defined by the file. For calculations, the value of this property must be `metric_calc`.",
+      "const": "metric_calc"
+    },
+    "label": {
+      "description": "The name of the calculation as it appears in SML. This value does not need to be unique.",
+      "type": "string"
+    },
+    "expression": {
+      "description": "The MDX expression to use for the calculation. This expression must be written in MDX syntax, surrounded by quotes (\"). Additionally, it can only operate on existing metrics in the model, and must return a numeric value.",
+      "type": "string"
+    },
+    "description": {
+      "description": "A description of the calculation.",
+      "type": "string"
+    },
+    "format": {
+      "description": "The format of the values returned by the calculation. You can use one of SML's built-in named formats, or a custom string format. Supported named formats: `fixed` `general number` `none` `percent` `scientific` `standard` Custom format strings should be in quotes (\") and contain one to four sections, separated by semicolons.",
+      "type": "string"
+    },
+    "is_hidden": {
+      "description": "Determines whether the calculation is visible in BI tools.",
+      "type": "boolean"
+    },
+    "mdx_aggregation_function": {
+      "type": "string",
+      "enum": [
+        "SUM",
+        "MAX",
+        "MIN",
+        "COUNT",
+        "AVG"
+      ]
+    },
+    "mdx_aggregate_function": {
+      "description": "_Not described in the SML reference prose; adopted from the specification's own entity-relationship diagram._",
+      "type": "string"
+    }
+  },
+  "required": [
+    "unique_name",
+    "object_type",
+    "label",
+    "expression"
+  ],
+  "additionalProperties": true
+}

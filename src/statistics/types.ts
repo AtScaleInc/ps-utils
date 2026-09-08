@@ -111,6 +111,26 @@ export interface LevelNode {
   /** Optional companion column that holds the human-readable display value. */
   labelColumn?: string;
   isLeaf:       boolean;
+  /**
+   * Physical table/schema this level's own columns actually live in, when it
+   * differs from the dimension's default sourceTable — i.e. a snowflake-schema
+   * hierarchy where each level is normalized into its own physical table
+   * (e.g. dimproductcategory → dimproductsubcategory → dimproduct), rather than
+   * a single denormalized star-schema table shared by every level.
+   * Falls back to the dimension's sourceTable/sourceSchema when absent.
+   */
+  sourceTable?:  string;
+  sourceSchema?: string;
+  /**
+   * FK column — present in THIS level's own sourceTable — that references the
+   * parent level's key column. Only needed when this level's table differs
+   * from the parent level's table; resolved from the dimension's internal
+   * `relationships` block (snowflake-schema hierarchies). Falls back to using
+   * the parent level's own key column name when absent, which is correct for
+   * single-table (star-schema) hierarchies where every level's key is just
+   * another column on the same shared row.
+   */
+  parentKeyColumn?: string;
 }
 
 export interface JoinEdge {

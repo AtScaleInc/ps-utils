@@ -7,13 +7,14 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { EjsTemplateService } from "../../services/EjsTemplateService.js";
+import { operationAssetDir } from "../../assets.js";
 import fs from "fs";
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
+
+/** Directory of this operation's .ejs templates (dist tree or bundled assets). */
+const templateDir = (): string => operationAssetDir(() => import.meta.url, "generate-tableau-from-namespace");
 
 class GenerateTableauParameterSet extends TemplateParameterSet {
   parameters = [
@@ -74,8 +75,8 @@ export class GenerateTableauFromNamespaceOperation extends TemplateOperation<Gen
 
     this.logger.verbose(`Reading model file: ${modelFile}`);
     const rawModelData = yaml.readFromFile<Record<string, unknown>>(modelFile);
-    const aliasesFile  = params["aliases-file"];
-    const aliasesData  = aliasesFile
+    const aliasesFile = params["aliases-file"];
+    const aliasesData = aliasesFile
       ? yaml.readFromFile<Record<string, unknown>>(aliasesFile)
       : null;
     const modelData = yaml.augmentModelData(rawModelData, aliasesData);
@@ -107,14 +108,14 @@ schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin
 
       
 */
-    connection={...connection, jdbcUrl: `jdbc:${connection.sql.dialect}ql://${connection.sql.server}:${connection.sql.port}/${connection.sql.schema}`};
-    connection={...connection, class: "genericjdbc"};
-    connection={...connection, user: connectionData.users[connection.sql.user]};
+    connection = { ...connection, jdbcUrl: `jdbc:${connection.sql.dialect}ql://${connection.sql.server}:${connection.sql.port}/${connection.sql.schema}` };
+    connection = { ...connection, class: "genericjdbc" };
+    connection = { ...connection, user: connectionData.users[connection.sql.user] };
 
     this.logger.verbose("Reading overview namespace: " + params["namespace-file"]);
     const overviewData = yaml.readFromFile<Record<string, unknown>>(params["namespace-file"]);
 
-    const templatePath = `${__dirname}/tableau.${version}.twb.ejs`;
+    const templatePath = `${templateDir()}/tableau.${version}.twb.ejs`;
     this.logger.verbose(`Reading EJS template: ${templatePath}`);
     const template = fs.readFileSync(templatePath, "utf8");
 
@@ -138,11 +139,11 @@ schema='Telemetry' server='class-i.training.atscale-se-demo.com' username='admin
           "DATE_DOUBLE": "date",
           "BSTR": "string",
           "BOOL": "boolean",
-          "DECIMAL": "decimal",
+          "DECIMAL": "real",
           "GUID": "string",
           "BYTES": "binary",
           "WSTR": "string",
-          "NUMERIC": "numeric",
+          "NUMERIC": "real",
           "TIME": "time",
           "DATETIME": "datetime"
         } as Record<string, string>,

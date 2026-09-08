@@ -1,0 +1,22 @@
+unique_name: queries_planned.dataset
+object_type: dataset
+label: Queries Planned
+connection_id: testconn
+table: queries_planned
+columns:
+  - name: query_id
+    data_type: string
+  - name: planning_started
+    data_type: datetime
+  - name: planning_completed
+    data_type: datetime
+  - name: project_id
+    data_type: string
+  - name: cube_id
+    data_type: string
+  - name: cube_name
+    data_type: string
+  - name: logical_plan
+    data_type: string
+  - name: physical_plan
+    data_type: string

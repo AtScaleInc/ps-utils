@@ -261,8 +261,13 @@ export class AtScaleDeployCatalogOperation extends Operation<Params> {
       throw new Error(`No model file (object_type: model) found in ${smlDir}`);
     }
 
-    // Infer connection IDs from SML dataset files.
-    const conIds = inferConIds(smlFiles);
+    // Infer connection IDs from SML dataset files, then translate each SML
+    // connection object's unique_name to its AtScale data-warehouse
+    // connection id (`as_connection`) — the deploy endpoint validates conIds
+    // against the registered data warehouses.
+    const conIds = Array.from(new Set(
+      inferConIds(smlFiles).map((id) => connectionsMap.get(id)?.as_connection ?? id),
+    ));
     this.logger.verbose(`[AtScaleDeployCatalog] Inferred connection IDs: ${conIds.join(", ")}`);
 
     // Parse optional Tableau servers.

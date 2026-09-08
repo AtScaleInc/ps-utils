@@ -18,15 +18,19 @@ const SPREADSHEET_NS =
 export function buildConnectionsXml(
   connString: string,
   connectionName: string,
-  catalog: string,
+  cubeName: string,
 ): string {
+  // commandType="1" ("Cube") — command must be the CUBE name Excel queries,
+  // not the catalog/project name. A catalog can expose multiple cubes with
+  // different names; reusing the catalog here produced Excel's "cannot find
+  // OLAP cube <catalog>" error on refresh.
   return (
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<connections xmlns="${SPREADSHEET_NS}">` +
     `<connection id="1" name="${xmlAttr(connectionName)}" ` +
     `type="5" refreshedVersion="8" background="1">` +
     `<dbPr connection="${xmlAttr(connString)}" ` +
-    `command="${xmlAttr(catalog)}" commandType="1"/>` +
+    `command="${xmlAttr(cubeName)}" commandType="1"/>` +
     `<olapPr sendLocale="1" rowDrillCount="1000"/>` +
     `</connection>` +
     `</connections>`
@@ -77,6 +81,14 @@ export function buildCacheDefXml(
   const meas = hierarchies.filter(h => h.isMeasure);
   const groupName = modelName.split(".").pop()!;
 
+  // A single dimension can have multiple hierarchies (e.g. "Date.Calendar" and
+  // "Date.Fiscal" both under the "Date" dimension), so cacheHierarchies has one
+  // entry per hierarchy while <dimensions> must have exactly one entry per
+  // DISTINCT dimension. Building <dimensions> from every hierarchy instead of
+  // deduplicating produced repeated uniqueName entries, which Excel silently
+  // rejects — surfacing as a "PivotTable view" repair on open.
+  const uniqueDimNames = [...new Set(dims.map(h => h.dimensionUniqueName ?? ""))];
+
   const hierParts = hierarchies.map(h =>
     h.isMeasure
       ? `<cacheHierarchy uniqueName="${xmlAttr(h.uniqueName)}" ` +
@@ -96,18 +108,18 @@ export function buildCacheDefXml(
 
   const dimParts = [
     `<dimension measure="1" name="Measures" uniqueName="[Measures]" caption="Measures"/>`,
-    ...dims.map(h => {
-      const dimName = (h.dimensionUniqueName ?? "").replace(/^\[|\]$/g, "");
-      return `<dimension name="${xmlAttr(dimName)}" uniqueName="${xmlAttr(h.dimensionUniqueName ?? "")}" caption="${xmlAttr(dimName)}"/>`;
+    ...uniqueDimNames.map(dimUnique => {
+      const dimName = dimUnique.replace(/^\[|\]$/g, "");
+      return `<dimension name="${xmlAttr(dimName)}" uniqueName="${xmlAttr(dimUnique)}" caption="${xmlAttr(dimName)}"/>`;
     }),
   ];
   const dimsXml = `<dimensions count="${dimParts.length}">${dimParts.join("")}</dimensions>`;
   const mgXml = meas.length > 0
     ? `<measureGroups count="1"><measureGroup name="${xmlAttr(groupName)}" caption="${xmlAttr(groupName)}"/></measureGroups>`
     : "";
-  const mapParts = dims.map((_, i) => `<map measureGroup="0" dimension="${i + 1}"/>`);
-  const mapsXml = dims.length > 0
-    ? `<maps count="${dims.length}">${mapParts.join("")}</maps>`
+  const mapParts = uniqueDimNames.map((_, i) => `<map measureGroup="0" dimension="${i + 1}"/>`);
+  const mapsXml = uniqueDimNames.length > 0
+    ? `<maps count="${uniqueDimNames.length}">${mapParts.join("")}</maps>`
     : "";
 
   return (
@@ -152,21 +164,28 @@ export function buildPivotTableXml(
   const nHier = hierarchies.length;
 
   // ---- location ----
+  // `ref` must describe the pivot table's FULL range, not just its top-left cell,
+  // and firstHeaderRow/firstDataRow/firstDataCol are offsets that must resolve to
+  // cells INSIDE that range. A single-cell ref (e.g. "A15") combined with
+  // firstDataRow="1" points the data row at row 16 — outside the range — which
+  // Excel rejects with a "PivotTable view" repair (and then drops the orphaned
+  // pivotCache as a "Workbook properties" repair). This vestigial OLAP pivot is
+  // empty, so emit the minimal self-consistent block covering the offsets. This
+  // matches the range pattern used by the legacy generate_excel.py generator.
+  const startRef = `${colLetter(anchorCol)}${hdrRow}`;
+  const endRef   = `${colLetter(anchorCol)}${hdrRow + 1}`;
   const locXml =
-    `<location ref="${colLetter(anchorCol)}${hdrRow}" ` +
+    `<location ref="${startRef}:${endRef}" ` +
     `firstHeaderRow="1" firstDataRow="1" firstDataCol="0"/>`;
 
   // ---- pivotHierarchies ----
-  // Measures get dragToData="1"; dimensions get plain <pivotHierarchy/>.
-  // Note: rowFields/colFields/dataFields cannot be pre-populated for OLAP
-  // pivot tables with saveData="0" — Excel requires cached item lists
-  // (rowItems/colItems/pivotItems) which don't exist without saved data.
-  // Data is supplied by CUBE function formulas in rows 2–11 instead.
-  const phParts = hierarchies.map(h =>
-    h.isMeasure
-      ? `<pivotHierarchy dragToRow="0" dragToCol="0" dragToPage="0" dragToData="1"/>`
-      : `<pivotHierarchy/>`,
-  );
+  // This pivot table is intentionally empty — nothing is placed in the row/col/
+  // data areas (data is supplied by CUBE function formulas elsewhere). Every
+  // hierarchy must therefore be a bare <pivotHierarchy/>. Marking measures with
+  // dragToData="1" declares a data-area placement with no backing <dataFields>,
+  // which is inconsistent for a saveData="0" OLAP cache and contributes to the
+  // "PivotTable view" repair. cacheHierarchies count must still equal this count.
+  const phParts = hierarchies.map(() => `<pivotHierarchy/>`);
   const pivotHierXml = nHier > 0
     ? `<pivotHierarchies count="${nHier}">${phParts.join("")}</pivotHierarchies>`
     : "";

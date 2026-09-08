@@ -33,6 +33,7 @@
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+    - [`generate-notebook-from-connection`](#generate-notebook-from-connection)
   - Testing / Query Processing
     - [`generate-queries-from-sml`](#generate-queries-from-sml)
     - [`generate-queries-from-model`](#generate-queries-from-model)
@@ -51,6 +52,7 @@
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+    - [`get-dso-count`](#get-dso-count)
   - Web Services
 
 ---
@@ -187,7 +189,6 @@ curl -X POST http://localhost:4000/rest/extract-model-from-atscale \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/extract-model-from-atscale \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputModelFileUpload=@/path/to/file" \
   -F "model=value" \
   -F "connectionName=value"
 ```
@@ -216,13 +217,6 @@ curl -X POST http://localhost:4000/rest/extract-model-from-sml \
   -d '{
       "smlDir": "value"
   }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/extract-model-from-sml \
-  -F "outputModelFileUpload=@/path/to/file" \
-  -F "smlDir=value"
 ```
 
 ---
@@ -307,7 +301,6 @@ curl -X POST http://localhost:4000/rest/extract-ddl-from-connection \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/extract-ddl-from-connection \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file" \
   -F "connectionName=value" \
   -F "schema=value"
 ```
@@ -435,8 +428,8 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-ddl \
 | `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from XML if omitted) |
 | `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
 | `catalogName` | `String` | No | Override the catalog label (defaults to the XML schema name) |
-| `connectionDb` | `String` | No | Database name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object |
-| `connectionSchema` | `String` | No | Schema name written into the connection file; when set, datasets use a plain table name instead of a nested db/schema/name object |
+| `connectionDb` | `String` | No | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connectionSchema` | `String` | No | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
 
@@ -560,7 +553,6 @@ curl -X POST http://localhost:4000/rest/generate-ddl-from-atscale \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-ddl-from-atscale \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file" \
   -F "atscaleConnectionName=value" \
   -F "dataSourceName=value" \
   -F "database=value"
@@ -651,7 +643,6 @@ curl -X POST http://localhost:4000/rest/extract-data-shape-from-connection \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/extract-data-shape-from-connection \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file" \
   -F "connectionName=value" \
   -F "smlPath=value"
 ```
@@ -687,8 +678,7 @@ curl -X POST http://localhost:4000/rest/generate-ddl-from-data-shape \
 ```bash
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-ddl-from-data-shape \
-  -F "inputFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file"
+  -F "inputFileUpload=@/path/to/file"
 ```
 
 ---
@@ -813,8 +803,7 @@ curl -X POST http://localhost:4000/rest/generate-namespace-from-model \
 ```bash
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-namespace-from-model \
-  -F "modelFileUpload=@/path/to/file" \
-  -F "outputFileUpload=@/path/to/file"
+  -F "modelFileUpload=@/path/to/file"
 ```
 
 ---
@@ -965,6 +954,55 @@ curl -X POST http://localhost:4000/rest/generate-powerbi-from-namespace \
 
 ---
 
+### `generate-notebook-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Generate a Notebook from a namespace (stub)
+
+**Endpoint:** `POST /rest/generate-notebook-from-connection`  |  **GraphQL:** `generateNotebookFromConnection`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `namespaceFile` | `String` | No | The file where the namespace is contained |
+| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
+| `namespaceFileUpload` | file field | No | Multipart upload — alternative to `namespaceFile` |
+| `modelFile` | `String` | No | The file where the models are defined |
+| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
+| `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
+| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
+| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
+| `aliasesFileUpload` | file field | No | Multipart upload — alternative to `aliasesFile` |
+| `connectionName` | `String` | No | The name of the connection to use |
+| `targetFile` | `String` | No | Target file to output the notebook |
+| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
+| `targetFileUpload` | file field | No | Multipart upload — alternative to `targetFile` |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
+  -H "Content-Type: application/json" \
+  -d '{
+      "namespaceFileContent": "--- # inline YAML/file content",
+      "modelFileContent": "--- # inline YAML/file content",
+      "connectionFileContent": "--- # inline YAML/file content",
+      "aliasesFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
+  -F "namespaceFileUpload=@/path/to/file" \
+  -F "modelFileUpload=@/path/to/file"
+```
+
+---
+
 #### Testing / Query Processing
 
 ### `generate-queries-from-sml`
@@ -980,14 +1018,6 @@ curl -X POST http://localhost:4000/rest/generate-powerbi-from-namespace \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
-| `xmlaOutputFile` | `String` | Yes\* | Path to write the XMLA (MDX) query JSON file |
-| `xmlaOutputFileContent` | `String` | No | Raw string content — alternative to `xmlaOutputFile` |
-| `xmlaOutputFileUpload` | file field | No | Multipart upload — alternative to `xmlaOutputFile` |
-| `sqlOutputFile` | `String` | Yes\* | Path to write the SQL query JSON file |
-| `sqlOutputFileContent` | `String` | No | Raw string content — alternative to `sqlOutputFile` |
-| `sqlOutputFileUpload` | file field | No | Multipart upload — alternative to `sqlOutputFile` |
-
-\* Required when neither the `Content` nor `Upload` variant is provided.
 
 **curl (JSON):**
 
@@ -995,18 +1025,8 @@ curl -X POST http://localhost:4000/rest/generate-powerbi-from-namespace \
 curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
   -H "Content-Type: application/json" \
   -d '{
-      "smlDir": "value",
-      "xmlaOutputFileContent": "--- # inline YAML/file content",
-      "sqlOutputFileContent": "--- # inline YAML/file content"
+      "smlDir": "value"
   }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
-  -F "xmlaOutputFileUpload=@/path/to/file" \
-  -F "sqlOutputFileUpload=@/path/to/file" \
-  -F "smlDir=value"
 ```
 
 ---
@@ -1026,12 +1046,6 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
 | `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
-| `xmlaOutputFile` | `String` | Yes\* | Path to write the XMLA (MDX) query JSON file |
-| `xmlaOutputFileContent` | `String` | No | Raw string content — alternative to `xmlaOutputFile` |
-| `xmlaOutputFileUpload` | file field | No | Multipart upload — alternative to `xmlaOutputFile` |
-| `sqlOutputFile` | `String` | Yes\* | Path to write the SQL query JSON file |
-| `sqlOutputFileContent` | `String` | No | Raw string content — alternative to `sqlOutputFile` |
-| `sqlOutputFileUpload` | file field | No | Multipart upload — alternative to `sqlOutputFile` |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
 
@@ -1041,17 +1055,14 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
 curl -X POST http://localhost:4000/rest/generate-queries-from-model \
   -H "Content-Type: application/json" \
   -d '{
-      "modelFileContent": "--- # inline YAML/file content",
-      "xmlaOutputFileContent": "--- # inline YAML/file content",
-      "sqlOutputFileContent": "--- # inline YAML/file content"
+      "modelFileContent": "--- # inline YAML/file content"
   }'
 ```
 
 ```bash
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/generate-queries-from-model \
-  -F "modelFileUpload=@/path/to/file" \
-  -F "xmlaOutputFileUpload=@/path/to/file"
+  -F "modelFileUpload=@/path/to/file"
 ```
 
 ---
@@ -1362,6 +1373,8 @@ curl -X POST http://localhost:4000/rest/execute-run-analysis \
 | `licenseKey` | `String` | No | AtScale license key to embed in the values.yaml. Written to atscale-entitlement.entitlement.licenseKey. If omitted the field is left blank and the key can be uploaded via the UI after install. |
 | `enableMcp` | `Boolean` | No | Enable the AtScale MCP server sub-chart (atscale-mcp.enabled). Accepts true/false, yes/no, 1/0, on/off, or standalone flag. Defaults to false. |
 | `minimal` | `Boolean` | No | Emit additional Helm values that reduce the hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes. |
+| `externalPostgres` | `Boolean` | No | Emit Helm values that point AtScale at an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and wires each service's externalDatabase block to Kubernetes secrets. The connection credentials (host/port/user/password) are NOT taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (KC_DB_SCHEMA) rather than `public`; the operator must create that schema before install (a CREATE SCHEMA statement is included in the emitted header comment). Verified against AtScale Helm chart 2026.5.0. |
+| `gatekeeperCompliant` | `Boolean` | No | Emit Helm values that satisfy common OPA Gatekeeper constraints: sets image.pullPolicy=Always and serviceAccount.create=true per subchart, and resource requests/limits via global.resourcesPreset (poc when combined with --minimal, otherwise prod). Some constraints cannot be met via values.yaml and require a namespace exemption; these are listed in a comment in the output. Verified against AtScale Helm chart 2026.5.0. |
 
 **curl (JSON):**
 
@@ -1668,56 +1681,44 @@ curl -X POST http://localhost:4000/rest/atscale-list-model-errors \
 
 ---
 
-#### Other
-
-### `generate-notebook-from-connection`
+### `get-dso-count`
 
 [↑ Table of Contents](#table-of-contents)
 
-> Generate a Notebook from a namespace (stub)
+> Get the DSO count from models
 
-**Endpoint:** `POST /rest/generate-notebook-from-connection`  |  **GraphQL:** `generateNotebookFromConnection`
+**Endpoint:** `POST /rest/get-dso-count`  |  **GraphQL:** `getDsoCount`
 
 | Field (JSON key) | Type | Required | Description |
 |-----------------|------|----------|-------------|
-| `namespaceFile` | `String` | No | The file where the namespace is contained |
-| `namespaceFileContent` | `String` | No | Raw string content — alternative to `namespaceFile` |
-| `namespaceFileUpload` | file field | No | Multipart upload — alternative to `namespaceFile` |
-| `modelFile` | `String` | No | The file where the models are defined |
-| `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
-| `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
-| `connectionFile` | `String` | No | The file where the connections are defined |
+| `connectionFile` | `String` | No | File that defines all the connections |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
-| `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
-| `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
-| `aliasesFileUpload` | file field | No | Multipart upload — alternative to `aliasesFile` |
-| `connectionName` | `String` | No | The name of the connection to use |
-| `targetFile` | `String` | No | Target file to output the notebook |
-| `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
-| `targetFileUpload` | file field | No | Multipart upload — alternative to `targetFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
+| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
 
 **curl (JSON):**
 
 ```bash
-curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
+curl -X POST http://localhost:4000/rest/get-dso-count \
   -H "Content-Type: application/json" \
   -d '{
-      "namespaceFileContent": "--- # inline YAML/file content",
-      "modelFileContent": "--- # inline YAML/file content",
       "connectionFileContent": "--- # inline YAML/file content",
-      "aliasesFileContent": "--- # inline YAML/file content"
+      "connectionName": "value"
   }'
 ```
 
 ```bash
 # With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
-  -F "namespaceFileUpload=@/path/to/file" \
-  -F "modelFileUpload=@/path/to/file"
+curl -X POST http://localhost:4000/rest/get-dso-count \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "connectionName=value"
 ```
 
 ---
+
+#### Other
 
 ### `echo-connection-metadata`
 
@@ -1792,39 +1793,27 @@ curl -X POST http://localhost:4000/rest/apply-style-to-sml \
 
 ---
 
-### `get-dso-count`
+### `generate-sml-docs`
 
 [↑ Table of Contents](#table-of-contents)
 
-> Get the DSO count from models
+> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
 
-**Endpoint:** `POST /rest/get-dso-count`  |  **GraphQL:** `getDsoCount`
+**Endpoint:** `POST /rest/generate-sml-docs`  |  **GraphQL:** `generateSmlDocs`
 
 | Field (JSON key) | Type | Required | Description |
 |-----------------|------|----------|-------------|
-| `connectionFile` | `String` | No | File that defines all the connections |
-| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
-| `connectionName` | `String` | Yes | The name of the connection in the connection file |
-| `catalog` | `String` | No | The name of the catalog to pull the DSO count for. Ignore to pull all catalogs |
-| `model` | `String` | No | The name of the model to pull the DSO count for. Ignore to pull all models |
+| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
 
 **curl (JSON):**
 
 ```bash
-curl -X POST http://localhost:4000/rest/get-dso-count \
+curl -X POST http://localhost:4000/rest/generate-sml-docs \
   -H "Content-Type: application/json" \
   -d '{
-      "connectionFileContent": "--- # inline YAML/file content",
-      "connectionName": "value"
+      "smlDir": "value"
   }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/get-dso-count \
-  -F "connectionFileUpload=@/path/to/file" \
-  -F "connectionName=value"
 ```
 
 ---

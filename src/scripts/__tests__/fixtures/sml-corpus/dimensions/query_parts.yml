@@ -1,0 +1,24 @@
+unique_name: Query Parts
+object_type: dimension
+label: Query Parts
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: query_id
+    label: Query
+    dataset: query_parts.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: query_part
+    label: Query Part
+    dataset: query_parts.dataset
+    name_column: query_part
+    key_columns:
+      - query_part
+  - unique_name: parent_part
+    label: Parent Part
+    dataset: query_parts.dataset
+    name_column: parent_part
+    key_columns:
+      - parent_part

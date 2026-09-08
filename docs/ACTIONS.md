@@ -29,6 +29,7 @@ flowchart LR
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
+    SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
 ```
 
 ### Synthetic Data Generation
@@ -124,6 +125,7 @@ flowchart LR
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
+    - [`generate-sml-docs`](#generate-sml-docs)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
   - Synthetic Data Generation
@@ -155,6 +157,7 @@ flowchart LR
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
     - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
+    - [`get-dso-count`](#get-dso-count)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
   - Utilities
@@ -432,8 +435,8 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
 | `output-dir` | Yes | | Directory to write SML files |
 | `connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
 | `connection-type` | No | | Database dialect for the connection file (e.g. `snowflake`, `bigquery`) |
-| `connection-db` | No | | Database/project name written to the connection file; when set, datasets use a plain table name |
-| `connection-schema` | No | | Schema/dataset name written to the connection file; when set, datasets use a plain table name |
+| `connection-db` | No | | Database/project name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 
 ---
@@ -527,6 +530,35 @@ Re-applies display labels to an existing SML directory using a style config. Rea
 | `sml-config-file` | No | `<sml-dir>/sml.style.yaml` | Path to the SML style config to read settings from |
 | `label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names) |
 | `catalog-name` | No | | Catalog display name for `STYLE.md` |
+
+---
+
+### `generate-sml-docs`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a single Markdown reference of every SML object — catalog, connections, datasets (fact vs dimension), dimensions (hierarchies, levels, level attributes, secondary attributes, snowflake/embedded joins), models (fact→dimension relationships with a Mermaid diagram and join table, metric references, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), metrics, calculations, and any security objects.
+
+**Requires:** No secrets — the SML directory must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-docs
+    sml-dir: sml-output
+    output-file: README.md                      # optional
+    title: "Sales Analytics — Semantic Model"   # optional
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML directory to document |
+| `output-file` | No | `README.md` | Output Markdown file. A relative path is written inside `<sml-dir>`; an absolute path is used as-is. |
+| `title` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
 
 ---
 
@@ -1387,6 +1419,7 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
     output-file: values.yaml   # optional, default values.yaml
     enable-mcp: "true"         # optional, default false
     minimal: "true"            # optional, default false
+    gatekeeper-compliant: "true"  # optional, default false
 ```
 
 ```yaml
@@ -1409,6 +1442,8 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 | `license-key` | No | | AtScale license key (`atscale-entitlement.entitlement.licenseKey`). Store as `secrets.ATSCALE_LICENSE_KEY`. |
 | `enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart. Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
 | `minimal` | No | `false` | Emit additional values to reduce hardware footprint (disables telemetry, removes Redis replica, reduces PVC sizes). |
+| `external-postgres` | No | `false` | Wire AtScale to an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database and sets each service's `externalDatabase` block to read from Kubernetes secrets. Credentials are not taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and apply. Keycloak is pinned to a dedicated `keycloak` Postgres schema (`KC_DB_SCHEMA`) rather than `public`; the operator must create that schema before install (a `CREATE SCHEMA` statement is included in the emitted header comment). |
+| `gatekeeper-compliant` | No | `false` | Emit values satisfying common OPA Gatekeeper constraints: `image.pullPolicy=Always` and `serviceAccount.create=true` per subchart, plus resource requests/limits via `global.resourcesPreset` (`poc` with `minimal`, else `prod`). Residual constraints needing a namespace exemption are listed in a header comment in the output. |
 | `output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **What it does:**
@@ -1653,8 +1688,8 @@ Either `repo-id` or `repo-name` must be provided. When only `repo-name` is given
 Validates an SML model against the AtScale engine and reports any problems.
 
 Runs two validation phases:
-1. **Structural** (always) — local YAML cross-reference check: verifies that all datasets, columns, dimensions, and level attributes referenced in the model and relationships actually exist in the SML files.
-2. **Engine** (if Phase 1 passes) — POSTs column-joinability and uniqueness checks to AtScale's `POST /catalog/validate-model` API; reports `Incorrect` results as errors and `Warning` results as warnings.
+1. **Structural** (always) — local YAML cross-reference check: verifies that all datasets, columns, dimensions, and level attributes referenced in the model and relationships actually exist in the SML files, and that every dataset's `connection_id` resolves to a file in `connections/`.
+2. **Engine** (if Phase 1 passes) — POSTs column-joinability and uniqueness checks to AtScale's `POST /catalog/validate-model` API; reports `Incorrect` results as errors and `Warning` results as warnings. Each check goes to the connection group named by its dataset's `connection_id` (via that connection's `as_connection`, `database` and `schema`), batched one request per distinct connection group. The `as_connection` must already exist as a connection group on the target instance, or the engine returns `ConnectionGroup … not found`.
 
 **Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) in the named connection.
 
@@ -1701,6 +1736,37 @@ Supports two source modes — provide exactly one:
 † Provide exactly one of `sml-dir`, `repo-name`, or `repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each with `phase`, `severity`, `message`, optional `location`), and `summary` counts.
+
+---
+
+### `get-dso-count`
+
+[↑ Table of Contents](#table-of-contents)
+
+Gets the DSO count for a specified model or catalog if supplied or the entire system if none are specified.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the AtScale connection entry and a `sql:` block on the SQL connection entry. The API token is automatically exchanged for a JWT via `POST /v1/token`.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: get-dso-count
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: my_atscale
+    catalog: sales
+    model: sales_demo
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `catalog` | No | all available catalogs | Count only models from the specified catalog |
+| `model` | No | all available models | Count only the specified model |
+
+**Output:** The unique and total DSO count for the available models.
 
 ---
 

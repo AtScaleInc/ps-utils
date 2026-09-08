@@ -1,6 +1,6 @@
 {
   "name": "@atscale-ps/ps-utils",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
   "type": "module",
   "license": "Apache-2.0",
@@ -33,13 +33,17 @@
     "atscale-utils"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-ejs.mjs && npm run generate:completions && npm run generate:graphql-docs && npm run generate:rest-docs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-ejs.mjs && npm run generate:completions && npm run generate:graphql-docs && npm run generate:rest-docs && npm run generate:sml-schema && npm run generate:extension-manifest && npm run generate:extension-contributes && npm run bundle:cli",
     "start": "npm run build && node dist/cli.js",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run",
     "generate:completions": "node dist/scripts/generate-completions.js",
     "generate:graphql-docs": "node dist/scripts/generate-graphql-docs.js",
-    "generate:rest-docs": "node dist/scripts/generate-rest-docs.js"
+    "generate:rest-docs": "node dist/scripts/generate-rest-docs.js",
+    "generate:extension-manifest": "node dist/scripts/generate-extension-manifest.js",
+    "generate:extension-contributes": "node dist/scripts/generate-extension-contributes.js",
+    "generate:sml-schema": "node dist/scripts/generate-sml-schema.js",
+    "bundle:cli": "node dist/scripts/bundle-cli.js"
   },
   "dependencies": {
     "@types/node": "^25.3.0",
@@ -49,7 +53,7 @@
     "exceljs": "^4.4.0",
     "graphql": "^16.13.2",
     "graphql-yoga": "^5.21.0",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "jszip": "^3.10.1",
     "pg": "^8.20.0",
     "snowflake-sdk": "^2.3.6",
@@ -63,6 +67,7 @@
     "@types/pg": "^8.20.0",
     "@types/uuid": "^10.0.0",
     "@types/xml2js": "^0.4.14",
+    "esbuild": "^0.25.12",
     "typescript": "^5.5.4",
     "vitest": "^4.1.5"
   }

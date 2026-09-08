@@ -548,7 +548,7 @@ SML models live as YAML files in your repository. Modify per your requirements.
 
 ```bash
 # Using ps-utils to validate and preview
-npx @atscale/ps-utils validate-sml --connection-file example/connections.yaml
+npx @atscale-ps/ps-utils validate-sml --connection-file example/connections.yaml
 ```
 
 #### 4. Push and open a PR
@@ -650,7 +650,7 @@ git pull origin main
 git checkout -b hotfix/fix-revenue-calc
 
 # 2. Apply the minimal targeted fix, then validate
-npx @atscale/ps-utils validate-sml --connection-file example/connections.yaml
+npx @atscale-ps/ps-utils validate-sml --connection-file example/connections.yaml
 
 # 3. Commit and push
 git add .
@@ -811,7 +811,7 @@ jobs:
           node-version: "20"
 
       - name: Install ps-utils
-        run: npm install -g @atscale/ps-utils
+        run: npm install -g @atscale-ps/ps-utils
 
       - name: Validate SML schema
         run: |
@@ -999,7 +999,7 @@ jobs:
           node-version: "20"
 
       - name: Install ps-utils
-        run: npm install -g @atscale/ps-utils
+        run: npm install -g @atscale-ps/ps-utils
 
       - name: Validate entire SML tree
         run: |
@@ -1045,7 +1045,7 @@ jobs:
           node-version: "20"
 
       - name: Install ps-utils
-        run: npm install -g @atscale/ps-utils
+        run: npm install -g @atscale-ps/ps-utils
 
       - name: Validate SML schema
         run: |
@@ -1164,7 +1164,7 @@ jobs:
 
 ## Shared Package Dependencies
 
-When a repository depends on a shared package — such as `@atscale/ps-utils` for CLI operations or `atscaleinc/ps-utils` as a GitHub Actions composite action — the way that dependency is referenced determines how quickly updates are adopted, how much manual coordination a release requires, and whether consumers validate updates before they reach PROD.
+When a repository depends on a shared package — such as `@atscale-ps/ps-utils` for CLI operations or `atscaleinc/ps-utils` as a GitHub Actions composite action — the way that dependency is referenced determines how quickly updates are adopted, how much manual coordination a release requires, and whether consumers validate updates before they reach PROD.
 
 ### Versioning Strategy Decision
 
@@ -1195,8 +1195,8 @@ Consumer branches should reference the shared package at a stability level that 
 
 | Consumer branch | GitHub Actions ref | npm version range | Rationale |
 |---|---|---|---|
-| `main` (→ PROD) | `atscaleinc/ps-utils@v1` | `"@atscale/ps-utils": "1.x.x"` (exact minor) | Predictable; change requires a deliberate PR |
-| `development` (→ UAT) | `atscaleinc/ps-utils@v1` | `"@atscale/ps-utils": "^1"` | Semver range validates updates before PROD adoption |
+| `main` (→ PROD) | `atscaleinc/ps-utils@v1` | `"@atscale-ps/ps-utils": "1.x.x"` (exact minor) | Predictable; change requires a deliberate PR |
+| `development` (→ UAT) | `atscaleinc/ps-utils@v1` | `"@atscale-ps/ps-utils": "^1"` | Semver range validates updates before PROD adoption |
 | `feature/*` | Same as `development` | Same as `development` | Feature branches inherit the reference from their base |
 
 **Key rule:** `main` and `development` should not diverge in their shared package reference for routine operations. Divergence is acceptable only during a controlled upgrade window where `development` intentionally runs against a newer major version while `main` remains on the previous stable version.
@@ -1271,7 +1271,7 @@ Add `.github/dependabot.yml` to the consumer repository to automatically raise P
 ```yaml
 version: 2
 updates:
-  # npm dependencies (e.g. @atscale/ps-utils in package.json)
+  # npm dependencies (e.g. @atscale-ps/ps-utils in package.json)
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -1335,19 +1335,19 @@ jobs:
       - name: Get pinned version
         id: current
         run: |
-          PINNED=$(node -p "require('./package.json').dependencies['@atscale/ps-utils'] || require('./package.json').devDependencies['@atscale/ps-utils']" | tr -d '^~')
+          PINNED=$(node -p "require('./package.json').dependencies['@atscale-ps/ps-utils'] || require('./package.json').devDependencies['@atscale-ps/ps-utils']" | tr -d '^~')
           echo "version=$PINNED" >> "$GITHUB_OUTPUT"
 
       - name: Get latest published version
         id: latest
         run: |
-          LATEST=$(npm view @atscale/ps-utils version)
+          LATEST=$(npm view @atscale-ps/ps-utils version)
           echo "version=$LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Warn if behind
         if: steps.current.outputs.version != steps.latest.outputs.version
         run: |
-          echo "::warning::Pinned @atscale/ps-utils ${{ steps.current.outputs.version }} is behind latest ${{ steps.latest.outputs.version }}. Consider opening an update PR."
+          echo "::warning::Pinned @atscale-ps/ps-utils ${{ steps.current.outputs.version }} is behind latest ${{ steps.latest.outputs.version }}. Consider opening an update PR."
 ```
 
 ### Shared Package Release Checklist

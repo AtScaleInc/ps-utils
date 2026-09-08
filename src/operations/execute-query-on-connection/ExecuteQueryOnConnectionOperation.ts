@@ -38,6 +38,7 @@ import {
   type QueryRecord,
 } from "../extract-queries-from-atscale/ExtractQueriesFromAtScaleOperation.js";
 import axios from "axios";
+import https from 'https';
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
@@ -253,9 +254,20 @@ async function getBearerToken(
   authUrl: string,
   username: string,
   password: string,
+  proxyConfig: Record<string, any>,
+  certConfig: Record<string, any>
 ): Promise<string> {
   try {
-    const response = await axios.get(authUrl, { auth: { username, password } });
+    const config: Record<string, any> = {
+      auth: { username, password },
+    }
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
+    }
+    const response = await axios.get(authUrl, config);
     return String(response.data).trim();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -471,6 +483,48 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
       ) as Record<string, any>;
     }
 
+    let proxyConfig: any = {};
+    if (yamlConfig.proxy && yamlConfig.proxy.host) {
+      proxyConfig.host = yamlConfig.proxy.host;
+      if (yamlConfig.proxy.port) {
+        proxyConfig.port = yamlConfig.proxy.port;
+      }
+      else {
+        throw new Error(
+          `Connection '${params["connection-name"]}' contains a proxy host but is missing the required port`,
+        );
+      }
+      if (yamlConfig.proxy.protocol) {
+        proxyConfig.protocol = yamlConfig.proxy.protocol;
+      }
+      if (yamlConfig.proxy.username) {
+        proxyConfig.auth = {};
+        proxyConfig.auth.username = yamlConfig.proxy.username;
+        if (yamlConfig.proxy.password) {
+          proxyConfig.password = yamlConfig.proxy.password;
+        }
+      }
+    }
+    else if (yamlConfig.proxy === false) {
+      proxyConfig = false
+    }
+
+    let certConfig: Record<string, any> = {};
+    if (yamlConfig.cert) {
+      if (yamlConfig.cert.ca) {
+        certConfig.ca = fs.readFileSync(yamlConfig.cert.ca);
+      }
+      if (yamlConfig.cert.cert) {
+        certConfig.cert = fs.readFileSync(yamlConfig.cert.cert);
+      }
+      if (yamlConfig.cert.key) {
+        certConfig.key = fs.readFileSync(yamlConfig.cert.key);
+      }
+      if (yamlConfig.cert.rejectUnauthorized === false) {
+        certConfig.rejectUnauthorized = false;
+      }
+    }
+
     // ── Select matching queries ───────────────────────────────────────────────
     const allQueries = loadQueries(params["query-file"]);
     const matched = allQueries.filter((q) => wildcardMatch(pattern, q.queryName));
@@ -511,7 +565,7 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
       // Authenticate once and reuse the token for all queries in the batch.
       const token = cfg.isContainer
         ? ""
-        : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!);
+        : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, proxyConfig, certConfig);
 
       const headers: Record<string, string> = {
         "Content-Type": "text/xml; charset=UTF-8",
@@ -525,11 +579,18 @@ export class ExecuteQueryOnConnectionOperation extends Operation<Params> {
         const outFile = resolveOut(query);
         const envelope = buildSoapEnvelope(query.originalText, cfg);
 
-        const start = Date.now();
-        const response = await axios.post(cfg.url, envelope, {
+        const config: Record<string, any> = {
           headers,
-          validateStatus: null,
-        });
+          validateStatus: null, // capture all HTTP statuses
+        }
+        if (Object.keys(proxyConfig).length != 0) {
+          config.proxy = proxyConfig
+        }
+        if (Object.keys(certConfig).length != 0) {
+          config.httpsAgent = new https.Agent(certConfig);
+        }
+        const start = Date.now();
+        const response = await axios.post(cfg.url, envelope, config);
         const durationMs = Date.now() - start;
 
         const responseBody: string = typeof response.data === "string"

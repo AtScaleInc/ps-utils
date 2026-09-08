@@ -1,0 +1,30 @@
+unique_name: Query Part Plans
+object_type: dimension
+label: Query Part Plans
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: query_id
+    label: Query
+    dataset: query_part_plans.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: query_part
+    label: Query Part
+    dataset: query_part_plans.dataset
+    name_column: query_part
+    key_columns:
+      - query_part
+  - unique_name: plan_part_graph
+    label: Plan Part Graph
+    dataset: query_part_plans.dataset
+    name_column: plan_part_graph
+    key_columns:
+      - plan_part_graph
+  - unique_name: plan_part_cost
+    label: Plan Part Cost
+    dataset: query_part_plans.dataset
+    name_column: plan_part_cost
+    key_columns:
+      - plan_part_cost

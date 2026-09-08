@@ -85,6 +85,26 @@ interface SmlDimensionFile extends SmlBase {
     };
     level_attributes?: SmlLevelAttribute[];
   }>;
+  /**
+   * Dimension-internal relationships — join a snowflake-schema hierarchy's
+   * per-level physical tables together (e.g. dimproduct.productsubcategorykey
+   * → level "Product Sub-Category", whose own dataset is dimproductsubcategory).
+   * `from.dataset` is the CHILD table that carries the FK column(s) named in
+   * `from.join_columns`; `to.level` is the parent level those FK column(s)
+   * reference. Absent for star-schema dimensions where every level lives in
+   * one physical table and no cross-table join is needed.
+   */
+  relationships?: Array<{
+    unique_name?: string;
+    from: {
+      dataset:       string;
+      join_columns?: string[];
+    };
+    to: {
+      level: string;
+    };
+    type?: string;
+  }>;
 }
 
 interface SmlDatasetFile extends SmlBase {
@@ -216,6 +236,10 @@ function buildDimension(
   // Map level unique_name → key columns (from level_attributes)
   const keyColMap   = new Map<string, string[]>();
   const labelColMap = new Map<string, string>();
+  // Map level unique_name → its OWN physical table/schema, when a level_attribute
+  // names a dataset different from the dimension's default (snowflake-schema
+  // hierarchies where each level is normalized into a separate table).
+  const levelTableMap = new Map<string, { table: string; schema: string }>();
 
   for (const la of levelAttrs) {
     const keys = la.key_columns?.length ? la.key_columns : [la.unique_name];
@@ -231,6 +255,36 @@ function buildDimension(
         labelColMap.set(la.unique_name, labelAttr.source_column);
       }
     }
+
+    if (la.dataset) {
+      const levelDs = datasetByName.get(la.dataset);
+      const levelTable = levelDs?.table ?? levelDs?.source?.table;
+      if (levelTable) {
+        levelTableMap.set(la.unique_name, {
+          table:  levelTable,
+          schema: levelDs?.source?.schema ?? "",
+        });
+      }
+    }
+  }
+
+  // Dimension-internal relationships resolve, for a level whose own table
+  // differs from its parent's, which FK column (in the level's OWN table)
+  // points back at the parent level's key. Keyed by dataset name (the CHILD
+  // table named in `from.dataset`) since that's what a level_attribute's
+  // `dataset` field is matched against below.
+  const parentKeyColByDataset = new Map<string, string>();
+  for (const rel of (f.relationships ?? [])) {
+    const fkCol = rel.from.join_columns?.[0];
+    if (rel.from.dataset && fkCol) {
+      parentKeyColByDataset.set(rel.from.dataset, fkCol);
+    }
+  }
+  // Map level unique_name → its resolved dataset name (needed to look up
+  // parentKeyColByDataset below without re-scanning levelAttrs per level).
+  const levelDatasetMap = new Map<string, string>();
+  for (const la of levelAttrs) {
+    if (la.dataset) levelDatasetMap.set(la.unique_name, la.dataset);
   }
 
   const hierarchies: HierarchyNode[] = [];
@@ -238,13 +292,35 @@ function buildDimension(
     const rawLevels = h.levels ?? [];
     if (rawLevels.length === 0) continue;
 
-    const levels: LevelNode[] = rawLevels.map((l, i) => ({
-      uniqueName:   l.unique_name,
-      label:        l.label ?? l.unique_name,
-      keyColumns:   keyColMap.get(l.unique_name) ?? [l.unique_name],
-      labelColumn:  labelColMap.get(l.unique_name),
-      isLeaf:       l.is_unique_key === true || i === rawLevels.length - 1,
-    }));
+    const levels: LevelNode[] = rawLevels.map((l, i) => {
+      const ownTable   = levelTableMap.get(l.unique_name);
+      const levelDs    = levelDatasetMap.get(l.unique_name);
+
+      // Only resolve a cross-table parentKeyColumn when this level's table
+      // actually differs from its immediate parent's table — that's the one
+      // point in the chain where a relationship-declared FK is needed.
+      // Consecutive levels sharing one table (e.g. Product Line → Product
+      // Name, both in dimproduct) must fall back to the parent's own key
+      // column name, exactly like a star-schema hierarchy — otherwise every
+      // level sharing that dataset would incorrectly inherit the FK column
+      // from whichever relationship entry happens to reference that dataset.
+      const parentRawLevel = i > 0 ? rawLevels[i - 1] : undefined;
+      const parentLevelDs  = parentRawLevel ? levelDatasetMap.get(parentRawLevel.unique_name) : undefined;
+      const parentKeyColumn = (levelDs && parentLevelDs && levelDs !== parentLevelDs)
+        ? parentKeyColByDataset.get(levelDs)
+        : undefined;
+
+      return {
+        uniqueName:   l.unique_name,
+        label:        l.label ?? l.unique_name,
+        keyColumns:   keyColMap.get(l.unique_name) ?? [l.unique_name],
+        labelColumn:  labelColMap.get(l.unique_name),
+        isLeaf:       l.is_unique_key === true || i === rawLevels.length - 1,
+        sourceTable:  ownTable?.table,
+        sourceSchema: ownTable?.schema,
+        parentKeyColumn,
+      };
+    });
 
     hierarchies.push({
       uniqueName: h.unique_name,

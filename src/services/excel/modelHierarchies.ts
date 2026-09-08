@@ -38,9 +38,13 @@ export function extractModelHierarchies(
 
   // Build a lookup: hierUnique -> sorted levels array from mdx.columns
   // mdx.columns: { DimName: { HierarchyName: [{ caption, level_number, ... }, ...] } }
-  type LevelEntry = { caption: string; levelNumber: number };
+  type LevelEntry = { caption: string; queryName: string; levelNumber: number };
   const mdxLevels = new Map<string, LevelEntry[]>();
   const mdxLeafLevel = new Map<string, string>();
+  // query_names of every level in the real hierarchy tree, so the sql.columns
+  // fallback below can tell "this column IS a real attribute/level" apart from
+  // "this column has no counterpart in mdx.attributes at all".
+  const mdxLevelQueryNames = new Set<string>();
 
   // Real models store the hierarchy tree under mdx.attributes; some legacy or
   // test fixtures may use mdx.columns instead.  Accept either.
@@ -55,22 +59,32 @@ export function extractModelHierarchies(
         for (const lv of rawLevels) {
           if (!lv || typeof lv !== "object") continue;
           const lvObj = lv as Record<string, unknown>;
+          const qn = lvObj["query_name"] as string | undefined;
           levelArr.push({
             caption:     (lvObj["caption"] as string | undefined) ?? dimName,
+            queryName:   qn ?? (lvObj["caption"] as string | undefined) ?? dimName,
             levelNumber: (lvObj["level_number"] as number | undefined) ?? 0,
           });
+          if (qn) mdxLevelQueryNames.add(qn);
         }
         levelArr.sort((a, b) => a.levelNumber - b.levelNumber);
       }
 
       mdxLevels.set(hierUnique, levelArr);
-      // Leaf = entry with the highest levelNumber
+      // Leaf = entry with the highest levelNumber. Use queryName (the real
+      // MDX LEVEL_NAME), not caption — the two can differ, and MDX addressing
+      // (".[LevelName].Members") requires the actual level name.
       const leaf = levelArr.at(-1);
-      mdxLeafLevel.set(hierUnique, leaf?.caption ?? dimName);
+      mdxLeafLevel.set(hierUnique, leaf?.queryName ?? dimName);
     }
   }
 
   // --- sql.columns (role: "dimension") ---
+  // This is a fallback for columns with no real counterpart in mdx.attributes
+  // (e.g. simpler models/test fixtures that only have sql.columns). When a
+  // column IS a real attribute/level in mdx.attributes, skip synthesizing a
+  // "[Label].[Label Hierarchy]" name here — it doesn't exist in the live cube,
+  // and the real mdx.attributes-derived hierarchy is added below instead.
   const sqlCols = (sql["columns"] ?? {}) as Record<string, unknown>;
   for (const [colKey, colInfo] of Object.entries(sqlCols)) {
     if (!colInfo || typeof colInfo !== "object") continue;
@@ -78,6 +92,8 @@ export function extractModelHierarchies(
     if (ci["role"] !== "dimension") continue;
 
     const label = (ci["label"] as string | undefined) ?? colKey;
+    if (mdxLevelQueryNames.has(colKey) || mdxLevelQueryNames.has(label)) continue;
+
     const dimName = label.replace(/ /g, "_");
     const dimUnique = `[${dimName}]`;
     const hierUnique = `[${dimName}].[${dimName} Hierarchy]`;
@@ -167,6 +183,32 @@ export function resolveXaxisUnique(
 ): string | undefined {
   if (!xAxis) return undefined;
 
+  // Strategy 0: exact match against a real hierarchy's caption. Hierarchies
+  // sourced from mdx.attributes carry AtScale's actual hierarchy name as their
+  // caption (e.g. "Order Quarter Number" under dimension "Order Date
+  // Dimension"), which namespace xAxis values commonly reference directly.
+  // This must run before the sql.columns-derived guess below, which
+  // fabricates a "[Label].[Label Hierarchy]" name that may not exist in the
+  // live cube at all.
+  const exactCaption = hierarchies.find(
+    h => !h.isMeasure && h.caption.toLowerCase() === xAxis.toLowerCase(),
+  );
+  if (exactCaption) return exactCaption.uniqueName;
+
+  // Strategy 0.5: xAxis may name a single LEVEL inside a larger, shared
+  // multi-level hierarchy (e.g. "Order Custom Year" is a level within the
+  // "Order Custom PP445" hierarchy, not a hierarchy of its own). Search every
+  // hierarchy's levels for a caption OR query_name match (the two can differ,
+  // e.g. query_name "Order Year Week Hierarchy" vs caption "Order Year") and
+  // return its owning hierarchy.
+  const xLower = xAxis.toLowerCase();
+  const ownerOfLevel = hierarchies.find(
+    h => !h.isMeasure && h.levels.some(
+      l => l.caption.toLowerCase() === xLower || l.queryName.toLowerCase() === xLower,
+    ),
+  );
+  if (ownerOfLevel) return ownerOfLevel.uniqueName;
+
   // Strategy 1: look up in sql.columns via label
   if (model) {
     const sql = (model["sql"] ?? {}) as Record<string, unknown>;
@@ -205,8 +247,11 @@ export function levelForGranularity(
 ): string | null {
   if (!granularity || hier.levels.length === 0) return null;
   const g = granularity.toLowerCase();
+  // Match against the human-readable caption (e.g. "week" substring-matches
+  // "Order Custom Week"), but return queryName — the real MDX LEVEL_NAME,
+  // which can differ from caption and is what addressing requires.
   const match = hier.levels.find(l => l.caption.toLowerCase().includes(g));
-  return match?.caption ?? null;
+  return match?.queryName ?? null;
 }
 
 /**

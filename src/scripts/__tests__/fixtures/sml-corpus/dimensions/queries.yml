@@ -1,0 +1,72 @@
+unique_name: Queries
+object_type: dimension
+label: Queries
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: query_id
+    label: Query
+    dataset: queries.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: user_id
+    label: User
+    dataset: queries.dataset
+    name_column: user_id
+    key_columns:
+      - user_id
+  - unique_name: remote_address
+    label: Remote Address
+    dataset: queries.dataset
+    name_column: remote_address
+    key_columns:
+      - remote_address
+  - unique_name: query_language
+    label: Query Language
+    dataset: queries.dataset
+    name_column: query_language
+    key_columns:
+      - query_language
+  - unique_name: received
+    label: Received
+    dataset: queries.dataset
+    name_column: received
+    key_columns:
+      - received
+  - unique_name: organization_id
+    label: Organization
+    dataset: queries.dataset
+    name_column: organization_id
+    key_columns:
+      - organization_id
+  - unique_name: environment_id
+    label: Environment
+    dataset: queries.dataset
+    name_column: environment_id
+    key_columns:
+      - environment_id
+  - unique_name: query_text
+    label: Query Text
+    dataset: queries.dataset
+    name_column: query_text
+    key_columns:
+      - query_text
+  - unique_name: service
+    label: Service
+    dataset: queries.dataset
+    name_column: service
+    key_columns:
+      - service
+  - unique_name: session_id
+    label: Session
+    dataset: queries.dataset
+    name_column: session_id
+    key_columns:
+      - session_id
+  - unique_name: subject_id
+    label: Subject
+    dataset: queries.dataset
+    name_column: subject_id
+    key_columns:
+      - subject_id

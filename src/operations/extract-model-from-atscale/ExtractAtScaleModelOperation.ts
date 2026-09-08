@@ -7,6 +7,8 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import axios from 'axios';
+import https from 'https';
+import fs from "fs";
 import { Parser } from 'xml2js';
 import { stringify } from "yaml";
 
@@ -79,16 +81,24 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     atscaleUrl: string,
     organizationId: string,
     username: string,
-    password: string
+    password: string,
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<any> {
     try {
+      const config: Record<string, any> = {}
+      if (Object.keys(proxyConfig).length != 0) {
+        config.proxy = proxyConfig
+      }
+      if (Object.keys(certConfig).length != 0) {
+        config.httpsAgent = new https.Agent(certConfig);
+      }
       if (installer) {
         const url = `${atscaleUrl}:10500/${organizationId}/auth`;
-        this.logger.verbose("Auth URL: " + atscaleUrl);
+        this.logger.verbose("Auth URL: " + url);
 
-        const response = await axios.get(url, {
-          auth: { username, password }
-        });
+        config.auth = { username, password };
+        const response = await axios.get(url, config);
         return response.data;
       } else {
         const url = `${atscaleUrl}/auth/realms/atscale/protocol/openid-connect/token`;
@@ -100,7 +110,7 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
         params.append('username', username);
         params.append('password', password);
 
-        const response = await axios.post(url, params);
+        const response = await axios.post(url, params, config);
         return response.data.access_token;
       }
     } catch (error) {
@@ -120,7 +130,9 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     statement: string,
     organizationId: string,
     catalogName: string,
-    modelName: string
+    modelName: string,
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<any[]> {
     this.logger.verbose("XMLA Request Data: " + atscaleUrl);
 
@@ -145,14 +157,23 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
 
     const xmlaUrl = installer
       ? `${atscaleUrl}:10502/xmla/${organizationId}`
-      : `${atscaleUrl}/engine/xmla`;
+      // mdx.url may already carry the /engine/xmla suffix (and a per-user
+      // token beyond it) — avoid doubling the path if so.
+      : /\/engine\/xmla(\/|$)/i.test(atscaleUrl) ? atscaleUrl : `${atscaleUrl}/engine/xmla`;
 
-    const response = await axios.post(xmlaUrl, data, {
-      headers: {
-        'Content-Type': 'text/xml',
-        'Authorization': `Bearer ${token}`
-      }
-    });
+    const config: Record<string, any> = {}
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
+    }
+    config.headers = {
+      'Content-Type': 'text/xml',
+      'Authorization': `Bearer ${token}`
+    }
+
+    const response = await axios.post(xmlaUrl, data, config);
 
     // Parse XML response to JSON for easier handling
     const parser = new Parser({ explicitArray: false, ignoreAttrs: true });
@@ -177,10 +198,12 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     atscaleUrl: string,
     organizationId: string,
     catalogName: string,
-    modelName: string
+    modelName: string,
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<any[]> {
     const statement = "SELECT MEASURE_NAME, DATA_TYPE, MEASURE_CAPTION, MEASURE_AGGREGATOR, MEASURE_DISPLAY_FOLDER, DEFAULT_FORMAT_STRING, DESCRIPTION FROM $system.MDSCHEMA_MEASURES WHERE [CUBE_NAME] = @CubeName";
-    const rows = await this.getDmvData(token, installer, atscaleUrl, statement, organizationId, catalogName, modelName);
+    const rows = await this.getDmvData(token, installer, atscaleUrl, statement, organizationId, catalogName, modelName, proxyConfig, certConfig);
 
     this.logger.verbose("Metric Rows: " + rows);
     return rows ? rows.map((row) => {
@@ -211,14 +234,16 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
     atscaleUrl: string,
     organizationId: string,
     catalogName: string,
-    modelName: string
+    modelName: string,
+    proxyConfig: Record<string, any>,
+    certConfig: Record<string, any>
   ): Promise<Record<string, any>> {
     const levelStatement = "SELECT LEVEL_NAME, HIERARCHY_UNIQUE_NAME, LEVEL_NUMBER, LEVEL_CAPTION, DESCRIPTION, LEVEL_DBTYPE FROM $system.MDSCHEMA_LEVELS WHERE [CUBE_NAME] = @CubeName and [LEVEL_NAME] &lt;&gt; '(All)' and [DIMENSION_UNIQUE_NAME] &lt;&gt; '[Measures]'";
     const hierStatement = "SELECT HIERARCHY_UNIQUE_NAME, HIERARCHY_DISPLAY_FOLDER FROM $system.MDSCHEMA_HIERARCHIES WHERE [CUBE_NAME] = @CubeName";
 
     const [levelRows, hierRows] = await Promise.all([
-      this.getDmvData(token, installer, atscaleUrl, levelStatement, organizationId, catalogName, modelName),
-      this.getDmvData(token, installer, atscaleUrl, hierStatement, organizationId, catalogName, modelName)
+      this.getDmvData(token, installer, atscaleUrl, levelStatement, organizationId, catalogName, modelName, proxyConfig, certConfig),
+      this.getDmvData(token, installer, atscaleUrl, hierStatement, organizationId, catalogName, modelName, proxyConfig, certConfig)
     ]);
 
     const folderLookup: Record<string, string> = {};
@@ -274,7 +299,7 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       sqlObjects[objType.query_name]["aggregation"] = objType.agg_type_string;
       sqlObjects[objType.query_name]["folder"] = objType.folder;
     });
-    
+
     Object.keys(mdxObjects.attributes || {}).forEach((attributeName) => {
       const attribute = mdxObjects.attributes[attributeName];
       Object.keys(attribute || {}).forEach((hierarchyName) => {
@@ -319,11 +344,57 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
         `Connection '${_params["connection-name"]}' is missing an 'mdx:' block in ${_params["connection-file"]}`,
       );
     }
+
+    let proxyConfig: any = {};
+    if (connection.proxy && connection.proxy.host) {
+      proxyConfig.host = connection.proxy.host;
+      if (connection.proxy.port) {
+        proxyConfig.port = connection.proxy.port;
+      }
+      else {
+        throw new Error(
+          `Connection '${_params["connection-name"]}' contains a proxy host but is missing the required port`,
+        );
+      }
+      if (connection.proxy.protocol) {
+        proxyConfig.protocol = connection.proxy.protocol;
+      }
+      if (connection.proxy.username) {
+        proxyConfig.auth = {};
+        proxyConfig.auth.username = connection.proxy.username;
+        if (connection.proxy.password) {
+          proxyConfig.password = connection.proxy.password;
+        }
+      }
+    }
+    else if (connection.proxy === false) {
+      proxyConfig = false
+    }
+
+    let certConfig: Record<string, any> = {};
+    if (connection.cert) {
+      if (connection.cert.ca) {
+        certConfig.ca = fs.readFileSync(connection.cert.ca);
+      }
+      if (connection.cert.cert) {
+        certConfig.cert = fs.readFileSync(connection.cert.cert);
+      }
+      if (connection.cert.key) {
+        certConfig.key = fs.readFileSync(connection.cert.key);
+      }
+      if (connection.cert.rejectUnauthorized === false) {
+        certConfig.rejectUnauthorized = false;
+      }
+    }
+
     const user = (connectionFile.users ?? {})[connection.mdx.user] ?? {};
     this.logger.verbose("User detail: " + user.username);
+    // Auth is against the AtScale base host, not the XMLA endpoint (mdx.url
+    // may carry an /engine/xmla suffix, which is not a valid auth path).
+    const authUrl = connection.atscale?.url ?? connection.mdx.url;
     const token = await this.getToken(connection.installer,
-      connection.mdx.url,
-      connection.mdx.organization_id, user.username, user.password);
+      authUrl,
+      connection.mdx.organization_id, user.username, user.password, proxyConfig, certConfig);
 
 
     this.logger.info("Fetching Metrics...");
@@ -331,14 +402,18 @@ export class ExtractAtScaleModelOperation extends Operation<ExtractAtScaleParams
       connection.mdx.url,
       connection.mdx.organization_id,
       connection.mdx.catalog_name,
-      _params.model);
+      _params.model,
+      proxyConfig,
+      certConfig);
 
     this.logger.info("Fetching Attributes...");
     const attributes = await this.getAttributes(token, connection.installer,
       connection.mdx.url,
       connection.mdx.organization_id,
       connection.mdx.catalog_name,
-      _params.model);
+      _params.model,
+      proxyConfig,
+      certConfig);
 
     const output = { metrics, attributes };
 

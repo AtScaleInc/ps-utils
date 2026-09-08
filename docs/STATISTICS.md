@@ -192,6 +192,36 @@ The result is stamped onto the leaf `LevelFingerprint` after density profiling c
 
 ---
 
+### Snowflake-schema hierarchies
+
+Every query example above assumes a **star schema** — every level of a hierarchy lives
+in one denormalized `dim_table`, so a single `parent_key_col` / `child_key_col` pair on
+that one table is enough to profile a rollup edge.
+
+Not every hierarchy is laid out that way. In a **snowflake schema**, each level is
+normalized into its own physical table (e.g. `dimproductcategory` → `dimproductsubcategory`
+→ `dimproduct`), and the FK connecting a child level's table back to its parent lives on
+the child's own table, not on a shared row.
+
+The SML reader resolves this per level, not per dimension, from two places in the model:
+
+- **Per-level table** — a `level_attributes` entry naming a `dataset` other than the
+  dimension's default is recorded as that level's own `sourceTable` / `sourceSchema`.
+- **Parent FK column** — the dimension's `relationships` block maps a child dataset to
+  the FK column (`from.join_columns`) it carries back to its parent. This is only
+  resolved when a level's dataset actually differs from its immediate parent's —
+  consecutive levels sharing one table behave exactly like a star schema and simply use
+  the parent's own key column name.
+
+Every profiling query that touches a dimension table — rollup ratio (Phase 2), leaf
+density and null-FK fraction (Phase 3), and conformed-dimension cross-fact profiling
+(Phase 5) — queries the level's own resolved table when one is recorded, and falls back
+to the dimension's default `sourceTable` / `sourceSchema` otherwise. Star-schema
+dimensions (no per-level dataset, no `relationships` block) are unaffected: every level
+resolves to the same default table, exactly as before.
+
+---
+
 ## Phase 3: Leaf-Level Fact Density Profiling
 
 The leaf level is the join anchor — every fact query touches the dimension through its

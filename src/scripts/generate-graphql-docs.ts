@@ -16,11 +16,11 @@ import type { OpMeta, ParamMeta } from "../operations/execute-web-services/graph
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(__dirname, "../../docs/GRAPHQL.md");
 
-const nullLogger = { log: () => {}, info: () => {}, error: () => {}, verbose: () => {} };
+const nullLogger = { log: () => { }, info: () => { }, error: () => { }, verbose: () => { } };
 
 const registry = await buildRegistry(nullLogger, { includeSql: false });
-const metas    = buildOpMetas(registry);
-const sdl      = buildSdl(metas);
+const metas = buildOpMetas(registry);
+const sdl = buildSdl(metas);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -93,6 +93,7 @@ const GROUPS: [string, string[]][] = [
   ["Visualization and Namespace Processing", [
     "generate-namespace-from-model", "generate-tableau-from-namespace",
     "generate-excel-from-namespace", "generate-powerbi-from-namespace",
+    "generate-notebook-from-connection",
   ]],
   ["Testing / Query Processing", [
     "generate-queries-from-sml", "generate-queries-from-model",
@@ -105,6 +106,7 @@ const GROUPS: [string, string[]][] = [
     "atscale-create-data-source", "atscale-list-repos",
     "atscale-create-repo", "atscale-list-deployments",
     "atscale-deploy-catalog", "atscale-list-model-errors",
+    "get-dso-count"
   ]],
   ["Web Services", ["execute-web-services"]],
 ];
@@ -273,7 +275,7 @@ for (const meta of sortedMetas) {
       continue;
     }
     const type = p.gqlType;
-    const req  = p.isFile ? (p.required ? "Yes\\*" : "No") : (p.required ? "Yes" : "No");
+    const req = p.isFile ? (p.required ? "Yes\\*" : "No") : (p.required ? "Yes" : "No");
     lines.push(`| \`${p.fieldName}\` | \`${type}\` | ${req} | ${p.description} |`);
     if (p.isFile) {
       lines.push(`| \`${p.fieldName}Upload\` | \`Upload\` | No | Multipart upload — alternative to \`${p.fieldName}\` |`);
@@ -293,7 +295,7 @@ for (const meta of sortedMetas) {
     .map((p) => {
       if (p.isFile) return `    ${p.fieldName}Content: "--- # file content"`;
       if (p.gqlType === "Boolean") return `    ${p.fieldName}: false`;
-      if (p.gqlType === "Int")     return `    ${p.fieldName}: 0`;
+      if (p.gqlType === "Int") return `    ${p.fieldName}: 0`;
       return `    ${p.fieldName}: "value"`;
     });
 

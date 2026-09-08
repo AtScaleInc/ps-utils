@@ -1,0 +1,48 @@
+unique_name: Query Aggregate Usage
+object_type: dimension
+label: Query Aggregate Usage
+type: standard
+hierarchies: []
+level_attributes:
+  - unique_name: organization_id
+    label: Organization
+    dataset: query_aggregate_usage.dataset
+    name_column: organization_id
+    key_columns:
+      - organization_id
+  - unique_name: query_id
+    label: Query
+    dataset: query_aggregate_usage.dataset
+    name_column: query_id
+    key_columns:
+      - query_id
+  - unique_name: aggregate_definition_id
+    label: Aggregate Definition
+    dataset: query_aggregate_usage.dataset
+    name_column: aggregate_definition_id
+    key_columns:
+      - aggregate_definition_id
+  - unique_name: used_at
+    label: Used At
+    dataset: query_aggregate_usage.dataset
+    name_column: used_at
+    key_columns:
+      - used_at
+  - unique_name: service
+    label: Service
+    dataset: query_aggregate_usage.dataset
+    name_column: service
+    key_columns:
+      - service
+  - unique_name: aggregate_instance_table_name
+    label: Aggregate Instance Table Name
+    dataset: query_aggregate_usage.dataset
+    name_column: aggregate_instance_table_name
+    key_columns:
+      - aggregate_instance_table_name
+  - unique_name: query_part
+    label: Query Part
+    dataset: query_aggregate_usage.dataset
+    name_column: query_part
+    key_columns:
+      - query_part

@@ -45,6 +45,7 @@ flowchart LR
     DB --> E["execute-sql-on-connection"] --> OUT["Results (stdout)"]
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
+    SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
 ```
 
 ### Synthetic Data Generation
@@ -108,7 +109,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["version"] --> VER["@atscale/ps-utils@x.y.z (stdout)"]
+    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
 ```
 
 ### AtScale Config
@@ -143,6 +144,7 @@ flowchart LR
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
+    - [`generate-sml-docs`](#generate-sml-docs)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -202,7 +204,7 @@ flowchart LR
 
 **Install globally from npm:**
 ```bash
-sudo npm install -g @atscale/ps-utils
+sudo npm install -g @atscale-ps/ps-utils
 ```
 
 **Build from source:**
@@ -225,6 +227,8 @@ The `docs/` directory contains extended reference material:
 | [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
 | [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
 | [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+| [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu, plus SML schema validation and highlighting (install & usage) |
+| [resources/sml-reference/UPSTREAM.md](resources/sml-reference/UPSTREAM.md) | Vendored SML language specification — source, pinned revision, and how to refresh it |
 
 ---
 
@@ -499,7 +503,7 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 
 Reads an AtScale XML project file (schema version `project_2_0`) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the XML model definition.
 
-Dimensions, metrics, datasets, catalog, connection, and model files are all emitted based on the XML structure. Relationships are inferred from the cube's key-ref logical sections: cross-table FKs (`complete="false"`) are mapped to separate dimension datasets, and degenerate dimensions (`complete="true"`) are mapped as self-joins within the fact table. Role-played dimensions (`role_play`), `include_default_drillthrough`, metric folders, dataset column definitions, and the `immutable` flag are all extracted from the XML when present. The connection name is auto-detected from `<physical><connection id="...">` if `--connection-name` is not supplied. Schema-level dimensions that have no join path to the cube are omitted.
+Dimensions, metrics, datasets, catalog, connection, and model files are all emitted based on the XML structure. Relationships are inferred from the cube's key-ref logical sections: cross-table FKs (`complete="false"`) are mapped to separate dimension datasets, and degenerate dimensions (`complete="true"`) are mapped as self-joins within the fact table. Role-played dimensions (`role_play`), `include_default_drillthrough`, metric folders, dataset column definitions, and the `immutable` flag are all extracted from the XML when present. Cube-level User Defined Aggregates (`<aggregates>`) are converted to each model's `aggregates:` list, with each attribute-ref resolved to either a dimension attribute or a metric and `relationships_path` synthesized for attributes reached through a snowflake/embedded relationship. The connection name is auto-detected from `<physical><connection id="...">` if `--connection-name` is not supplied. Schema-level dimensions that have no join path to the cube are omitted.
 
 ```bash
 ./atscale-utils generate-sml-from-xml \
@@ -526,16 +530,16 @@ With optional overrides:
 | `--output-dir` | Yes | | Directory to write SML files |
 | `--connection-name` | No | Auto-detected from XML | Connection `unique_name` to embed in generated files |
 | `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `bigquery`) |
-| `--connection-db` | No | | Database/project name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
-| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, datasets use a plain table name instead of a nested `db`/`schema`/`name` object |
+| `--connection-db` | No | | Database/project name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `--catalog-name` | No | XML schema name | Override the catalog label |
 
 **Output layout:**
 ```
 <output-dir>/
   catalog.yml
-  connections/<connection-name>.yml
-  datasets/<dataset-name>.yml      (one per XML <data-set>)
+  connections/<connection-name>.yml  (one per distinct database/schema pair, unless --connection-db/--connection-schema is set)
+  datasets/<dataset-name>.yml      (one per dataset referenced by a cube or dimension)
   dimensions/<dim-name>.yml        (one per referenced dimension)
   metrics/<metric-name>.yml        (one per measure or inline expression)
   calculations/<calc-name>.yml     (one per schema-level calculated member)
@@ -670,6 +674,36 @@ With optional overrides:
 
 ---
 
+### `generate-sml-docs`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a single Markdown reference documenting every object in it: the catalog, connections, datasets (tagged fact or dimension), dimensions (hierarchies, levels, level attributes, secondary attributes, and snowflake/embedded joins), models (fact→dimension relationships as a Mermaid diagram plus a join table, metric references, degenerate dimensions, perspectives, aggregates, query-name overrides, and drillthrough), metrics, calculations, and any security objects. Objects are discovered by their `object_type`, so anything present is documented — not just the listed examples.
+
+```bash
+./atscale-utils generate-sml-docs \
+  --sml-dir "./sml-output"
+```
+
+With optional overrides:
+
+```bash
+./atscale-utils generate-sml-docs \
+  --sml-dir "./sml-output" \
+  --output-file "DOCS.md" \
+  --title "Sales Analytics — Semantic Model"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML directory to document |
+| `--output-file` | No | `README.md` | Output Markdown file. A relative path is written inside `<sml-dir>`; an absolute path is used as-is. |
+| `--title` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
+
+**Output:** Writes the Markdown document (default `<sml-dir>/README.md`).
+
+---
+
 ### `generate-ddl-from-atscale`
 
 [↑ Table of Contents](#table-of-contents)
@@ -759,6 +793,8 @@ The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include
 [↑ Table of Contents](#table-of-contents)
 
 Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
+
+Supports both star-schema (every hierarchy level denormalized into one dimension table) and snowflake-schema (each level normalized into its own physical table, resolved from the SML model's per-level datasets and `relationships` block) layouts — see [Snowflake-schema hierarchies](docs/STATISTICS.md#snowflake-schema-hierarchies) in STATISTICS.md.
 
 No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
 
@@ -1656,7 +1692,9 @@ The `tlsCrt` and `tlsKey` fields in the output are base64-encoded PEM strings �
 | `--cert-file` | No | | Path to an existing PEM certificate file |
 | `--key-file` | No | | Path to an existing PEM private key file (required when `--cert-file` is set) |
 | `--enable-mcp` | No | `false` | Enable the AtScale MCP server sub-chart (`atscale-mcp.enabled`). Accepts `true`/`false`, `yes`/`no`, `1`/`0`, `on`/`off`. |
-| `--minimal` | No | `false` | Append values that reduce hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes (`db` 20 Gi, Redis master 8 Gi, telemetry 10 Gi). Verified against chart 2026.1.0. |
+| `--minimal` | No | `false` | Append values that reduce hardware footprint: disables telemetry, removes the Redis replica, and shrinks default PVC sizes (`db` 20 Gi, Redis master 8 Gi, telemetry 10 Gi). Verified against chart 2026.5.0. |
+| `--external-postgres` | No | `false` | Wire AtScale to an externally-managed PostgreSQL instance instead of the bundled `db` sub-chart: disables the in-cluster database (`global.atscale.db.enabled=false`, `db.enabled=false`) and sets each service's `externalDatabase` block to read from Kubernetes secrets. Credentials (host/port/user/password) are **not** taken as inputs — stubbed secret manifests are emitted as a header comment for the operator to fill in and `kubectl apply`. Keycloak is pinned to a dedicated `keycloak` Postgres schema (`KC_DB_SCHEMA`) rather than `public`; the operator must create that schema before install (a `CREATE SCHEMA` statement is included in the emitted header comment). Verified against chart 2026.5.0. |
+| `--gatekeeper-compliant` | No | `false` | Emit values that satisfy common OPA Gatekeeper constraints: `image.pullPolicy=Always` and `serviceAccount.create=true` per subchart, plus resource requests/limits via `global.resourcesPreset` (`poc` when combined with `--minimal`, otherwise `prod`). A header comment lists the residual constraints that cannot be met via `values.yaml` and need a namespace exemption. Verified against chart 2026.5.0. |
 | `--output-file` | No | `values.yaml` | Output path for the generated `values.yaml` |
 
 **Output:** A `values.yaml` ready to pass to `helm install atscale ... --values values.yaml`.
@@ -1874,8 +1912,12 @@ connections:
 Validates an SML model and lists any structural or engine-level problems.
 
 Runs in two phases:
-1. **Structural** — local cross-reference check of all SML YAML files (datasets, dimensions, level attributes, model relationships).
+1. **Structural** — local cross-reference check of all SML YAML files (datasets, dimensions, level attributes, model relationships, and each dataset's `connection_id`).
 2. **Engine** (if Phase 1 passes) — calls `POST /catalog/validate-model` to validate column joinability and uniqueness against the actual data warehouse.
+
+Each engine check is sent to the connection group of the dataset it applies to: the dataset's `connection_id` names a file in `connections/`, whose `as_connection`, `database` and `schema` are what the engine receives. Checks are batched one request per distinct connection group / database / schema, so a model spanning several connections is validated correctly. A relationship whose two sides sit on different connections is reported as a warning and skipped — the engine cannot join across connection groups in a single request.
+
+The `as_connection` value must match a connection group that already exists on the target instance (see [`atscale-list-data-sources`](#atscale-list-data-sources)). If it does not, the engine returns `500 … ConnectionGroup ConnectionGroupIdentity(<name>) not found` and Phase 2 is reported as a warning.
 
 Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
@@ -1967,7 +2009,7 @@ atscale-utils version
 atscale-utils --version
 ```
 
-**Output:** `@atscale/ps-utils@<version>`
+**Output:** `@atscale-ps/ps-utils@<version>`
 
 This operation takes no parameters.
 
@@ -2048,6 +2090,17 @@ connections:
       user: <user_key>          # key from users block, or use username/password inline
       # username: admin         # alternative: inline credentials
       # password: secret
+    proxy:
+      host: proxy.com
+      port: 8080
+      protocol: https
+      username: admin
+      password: secret
+    cert:
+      ca: /path/to/cacerts.pem
+      cert: /path/to/client.crt
+      key: /path/to/client.key
+      rejectUnauthorized: false
 ```
 
 ---
@@ -2074,6 +2127,19 @@ users:
     # Alternative: pre-encoded PKCS8 DER base64
     # privateKeyBase64: "<base64-der-pkcs8>"
 ```
+
+#### Programmatic access token authentication (Snowflake)
+
+An alternative to key-pair auth for accounts where you cannot assign a key pair to your user. Generate a token in Snowsight under **User → Programmatic Access Tokens**, then reference it as `token` (or `pat`) on the user entry:
+
+```yaml
+users:
+  snowflake_pat_user:
+    username: USER@EXAMPLE.COM
+    token: "<programmatic-access-token>"
+```
+
+Requires no key file and no MFA prompt. Note that the token's associated user must be covered by a network policy (account-level or user-level) unless an authentication policy explicitly waives that requirement — see [Snowflake's PAT documentation](https://docs.snowflake.com/en/user-guide/programmatic-access-tokens). If both `privateKeyPath`/`privateKeyBase64` and `token` are present on the same user entry, key-pair auth takes priority.
 
 #### Personal access token (Databricks)
 
@@ -2156,7 +2222,9 @@ connections:
 | `snowflake_user` | Yes | | Key from `users` section |
 | `role` | No | | Snowflake role (e.g. `SYSADMIN`) |
 
-#### Full Snowflake example
+The referenced `users` entry authenticates via, in priority order: key-pair (`privateKeyPath` / `privateKeyBase64`), programmatic access token (`token` / `pat`), or plain `password`. See [User credentials](#user-credentials) above.
+
+#### Full Snowflake example — key-pair auth
 
 ```yaml
 users:
@@ -2164,6 +2232,26 @@ users:
     username: USER@EXAMPLE.COM
     privateKeyPath: resources/keys/snowflake_key.p8
     privateKeyPassword: ""
+
+connections:
+  snow_demo:
+    sql:
+      dialect: snowflake
+      account: da37161
+      warehouse: COMPUTE_WH
+      database: MY_DATABASE
+      schema: MY_SCHEMA
+      role: SYSADMIN
+      snowflake_user: snowflake_user
+```
+
+#### Full Snowflake example — programmatic access token (PAT) auth
+
+```yaml
+users:
+  snowflake_user:
+    username: USER@EXAMPLE.COM
+    token: "<programmatic-access-token>"
 
 connections:
   snow_demo:
