@@ -407,7 +407,7 @@ With optional overrides:
   --camel-case-measures true
 ```
 
-Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--sample-size`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`--pii-severity`, `--model-mode`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--sample-size`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
@@ -419,6 +419,7 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--schema` | No | From connection config | Override the database schema to introspect |
 | `--catalog-name` | No | `model-name` | Display name for the generated catalog |
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
 | `--sample-size` | No | `250` | Rows to sample per table for type inference (`0` to disable) |
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
 | `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
@@ -472,7 +473,7 @@ With optional overrides:
   --camel-case-measures true
 ```
 
-Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`--pii-severity`, `--model-mode`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
@@ -486,6 +487,7 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--database` | No | | Database name to embed in the SML connection file |
 | `--dialect` | No | Auto-detected from filename | Database dialect (`snowflake`, `postgresql`). When `snowflake`, dataset table names are uppercased. |
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
 | `--camel-case-files` | No | `false` | When `true`, dataset and dimension filenames use camelCase of the source table name |
 | `--camel-case-measures` | No | `false` | When `true`, metric labels use camelCase of the source column name (deprecated — use `--label-style`) |
@@ -504,6 +506,8 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 Reads an AtScale XML project file (schema version `project_2_0`) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the XML model definition.
 
 Dimensions, metrics, datasets, catalog, connection, and model files are all emitted based on the XML structure. Relationships are inferred from the cube's key-ref logical sections: cross-table FKs (`complete="false"`) are mapped to separate dimension datasets, and degenerate dimensions (`complete="true"`) are mapped as self-joins within the fact table. Role-played dimensions (`role_play`), `include_default_drillthrough`, metric folders, dataset column definitions, and the `immutable` flag are all extracted from the XML when present. Cube-level User Defined Aggregates (`<aggregates>`) are converted to each model's `aggregates:` list, with each attribute-ref resolved to either a dimension attribute or a metric and `relationships_path` synthesized for attributes reached through a snowflake/embedded relationship. The connection name is auto-detected from `<physical><connection id="...">` if `--connection-name` is not supplied. Schema-level dimensions that have no join path to the cube are omitted.
+
+`--model-mode` is optional unless multiple dimensions in one model expose the same case-insensitive level-attribute query name. In an interactive terminal, ps-utils explains the compatibility choice and prompts only when such a collision occurs. In CI or another non-interactive environment, supply `new` to rename every collision member deterministically or `existing` to preserve established names and surface a blocking conflict.
 
 ```bash
 ./atscale-utils generate-sml-from-xml \
@@ -533,6 +537,7 @@ With optional overrides:
 | `--connection-db` | No | | Database/project name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `--connection-schema` | No | | Schema/dataset name written to the connection file. When set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `--catalog-name` | No | XML schema name | Override the catalog label |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
 
 **Output layout:**
 ```
@@ -2499,6 +2504,7 @@ An optional YAML file that stores SML generation parameters so you don't have to
 ```yaml
 # ── generate-sml-from-ddl / generate-sml-from-connection ─────────────────────
 pii-severity: MEDIUM          # "HIGH" | "MEDIUM" | "LOW" | "none"
+model-mode: new               # "new" | "existing"; omit until a collision needs a policy
 fact-tables:                  # force-classify tables as facts (list or empty)
   - FactSales
   - FactOrders

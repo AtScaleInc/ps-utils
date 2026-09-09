@@ -144,6 +144,7 @@ export type GenerateSMLFromConnectionParams = {
   schema?: string;
   catalogName?: string;
   piiSeverity?: string;
+  modelMode?: "new" | "existing";
   sampleSize?: number;
   factTables?: string;
   camelCaseFiles?: boolean;
@@ -174,6 +175,7 @@ export type GenerateSMLFromDDLParams = {
   modelName?: string;
   catalogName?: string;
   piiSeverity?: string;
+  modelMode?: "new" | "existing";
   schema?: string;
   database?: string;
   dialect?: string;
@@ -206,6 +208,7 @@ export type GenerateSMLFromXMLParams = {
   catalogName?: string;
   connectionDb?: string;
   connectionSchema?: string;
+  modelMode?: "new" | "existing";
 };
 
 export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: LibraryOptions = {}) {

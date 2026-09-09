@@ -25,6 +25,8 @@ export interface SmlStyleConfig {
   // ── generate-sml-from-ddl / generate-sml-from-connection ─────────────────
   /** PII column exclusion threshold: "HIGH" | "MEDIUM" | "LOW" | "none".  Default: "MEDIUM". */
   "pii-severity"?:        string;
+  /** Compatibility policy for query-name collisions. Unset until a collision requires it. */
+  "model-mode"?:          "new" | "existing";
   /** Tables to force-classify as fact tables, overriding automatic detection. */
   "fact-tables"?:         string[];
   /** Catalog display name.  Omit (or leave empty) to default to the model name. */
@@ -64,6 +66,7 @@ export interface SmlStyleConfig {
 /** Fully-resolved style — every field has a concrete value after merging. */
 export interface MergedSmlStyle {
   "pii-severity":       string;
+  "model-mode":         "new" | "existing" | undefined;
   "fact-tables":        string[];
   "catalog-name":       string | undefined;   // undefined → caller applies model-name fallback
   "camel-case-files":   boolean;
@@ -79,8 +82,9 @@ export interface MergedSmlStyle {
 
 // ─── Defaults ──────────────────────────────────────────────────────────────────
 
-export const SML_STYLE_DEFAULTS: Omit<MergedSmlStyle, "catalog-name"> & { "catalog-name": undefined } = {
+export const SML_STYLE_DEFAULTS: Omit<MergedSmlStyle, "catalog-name" | "model-mode"> & { "catalog-name": undefined; "model-mode": undefined } = {
   "pii-severity":        "MEDIUM",
+  "model-mode":          undefined,
   "fact-tables":         [],
   "catalog-name":        undefined,
   "camel-case-files":    false,
@@ -123,6 +127,7 @@ export function mergeSmlStyle(
 ): MergedSmlStyle {
   return {
     "pii-severity":        cliValues["pii-severity"]        ?? styleConfig["pii-severity"]        ?? SML_STYLE_DEFAULTS["pii-severity"],
+    "model-mode":          cliValues["model-mode"]          ?? styleConfig["model-mode"]          ?? SML_STYLE_DEFAULTS["model-mode"],
     "fact-tables":         cliValues["fact-tables"]         ?? styleConfig["fact-tables"]         ?? [...SML_STYLE_DEFAULTS["fact-tables"]],
     "catalog-name":        cliValues["catalog-name"]        ?? styleConfig["catalog-name"]        ?? SML_STYLE_DEFAULTS["catalog-name"],
     "camel-case-files":    cliValues["camel-case-files"]    ?? styleConfig["camel-case-files"]    ?? SML_STYLE_DEFAULTS["camel-case-files"],

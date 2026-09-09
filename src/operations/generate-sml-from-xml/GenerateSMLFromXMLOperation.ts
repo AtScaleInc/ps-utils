@@ -22,6 +22,13 @@ import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { convertXmlToSml } from "./xml-converter.js";
 import { writeSmlFiles } from "../generate-sml-shared.js";
+import {
+  applyModelCompatibilityPolicy,
+  compatibilityReportMarkdown,
+  formatExistingConflict,
+  parseModelMode,
+  type ModelMode,
+} from "../model-query-name-compatibility.js";
 
 // ----------------------------------------------------------
 // Parameter declarations
@@ -64,6 +71,12 @@ class GenerateSMLFromXMLParamsSet extends ParameterSet {
       description = "Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML";
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "model-mode";
+      description = 'Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict.';
+      required    = false;
+      validate(value: string): void { parseModelMode(value); }
+    })(),
   ];
 }
 
@@ -75,6 +88,7 @@ type Params = {
   "catalog-name"?:      string;
   "connection-db"?:     string;
   "connection-schema"?: string;
+  "model-mode"?:        ModelMode;
 };
 export type GenerateSMLFromXMLParams = Params;
 
@@ -102,7 +116,7 @@ export class GenerateSMLFromXMLOperation extends Operation<Params> {
     this.logger.log(`[GenerateSMLFromXML] Reading: ${xmlFile}`);
     const xmlContent = fs.readFileSync(xmlFile, "utf8");
 
-    const sml = await convertXmlToSml(
+    const generatedSml = await convertXmlToSml(
       xmlContent,
       {
         xmlFileName:      path.basename(xmlFile),
@@ -114,6 +128,19 @@ export class GenerateSMLFromXMLOperation extends Operation<Params> {
       },
       this.logger,
     );
+
+    const compatibility = await applyModelCompatibilityPolicy(
+      generatedSml,
+      params["model-mode"],
+      this.logger,
+    );
+    const sml = compatibility.modelMode || compatibility.collisionSets.length > 0
+      ? new Map(compatibility.sml).set(
+          "README.md",
+          (compatibility.sml.get("README.md") ?? "# XML to SML Conversion\n") +
+            compatibilityReportMarkdown(compatibility),
+        )
+      : compatibility.sml;
 
     this.logger.log(`\n[GenerateSMLFromXML] Writing ${sml.size} SML file(s) to: ${outputDir}`);
     writeSmlFiles(sml, outputDir, this.logger);
@@ -129,5 +156,9 @@ export class GenerateSMLFromXMLOperation extends Operation<Params> {
       `${datasetCount} dataset(s), ${dimCount} dimension(s), ` +
       `${metricCount} metric(s)${calcCount ? `, ${calcCount} calculation(s)` : ""}, ${modelCount} model(s)`,
     );
+
+    if (compatibility.reviewRequired) {
+      throw new Error(formatExistingConflict(compatibility));
+    }
   }
 }
