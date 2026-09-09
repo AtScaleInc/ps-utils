@@ -786,12 +786,31 @@ export async function convertXmlToSml(
               metricNames.push({ uniqueName, folder: folder || undefined });
               continue;
             }
-            rptOmissions.push({
-              category: "Metric",
-              item: attrNameRaw,
-              reason: `Duplicate measure name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
-              recommendation: "Rename one of the source measures in the XML so they produce distinct unique_names.",
-            });
+            // Different real definition under the same name — Java always renames a colliding
+            // calculated member (via recordQueryNameOverrides) rather than dropping it, so
+            // give this one a distinct unique_name too instead of losing it entirely.
+            const altUniqueName = truncateUniqueName(`${safeName(attrNameRaw)}_${safeName(cubeName)}`);
+            const altDedupKey = altUniqueName.toLowerCase();
+            if (!seenMetricNames.has(altDedupKey)) {
+              seenMetricNames.add(altDedupKey);
+              metricDefSignature.set(altDedupKey, attrId);
+              attrIdToMetricUniqueName.set(attrId, altUniqueName);
+              const fname = safeFilename(altUniqueName);
+              output.set(
+                `metrics/${fname}.yml`,
+                buildCalcMemberYaml(altUniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
+              );
+              logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
+              metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
+              rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "calculated_measure", folder: folder || undefined, isHidden: !visible });
+            } else {
+              rptOmissions.push({
+                category: "Metric",
+                item: attrNameRaw,
+                reason: `Duplicate measure name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+                recommendation: "Rename one of the source measures in the XML so they produce distinct unique_names.",
+              });
+            }
             continue;
           }
           seenMetricNames.add(dedupKey);
@@ -829,12 +848,41 @@ export async function convertXmlToSml(
             metricNames.push({ uniqueName, folder: def.folder || undefined });
             continue;
           }
-          rptOmissions.push({
-            category: "Calculated Member",
-            item: def.name,
-            reason: `Duplicate calculated member name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
-            recommendation: "Rename one of the source calculated members in the XML so they produce distinct unique_names.",
-          });
+          // Different real definition under the same name — Java always renames a colliding
+          // calculated member (via recordQueryNameOverrides) rather than dropping it.
+          const altUniqueName = truncateUniqueName(`${safeName(def.name)}_${safeName(cubeName)}`);
+          const altDedupKey = altUniqueName.toLowerCase();
+          if (!seenMetricNames.has(altDedupKey)) {
+            seenMetricNames.add(altDedupKey);
+            metricDefSignature.set(altDedupKey, refId!);
+            attrIdToMetricUniqueName.set(refId!, altUniqueName);
+            const format = resolveFormat(def.formatString, def.namedFormat);
+            const fname = safeFilename(altUniqueName);
+            output.set(
+              `calculations/${fname}.yml`,
+              buildCalcMemberYaml(
+                altUniqueName,
+                label,
+                rewriteMeasureRefs(def.expression, measureRefMap),
+                format,
+                def.folder,
+                def.visible,
+                def.description,
+                def.mdxAggregateFunction,
+                def.dimension,
+              ),
+            );
+            logger.log(`  → calculations/${fname}.yml (renamed — "${uniqueName}" already denotes a different calculated member elsewhere)`);
+            metricNames.push({ uniqueName: altUniqueName, folder: def.folder || undefined });
+            rptMetrics.push({ name: altUniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
+          } else {
+            rptOmissions.push({
+              category: "Calculated Member",
+              item: def.name,
+              reason: `Duplicate calculated member name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "Rename one of the source calculated members in the XML so they produce distinct unique_names.",
+            });
+          }
           continue;
         }
         seenMetricNames.add(dedupKey);
@@ -878,6 +926,15 @@ export async function convertXmlToSml(
       for (const aggEl of arr((aggsSec as Record<string, unknown>).aggregate)) {
         const aggName = a(aggEl, "name");
         if (!aggName) continue;
+
+        // <properties><name>...</name><caching/></properties> — the aggregate's own display
+        // label (distinct from its XML "name" attribute, which is really an id/technical
+        // name) and whether it's pinned in the engine's local cache.
+        const aggPropsEl = first(arr((aggEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        const aggLabel = aggPropsEl ? s(first(arr(aggPropsEl.name))) : undefined;
+        const aggCaching = aggPropsEl && arr(aggPropsEl.caching).length > 0 ? "engine-memory" : undefined;
 
         const attributes: AggregateDef["attributes"] = [];
         const metrics: string[] = [];
@@ -925,7 +982,7 @@ export async function convertXmlToSml(
         }
 
         if (attributes.length === 0 && metrics.length === 0) continue;
-        aggregates.push({ uniqueName: aggName, label: aggName, attributes, metrics });
+        aggregates.push({ uniqueName: aggName, label: aggLabel ?? aggName, attributes, metrics, caching: aggCaching });
       }
     }
 
@@ -965,18 +1022,51 @@ export async function convertXmlToSml(
     // silently emitted with an empty/wrong relationships list.
     for (const pm of pendingSemiAdditiveMetrics) {
       const resolvedRelationshipNames: string[] = [];
+      const resolvedDegenerateDims: Array<{ name: string; level: string }> = [];
+      let ambiguous = false;
       for (const refId of pm.attrRefIds) {
         const levelDef = attrDef.get(refId);
-        const rel = levelDef
-          ? relationships.find((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelDef.name)
-          : undefined;
-        if (rel) resolvedRelationshipNames.push(rel.uniqueName);
+        // A role-played dimension (e.g. "Order Date"/"Ship Date" both pointing at the same
+        // Date level from this fact dataset) can produce MORE THAN ONE relationship matching
+        // (fromDataset, toLevel) — picking the first arbitrarily would silently attach
+        // semi-additivity to the wrong role. There's no reliable way to resolve which
+        // specific role a semi-additive <attribute-ref>'s <ref-path> names (it's an id-path
+        // through existing keyed-attribute-refs, not the ref-naming string relationships are
+        // keyed by), so a genuine ambiguity is reported instead of guessed.
+        const levelUniqueName = levelDef ? levelUniqueNameFor(levelDef.name) : undefined;
+        const matches = levelUniqueName
+          ? relationships.filter((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelUniqueName)
+          : [];
+        if (matches.length > 1) {
+          ambiguous = true;
+          continue;
+        }
+        if (matches.length === 1) {
+          resolvedRelationshipNames.push(matches[0].uniqueName);
+          continue;
+        }
+        // No relationship at all — the level may belong to a degenerate dimension on this
+        // cube, which SML expresses via semi_additive.degenerate_dimensions instead of a
+        // relationship reference.
+        const dimName = attrIdToDimName.get(refId);
+        if (dimName && degenerateDimNames.includes(dimName) && levelUniqueName) {
+          resolvedDegenerateDims.push({ name: dimName, level: levelUniqueName });
+        }
       }
-      if (resolvedRelationshipNames.length === 0) {
+      if (ambiguous) {
         rptOmissions.push({
           category: "Metric",
           item: pm.uniqueName,
-          reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship (it may be a degenerate dimension) — converted without a semi_additive block.",
+          reason: "Semi-additive metric's non-summarized dimension level matches more than one relationship in this cube (likely a role-played dimension) — which specific role was intended can't be determined, so it was converted without a semi_additive block rather than risk attaching it to the wrong one.",
+          recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, choosing the correct role-played relationship.`,
+        });
+        continue;
+      }
+      if (resolvedRelationshipNames.length === 0 && resolvedDegenerateDims.length === 0) {
+        rptOmissions.push({
+          category: "Metric",
+          item: pm.uniqueName,
+          reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship or a degenerate dimension — converted without a semi_additive block.",
           recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, using relationships or degenerate_dimensions as appropriate.`,
         });
         continue;
@@ -995,7 +1085,11 @@ export async function convertXmlToSml(
           pm.description,
           pm.unrelatedDimensionsHandling,
           pm.isAggregatable,
-          { position: pm.position, relationships: resolvedRelationshipNames },
+          {
+            position: pm.position,
+            relationships: resolvedRelationshipNames.length ? resolvedRelationshipNames : undefined,
+            degenerateDimensions: resolvedDegenerateDims.length ? resolvedDegenerateDims : undefined,
+          },
         ),
       );
     }
@@ -1062,6 +1156,17 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
+    // Calculation groups (a dimension-level construct, e.g. time-intelligence YTD/QTD member
+    // templates) have no conversion support at all — surface it the same way KPIs/Named Sets
+    // are, rather than letting every calc-group member vanish with zero trace.
+    if (arr((dimEl as Record<string, unknown>)["calculation-group"]).length > 0) {
+      rptOmissions.push({
+        category: "Structural",
+        item: `Calculation Group in dimension "${dimName}"`,
+        reason: "Dimension-level calculation groups are not converted — no direct SML equivalent implemented.",
+        recommendation: "Recreate the calculation group's member templates as calculated members manually after conversion.",
+      });
+    }
     // A real relationship anywhere wins over a degenerate determination elsewhere — a
     // dimension used by multiple cubes could be degenerate in one and properly joined
     // in another.
@@ -1371,6 +1476,7 @@ interface AggregateDef {
   label: string;
   attributes: Array<{ name: string; dimension: string; relationshipsPath?: string[] }>;
   metrics: string[];
+  caching?: string;
 }
 
 interface OmissionRecord {
@@ -1511,6 +1617,18 @@ function truncateUniqueName(name: string): string {
   const hash = createHash("sha1").update(name).digest("hex").slice(0, 8);
   const keep = MAX_UNIQUE_NAME_LENGTH - hash.length - 1;
   return `${name.slice(0, keep)}_${hash}`;
+}
+
+/**
+ * A dimension level's unique_name, exactly as buildDimensionYaml, findCubeMatchingLevels,
+ * and the semi-additive resolution loop each independently derive it — sanitized (illegal
+ * characters replaced, matching every other unique_name in this file) and truncated to
+ * SML's 63-char limit. Centralized so all three call sites always agree; a mismatch here
+ * silently breaks relationships[].to.level, semi_additive.degenerate_dimensions[].level, and
+ * the shared-degenerate-bindings lookup.
+ */
+function levelUniqueNameFor(name: string): string {
+  return truncateUniqueName(safeName(name));
 }
 
 /**
@@ -1854,6 +1972,8 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
       columnsByName.set(name, entry);
     }
   }
+  /** A column with no computed SQL, map, or parent-column linkage — safe to silently replace. */
+  const isPlainColumn = (c: ColEntry): boolean => !c.sql && !c.map && !c.parentColumn;
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
@@ -1895,13 +2015,19 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     const keyType = mapKeyEl ? s(first(arr(mapKeyEl.type))) : undefined;
     const valueType = mapValueEl ? s(first(arr(mapValueEl.type))) : undefined;
     if (!fieldTerminator || !keyTerminator || !keyType || !valueType) continue;
+    // Only replace a same-named collision if the existing entry is a plain passthrough
+    // column — never silently discard another column's computed <sql>, its own map:
+    // definition, or its parent-column linkage (a genuine name collision between two
+    // distinct physical/computed columns is a source-data ambiguity, not something to
+    // resolve by picking whichever happened to be seen last).
+    const existingMapCol = columnsByName.get(mapColName);
     addColumn(
       mapColName,
       {
         name: mapColName,
         map: { fieldTerminator, keyTerminator, keyType, valueType, isPrefixed: isPrefixed || undefined },
       },
-      true,
+      !existingMapCol || isPlainColumn(existingMapCol),
     );
 
     const colsEl = first(arr(mapColEl.columns)) as Record<string, unknown> | undefined;
@@ -1910,7 +2036,12 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
       const subColName = s(first(arr(subColEl.name)));
       const subColType = s(first(arr(subColEl.type)));
       if (!subColName) continue;
-      addColumn(subColName, { name: subColName, dataType: mapDataType(subColType), parentColumn: mapColName }, true);
+      const existingSubCol = columnsByName.get(subColName);
+      addColumn(
+        subColName,
+        { name: subColName, dataType: mapDataType(subColType), parentColumn: mapColName },
+        !existingSubCol || isPlainColumn(existingSubCol),
+      );
     }
   }
 
@@ -1959,10 +2090,16 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
 }
 
 /** Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants. */
+/**
+ * Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants.
+ * Matches the reference converter's getBaseSql()/getBaseQuery(): if every <sql> is
+ * dialect-tagged, there is no base definition at all — returning one of the dialect-specific
+ * variants here would silently promote (and duplicate into `dialects:`) one engine's SQL as
+ * if it were the universal default.
+ */
 function pickBaseSql(sqlEls: Record<string, unknown>[]): string | undefined {
-  if (sqlEls.length === 0) return undefined;
-  const base = sqlEls.find((el) => !a(el, "dialect")) ?? sqlEls[0];
-  return s(base);
+  const base = sqlEls.find((el) => !a(el, "dialect"));
+  return base ? s(base) : undefined;
 }
 
 // ============================================================
@@ -2184,6 +2321,8 @@ interface SecondaryAttrDef {
   sortColumn: string;
   allowedCalcsForDma?: string[];
   format?: string;
+  isHidden?: boolean;
+  isUniqueKey?: boolean;
 }
 
 interface LevelAttrDef {
@@ -2312,7 +2451,7 @@ function buildDimensionYaml(
       // Same 63-char SML unique_name constraint applied to secondary attributes (see
       // truncateUniqueName) — the level's own primary attribute is the most common case
       // for a long name, since every level has exactly one, and was previously missed.
-      const levelUniqueName = truncateUniqueName(def.name);
+      const levelUniqueName = levelUniqueNameFor(def.name);
 
       // Resolve key columns for the primary level attribute
       const keyEntries = keyMap.get(def.keyUuid) ?? [];
@@ -2365,7 +2504,7 @@ function buildDimensionYaml(
         const saNameCol = saAttrRefEntry?.column ?? saKeyColumns[0];
         const saSortCol = resolveSortColumn(kaDef.sortKeyUuid, keyMap, kaAuthEntry.datasetName) ?? saNameCol;
         secondaryAttrs.push({
-          uniqueName: truncateUniqueName(kaDef.name),
+          uniqueName: truncateUniqueName(safeName(kaDef.name)),
           label: kaDef.caption ?? kaDef.name,
           dataset: saDataset,
           keyColumns: saKeyColumns,
@@ -2373,6 +2512,12 @@ function buildDimensionYaml(
           sortColumn: saSortCol,
           allowedCalcsForDma: kaDef.allowedCalcTypes,
           format: resolveFormat(kaDef.formatString, kaDef.namedFormat),
+          // Matches the reference converter: is_hidden applies only to secondary attributes
+          // (never the level's own primary attribute), from the keyed-attribute's own
+          // <properties><visible>; is_unique_key applies to every keyed attribute, from its
+          // key-ref's own unique flag — the same signal already used for level_attributes.
+          isHidden: !kaDef.visible || undefined,
+          isUniqueKey: kaAuthEntry.unique || undefined,
         });
       }
 
@@ -2413,11 +2558,17 @@ function buildDimensionYaml(
         });
       }
 
+      // Visibility for a level (and its level_attributes entry) comes from the LEVEL's own
+      // <properties><visible> only — the reference converter never lets the primary keyed-
+      // attribute's own visibility hide the level (that flag only applies to secondary
+      // attributes, see the secondaryAttrs.push above). Mixing the two meant a level whose
+      // attribute happened to be marked invisible for unrelated reasons was hidden even
+      // though the level itself was never marked hidden.
       const levelVisibleStr = (() => {
         const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
         return lProps ? s(first(arr(lProps.visible))) : undefined;
       })();
-      const isHidden = levelVisibleStr === "false" || !def.visible;
+      const isHidden = levelVisibleStr === "false";
 
       const levelTypeRaw = (() => {
         const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
@@ -2470,7 +2621,7 @@ function buildDimensionYaml(
     if (hierLevels.length > 0) {
       metaTotalLevels += hierLevels.length;
       hierarchies.push({
-        uniqueName: truncateUniqueName(hierName),
+        uniqueName: truncateUniqueName(safeName(hierName)),
         label: hierCaption ?? hierName,
         filterEmpty,
         folder: hierFolder,
@@ -2518,12 +2669,14 @@ function buildDimensionYaml(
               dataset: sa.dataset,
               key_columns: sa.keyColumns,
               name_column: sa.nameColumn,
-              sort_column: sa.sortColumn,
             };
+            if (sa.sortColumn && sa.sortColumn !== sa.nameColumn) saObj.sort_column = sa.sortColumn;
             if (sa.format) saObj.format = sa.format;
             if (sa.allowedCalcsForDma?.length) {
               saObj.allowed_calcs_for_dma = sa.allowedCalcsForDma;
             }
+            if (sa.isHidden) saObj.is_hidden = true;
+            if (sa.isUniqueKey) saObj.is_unique_key = true;
             return saObj;
           });
         }
@@ -2611,7 +2764,11 @@ function buildMetricYaml(
   description?: string,
   unrelatedDimensionsHandling?: string,
   isAggregatable?: boolean,
-  semiAdditive?: { position: string; relationships: string[] },
+  semiAdditive?: {
+    position: string;
+    relationships?: string[];
+    degenerateDimensions?: Array<{ name: string; level: string }>;
+  },
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
@@ -2622,7 +2779,12 @@ function buildMetricYaml(
   // Matches the field order production deployments use: semi_additive sits between
   // calculation_method and dataset/column.
   if (semiAdditive) {
-    obj.semi_additive = { position: semiAdditive.position, relationships: semiAdditive.relationships };
+    const semiAdditiveObj: Record<string, unknown> = { position: semiAdditive.position };
+    if (semiAdditive.relationships?.length) semiAdditiveObj.relationships = semiAdditive.relationships;
+    if (semiAdditive.degenerateDimensions?.length) {
+      semiAdditiveObj.degenerate_dimensions = semiAdditive.degenerateDimensions;
+    }
+    obj.semi_additive = semiAdditiveObj;
   }
   obj.dataset = `${factDatasetName}.dataset`;
   obj.column = column;
@@ -2745,12 +2907,17 @@ function findCubeMatchingLevels(
       const pa = a(levelEl, "primary-attribute");
       if (!pa) continue;
       const def = attrDef.get(pa);
+      // toLevel must match the level's actual emitted unique_name (buildDimensionYaml
+      // truncates it — see truncateUniqueName there) so relationships[].to.level,
+      // semi_additive.degenerate_dimensions[].level, and the shared-degenerate-bindings
+      // lookup key all agree with what the dimension file itself uses; otherwise a level
+      // with a name over 63 chars silently fails every one of those lookups.
       if (cubeKeyRoles.has(pa)) {
-        matches.push({ matchId: pa, toLevel: def?.name ?? pa, dimKeyUuid: def?.keyUuid });
+        matches.push({ matchId: pa, toLevel: levelUniqueNameFor(def?.name ?? pa), dimKeyUuid: def?.keyUuid });
         continue;
       }
       if (def?.keyUuid && cubeKeyRoles.has(def.keyUuid)) {
-        matches.push({ matchId: def.keyUuid, toLevel: def.name, dimKeyUuid: def.keyUuid });
+        matches.push({ matchId: def.keyUuid, toLevel: levelUniqueNameFor(def.name), dimKeyUuid: def.keyUuid });
       }
     }
   }
@@ -3169,6 +3336,7 @@ function buildModelYaml(
         });
       }
       if (agg.metrics.length > 0) aggObj.metrics = agg.metrics;
+      if (agg.caching) aggObj.caching = agg.caching;
       return aggObj;
     });
   }
