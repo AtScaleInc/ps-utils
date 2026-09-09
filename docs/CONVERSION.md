@@ -432,9 +432,10 @@ Process both locations with identical logic.
 
 If any `<attribute>` in the cube contains an `<expression>` child element
 rather than a `<measure>` type, it is a calculated measure. These map to SML
-metrics with a `formula:` field instead of `aggregation:` and `column_name:`.
-The Bookability model does not contain calculated measures, but the algorithm
-should handle them for general use.
+`object_type: metric_calc` (the same shape as a schema-level calculated
+member) with an `expression:` field — there is no `formula:`/`aggregation:`/
+`column_name:` shape for this case. The Bookability model does not contain
+calculated measures, but the algorithm should handle them for general use.
 
 ### `filter-empty` values
 
@@ -448,7 +449,7 @@ additional annotation depending on the target AtScale version.
 ### Invisible attributes
 
 Attributes with `<visible>false</visible>` should be emitted as
-`is_hidden_from_ui: true` in SML rather than omitted, so that the model
+`is_hidden: true` in SML rather than omitted, so that the model
 structure is fully preserved and visibility can be toggled without a re-import.
 
 ---
