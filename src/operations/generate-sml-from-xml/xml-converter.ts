@@ -1293,7 +1293,18 @@ interface DatasetPhysical {
   /** Per-dialect overrides of `sql` (e.g. Snowflake vs. Postgres variants of the same query). */
   dialects?: Array<{ dialect: string; sql: string }>;
   connectionName?: string;
-  columns?: Array<{ name: string; dataType: string; sql?: string }>;
+  columns?: Array<{
+    name: string;
+    /** Optional because a <map-column> itself carries no data_type — SML requires one unless the column is a map. */
+    dataType?: string;
+    sql?: string;
+    /** Per-dialect overrides of a computed column's `sql`. */
+    dialects?: Array<{ dialect: string; sql: string }>;
+    /** A semi-structured MAP-typed physical column (e.g. Hive MAP<string,string>). */
+    map?: { fieldTerminator: string; keyTerminator: string; keyType: string; valueType: string; isPrefixed?: boolean };
+    /** For a map's sub-column: the name of the <map-column> it's projected out of. */
+    parentColumn?: string;
+  }>;
   immutable?: boolean;
 }
 
@@ -1831,26 +1842,78 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   // same name) — dedupe by name, but prefer whichever duplicate carries a <sql>
   // expression, since dropping a computed override silently turns it into a plain
   // passthrough column.
-  const columnsByName = new Map<string, { name: string; dataType: string; sql?: string }>();
+  type ColEntry = DatasetPhysical["columns"] extends Array<infer T> | undefined ? T : never;
+  const columnsByName = new Map<string, ColEntry>();
   const columnOrder: string[] = [];
+  function addColumn(name: string, entry: ColEntry, preferOverExisting: boolean): void {
+    const existing = columnsByName.get(name);
+    if (!existing) {
+      columnOrder.push(name);
+      columnsByName.set(name, entry);
+    } else if (preferOverExisting) {
+      columnsByName.set(name, entry);
+    }
+  }
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
+    const colSqlEls = arr((col as Record<string, unknown>).sql);
     // A computed column can declare multiple <sql dialect="..."> variants — the base
-    // definition is the one with no dialect attribute; per-column dialect overrides aren't
-    // converted (only the dataset-level query's dialects are — see below), so picking any
-    // dialect-tagged <sql> as "the" definition would silently pick the wrong engine's SQL.
-    const colSqlRaw = pickBaseSql(arr((col as Record<string, unknown>).sql));
+    // definition is the one with no dialect attribute; other variants become dialects:.
+    const colSqlRaw = pickBaseSql(colSqlEls);
     const colSql = colSqlRaw ? unescapeHtml(colSqlRaw).replace(/\t/g, "  ") : undefined;
+    const colDialectEls = colSqlEls.filter((el) => a(el, "dialect"));
+    const colDialects = colDialectEls
+      .map((el) => {
+        const dialect = a(el, "dialect");
+        const sqlText = s(el);
+        return dialect && sqlText ? { dialect, sql: unescapeHtml(sqlText).replace(/\t/g, "  ") } : undefined;
+      })
+      .filter((d): d is { dialect: string; sql: string } => Boolean(d));
     if (!colName) continue;
-    const existing = columnsByName.get(colName);
-    if (!existing) {
-      columnOrder.push(colName);
-      columnsByName.set(colName, { name: colName, dataType: mapDataType(colType), sql: colSql });
-    } else if (colSql && !existing.sql) {
-      columnsByName.set(colName, { name: colName, dataType: mapDataType(colType), sql: colSql });
+    addColumn(
+      colName,
+      { name: colName, dataType: mapDataType(colType), sql: colSql, dialects: colDialects.length ? colDialects : undefined },
+      Boolean(colSql && !columnsByName.get(colName)?.sql),
+    );
+  }
+
+  // <map-column>: a semi-structured MAP-typed physical column (e.g. Hive MAP<string,string>),
+  // delimited into keys/values, with its own nested <columns> projecting individual keys out
+  // of the map. Emitted as a `map:` column (no data_type) plus one sub-column per nested key,
+  // each carrying `parent_column` back to the map column's own name.
+  for (const mapCol of arr(physSec["map-column"])) {
+    const mapColEl = mapCol as Record<string, unknown>;
+    const mapColName = s(first(arr(mapColEl.name)));
+    if (!mapColName) continue;
+    const delimitedEl = first(arr(mapColEl.delimited)) as Record<string, unknown> | undefined;
+    const fieldTerminator = delimitedEl ? s(first(arr(delimitedEl["field-terminator"]))) : undefined;
+    const keyTerminator = delimitedEl ? s(first(arr(delimitedEl["key-terminator"]))) : undefined;
+    const isPrefixed = delimitedEl ? a(delimitedEl, "prefixed") === "true" : false;
+    const mapKeyEl = first(arr(mapColEl["map-key"])) as Record<string, unknown> | undefined;
+    const mapValueEl = first(arr(mapColEl["map-value"])) as Record<string, unknown> | undefined;
+    const keyType = mapKeyEl ? s(first(arr(mapKeyEl.type))) : undefined;
+    const valueType = mapValueEl ? s(first(arr(mapValueEl.type))) : undefined;
+    if (!fieldTerminator || !keyTerminator || !keyType || !valueType) continue;
+    addColumn(
+      mapColName,
+      {
+        name: mapColName,
+        map: { fieldTerminator, keyTerminator, keyType, valueType, isPrefixed: isPrefixed || undefined },
+      },
+      true,
+    );
+
+    const colsEl = first(arr(mapColEl.columns)) as Record<string, unknown> | undefined;
+    for (const subCol of arr(colsEl?.column)) {
+      const subColEl = subCol as Record<string, unknown>;
+      const subColName = s(first(arr(subColEl.name)));
+      const subColType = s(first(arr(subColEl.type)));
+      if (!subColName) continue;
+      addColumn(subColName, { name: subColName, dataType: mapDataType(subColType), parentColumn: mapColName }, true);
     }
   }
+
   const columns = columnOrder.map((name) => columnsByName.get(name)!);
   const colsResult = columns.length ? columns : undefined;
 
@@ -1934,15 +1997,23 @@ function buildDatasetYaml(
     obj.table = phys.tableName ?? dsName;
   }
 
-  const columns: Array<{ name: string; data_type: string; sql?: string }> =
+  const columns: Array<Record<string, unknown>> =
     (phys.columns ?? [])
       // A column whose XML type has no SML equivalent (e.g. Snowflake BINARY) is only
       // safe to keep if something actually references it (a key/relationship column);
       // otherwise it's dead physical metadata that fails catalog validation outright —
       // drop it, matching the reference converter's own "unused, will be removed"
-      // behavior for these columns.
-      .filter((c) => !c.dataType.startsWith("binary") || referencedColumns?.has(c.name))
-      .map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) }));
+      // behavior for these columns. A map column has no data_type at all (SML only
+      // requires one unless the column is a map), so it's never subject to this filter.
+      .filter((c) => !c.dataType?.startsWith("binary") || referencedColumns?.has(c.name))
+      .map((c) => ({
+        name: c.name,
+        ...(c.dataType ? { data_type: c.dataType } : {}),
+        ...(c.sql ? { sql: c.sql } : {}),
+        ...(c.dialects?.length ? { dialects: c.dialects } : {}),
+        ...(c.map ? { map: { field_terminator: c.map.fieldTerminator, key_terminator: c.map.keyTerminator, key_type: c.map.keyType, value_type: c.map.valueType, ...(c.map.isPrefixed ? { is_prefixed: true } : {}) } } : {}),
+        ...(c.parentColumn ? { parent_column: c.parentColumn } : {}),
+      }));
 
   if (referencedColumns?.size) {
     const known = new Set(columns.map((c) => c.name));
