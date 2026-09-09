@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema name="Query Name Collision Fixture">
+  <data-sets>
+    <data-set id="fact-assignments" name="fact_assignments">
+      <physical>
+        <connection id="fixture_connection" />
+        <table>
+          <database>fixture_db</database>
+          <schema>fixture_schema</schema>
+          <name>fact_assignments</name>
+        </table>
+        <column><name>geographic_division_id</name><type>Integer</type></column>
+        <column><name>organization_division_id</name><type>Integer</type></column>
+      </physical>
+    </data-set>
+
+    <data-set id="geography-dataset" name="geography">
+      <physical>
+        <connection id="fixture_connection" />
+        <table>
+          <database>fixture_db</database>
+          <schema>fixture_schema</schema>
+          <name>geography</name>
+        </table>
+        <column><name>geographic_division_id</name><type>Integer</type></column>
+      </physical>
+      <logical>
+        <key-ref id="geography-division-key" complete="true" unique="true">
+          <column>geographic_division_id</column>
+        </key-ref>
+      </logical>
+    </data-set>
+
+    <data-set id="organization-dataset" name="organization">
+      <physical>
+        <connection id="fixture_connection" />
+        <table>
+          <database>fixture_db</database>
+          <schema>fixture_schema</schema>
+          <name>organization</name>
+        </table>
+        <column><name>organization_division_id</name><type>Integer</type></column>
+      </physical>
+      <logical>
+        <key-ref id="organization-division-key" complete="true" unique="true">
+          <column>organization_division_id</column>
+        </key-ref>
+      </logical>
+    </data-set>
+  </data-sets>
+
+  <attributes>
+    <keyed-attribute id="geography-division-attribute" name="division" key-ref="geography-division-key">
+      <properties><caption>Geographic Division</caption></properties>
+    </keyed-attribute>
+    <keyed-attribute id="organization-division-attribute" name="division" key-ref="organization-division-key">
+      <properties><caption>Organization Division</caption></properties>
+    </keyed-attribute>
+  </attributes>
+
+  <dimensions>
+    <dimension id="geography-dimension" name="Geography">
+      <properties><caption>Geography</caption></properties>
+      <hierarchy name="Geography Hierarchy">
+        <level primary-attribute="geography-division-attribute" />
+      </hierarchy>
+    </dimension>
+    <dimension id="organization-dimension" name="Organization">
+      <properties><caption>Organization</caption></properties>
+      <hierarchy name="Organization Hierarchy">
+        <level primary-attribute="organization-division-attribute" />
+      </hierarchy>
+    </dimension>
+  </dimensions>
+
+  <cubes>
+    <cube id="division-model" name="Division Model">
+      <data-sets>
+        <data-set-ref id="fact-assignments">
+          <logical>
+            <key-ref id="geography-division-key" complete="false">
+              <column>geographic_division_id</column>
+            </key-ref>
+            <key-ref id="organization-division-key" complete="false">
+              <column>organization_division_id</column>
+            </key-ref>
+          </logical>
+        </data-set-ref>
+        <data-set-ref id="geography-dataset" />
+        <data-set-ref id="organization-dataset" />
+      </data-sets>
+      <dimensions>
+        <dimension-ref id="geography-dimension" />
+        <dimension-ref id="organization-dimension" />
+      </dimensions>
+    </cube>
+  </cubes>
+</schema>

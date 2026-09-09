@@ -421,6 +421,12 @@ export async function convertXmlToSml(
   // degenerate overall, so the relationship set takes precedence when both are present.
   const globalDegenerateDimNames = new Set<string>();
   const globalRelationshipDimNames = new Set<string>();
+  // Degenerate dimensions can draw the same level from more than one fact dataset (e.g. a
+  // flag column present on both a cube's primary fact table and its YTD fact table) — SML's
+  // shared_degenerate_columns models exactly this. Aggregated across every cube in the file
+  // (dimName -> levelName -> datasetName -> keyColumns) so buildDimensionYaml can tell a
+  // single-dataset degenerate level (plain dataset/key_columns) from a shared one.
+  const globalDegenerateBindings = new Map<string, Map<string, Map<string, string[]>>>();
 
   // ---------------------------------------------------------------
   // Phase 7: Schema-level calculated members
@@ -439,6 +445,23 @@ export async function convertXmlToSml(
   // Map every measure/calculated-member's original name to its final unique_name, so
   // calculation expressions referencing other metrics by name can be rewritten to match.
   const measureRefMap = buildMeasureRefMap(cubeEls, calcMemberDefs);
+
+  // Determine, across every cube up front, which dimensions may validly use SML's
+  // shared-degenerate mechanism — a decision made cube-by-cube can't see a dimension's
+  // bindings in OTHER cubes, but SML's constraints (every level of the dimension sharing
+  // the same set of fact datasets; every dataset's key/name column for a shared level having
+  // the same physical type) can only be verified with the full picture. See
+  // computeEligibleDegenerateDimensions for what disqualifies a dimension.
+  const { eligible: eligibleDegenerateDimNames, rejected: rejectedDegenerateDims } =
+    computeEligibleDegenerateDimensions(cubeEls, schemaDims, keyMap, attrDef, datasetIdToName, datasetNameToPhysical);
+  for (const r of rejectedDegenerateDims) {
+    rptOmissions.push({
+      category: "Dimension",
+      item: r.dimName,
+      reason: r.reason,
+      recommendation: "Review this dimension's fact-table bindings manually — some levels may need a relationship instead of a direct column, or the source data types must be reconciled before it can be modeled as a shared degenerate dimension.",
+    });
+  }
 
   // ---------------------------------------------------------------
   // Phase 4+5+Model: Process each cube
@@ -500,6 +523,26 @@ export async function convertXmlToSml(
     // emitted metric's id alongside its transformed unique_name so aggregate parsing (below)
     // can resolve them the same way the reference converter does.
     const attrIdToMetricUniqueName = new Map<string, string>();
+    // Semi-additive measures (<additivity>) reference a dimension level via attribute-ref,
+    // which only resolves to a model relationship's unique_name once Phase 5 has run — so
+    // emission here is provisional and gets overwritten with the resolved semi_additive
+    // block once relationships are known (see the fixup loop after inferRelationships).
+    const pendingSemiAdditiveMetrics: Array<{
+      fname: string;
+      uniqueName: string;
+      label: string;
+      aggregation: string;
+      measureDatasetName: string;
+      column: string;
+      format?: string;
+      folder?: string;
+      visible: boolean;
+      description?: string;
+      unrelatedDimensionsHandling?: string;
+      isAggregatable?: boolean;
+      position: string;
+      attrRefIds: string[];
+    }> = [];
 
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
@@ -599,8 +642,47 @@ export async function convertXmlToSml(
             continue;
           }
 
+          // Semi-additive measures: <additivity><subspace><aggregation-function>...
+          // </aggregation-function><attribute-ref id="..."/></subspace></additivity> marks
+          // the dimension level(s) that should not be summarized. The attribute-ref only
+          // resolves to a model relationship once Phase 5 (inferRelationships) has run, so
+          // record it here and finalize via pendingSemiAdditiveMetrics below.
+          let semiAdditive: { position: string; attrRefIds: string[] } | undefined;
+          if (measureEl) {
+            const additivityEl = first(arr(measureEl.additivity)) as Record<string, unknown> | undefined;
+            const subspaceEl = additivityEl
+              ? (first(arr(additivityEl.subspace)) as Record<string, unknown> | undefined)
+              : undefined;
+            if (subspaceEl) {
+              const aggFnText = s(first(arr(subspaceEl["aggregation-function"])));
+              const position = aggFnText ? mapAdditivityPosition(aggFnText) : undefined;
+              const attrRefIds = arr(subspaceEl["attribute-ref"])
+                .map((r) => a(r as Record<string, unknown>, "id"))
+                .filter((id): id is string => !!id);
+              if (position && attrRefIds.length > 0) {
+                semiAdditive = { position, attrRefIds };
+              } else {
+                rptOmissions.push({
+                  category: "Metric",
+                  item: attrNameRaw,
+                  reason: `Semi-additive aggregation function "${aggFnText}" has no SML equivalent, or its non-summarized attribute could not be identified — converted as a plain ${aggregation} metric instead.`,
+                  recommendation: "Verify whether this measure needs a manually-added semi_additive block after conversion.",
+                });
+              }
+            }
+          }
+
           const label = caption ?? toTitleCase(attrNameRaw);
+          // Preserve the source XML's own casing (matching how dimensions/levels already
+          // behave, and the reference converter) — BI tools like Power BI/Excel/Tableau
+          // bind report fields to the exact unique_name string, so force-lowercasing here
+          // silently breaks every existing report built against a prior deployment.
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          // Dedup key is case-insensitive — matching the reference converter's own
+          // CASE_INSENSITIVE_ORDER qnMap — so "Sales" and "sales" collide even though
+          // their unique_name strings differ, but the emitted file/unique_name still uses
+          // the original casing.
+          const dedupKey = uniqueName.toLowerCase();
           const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
           // Dedup is project-wide (see metricDefSignature above): a measure with the exact
           // same definition (dataset|column|calculation_method) already emitted — by this
@@ -608,8 +690,8 @@ export async function convertXmlToSml(
           // converter's existsExactlyInProject check; only a genuinely different definition
           // sharing the same name needs to be told apart.
           const sig = `${measureDatasetName}|${column}|${aggregation}`;
-          if (seenMetricNames.has(uniqueName)) {
-            if (metricDefSignature.get(uniqueName) === sig) {
+          if (seenMetricNames.has(dedupKey)) {
+            if (metricDefSignature.get(dedupKey) === sig) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
               metricNames.push({ uniqueName, folder: folder || undefined });
               continue;
@@ -620,15 +702,18 @@ export async function convertXmlToSml(
             // column SML can't type (falls back to string), breaking any calc that does
             // arithmetic with it. Prefer whichever duplicate resolves to a real declared
             // physical column, matching the reference converter's own dedup behavior.
-            if (isKnownColumn && !metricHasKnownColumn.get(uniqueName)) {
+            if (isKnownColumn && !metricHasKnownColumn.get(dedupKey)) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
-              metricHasKnownColumn.set(uniqueName, true);
-              metricDefSignature.set(uniqueName, sig);
+              metricHasKnownColumn.set(dedupKey, true);
+              metricDefSignature.set(dedupKey, sig);
               const fname = safeFilename(uniqueName);
               output.set(
                 `metrics/${fname}.yml`,
                 buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable),
               );
+              if (semiAdditive) {
+                pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable, ...semiAdditive });
+              }
               logger.log(`  → metrics/${fname}.yml (replacing an earlier duplicate with an unresolved column)`);
               continue;
             }
@@ -637,16 +722,20 @@ export async function convertXmlToSml(
             // of silently overwriting the earlier cube's metrics/*.yml with this one's
             // definition, which would corrupt whatever already references the original name.
             const altUniqueName = truncateUniqueName(`${safeName(attrNameRaw)}_${safeName(cubeName)}`);
-            if (!seenMetricNames.has(altUniqueName)) {
-              seenMetricNames.add(altUniqueName);
-              metricHasKnownColumn.set(altUniqueName, isKnownColumn);
-              metricDefSignature.set(altUniqueName, sig);
+            const altDedupKey = altUniqueName.toLowerCase();
+            if (!seenMetricNames.has(altDedupKey)) {
+              seenMetricNames.add(altDedupKey);
+              metricHasKnownColumn.set(altDedupKey, isKnownColumn);
+              metricDefSignature.set(altDedupKey, sig);
               attrIdToMetricUniqueName.set(attrId, altUniqueName);
               const fname = safeFilename(altUniqueName);
               output.set(
                 `metrics/${fname}.yml`,
                 buildMetricYaml(altUniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable),
               );
+              if (semiAdditive) {
+                pendingSemiAdditiveMetrics.push({ fname, uniqueName: altUniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable, ...semiAdditive });
+              }
               logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
               metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
               rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
@@ -660,15 +749,18 @@ export async function convertXmlToSml(
             }
             continue;
           }
-          seenMetricNames.add(uniqueName);
-          metricHasKnownColumn.set(uniqueName, isKnownColumn);
-          metricDefSignature.set(uniqueName, sig);
+          seenMetricNames.add(dedupKey);
+          metricHasKnownColumn.set(dedupKey, isKnownColumn);
+          metricDefSignature.set(dedupKey, sig);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
             buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable),
           );
+          if (semiAdditive) {
+            pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable, ...semiAdditive });
+          }
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
@@ -686,8 +778,9 @@ export async function convertXmlToSml(
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
-          if (seenMetricNames.has(uniqueName)) {
-            if (metricDefSignature.get(uniqueName) === attrId) {
+          const dedupKey = uniqueName.toLowerCase();
+          if (seenMetricNames.has(dedupKey)) {
+            if (metricDefSignature.get(dedupKey) === attrId) {
               // Same attribute (by id), reused by another cube — just reference it.
               attrIdToMetricUniqueName.set(attrId, uniqueName);
               metricNames.push({ uniqueName, folder: folder || undefined });
@@ -701,8 +794,8 @@ export async function convertXmlToSml(
             });
             continue;
           }
-          seenMetricNames.add(uniqueName);
-          metricDefSignature.set(uniqueName, attrId);
+          seenMetricNames.add(dedupKey);
+          metricDefSignature.set(dedupKey, attrId);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           // The reference converter has no "calculated measure inline on a cube attribute"
@@ -728,8 +821,9 @@ export async function convertXmlToSml(
         if (!def) continue;
         const label = def.caption ?? def.name;
         const uniqueName = truncateUniqueName(safeName(def.name));
-        if (seenMetricNames.has(uniqueName)) {
-          if (metricDefSignature.get(uniqueName) === refId) {
+        const dedupKey = uniqueName.toLowerCase();
+        if (seenMetricNames.has(dedupKey)) {
+          if (metricDefSignature.get(dedupKey) === refId) {
             // Same calculated member (by id), shared across multiple cubes — just reference it.
             attrIdToMetricUniqueName.set(refId!, uniqueName);
             metricNames.push({ uniqueName, folder: def.folder || undefined });
@@ -743,8 +837,8 @@ export async function convertXmlToSml(
           });
           continue;
         }
-        seenMetricNames.add(uniqueName);
-        metricDefSignature.set(uniqueName, refId!);
+        seenMetricNames.add(dedupKey);
+        metricDefSignature.set(dedupKey, refId!);
         attrIdToMetricUniqueName.set(refId!, uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
@@ -857,50 +951,54 @@ export async function convertXmlToSml(
       }
     }
 
-    // Build per-cube relevant dims: this cube's inline dims + schema-level shared dims.
-    // Structurally, an inline <cube><dimensions><dimension> is always degenerate, and a
-    // <dimension-ref> to a schema-level <dimension> never is — that's a positional fact
-    // about where the dimension is declared in the source XML, unrelated to which physical
-    // dataset backs its key. Capture the inline names separately, before they're merged
-    // with schema/ref'd dims, so inferRelationships can use structural placement (not
-    // dataset-matching) to decide is_degenerate.
-    const cubeInlineDimNames = new Set<string>();
-    const cubeLevelDims = new Map<string, Record<string, unknown>>();
-    for (const dimsSec of arr(cube.dimensions)) {
-      for (const dim of arr(dimsSec.dimension)) {
-        const name = a(dim, "name");
-        if (name) {
-          cubeLevelDims.set(name, dim as Record<string, unknown>);
-          cubeInlineDimNames.add(name);
-        }
-      }
-    }
-    // Schema-level dims referenced via dimension-ref
-    for (const dimsSec of arr(cube.dimensions)) {
-      for (const dimRef of arr(dimsSec["dimension-ref"])) {
-        const refId = a(dimRef, "id");
-        if (!refId) continue;
-        // Find the schema dim with this id
-        for (const [dname, del] of schemaDims) {
-          if (a(del, "id") === refId) {
-            cubeLevelDims.set(dname, del);
-            break;
-          }
-        }
-      }
-    }
-    const relevantDims = new Map([...schemaDims, ...cubeLevelDims]);
+    // Build per-cube relevant dims: this cube's inline dims + schema-level shared dims
+    const relevantDims = buildRelevantDims(cube, schemaDims);
 
     // Phase 5: Infer relationships
-    const { relationships, degenerateDimNames } = inferRelationships(
-      cube,
-      factDatasetName,
-      keyMap,
-      attrDef,
-      relevantDims,
-      datasetIdToName,
-      cubeInlineDimNames,
-    );
+    const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName, eligibleDegenerateDimNames);
+
+    // Resolve semi-additive measures deferred from Phase 4: each attribute-ref names a
+    // dimension level (via attrDef), which is matched against this cube's own relationships
+    // by (fromDataset, toLevel) to find the relationship unique_name semi_additive.relationships
+    // needs. A level with no matching relationship (e.g. a degenerate dimension, which SML
+    // would instead require via semi_additive.degenerate_dimensions) is reported rather than
+    // silently emitted with an empty/wrong relationships list.
+    for (const pm of pendingSemiAdditiveMetrics) {
+      const resolvedRelationshipNames: string[] = [];
+      for (const refId of pm.attrRefIds) {
+        const levelDef = attrDef.get(refId);
+        const rel = levelDef
+          ? relationships.find((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelDef.name)
+          : undefined;
+        if (rel) resolvedRelationshipNames.push(rel.uniqueName);
+      }
+      if (resolvedRelationshipNames.length === 0) {
+        rptOmissions.push({
+          category: "Metric",
+          item: pm.uniqueName,
+          reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship (it may be a degenerate dimension) — converted without a semi_additive block.",
+          recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, using relationships or degenerate_dimensions as appropriate.`,
+        });
+        continue;
+      }
+      output.set(
+        `metrics/${pm.fname}.yml`,
+        buildMetricYaml(
+          pm.uniqueName,
+          pm.label,
+          pm.aggregation,
+          pm.measureDatasetName,
+          pm.column,
+          pm.format,
+          pm.folder,
+          pm.visible,
+          pm.description,
+          pm.unrelatedDimensionsHandling,
+          pm.isAggregatable,
+          { position: pm.position, relationships: resolvedRelationshipNames },
+        ),
+      );
+    }
 
     // The model's flat dimensions: list only holds dimensions with no relationship (they
     // attach directly via is_degenerate) — degenerate schema/cube dims. Dimensions with a
@@ -916,6 +1014,13 @@ export async function convertXmlToSml(
     for (const rel of relationships) referencedDimNames.add(rel.toDimension);
     for (const n of degenerateDimNames) globalDegenerateDimNames.add(n);
     for (const rel of relationships) globalRelationshipDimNames.add(rel.toDimension);
+    for (const b of degenerateBindings) {
+      const byLevel = globalDegenerateBindings.get(b.dimName) ?? new Map<string, Map<string, string[]>>();
+      const byDataset = byLevel.get(b.toLevel) ?? new Map<string, string[]>();
+      if (!byDataset.has(b.dataset)) byDataset.set(b.dataset, b.keyColumns);
+      byLevel.set(b.toLevel, byDataset);
+      globalDegenerateBindings.set(b.dimName, byLevel);
+    }
 
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
@@ -961,7 +1066,8 @@ export async function convertXmlToSml(
     // dimension used by multiple cubes could be degenerate in one and properly joined
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef);
+    const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1495,6 +1601,19 @@ function mapAggregation(raw: string): string {
   }
 }
 
+/** Map XML <additivity><subspace><aggregation-function> → SML semi_additive.position. Returns
+ *  undefined for XMLA aggregation functions (e.g. ByAccount, AverageOfChildren, None) that have
+ *  no SML equivalent, so the caller can fall back to a plain (fully-additive) metric. */
+function mapAdditivityPosition(raw: string): string | undefined {
+  switch (raw) {
+    case "LastNonEmpty":  return "last";
+    case "FirstNonEmpty": return "first";
+    case "LastChild":     return "last_child";
+    case "FirstChild":    return "first_child";
+    default:              return undefined;
+  }
+}
+
 /** Normalize a named format keyword (e.g. "General Number", "Short Date") to a lowercase SML format token. */
 function normalizeNamedFormat(named: string): string {
   switch (named.toLowerCase()) {
@@ -2008,6 +2127,11 @@ interface LevelAttrDef {
   isUniqueKey?: boolean;
   folder?: string;
   description?: string;
+  allowedCalcsForDma?: string[];
+  /** Set instead of dataset/keyColumns/nameColumn when this level is degenerate on more
+   *  than one fact dataset (e.g. a flag column present on both a cube's primary fact table
+   *  and its YTD fact table) — SML's shared_degenerate_columns, one entry per fact dataset. */
+  sharedDegenerateColumns?: Array<{ dataset: string; keyColumns: string[]; nameColumn: string }>;
 }
 
 function buildDimensionYaml(
@@ -2026,6 +2150,11 @@ function buildDimensionYaml(
   soleKeyColumns: Set<string>,
   datasetNameToPhysical: Map<string, DatasetPhysical>,
   metricalAttrDef: Map<string, MetricalAttrDef>,
+  /** Per-level fact-dataset bindings gathered across every cube that uses this dimension
+   * (levelName -> datasetName -> keyColumns), only meaningful when isDegenerate is true. A
+   * level backed by more than one distinct dataset here emits shared_degenerate_columns
+   * instead of a single dataset/key_columns/name_column. */
+  degenerateBindingsForDim?: Map<string, Map<string, string[]>>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -2225,6 +2354,20 @@ function buildDimensionYaml(
       })();
       const timeUnit = mapLevelType(levelTypeRaw) ?? (isTime ? inferTimeUnitFromName(levelName) : undefined);
 
+      // A degenerate level backed by more than one distinct fact dataset (e.g. a flag column
+      // present on both a cube's primary fact table and its YTD fact table) needs
+      // shared_degenerate_columns instead of a single dataset/key_columns/name_column —
+      // one dataset alone (the common case) keeps the plain fields, unchanged from before.
+      const datasetBindings = isDegenerate ? degenerateBindingsForDim?.get(levelUniqueName) : undefined;
+      const sharedDegenerateColumns =
+        datasetBindings && datasetBindings.size > 1
+          ? Array.from(datasetBindings, ([bindingDataset, bindingColumns]) => ({
+              dataset: `${bindingDataset}.dataset`,
+              keyColumns: bindingColumns,
+              nameColumn: defaultNameColumn(bindingColumns, bindingDataset, soleKeyColumns, datasetNameToPhysical),
+            }))
+          : undefined;
+
       // Build or merge the level attribute entry (de-duplicated by unique name)
       if (!levelAttrMap.has(levelUniqueName)) {
         levelAttrMap.set(levelUniqueName, {
@@ -2239,6 +2382,8 @@ function buildDimensionYaml(
           isUniqueKey: isUniqueKey || undefined,
           folder: def.folder,
           description: def.description,
+          allowedCalcsForDma: def.allowedCalcTypes,
+          sharedDegenerateColumns,
         });
       }
 
@@ -2340,16 +2485,28 @@ function buildDimensionYaml(
       const laObj: Record<string, unknown> = {
         unique_name: la.uniqueName,
         label: la.label,
-        dataset: la.dataset,
-        name_column: la.nameColumn,
-        key_columns: la.keyColumns,
       };
+      // shared_degenerate_columns and dataset/name_column/key_columns are mutually
+      // exclusive per the SML spec — a level backed by more than one fact dataset uses the
+      // former instead of the latter.
+      if (la.sharedDegenerateColumns) {
+        laObj.shared_degenerate_columns = la.sharedDegenerateColumns.map((sdc) => ({
+          dataset: sdc.dataset,
+          name_column: sdc.nameColumn,
+          key_columns: sdc.keyColumns,
+        }));
+      } else {
+        laObj.dataset = la.dataset;
+        laObj.name_column = la.nameColumn;
+        laObj.key_columns = la.keyColumns;
+      }
       if (la.description) laObj.description = la.description;
       if (la.sortColumn && la.sortColumn !== la.nameColumn) laObj.sort_column = la.sortColumn;
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
       if (la.isHiddenFromUi) laObj.is_hidden = true;
+      if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
     });
   }
@@ -2383,15 +2540,21 @@ function buildMetricYaml(
   description?: string,
   unrelatedDimensionsHandling?: string,
   isAggregatable?: boolean,
+  semiAdditive?: { position: string; relationships: string[] },
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
     object_type: "metric",
     label,
     calculation_method: calculationMethod,
-    dataset: `${factDatasetName}.dataset`,
-    column,
   };
+  // Matches the field order production deployments use: semi_additive sits between
+  // calculation_method and dataset/column.
+  if (semiAdditive) {
+    obj.semi_additive = { position: semiAdditive.position, relationships: semiAdditive.relationships };
+  }
+  obj.dataset = `${factDatasetName}.dataset`;
+  obj.column = column;
   if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
@@ -2523,17 +2686,68 @@ function findCubeMatchingLevels(
   return matches;
 }
 
-function inferRelationships(
+/** One fact dataset's binding for a degenerate dimension's level — the raw material for
+ *  either a plain level_attributes dataset/key_columns pair (one binding) or a
+ *  shared_degenerate_columns array (multiple distinct fact datasets for the same level). */
+interface DegenerateBinding {
+  dimName: string;
+  toLevel: string;
+  dataset: string;
+  keyColumns: string[];
+}
+
+/** A single (dimension, level, fact-dataset) binding found in one cube — the common raw
+ *  material both the cross-cube eligibility pre-pass and inferRelationships itself need. */
+interface DimensionBinding {
+  dimName: string;
+  toLevel: string;
+  role: CubeKeyRole;
+  dimDataset: string | undefined;
+  isSelfReferencing: boolean;
+}
+
+/** This cube's inline dimensions plus schema-level shared dimensions referenced via
+ *  dimension-ref — the set of dimensions relevant to inferring this cube's relationships. */
+function buildRelevantDims(
+  cube: Record<string, unknown>,
+  schemaDims: Map<string, Record<string, unknown>>,
+): Map<string, Record<string, unknown>> {
+  const cubeLevelDims = new Map<string, Record<string, unknown>>();
+  for (const dimsSec of arr(cube.dimensions)) {
+    for (const dim of arr(dimsSec.dimension)) {
+      const name = a(dim, "name");
+      if (name) cubeLevelDims.set(name, dim as Record<string, unknown>);
+    }
+  }
+  // Schema-level dims referenced via dimension-ref
+  for (const dimsSec of arr(cube.dimensions)) {
+    for (const dimRef of arr(dimsSec["dimension-ref"])) {
+      const refId = a(dimRef, "id");
+      if (!refId) continue;
+      for (const [dname, del] of schemaDims) {
+        if (a(del, "id") === refId) {
+          cubeLevelDims.set(dname, del);
+          break;
+        }
+      }
+    }
+  }
+  return new Map([...schemaDims, ...cubeLevelDims]);
+}
+
+/**
+ * For one cube, find every (dimension, level, fact-dataset) binding — the raw material
+ * inferRelationships uses to decide relationships vs. degenerate treatment, and that the
+ * cross-cube eligibility pre-pass (computeEligibleDegenerateDimensions) uses to check SML's
+ * shared-degenerate constraints before any cube commits to either treatment.
+ */
+function gatherDimensionBindings(
   cubeEl: Record<string, unknown>,
-  factDatasetName: string | undefined,
   keyMap: Map<string, KeyRefEntry[]>,
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
   datasetIdToName: Map<string, string>,
-  structurallyDegenerateDimNames: Set<string>,
-): { relationships: RelationshipDef[]; degenerateDimNames: string[] } {
-  if (!factDatasetName) return { relationships: [], degenerateDimNames: [] };
-
+): DimensionBinding[] {
   // Build the set of ids that appear in this cube's data-set-ref logical sections, mapped to
   // every distinct role that id represents. Role-played FKs (e.g. "Order Date" and "Ship
   // Date" both pointing at the same Date Dimension level) share the same outer <key-ref id>
@@ -2583,11 +2797,7 @@ function inferRelationships(
     }
   }
 
-  const relationships: RelationshipDef[] = [];
-  const degenerateDimNames: string[] = [];
-  const seen = new Set<string>();
-  const usedNames = new Set<string>();
-
+  const bindings: DimensionBinding[] = [];
   for (const [dimName, dimEl] of relevantDims) {
     // Find every level (across every hierarchy) of this dimension matching the cube's
     // key-refs — a dimension can have multiple hierarchies each needing their own
@@ -2596,55 +2806,199 @@ function inferRelationships(
     const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles);
     if (matches.length === 0) continue; // Dimension not used by this cube
 
-    // is_degenerate is a structural fact fixed by where the dimension is declared in the
-    // source XML (inline under <cube><dimensions>, vs a <dimension-ref> to a schema-level
-    // <dimension>) — not by whether its key happens to live in the same physical dataset
-    // as the fact table for this cube. A cube-inline dimension attaches directly via
-    // is_degenerate with no relationship, even if it's backed by a separate lookup table;
-    // a schema-level shared dimension always gets a proper relationship, even on the rare
-    // occasion its key column is denormalized directly onto the fact table.
-    if (structurallyDegenerateDimNames.has(dimName)) {
-      degenerateDimNames.push(dimName);
-      continue;
-    }
-
     for (const { matchId, toLevel, dimKeyUuid } of matches) {
       const roles = cubeKeyRoles.get(matchId) ?? [];
-      if (roles.length === 0) continue;
-
+      const dimKeyEntries = dimKeyUuid ? keyMap.get(dimKeyUuid) ?? [] : [];
       // Dimension dataset: the complete=true side of the dimension's own key (the lookup
       // table) — distinct from matchId, which may be a cube-local role-play identifier.
-      const dimDataset = dimKeyUuid
-        ? keyMap.get(dimKeyUuid)?.find((e) => e.complete === "true")?.datasetName
-        : undefined;
-
+      const dimTrueEntry = dimKeyEntries.find((e) => e.complete === "true");
+      const dimDataset = dimTrueEntry?.datasetName;
+      // When a complete=true entry exists somewhere, it's the dimension's one real lookup
+      // table, and every OTHER entry under the same key-ref id is just a foreign-key
+      // reference from a fact table TO that table — a genuine relationship, not degenerate,
+      // no matter what its own completeness marker says. Only when NO complete=true entry
+      // exists anywhere for this key (this schema uses "false" and "partial" for values
+      // other than "true", not just a plain complete/incomplete binary) does the dimension
+      // have no separate physical home at all, so every fact dataset registered under this
+      // key hosts the data directly and self-referencing must be checked against all of them
+      // — otherwise a role landing on a "partial"-only key silently reads as a real
+      // relationship and produces a spurious self-join.
+      const selfReferencingDatasets = dimTrueEntry
+        ? new Set([dimTrueEntry.datasetName])
+        : new Set(dimKeyEntries.map((e) => e.datasetName));
       for (const role of roles) {
-        const relKey = `${dimName}|${toLevel}|${role.datasetName}|${role.columns.join(",")}`;
-        if (seen.has(relKey)) continue;
-        seen.add(relKey);
-
-        const baseName = `${safeName(role.datasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
-        let relUniqueName = baseName;
-        let suffix = 1;
-        while (usedNames.has(relUniqueName)) {
-          relUniqueName = `${baseName}_${++suffix}`;
-        }
-        usedNames.add(relUniqueName);
-
-        relationships.push({
-          uniqueName: relUniqueName,
-          fromDataset: role.datasetName,
-          fromColumns: role.columns,
-          toDimension: dimName,
-          toLevel,
-          rolePlay: role.rolePlay,
-          dimensionDataset: dimDataset,
-        });
+        bindings.push({ dimName, toLevel, role, dimDataset, isSelfReferencing: selfReferencingDatasets.has(role.datasetName) });
       }
     }
   }
+  return bindings;
+}
 
-  return { relationships, degenerateDimNames };
+/**
+ * Determines which dimensions may validly use SML's shared-degenerate mechanism, checked
+ * globally across every cube before any single cube commits to relationships vs. degenerate
+ * treatment. A per-cube decision can't see a dimension's bindings in OTHER cubes, but SML's
+ * own constraints can only be verified with the full picture:
+ *   - Every level of a shared degenerate dimension must be backed by the exact same set of
+ *     fact datasets (a dimension with one level on two fact tables and another level on only
+ *     one can't be modeled this way at all — Design Center rejects the mix outright).
+ *   - For a level spanning multiple fact datasets, every dataset's key/name column must have
+ *     the same physical data type (two fact tables computing "the same" degenerate column
+ *     with different declared types, e.g. one raw and one CAST to a different type, can't be
+ *     reconciled by the converter — this is a source-schema inconsistency to flag, not fix).
+ * A dimension failing either constraint falls back to ordinary relationships entirely, the
+ * same as if this feature didn't exist for it — exactly its pre-existing behavior.
+ */
+function computeEligibleDegenerateDimensions(
+  cubeEls: Record<string, unknown>[],
+  schemaDims: Map<string, Record<string, unknown>>,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrDef: Map<string, AttrDefEntry>,
+  datasetIdToName: Map<string, string>,
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
+): { eligible: Set<string>; rejected: Array<{ dimName: string; reason: string }> } {
+  const byDim = new Map<string, DimensionBinding[]>();
+  for (const cube of cubeEls) {
+    const factDatasetName = getFactDatasetName(cube, datasetIdToName);
+    if (!factDatasetName) continue;
+    const relevantDims = buildRelevantDims(cube, schemaDims);
+    for (const b of gatherDimensionBindings(cube, keyMap, attrDef, relevantDims, datasetIdToName)) {
+      const list = byDim.get(b.dimName) ?? [];
+      list.push(b);
+      byDim.set(b.dimName, list);
+    }
+  }
+
+  const eligible = new Set<string>();
+  const rejected: Array<{ dimName: string; reason: string }> = [];
+  const setKey = (keys: Iterable<string>) => Array.from(keys).sort().join("|");
+
+  for (const [dimName, bindings] of byDim) {
+    if (!bindings.some((b) => b.isSelfReferencing)) continue; // never degenerate — leave as relationships
+
+    // A name shared across cubes can resolve to genuinely different underlying attributes —
+    // e.g. one cube's "Org Channel Name" hosted on a real snowflake dataset (a normal
+    // relationship) while another cube's own same-named dimension is degenerate on its fact
+    // table directly. Mixing the two into one shared_degenerate_columns array would silently
+    // fold a real relationship's dataset in as if it were just another fact table, discarding
+    // whatever transformation (e.g. an UPPER() case-normalization) made it a separate lookup
+    // table in the first place. Same rule the rest of this file already applies globally: a
+    // real relationship anywhere wins over degenerate treatment for that name everywhere.
+    if (bindings.some((b) => !b.isSelfReferencing)) {
+      rejected.push({
+        dimName,
+        reason: "Some of its bindings are a genuine relationship to a separate dataset while others are degenerate directly on a fact table — these are very likely different underlying attributes that happen to share this display name across cubes, so it was left as ordinary relationships instead of risking an incorrect merge.",
+      });
+      continue;
+    }
+
+    const byLevel = new Map<string, Map<string, string[]>>();
+    for (const b of bindings) {
+      const byDataset = byLevel.get(b.toLevel) ?? new Map<string, string[]>();
+      byDataset.set(b.role.datasetName, b.role.columns);
+      byLevel.set(b.toLevel, byDataset);
+    }
+
+    const levelSetKeys = Array.from(byLevel.values(), (m) => setKey(m.keys()));
+    if (!levelSetKeys.every((k) => k === levelSetKeys[0])) {
+      rejected.push({
+        dimName,
+        reason: "Degenerate on more than one fact table, but its levels don't all share the same set of fact tables — SML requires every level of a shared degenerate dimension to use identical datasets, so this dimension was left as ordinary relationships instead.",
+      });
+      continue;
+    }
+
+    let typeMismatch: string | undefined;
+    for (const byDataset of byLevel.values()) {
+      if (byDataset.size <= 1) continue;
+      const types = new Map<string, string>();
+      for (const [dsName, cols] of byDataset) {
+        for (const col of cols) {
+          types.set(`${dsName}.${col}`, datasetNameToPhysical.get(dsName)?.columns?.find((c) => c.name === col)?.dataType ?? "unknown");
+        }
+      }
+      if (new Set(types.values()).size > 1) {
+        typeMismatch = Array.from(types, ([k, v]) => `${k}: ${v}`).join(", ");
+        break;
+      }
+    }
+    if (typeMismatch) {
+      rejected.push({
+        dimName,
+        reason: `Degenerate on more than one fact table, but the underlying columns have inconsistent data types across those tables (${typeMismatch}) — SML requires them to match, so this dimension was left as ordinary relationships instead.`,
+      });
+      continue;
+    }
+
+    eligible.add(dimName);
+  }
+
+  return { eligible, rejected };
+}
+
+function inferRelationships(
+  cubeEl: Record<string, unknown>,
+  factDatasetName: string | undefined,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrDef: Map<string, AttrDefEntry>,
+  relevantDims: Map<string, Record<string, unknown>>,
+  datasetIdToName: Map<string, string>,
+  eligibleDegenerateDimNames: Set<string>,
+): { relationships: RelationshipDef[]; degenerateDimNames: string[]; degenerateBindings: DegenerateBinding[] } {
+  if (!factDatasetName) return { relationships: [], degenerateDimNames: [], degenerateBindings: [] };
+
+  const byDim = new Map<string, DimensionBinding[]>();
+  for (const b of gatherDimensionBindings(cubeEl, keyMap, attrDef, relevantDims, datasetIdToName)) {
+    const list = byDim.get(b.dimName) ?? [];
+    list.push(b);
+    byDim.set(b.dimName, list);
+  }
+
+  const relationships: RelationshipDef[] = [];
+  const degenerateDimNames: string[] = [];
+  const degenerateBindings: DegenerateBinding[] = [];
+  const seen = new Set<string>();
+  const usedNames = new Set<string>();
+
+  for (const [dimName, bindings] of byDim) {
+    // Whether this dimension is degenerate is decided once, globally, by
+    // computeEligibleDegenerateDimensions — not re-derived per cube — so a dimension's
+    // relationships:/dimensions: placement can never disagree with its own dimension file's
+    // is_degenerate flag, and every cube treats the same dimension the same way.
+    if (eligibleDegenerateDimNames.has(dimName)) {
+      degenerateDimNames.push(dimName);
+      for (const { toLevel, role } of bindings) {
+        degenerateBindings.push({ dimName, toLevel, dataset: role.datasetName, keyColumns: role.columns });
+      }
+      continue;
+    }
+
+    for (const { toLevel, role, dimDataset } of bindings) {
+      const relKey = `${dimName}|${toLevel}|${role.datasetName}|${role.columns.join(",")}`;
+      if (seen.has(relKey)) continue;
+      seen.add(relKey);
+
+      const baseName = `${safeName(role.datasetName)}_to_${safeName(dimName)}_${safeName(role.columns.join("_"))}`;
+      let relUniqueName = baseName;
+      let suffix = 1;
+      while (usedNames.has(relUniqueName)) {
+        relUniqueName = `${baseName}_${++suffix}`;
+      }
+      usedNames.add(relUniqueName);
+
+      relationships.push({
+        uniqueName: relUniqueName,
+        fromDataset: role.datasetName,
+        fromColumns: role.columns,
+        toDimension: dimName,
+        toLevel,
+        rolePlay: role.rolePlay,
+        dimensionDataset: dimDataset,
+      });
+    }
+  }
+
+  return { relationships, degenerateDimNames, degenerateBindings };
 }
 
 // ============================================================
@@ -2697,7 +3051,9 @@ function buildModelYaml(
     label: modelName,
   };
 
-  if (isHidden) obj.is_hidden = true;
+  // Models use visible (default true), not is_hidden — a different property
+  // from every other SML object type that carries a hidden flag.
+  if (isHidden) obj.visible = false;
   if (includeDefaultDrillthrough) obj.include_default_drillthrough = true;
 
   obj.relationships = relationships.map((r) => {
