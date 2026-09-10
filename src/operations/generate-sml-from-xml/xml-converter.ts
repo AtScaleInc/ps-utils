@@ -305,11 +305,42 @@ export async function convertXmlToSml(
   // Phase 3: Collect dimension elements
   // ---------------------------------------------------------------
 
+  // Two different cubes — or a cube and the shared schema — can each declare their own
+  // dimension under the exact same display name for genuinely different underlying
+  // attributes (e.g. one cube's own inline "Org Group Name" lookup table vs another
+  // cube's completely separate degenerate "Org Group Name" bound directly to its fact
+  // table). A raw name is not a safe map key across the whole file: whichever dimension
+  // happened to be visited last would silently overwrite the other's entry, and the
+  // survivor could end up with one dimension's type/is_degenerate paired with the other's
+  // dataset binding. Every dimension element's id is resolved to a final (possibly
+  // disambiguated, "_2"/"_3"-suffixed) name exactly once here, so every later lookup by id
+  // — including from a different cube — agrees on the same name instead of colliding.
+  const dimIdToName = new Map<string, string>();
+  const dimNameClaimedBy = new Map<string, string>();
+  function resolveDimName(dim: Record<string, unknown>): string | undefined {
+    const rawName = a(dim, "name");
+    if (!rawName) return undefined;
+    const id = a(dim, "id");
+    if (!id) return rawName;
+    const existing = dimIdToName.get(id);
+    if (existing) return existing;
+    const claimant = dimNameClaimedBy.get(rawName);
+    let finalName = rawName;
+    if (claimant && claimant !== id) {
+      let n = 2;
+      while (dimNameClaimedBy.has(`${rawName}_${n}`)) n++;
+      finalName = `${rawName}_${n}`;
+    }
+    dimNameClaimedBy.set(finalName, id);
+    dimIdToName.set(id, finalName);
+    return finalName;
+  }
+
   // Schema-level shared dimensions (keyed by name)
   const schemaDims = new Map<string, Record<string, unknown>>();
   for (const dimsSec of arr(schemaEl.dimensions)) {
     for (const dim of arr(dimsSec.dimension)) {
-      const name = a(dim, "name");
+      const name = resolveDimName(dim as Record<string, unknown>);
       if (name) schemaDims.set(name, dim as Record<string, unknown>);
     }
   }
@@ -320,7 +351,7 @@ export async function convertXmlToSml(
   for (const cube of cubeEls) {
     for (const dimsSec of arr(cube.dimensions)) {
       for (const dim of arr(dimsSec.dimension)) {
-        const name = a(dim, "name");
+        const name = resolveDimName(dim as Record<string, unknown>);
         if (name) allDims.set(name, dim as Record<string, unknown>);
       }
     }
@@ -354,6 +385,11 @@ export async function convertXmlToSml(
   // (dimName -> levelName -> datasetName -> keyColumns) so buildDimensionYaml can tell a
   // single-dataset degenerate level (plain dataset/key_columns) from a shared one.
   const globalDegenerateBindings = new Map<string, Map<string, Map<string, string[]>>>();
+  // Schema-level calculated members are emitted per-cube below (Phase 7) when a cube
+  // references them by id; tracked here so a leftover pass after the cube loop can report
+  // an omission (like the "declared but not referenced" dataset note below) for every one
+  // no cube ever references, instead of it vanishing from the output with no trace.
+  const emittedCalcMemberIds = new Set<string>();
 
   // ---------------------------------------------------------------
   // Phase 7: Schema-level calculated members
@@ -380,7 +416,7 @@ export async function convertXmlToSml(
   // the same physical type) can only be verified with the full picture. See
   // computeEligibleDegenerateDimensions for what disqualifies a dimension.
   const { eligible: eligibleDegenerateDimNames, rejected: rejectedDegenerateDims } =
-    computeEligibleDegenerateDimensions(cubeEls, schemaDims, keyMap, attrDef, datasetIdToName, datasetNameToPhysical);
+    computeEligibleDegenerateDimensions(cubeEls, schemaDims, keyMap, attrDef, datasetIdToName, datasetNameToPhysical, dimIdToName);
   for (const r of rejectedDegenerateDims) {
     rptOmissions.push({
       category: "Dimension",
@@ -431,12 +467,13 @@ export async function convertXmlToSml(
 
     const metricNames: Array<{ uniqueName: string; folder?: string }> = [];
     // The same measure/calc name can legitimately appear under multiple XML attribute ids
-    // (e.g. a visible=false leftover from a rename) — dedupe by the transformed unique_name
-    // so the model's metrics: list never contains the same entry twice.
+    // in the same cube (e.g. a visible=false leftover copy from a rename, or a stale "TEMP"
+    // duplicate the modeler never cleaned up) — every one is still a real object declared in
+    // the source, so none are dropped. Each name collision after the first is disambiguated
+    // with a deterministic "_2", "_3", ... suffix (dedupeUniqueName) rather than excluded, so
+    // the model's metrics: list never contains the same unique_name twice but every source
+    // attribute still lands in the output under its own.
     const seenMetricNames = new Set<string>();
-    // Tracks, per emitted measure unique_name, whether its column actually resolved to a
-    // declared physical column on its dataset — see the duplicate-measure handling below.
-    const metricHasKnownColumn = new Map<string, boolean>();
     // User Defined Aggregates reference measures/calc members by attribute id — record each
     // emitted metric's id alongside its transformed unique_name so aggregate parsing (below)
     // can resolve them the same way the reference converter does.
@@ -460,6 +497,32 @@ export async function convertXmlToSml(
       attrRefIds: string[];
     }> = [];
 
+    // AtScale represents a percentile measure as two linked attributes: a hidden
+    // <quantile-group> (the base column + a compression/T-Digest setting) and one or more
+    // visible <quantile-instance> attributes, each pinning a specific quantile of that
+    // group. SML has no such split — a single `percentile` metric carries the column,
+    // compression and quantile together — so the group defs are collected up front and
+    // resolved when each instance is processed below.
+    const quantileGroupDefs = new Map<string, { baseAttrId?: string; compression?: number }>();
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr((attrsSec as Record<string, unknown>).attribute)) {
+        const attrId = a(attrEl, "id");
+        if (!attrId) continue;
+        const props = first(arr((attrEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        const typeEl = props ? (first(arr(props.type)) as Record<string, unknown> | undefined) : undefined;
+        const qgEl = typeEl ? (first(arr(typeEl["quantile-group"])) as Record<string, unknown> | undefined) : undefined;
+        if (!qgEl) continue;
+        const baseRefEl = first(arr(qgEl["attribute-ref"])) as Record<string, unknown> | undefined;
+        const compressionStr = s(first(arr(qgEl.compression)));
+        quantileGroupDefs.set(attrId, {
+          baseAttrId: baseRefEl ? a(baseRefEl, "id") : undefined,
+          compression: compressionStr ? Number(compressionStr) : undefined,
+        });
+      }
+    }
+
     // Phase 4: Emit measures
     for (const attrsSec of arr(cube.attributes)) {
       for (const attrEl of arr((attrsSec as Record<string, unknown>).attribute)) {
@@ -480,6 +543,9 @@ export async function convertXmlToSml(
           | Record<string, unknown>
           | undefined;
         const countNonNullEl = first(arr(typeEl["count-nonnull"])) as
+          | Record<string, unknown>
+          | undefined;
+        const quantileInstanceEl = first(arr(typeEl["quantile-instance"])) as
           | Record<string, unknown>
           | undefined;
         const exprEl = s(first(arr((attrEl as Record<string, unknown>).expression)));
@@ -570,43 +636,13 @@ export async function convertXmlToSml(
           // behave, and the reference converter) — BI tools like Power BI/Excel/Tableau
           // bind report fields to the exact unique_name string, so force-lowercasing here
           // silently breaks every existing report built against a prior deployment.
-          // Duplicate detection below still normalizes to lowercase, so a same-name
-          // collision that only differs by case is still caught rather than producing two
-          // SML objects that a case-insensitive target might treat as duplicates anyway.
-          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
-          const dedupKey = uniqueName.toLowerCase();
-          const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
-          if (seenMetricNames.has(dedupKey)) {
-            // The source XML can define the same measure name twice, bound to different
-            // columns — e.g. a stale duplicate whose column was never actually declared on
-            // its dataset. Silently keeping "whichever came first" can pin the measure to a
-            // column SML can't type (falls back to string), breaking any calc that does
-            // arithmetic with it. Prefer whichever duplicate resolves to a real declared
-            // physical column, matching the reference converter's own dedup behavior.
-            if (isKnownColumn && !metricHasKnownColumn.get(dedupKey)) {
-              attrIdToMetricUniqueName.set(attrId, uniqueName);
-              metricHasKnownColumn.set(dedupKey, true);
-              const fname = safeFilename(uniqueName);
-              output.set(
-                `metrics/${fname}.yml`,
-                buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description),
-              );
-              if (semiAdditive) {
-                pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, ...semiAdditive });
-              }
-              logger.log(`  → metrics/${fname}.yml (replacing an earlier duplicate with an unresolved column)`);
-            } else {
-              rptOmissions.push({
-                category: "Metric",
-                item: attrNameRaw,
-                reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
-                recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
-              });
-            }
-            continue;
-          }
-          seenMetricNames.add(dedupKey);
-          metricHasKnownColumn.set(dedupKey, isKnownColumn);
+          // Collision detection below still normalizes to lowercase, so a same-name
+          // collision that only differs by case is still caught (and disambiguated) rather
+          // than producing two SML objects a case-insensitive target might treat as
+          // duplicates anyway.
+          const baseUniqueName = truncateUniqueName(safeName(attrNameRaw));
+          const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
+          seenMetricNames.add(uniqueName.toLowerCase());
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
@@ -616,22 +652,50 @@ export async function convertXmlToSml(
           if (semiAdditive) {
             pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, ...semiAdditive });
           }
-          logger.log(`  → metrics/${fname}.yml`);
+          logger.log(`  → metrics/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${attrNameRaw}")` : ""}`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
-        } else if (exprEl) {
-          // Inline expression (calculated measure on attribute element)
-          const label = caption ?? toTitleCase(attrNameRaw);
-          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
-          if (seenMetricNames.has(uniqueName.toLowerCase())) {
+        } else if (quantileInstanceEl) {
+          // Percentile measure (see the quantile-group pre-pass above for context).
+          const groupRefEl = first(arr(quantileInstanceEl["quantile-group-ref"])) as
+            | Record<string, unknown>
+            | undefined;
+          const groupRefId = groupRefEl ? a(groupRefEl, "id") : undefined;
+          const groupDef = groupRefId ? quantileGroupDefs.get(groupRefId) : undefined;
+          const quantileValStr = s(first(arr(quantileInstanceEl["quantile-val"])));
+          const quantileVal = quantileValStr !== undefined ? Number(quantileValStr) : undefined;
+          const baseColRef = groupDef?.baseAttrId ? attrMap.get(groupDef.baseAttrId) : undefined;
+          const column = baseColRef?.column;
+          const measureDatasetName = baseColRef?.datasetName ?? factDatasetName;
+
+          if (!groupDef || quantileVal === undefined || Number.isNaN(quantileVal) || !column || !measureDatasetName) {
             rptOmissions.push({
               category: "Metric",
               item: attrNameRaw,
-              reason: `Duplicate measure name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
-              recommendation: "If both attributes are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
+              reason: "Could not resolve this percentile (quantile) measure's base column or its quantile-group definition",
+              recommendation: "Add this measure manually to metrics/*.yml with calculation_method: percentile.",
             });
             continue;
           }
+
+          const label = caption ?? toTitleCase(attrNameRaw);
+          const baseUniqueName = truncateUniqueName(safeName(attrNameRaw));
+          const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
+          seenMetricNames.add(uniqueName.toLowerCase());
+          attrIdToMetricUniqueName.set(attrId, uniqueName);
+          const fname = safeFilename(uniqueName);
+          output.set(
+            `metrics/${fname}.yml`,
+            buildPercentileMetricYaml(uniqueName, label, measureDatasetName, column, groupDef.compression, quantileVal, format, folder, visible, description),
+          );
+          logger.log(`  → metrics/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${attrNameRaw}")` : ""}`);
+          metricNames.push({ uniqueName, folder: folder || undefined });
+          rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation: "percentile", folder: folder || undefined, isHidden: !visible });
+        } else if (exprEl) {
+          // Inline expression (calculated measure on attribute element)
+          const label = caption ?? toTitleCase(attrNameRaw);
+          const baseUniqueName = truncateUniqueName(safeName(attrNameRaw));
+          const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
           seenMetricNames.add(uniqueName.toLowerCase());
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
@@ -639,7 +703,7 @@ export async function convertXmlToSml(
             `metrics/${fname}.yml`,
             buildCalcMetricYaml(uniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
           );
-          logger.log(`  → metrics/${fname}.yml`);
+          logger.log(`  → metrics/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${attrNameRaw}")` : ""}`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "calculated_measure", folder: folder || undefined, isHidden: !visible });
         }
@@ -652,17 +716,10 @@ export async function convertXmlToSml(
         const refId = a(cmRef, "id");
         const def = refId ? calcMemberDefs.get(refId) : undefined;
         if (!def) continue;
+        emittedCalcMemberIds.add(refId!);
         const label = def.caption ?? def.name;
-        const uniqueName = truncateUniqueName(safeName(def.name));
-        if (seenMetricNames.has(uniqueName.toLowerCase())) {
-          rptOmissions.push({
-            category: "Calculated Member",
-            item: def.name,
-            reason: `Duplicate calculated member name (unique_name "${uniqueName}" already emitted by another attribute in this cube) — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
-            recommendation: "If both are genuinely needed, rename one in the source XML so they produce distinct unique_names.",
-          });
-          continue;
-        }
+        const baseUniqueName = truncateUniqueName(safeName(def.name));
+        const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
         seenMetricNames.add(uniqueName.toLowerCase());
         attrIdToMetricUniqueName.set(refId!, uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
@@ -671,7 +728,7 @@ export async function convertXmlToSml(
           `calculations/${fname}.yml`,
           buildCalcMemberYaml(uniqueName, label, rewriteMeasureRefs(def.expression, measureRefMap), format, def.folder, def.visible, def.description),
         );
-        logger.log(`  → calculations/${fname}.yml`);
+        logger.log(`  → calculations/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${def.name}")` : ""}`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
         rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
       }
@@ -767,7 +824,7 @@ export async function convertXmlToSml(
     }
 
     // Build per-cube relevant dims: this cube's inline dims + schema-level shared dims
-    const relevantDims = buildRelevantDims(cube, schemaDims);
+    const relevantDims = buildRelevantDims(cube, schemaDims, dimIdToName);
 
     // Phase 5: Infer relationships
     const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName, eligibleDegenerateDimNames);
@@ -861,6 +918,23 @@ export async function convertXmlToSml(
   }
 
   // ---------------------------------------------------------------
+  // Phase 7b: Report schema-level calculated members no cube references
+  // ---------------------------------------------------------------
+  // A calculated member defined in the schema's shared library but never wired into any
+  // cube via a <calculated-member-ref> is excluded from output — same policy as the
+  // schema-level dimension check above and the "declared but not referenced" dataset
+  // check below — but still worth a note rather than vanishing with no trace.
+  for (const [id, def] of calcMemberDefs) {
+    if (emittedCalcMemberIds.has(id)) continue;
+    rptOmissions.push({
+      category: "Calculated Member",
+      item: def.name,
+      reason: "Declared in the schema's calculated-member library but no cube references it via a calculated-member-ref — excluded from output.",
+      recommendation: "If this calculated member is actually needed, add it manually to calculations/*.yml and reference it from the relevant model.",
+    });
+  }
+
+  // ---------------------------------------------------------------
   // Phase 3b: Emit dimension YAML files for all referenced dims
   // ---------------------------------------------------------------
 
@@ -893,6 +967,18 @@ export async function convertXmlToSml(
         recommendation: "Verify that the dimension-to-dimension relationship is covered by a model relationship, or add it manually as a secondary attribute referencing the correct dataset.",
       });
     }
+  }
+
+  // Schema-level dimensions no cube joins to are excluded from output (matching how an
+  // unreferenced dataset is excluded below), rather than silently vanishing with no trace.
+  for (const dimName of schemaDims.keys()) {
+    if (referencedDimNames.has(dimName)) continue;
+    rptOmissions.push({
+      category: "Dimension",
+      item: dimName,
+      reason: "Declared in the schema but no cube joins to it (no relationship and not used as a degenerate dimension) — excluded from output.",
+      recommendation: "If this dimension is actually needed, add it manually to dimensions/ and wire it into the relevant model's relationships.",
+    });
   }
 
   // ---------------------------------------------------------------
@@ -1248,6 +1334,25 @@ function truncateUniqueName(name: string): string {
 }
 
 /**
+ * Resolve a name collision within a cube's metrics/calculations by appending a
+ * deterministic "_2", "_3", ... suffix instead of dropping the colliding object — every
+ * <attribute>/<calculated-member-ref> the source XML declares becomes its own SML object,
+ * even when two of them share the exact same name (a common leftover from copy/paste
+ * "TEMP" duplicates or abandoned renames in real-world exports). Returns `base` unchanged
+ * when there is no collision.
+ */
+function dedupeUniqueName(base: string, seen: ReadonlySet<string>): string {
+  if (!seen.has(base.toLowerCase())) return base;
+  let n = 2;
+  let candidate = truncateUniqueName(`${base}_${n}`);
+  while (seen.has(candidate.toLowerCase())) {
+    n++;
+    candidate = truncateUniqueName(`${base}_${n}`);
+  }
+  return candidate;
+}
+
+/**
  * Build a map from every measure/calculated-member's original XML name to its final
  * (safeName + truncated) unique_name. Calculation expressions reference other metrics
  * by their original name (e.g. "[Measures].[Sales Amount-Prev]"), but the output uses
@@ -1275,7 +1380,8 @@ function buildMeasureRefMap(
         const isMeasure =
           arr(typeEl.measure).length > 0 ||
           arr(typeEl["count-distinct"]).length > 0 ||
-          arr(typeEl["count-nonnull"]).length > 0;
+          arr(typeEl["count-nonnull"]).length > 0 ||
+          arr(typeEl["quantile-instance"]).length > 0;
         const hasExpr = arr((attrEl as Record<string, unknown>).expression).length > 0;
         if (!isMeasure && !hasExpr) continue;
         map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw)));
@@ -1472,6 +1578,19 @@ function mapLevelType(xmlLevelType: string | undefined): string | undefined {
     default:              return undefined;
   }
 }
+
+/**
+ * Coarse-to-fine rank of every SML time_unit, used to reorder a time hierarchy's levels.
+ * SML requires each level's time_unit to be no finer than the level above it; the source
+ * XML's <level> order isn't guaranteed to already satisfy that (e.g. a "Year Month" lookup
+ * level placed ahead of "Quarter" purely because that's how the modeler declared it), so
+ * levels get sorted into this canonical coarse→fine order rather than passed through as-is.
+ * A level with no recognized time_unit sorts after all recognized ones, keeping its
+ * relative position among other such levels (stable sort).
+ */
+const TIME_UNIT_RANK: Record<string, number> = {
+  year: 0, halfyear: 1, quarter: 2, month: 3, week: 4, day: 5, hour: 6, minute: 7, second: 8,
+};
 
 /**
  * Ordered [pattern, time_unit] fallbacks for levels inside a time dimension whose
@@ -2021,6 +2140,12 @@ function buildDimensionYaml(
 
     if (hierLevels.length > 0) {
       metaTotalLevels += hierLevels.length;
+      // SML requires a time hierarchy's levels to run coarse-to-fine (each level's
+      // time_unit no finer than the one above it) — the source XML's level order isn't
+      // guaranteed to satisfy that, so reorder rather than emit an invalid hierarchy.
+      const orderedLevels = isTime
+        ? [...hierLevels].sort((a, b) => (TIME_UNIT_RANK[a.timeUnit ?? ""] ?? 99) - (TIME_UNIT_RANK[b.timeUnit ?? ""] ?? 99))
+        : hierLevels;
       hierarchies.push({
         uniqueName: hierName,
         label: hierCaption ?? hierName,
@@ -2028,7 +2153,7 @@ function buildDimensionYaml(
         folder: hierFolder,
         description: hierDescription,
         defaultMember,
-        levels: hierLevels,
+        levels: orderedLevels,
       });
     }
   }
@@ -2156,6 +2281,40 @@ function buildMetricYaml(
   }
   obj.dataset = `${factDatasetName}.dataset`;
   obj.column = column;
+  if (description) obj.description = description;
+  if (format) obj.format = format;
+  if (folder) obj.folder = folder;
+  if (!visible) obj.is_hidden = true;
+  return toYaml(obj);
+}
+
+/** Percentile metric — the SML equivalent of an AtScale quantile-group/quantile-instance pair. */
+function buildPercentileMetricYaml(
+  uniqueName: string,
+  label: string,
+  factDatasetName: string,
+  column: string,
+  compression: number | undefined,
+  quantileVal: number,
+  format?: string,
+  folder?: string,
+  visible = true,
+  description?: string,
+): string {
+  const obj: Record<string, unknown> = {
+    unique_name: uniqueName,
+    object_type: "metric",
+    label,
+    calculation_method: "percentile",
+    dataset: `${factDatasetName}.dataset`,
+    column,
+  };
+  if (compression !== undefined) obj.compression = compression;
+  if (quantileVal === 0.5) {
+    obj.named_quantiles = "median";
+  } else {
+    obj.custom_quantiles = [quantileVal];
+  }
   if (description) obj.description = description;
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
@@ -2321,11 +2480,17 @@ interface DimensionBinding {
 function buildRelevantDims(
   cube: Record<string, unknown>,
   schemaDims: Map<string, Record<string, unknown>>,
+  dimIdToName: Map<string, string>,
 ): Map<string, Record<string, unknown>> {
   const cubeLevelDims = new Map<string, Record<string, unknown>>();
   for (const dimsSec of arr(cube.dimensions)) {
     for (const dim of arr(dimsSec.dimension)) {
-      const name = a(dim, "name");
+      // Resolved once, globally, when allDims was built — reuse that same (possibly
+      // disambiguated) name rather than re-deriving the raw XML name here, or this cube's
+      // own dimension could resolve to a name a *different* cube's same-named-but-distinct
+      // dimension already claimed.
+      const id = a(dim, "id");
+      const name = id ? dimIdToName.get(id) : a(dim, "name");
       if (name) cubeLevelDims.set(name, dim as Record<string, unknown>);
     }
   }
@@ -2466,12 +2631,13 @@ function computeEligibleDegenerateDimensions(
   attrDef: Map<string, AttrDefEntry>,
   datasetIdToName: Map<string, string>,
   datasetNameToPhysical: Map<string, DatasetPhysical>,
+  dimIdToName: Map<string, string>,
 ): { eligible: Set<string>; rejected: Array<{ dimName: string; reason: string }> } {
   const byDim = new Map<string, DimensionBinding[]>();
   for (const cube of cubeEls) {
     const factDatasetName = getFactDatasetName(cube, datasetIdToName);
     if (!factDatasetName) continue;
-    const relevantDims = buildRelevantDims(cube, schemaDims);
+    const relevantDims = buildRelevantDims(cube, schemaDims, dimIdToName);
     for (const b of gatherDimensionBindings(cube, keyMap, attrDef, relevantDims, datasetIdToName)) {
       const list = byDim.get(b.dimName) ?? [];
       list.push(b);
@@ -2481,7 +2647,6 @@ function computeEligibleDegenerateDimensions(
 
   const eligible = new Set<string>();
   const rejected: Array<{ dimName: string; reason: string }> = [];
-  const setKey = (keys: Iterable<string>) => Array.from(keys).sort().join("|");
 
   for (const [dimName, bindings] of byDim) {
     if (!bindings.some((b) => b.isSelfReferencing)) continue; // never degenerate — leave as relationships
@@ -2502,20 +2667,20 @@ function computeEligibleDegenerateDimensions(
       continue;
     }
 
+    // shared_degenerate_columns is declared per level_attribute in SML, not once for the
+    // whole dimension (see dimension.md) — there's no requirement that every level share the
+    // identical set of fact datasets. A level backed by only one of the cube's fact tables
+    // (e.g. an hour-of-day column only present on the primary fact, while year/month/quarter
+    // are computed on every fact table bound to the cube) simply keeps the plain
+    // dataset/key_columns fields for that level; buildDimensionYaml already emits
+    // shared_degenerate_columns only for the levels that actually need it (datasetBindings
+    // size > 1). Rejecting the whole dimension over this per-level variation produced invalid
+    // output the live engine flagged as "should be degenerative" — degenerate was correct.
     const byLevel = new Map<string, Map<string, string[]>>();
     for (const b of bindings) {
       const byDataset = byLevel.get(b.toLevel) ?? new Map<string, string[]>();
       byDataset.set(b.role.datasetName, b.role.columns);
       byLevel.set(b.toLevel, byDataset);
-    }
-
-    const levelSetKeys = Array.from(byLevel.values(), (m) => setKey(m.keys()));
-    if (!levelSetKeys.every((k) => k === levelSetKeys[0])) {
-      rejected.push({
-        dimName,
-        reason: "Degenerate on more than one fact table, but its levels don't all share the same set of fact tables — SML requires every level of a shared degenerate dimension to use identical datasets, so this dimension was left as ordinary relationships instead.",
-      });
-      continue;
     }
 
     let typeMismatch: string | undefined;
