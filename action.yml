@@ -42,6 +42,8 @@ inputs:
         generate-queries-from-model
         extract-query-stats-from-atscale
         generate-sml-from-xml
+        generate-report-from-xml
+        generate-report-from-sml
         generate-shared-model-plan
         apply-shared-model-plan-option
         generate-sml-docs
@@ -104,7 +106,8 @@ inputs:
       Path to the SML project directory.
       Used by: extract-model-from-sml,
                atscale-deploy-catalog (required),
-               atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
+               atscale-list-model-errors (local mode — provide this OR repo-name/repo-id),
+               generate-report-from-sml.
     required: false
 
   # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
@@ -182,9 +185,11 @@ inputs:
     description: Path to the DDL SQL file to parse for SML generation.
     required: false
 
-  # ── generate-sml-from-xml ────────────────────────────────────────────────
+  # ── generate-sml-from-xml / generate-report-from-xml ────────────────────
   xml-file:
-    description: Path to the AtScale XML project file (project_2_0 format) to convert.
+    description: >
+      Path to the AtScale XML project file (project_2_0 format) to convert or report on.
+      Used by: generate-sml-from-xml, generate-report-from-xml.
     required: false
   connection-type:
     description: >
@@ -252,6 +257,8 @@ inputs:
     description: >
       Title for the generated namespace / Tableau workbook.
       For generate-sml-docs: H1 title of the docs (default: catalog label / unique_name).
+      For generate-report-from-xml: H1 title of the report (default: XML schema name).
+      For generate-report-from-sml: H1 title of the report (default: catalog label / unique_name).
     required: false
   max-suggestions:
     description: "Maximum number of analysis suggestions to generate (default: 25)."
@@ -276,6 +283,8 @@ inputs:
       For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
       For execute-query-on-connection: path to write query results (CSV for SQL, XML for XMLA).
       For generate-sml-docs: Markdown output file; relative paths are written inside the SML dir (default: README.md).
+      For generate-report-from-xml: Markdown report output file (omit to print to stdout).
+      For generate-report-from-sml: Markdown report output file (omit to print to stdout).
     required: false
 
   # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
@@ -970,6 +979,32 @@ runs:
         [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-report-from-xml ─────────────────────────────────────────────
+    - name: Generate report from XML
+      if: inputs.operation == 'generate-report-from-xml'
+      run: |
+        ARGS=(
+          --xml-file "${{ inputs.xml-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-report-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-report-from-sml ─────────────────────────────────────────────
+    - name: Generate report from SML
+      if: inputs.operation == 'generate-report-from-sml'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-report-from-sml "${ARGS[@]}"
       shell: bash
 
     # ── apply-style-to-sml ──────────────────────────────────────────────
