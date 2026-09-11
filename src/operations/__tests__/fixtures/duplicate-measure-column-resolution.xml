@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema name="Duplicate Measure Regression">
+  <data-sets>
+    <data-set id="fact-sales" name="fact_sales">
+      <physical>
+        <connection id="fixture_connection" />
+        <table><name>fact_sales</name></table>
+        <column><name>valid_amount</name><type>Decimal</type></column>
+      </physical>
+      <logical>
+        <key-ref id="unresolved-measure-key" complete="true"><column>missing_amount</column></key-ref>
+        <key-ref id="resolved-measure-key" complete="true"><column>valid_amount</column></key-ref>
+      </logical>
+    </data-set>
+  </data-sets>
+  <cubes>
+    <cube id="sales-model" name="Sales Model">
+      <data-sets><data-set-ref id="fact-sales" /></data-sets>
+      <attributes>
+        <attribute id="stale-sales-amount" name="SalesAmount">
+          <properties><type><measure><key-ref id="unresolved-measure-key" /></measure></type></properties>
+        </attribute>
+        <attribute id="valid-sales-amount" name="SalesAmount">
+          <properties><type><measure><key-ref id="resolved-measure-key" /></measure></type></properties>
+        </attribute>
+      </attributes>
+    </cube>
+  </cubes>
+</schema>

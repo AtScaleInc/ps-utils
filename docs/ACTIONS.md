@@ -347,7 +347,7 @@ Connects to a live database, introspects its schema, runs semantic model inferen
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
-Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -361,6 +361,7 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
     output-dir: sml-output
     sml-config-file: sml.style.yaml                   # optional — input settings file
     pii-severity: MEDIUM                              # optional
+    model-mode: new                                  # optional; required in CI only when a collision occurs
     schema: PUBLIC                                    # optional
     fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
     camel-case-files: "true"                          # optional — camelCase filenames
@@ -382,7 +383,7 @@ All inference capabilities from `generate-sml-from-connection` apply — composi
 
 **Requires:** No secrets — the DDL file must be present in the repository.
 
-Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -398,6 +399,7 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
     connection-name: snow_demo    # optional — embedded in SML files
     sml-config-file: sml.style.yaml  # optional — input settings file
     pii-severity: MEDIUM          # optional
+    model-mode: new              # optional; required in CI only when a collision occurs
     fact-tables: "FactInternetSales,FactResellerSales" # optional — override auto-classification
     camel-case-files: "true"      # optional — camelCase filenames
     camel-case-measures: "true"   # optional — camelCase metric labels (deprecated)
@@ -413,6 +415,8 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
 [↑ Table of Contents](#table-of-contents)
 
 Reads an AtScale XML project file (`project_2_0` format) and converts it to AtScale SML YAML files. No database connection or secrets required — the conversion runs entirely from the XML model definition.
+
+When a cross-dimension level-attribute query-name collision occurs, set `model-mode: new` to rename every collision member deterministically. Set `model-mode: existing` to preserve established names and fail for explicit compatibility review. With no collision, the input is optional.
 
 **Requires:** No secrets — the XML file must be present in the repository.
 
@@ -431,6 +435,7 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
     connection-db: my-project-id      # optional — database/project in connection file
     connection-schema: my_dataset     # optional — schema/dataset in connection file
     catalog-name: "My Catalog"        # optional — overrides the XML schema name
+    model-mode: new                   # optional; required in CI only when a collision occurs
 ```
 
 | Input | Required | Default | Description |
@@ -442,6 +447,7 @@ Reads an AtScale XML project file (`project_2_0` format) and converts it to AtSc
 | `connection-db` | No | | Database/project name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
+| `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
 
 ---
 

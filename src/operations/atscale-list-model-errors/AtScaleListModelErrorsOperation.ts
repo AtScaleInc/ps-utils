@@ -47,6 +47,7 @@ import {
   AtScaleRestClientService,
   AtScaleEnvironment,
 } from "../../services/AtScaleRestClientService.js";
+import { detectLevelAttributeQueryNameCollisions } from "../model-query-name-compatibility.js";
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -591,6 +592,34 @@ export class AtScaleListModelErrorsOperation extends Operation<Params> {
     // Phase 1: structural
     this.logger.verbose("Phase 1: structural validation…");
     const structuralErrors = validateStructure(dimensionsMap, datasetsMap, connectionsMap, modelData);
+    const selectedModelName = modelData.unique_name ?? modelData.label ?? "(unnamed)";
+    const dimensionPaths = new Map<string, string>();
+    const dimensionsByName = new Map<string, any>();
+    for (const [fileName, dimension] of dimensionsMap) {
+      const dimensionName = dimension.unique_name ?? dimension.label;
+      if (dimensionName) {
+        dimensionPaths.set(dimensionName, `dimensions/${fileName}.yml`);
+        dimensionsByName.set(dimensionName, dimension);
+      }
+    }
+    const { collisions: queryNameCollisions } = detectLevelAttributeQueryNameCollisions(
+      new Map([[selectedModelName, modelData]]),
+      dimensionsByName,
+      dimensionPaths,
+    );
+    for (const collision of queryNameCollisions) {
+      structuralErrors.push({
+        phase: "structural",
+        severity: "error",
+        message:
+          `Ambiguous query name '${collision.originalNames.join(" / ")}' is used by multiple dimension level attributes: ` +
+          collision.objects.map((object) =>
+            `${object.dimensionName}.${object.uniqueName} (dataset: ${object.dataset ?? "unknown"}, key: ${object.keyColumns.join(", ") || "unknown"})`,
+          ).join("; ") +
+          ". Resolve the collision before production deployment.",
+        location: collision.objects.map((object) => object.sourceFile).join(", "),
+      });
+    }
     allProblems.push(...structuralErrors);
 
     if (structuralErrors.length > 0) {
@@ -658,5 +687,8 @@ export class AtScaleListModelErrorsOperation extends Operation<Params> {
       this.logger.log(`  [${tag}][${p.phase}]${loc} ${p.message}`);
     }
     process.stdout.write(JSON.stringify({ model: modelLabel, problems: allProblems, summary: { errors: errors.length, warnings: warnings.length } }, null, 2) + "\n");
+    if (queryNameCollisions.length > 0) {
+      throw new Error("Structural validation failed: ambiguous query-name collision requires explicit resolution.");
+    }
   }
 }

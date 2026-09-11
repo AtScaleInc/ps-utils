@@ -16,6 +16,12 @@ import { proposeSemanticModel } from "../algorithm/semantic-model-builder.js";
 import { createDefaultEngine } from "../algorithm/inference/index.js";
 import { generateReport, generateStyleGuide, type ReportOptions, type StyleGuideOptions } from "../algorithm/report-generator.js";
 import { type SmlStyleConfig, writeSmlStyleConfig } from "./sml-style-config.js";
+import {
+  applyModelCompatibilityPolicy,
+  compatibilityReportMarkdown,
+  formatExistingConflict,
+  type ModelMode,
+} from "./model-query-name-compatibility.js";
 
 // ----------------------------------------------------------
 // PII severity resolver
@@ -75,6 +81,7 @@ export async function runInferenceAndWrite(
   logger: Logger,
   tag: string,
   styleConfig?: SmlStyleConfig,
+  modelMode?: ModelMode,
 ): Promise<void> {
   logger.log(`[${tag}] Running inference on "${modelName}"…`);
 
@@ -91,9 +98,11 @@ export async function runInferenceAndWrite(
     }
   }
 
-  if (model.sml && model.sml.size > 0) {
-    writeSmlFiles(model.sml, outputDir, logger);
-    logger.log(`\n[${tag}] Wrote ${model.sml.size} SML file(s) to: ${outputDir}`);
+  const compatibility = await applyModelCompatibilityPolicy(model.sml ?? new Map(), modelMode, logger);
+
+  if (compatibility.sml.size > 0) {
+    writeSmlFiles(compatibility.sml, outputDir, logger);
+    logger.log(`\n[${tag}] Wrote ${compatibility.sml.size} SML file(s) to: ${outputDir}`);
   } else {
     logger.log(`[${tag}] No SML output was generated.`);
   }
@@ -107,7 +116,10 @@ export async function runInferenceAndWrite(
     database:       smlOpts?.database,
     dialect:        smlOpts?.dialect,
   };
-  const reportContent = generateReport(model, reportOpts);
+  const reportContent = generateReport(model, reportOpts) +
+    (compatibility.modelMode || compatibility.collisionSets.length > 0
+      ? compatibilityReportMarkdown(compatibility)
+      : "");
   const reportPath    = path.join(outputDir, "REPORT.md");
   fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(reportPath, reportContent, "utf8");
@@ -116,6 +128,7 @@ export async function runInferenceAndWrite(
     const styleGuideOpts: StyleGuideOptions = {
       catalogName:          smlOpts?.catalogName ?? model.name,
       piiSeverity:          styleConfig["pii-severity"] ?? "MEDIUM",
+      modelMode:            styleConfig["model-mode"],
       camelCaseFiles:       styleConfig["camel-case-files"] ?? false,
       camelCaseMeasures:    styleConfig["camel-case-measures"] ?? false,
       labelStyle:           styleConfig["label-style"] ?? "title-case",
@@ -137,4 +150,8 @@ export async function runInferenceAndWrite(
     `${model.dimensions.length} dimension(s), ` +
     `${model.facts.reduce((n, f) => n + f.measures.length, 0)} measure(s)`,
   );
+
+  if (compatibility.reviewRequired) {
+    throw new Error(formatExistingConflict(compatibility));
+  }
 }

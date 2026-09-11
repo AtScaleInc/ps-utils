@@ -328,6 +328,7 @@ curl -X POST http://localhost:4000/rest/extract-ddl-from-connection \
 | `schema` | `String` | No | Database schema to introspect (overrides the schema in the connection config) |
 | `catalogName` | `String` | No | Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml. |
 | `piiSeverity` | `String` | No | Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml. |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. Can also be set in sml.style.yaml. |
 | `sampleSize` | `Int` | No | Maximum rows to sample per table for type inference (default: 250; 0 to disable). Can also be set in sml.style.yaml. |
 | `factTables` | `String` | No | Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml. |
 | `camelCaseFiles` | `Boolean` | No | When true, dataset and dimension filenames use camelCase of the source table name (default: false). Can also be set in sml.style.yaml. |
@@ -380,6 +381,7 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-connection \
 | `smlConfigFileUpload` | file field | No | Multipart upload — alternative to `smlConfigFile` |
 | `catalogName` | `String` | No | Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml. |
 | `piiSeverity` | `String` | No | Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml. |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. Can also be set in sml.style.yaml. |
 | `schema` | `String` | No | Schema name used to filter the DDL (only tables in this schema will be included) |
 | `database` | `String` | No | Database (catalog) name to embed in the SML connection file |
 | `dialect` | `String` | No | Database dialect (e.g. "snowflake", "postgresql"). When "snowflake", dataset table names are uppercased. |
@@ -430,6 +432,7 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-ddl \
 | `catalogName` | `String` | No | Override the catalog label (defaults to the XML schema name) |
 | `connectionDb` | `String` | No | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `String` | No | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
 

@@ -126,6 +126,12 @@ inputs:
   pii-severity:
     description: Minimum PII severity level to tag in generated SML (none/low/medium/high).
     required: false
+  model-mode:
+    description: >
+      Model compatibility policy for query-name collisions: new permits
+      deterministic renaming; existing preserves names and reports a blocking conflict.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl, generate-sml-from-xml.
+    required: false
 
   # ── generate-sml-from-connection ─────────────────────────────────────────
   sample-size:
@@ -927,6 +933,7 @@ runs:
         [[ -n "${{ inputs.schema }}" ]]        && ARGS+=(--schema        "${{ inputs.schema }}")
         [[ -n "${{ inputs.catalog-name }}" ]]  && ARGS+=(--catalog-name  "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.pii-severity }}" ]]  && ARGS+=(--pii-severity  "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.model-mode }}" ]]    && ARGS+=(--model-mode    "${{ inputs.model-mode }}")
         [[ -n "${{ inputs.sample-size }}" ]]     && ARGS+=(--sample-size     "${{ inputs.sample-size }}")
         [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
         [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
@@ -954,6 +961,7 @@ runs:
         [[ -n "${{ inputs.database }}" ]]        && ARGS+=(--database        "${{ inputs.database }}")
         [[ -n "${{ inputs.dialect }}" ]]         && ARGS+=(--dialect         "${{ inputs.dialect }}")
         [[ -n "${{ inputs.pii-severity }}" ]]    && ARGS+=(--pii-severity    "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.model-mode }}" ]]      && ARGS+=(--model-mode      "${{ inputs.model-mode }}")
         [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
         [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
         [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
@@ -978,6 +986,7 @@ runs:
         [[ -n "${{ inputs.connection-db }}"     ]] && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
         [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.model-mode }}"         ]] && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
       shell: bash
 

@@ -301,6 +301,7 @@ function generateSMLFromConnection(
 | `schema` | `string` | No | | Override schema name (overrides connection config) |
 | `catalogName` | `string` | No | | Catalog display name (defaults to `modelName`) |
 | `piiSeverity` | `string` | No | | PII exclusion level: `HIGH`, `MEDIUM`, `LOW`, or `none` |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 | `sampleSize` | `number` | No | | Max rows per table for type inference (default 250; 0 to disable) |
 | `factTables` | `string` | No | | Comma-separated fact table names (overrides auto-classification) |
 | `camelCaseFiles` | `boolean` | No | | Use camelCase for dataset/dimension filenames |
@@ -342,6 +343,7 @@ function generateSMLFromDDL(
 | `modelName` | `string` | No | | Model name (defaults to DDL filename stem) |
 | `catalogName` | `string` | No | | Catalog display name |
 | `piiSeverity` | `string` | No | | PII exclusion level |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 | `schema` | `string` | No | | Schema filter |
 | `database` | `string` | No | | Database name to embed in connection file |
 | `dialect` | `string` | No | | Database dialect (e.g. `snowflake`, `postgresql`) |
@@ -385,6 +387,7 @@ function generateSMLFromXML(
 | `catalogName` | `string` | No | | Override the catalog label |
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 
 ---
 
