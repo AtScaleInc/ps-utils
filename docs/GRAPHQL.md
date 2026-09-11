@@ -2284,6 +2284,44 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `cleanUnusedSmlObjects`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit
+
+**CLI name:** `clean-unused-sml-objects`  |  **REST:** `POST /rest/clean-unused-sml-objects`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `apply` | `Boolean` | No | Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it. |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  cleanUnusedSmlObjects(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{cleanUnusedSmlObjects(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
 ### `version`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2610,6 +2648,18 @@ input GenerateSmlDocsInput {
   """Output Markdown file. A relative path is written inside the SML directory; an absolute path is used as-is. Defaults to README.md."""
   outputFile: String
   """H1 title for the document. Defaults to the catalog label / unique_name."""
+  title: String
+}
+
+"""Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit"""
+input CleanUnusedSmlObjectsInput {
+  """Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)"""
+  smlDir: String!
+  """Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it."""
+  apply: Boolean
+  """Output Markdown report file path. Omit to print to stdout."""
+  outputFile: String
+  """H1 title for the report. Defaults to the catalog label / unique_name."""
   title: String
 }
 
@@ -3325,6 +3375,8 @@ type Mutation {
   applyStyleToSml(input: ApplyStyleToSmlInput): OperationResult!
   """Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""
   generateSmlDocs(input: GenerateSmlDocsInput): OperationResult!
+  """Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit"""
+  cleanUnusedSmlObjects(input: CleanUnusedSmlObjectsInput): OperationResult!
   """Analyse SML directories for sharing opportunities and generate a refactoring recommendation plan"""
   generateSharedModelPlan(input: GenerateSharedModelPlanInput): OperationResult!
   """Apply a generate-shared-model-plan recommendation YAML to create shared SML files"""

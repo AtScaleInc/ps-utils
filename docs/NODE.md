@@ -92,6 +92,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`applySharedModelPlanOption`](#generatesmlFromsharedmodelplan)
   - [`applyStyleToSML`](#applystyletosml)
   - [`generateSMLDocs`](#generatesmldocs)
+  - [`cleanUnusedSMLObjects`](#cleanunusedsmlobjects)
   - [`generateDDLFromAtScale`](#generateddlfromatscale)
   - [`generateMetricsFromModel`](#generatemetricsfrommodel)
   - [`echoConnectionMetadata`](#echoconnectionmetadata)
@@ -507,6 +508,37 @@ function generateSMLDocs(
 | `smlDir` | `DirInput` | Yes | | Path to the SML directory to document, or a `Readable` ZIP archive of it |
 | `outputFile` | `string` | No | `"README.md"` | Output Markdown file. A relative path is written inside `smlDir`; an absolute path is used as-is. |
 | `title` | `string` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
+
+---
+
+### `cleanUnusedSMLObjects`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and reports every connection, dataset, dimension, metric, and calculation that no model reaches — directly, or transitively through a dimension's own level attributes, secondary attributes, or snowflake relationships. A structural check (is the object wired into a model at all), not a usage audit (has it actually been queried against a live instance) — joining `extractQueryStatsFromAtScale`'s occurrence data against these `unique_name`s for a genuine usage-based pass is a natural next step, not implemented here. Defaults to a preview: nothing is deleted unless `apply` is `true`. Always review the report first — the analysis can't see `row_security` references or cross-references from an object type it doesn't recognize.
+
+```typescript
+import { cleanUnusedSMLObjects } from "@atscale-ps/ps-utils";
+
+await cleanUnusedSMLObjects({
+  smlDir: "./sml-output",
+  apply: false,
+});
+```
+
+```typescript
+function cleanUnusedSMLObjects(
+  params: CleanUnusedSMLObjectsParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `smlDir` | `DirInput` | Yes | | Path to the SML directory to clean, or a `Readable` ZIP archive of it |
+| `apply` | `boolean` | No | `false` | Actually delete the unused files. Defaults to a preview-only report. |
+| `outputFile` | `FileOutput` | No | | Output path for the Markdown report, or a `Writable` to receive it (stdout if omitted) |
+| `title` | `string` | No | | H1 title for the report. Defaults to the catalog label / `unique_name`. |
 
 ---
 

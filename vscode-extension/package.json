@@ -181,6 +181,11 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.clean-unused-sml-objects",
+        "title": "clean-unused-sml-objects",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-shared-model-plan",
         "title": "generate-shared-model-plan",
         "category": "PS-Utils"
@@ -514,17 +519,22 @@
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-shared-model-plan",
+          "command": "psUtils.op.clean-unused-sml-objects",
           "group": "1_ops@8",
           "when": "explorerResourceIsFolder"
         },
         {
+          "command": "psUtils.op.generate-shared-model-plan",
+          "group": "1_ops@9",
+          "when": "explorerResourceIsFolder"
+        },
+        {
           "command": "psUtils.op.apply-shared-model-plan-option",
-          "group": "1_ops@9"
+          "group": "1_ops@10"
         },
         {
           "command": "psUtils.op.generate-ddl-from-atscale",
-          "group": "1_ops@10",
+          "group": "1_ops@11",
           "when": "explorerResourceIsFolder"
         }
       ],

@@ -262,6 +262,26 @@ export async function generateSMLDocs(p: GenerateSMLDocsParams, o: LibraryOption
   } finally { cleanup(); }
 }
 
+export type CleanUnusedSMLObjectsParams = {
+  smlDir:       DirInput;
+  apply?:       boolean;      // default: false (preview-only report; nothing is deleted)
+  outputFile?:  FileOutput;
+  title?:       string;
+};
+
+export async function cleanUnusedSMLObjects(p: CleanUnusedSMLObjectsParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputDirs: ["smlDir"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("clean-unused-sml-objects", Object.assign({
+      apply: false,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type ApplySharedModelPlanOptionParams = {
   planFile: FileInput;
   sharedDir: DirOutput;

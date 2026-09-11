@@ -27,6 +27,7 @@
         "generate-sml-from-xml",
         "apply-style-to-sml",
         "generate-sml-docs",
+        "clean-unused-sml-objects",
         "generate-shared-model-plan",
         "apply-shared-model-plan-option",
         "generate-ddl-from-atscale"
@@ -794,6 +795,50 @@
         {
           "name": "title",
           "description": "H1 title for the document. Defaults to the catalog label / unique_name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "clean-unused-sml-objects": {
+      "description": "Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "apply",
+          "description": "Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "output-file",
+          "description": "Output Markdown report file path. Omit to print to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "description": "H1 title for the report. Defaults to the catalog label / unique_name.",
           "type": "string",
           "role": "scalar",
           "required": false,
