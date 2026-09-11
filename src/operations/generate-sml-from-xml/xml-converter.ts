@@ -234,9 +234,81 @@ export async function convertXmlToSml(
       const allowedCalcTypes = allowedCalcTypesEl
         ? arr(allowedCalcTypesEl["calculation-type"]).map(s).filter((t): t is string => Boolean(t))
         : undefined;
+      // Custom sort order: <properties><ordering><sort-key><key-ref id="..."/></sort-key></ordering></properties>.
+      // Absent (or a <value/> choice instead of <key-ref>) means "sort by the attribute's own
+      // value" — i.e. no override, fall back to name_column, matching the XSD-declared default.
+      const orderingEl = props ? (first(arr(props.ordering)) as Record<string, unknown> | undefined) : undefined;
+      const sortKeyEl = orderingEl ? (first(arr(orderingEl["sort-key"])) as Record<string, unknown> | undefined) : undefined;
+      const sortKeyRefEl = sortKeyEl ? (first(arr(sortKeyEl["key-ref"])) as Record<string, unknown> | undefined) : undefined;
+      const sortKeyUuid = sortKeyRefEl ? a(sortKeyRefEl, "id") : undefined;
       attrDef.set(id, {
         name, caption, keyUuid, formatString, namedFormat, folder, visible, description,
         allowedCalcTypes: allowedCalcTypes?.length ? allowedCalcTypes : undefined,
+        sortKeyUuid,
+      });
+    }
+  }
+
+  // Metrical attributes: schema-level plain <attribute> elements (as opposed to
+  // <keyed-attribute>) — measures attached to a dimension level rather than to a cube. A
+  // level links to one via a plain <attribute-ref attribute-id="..."> child (distinct from
+  // <keyed-attribute-ref>, which is always a secondary attribute).
+  const metricalAttrDef = new Map<string, MetricalAttrDef>();
+  function ingestMetricalAttrs(attrsEl: Record<string, unknown>): void {
+    for (const attrEl of arr(attrsEl.attribute)) {
+      const id = a(attrEl, "id");
+      const name = a(attrEl, "name");
+      if (!id || !name) continue;
+      const props = first(arr((attrEl as Record<string, unknown>).properties)) as
+        | Record<string, unknown>
+        | undefined;
+      if (!props) continue;
+      const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
+      if (!typeEl) continue;
+
+      const measureEl = first(arr(typeEl.measure)) as Record<string, unknown> | undefined;
+      const countDistEl = first(arr(typeEl["count-distinct"])) as Record<string, unknown> | undefined;
+      const countNonNullEl = first(arr(typeEl["count-nonnull"])) as Record<string, unknown> | undefined;
+      const sumDistinctEl = first(arr(typeEl["sum-distinct"])) as Record<string, unknown> | undefined;
+      const quantileGroupEl = first(arr(typeEl["quantile-group"])) as Record<string, unknown> | undefined;
+      const quantileInstanceEl = first(arr(typeEl["quantile-instance"])) as Record<string, unknown> | undefined;
+      const isQuantile = Boolean(quantileGroupEl || quantileInstanceEl);
+      if (!measureEl && !countDistEl && !countNonNullEl && !sumDistinctEl && !isQuantile) continue;
+
+      const caption = s(first(arr(props.caption)));
+      const folder = s(first(arr(props.folder)));
+      const description = s(first(arr(props.description)));
+      const visibleStr = s(first(arr(props.visible)));
+      const visible = visibleStr !== "false";
+      const fmtEl = first(arr(props.formatting)) as Record<string, unknown> | undefined;
+      const formatString = fmtEl ? s(first(arr(fmtEl["format-string"]))) : undefined;
+      const namedFormat = fmtEl ? s(first(arr(fmtEl["named-format"]))) : undefined;
+      const isAggregatableStr = s(first(arr(props["is-aggregatable"])));
+      const isAggregatable = isAggregatableStr === "false" ? false : undefined;
+
+      let aggregation: string | undefined;
+      let measureTypeEl: Record<string, unknown> | undefined;
+      if (!isQuantile) {
+        const countDistApprox = countDistEl ? s(first(arr(countDistEl.approximate))) === "true" : false;
+        const aggText = measureEl
+          ? (s(first(arr(measureEl["default-aggregation"])))?.toUpperCase() ?? "SUM")
+          : countDistEl
+          ? (countDistApprox ? "DISTINCT_COUNT_ESTIMATE" : "COUNT_DISTINCT")
+          : sumDistinctEl
+          ? "SUM_DISTINCT"
+          : "COUNT";
+        aggregation = mapAggregation(aggText);
+        measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl ?? sumDistinctEl;
+      }
+      const unrelatedDimensionsHandling = parseUnrelatedDimensionsHandling(measureTypeEl);
+      const keyRefEl = measureTypeEl
+        ? (first(arr(measureTypeEl["key-ref"])) as Record<string, unknown> | undefined)
+        : undefined;
+      const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
+
+      metricalAttrDef.set(id, {
+        id, name, caption, folder, visible, description, formatString, namedFormat,
+        aggregation, isQuantile, unrelatedDimensionsHandling, isAggregatable, keyRefId,
       });
     }
   }
@@ -244,6 +316,7 @@ export async function convertXmlToSml(
   // Schema-level attributes
   for (const attrsSec of arr(schemaEl.attributes)) {
     ingestKeyedAttrs(attrsSec as Record<string, unknown>);
+    ingestMetricalAttrs(attrsSec as Record<string, unknown>);
   }
 
   // Collect cubes for processing and gather their data
@@ -430,6 +503,22 @@ export async function convertXmlToSml(
   // Phase 4+5+Model: Process each cube
   // ---------------------------------------------------------------
 
+  // Metric/calc-member dedup is project-wide, not per-cube — the reference converter
+  // (AtScaleToML.addMetrics) checks the whole project for an existing metric with the same
+  // name before creating a new one: if a later cube defines an identically-named measure
+  // with the SAME definition (dataset/column/aggregation), that cube just gets a reference
+  // to the existing metrics/*.yml file; only a genuinely different definition under the
+  // same name gets its own distinct unique_name. Scoping this per-cube instead meant a
+  // second cube reusing a common measure name silently overwrote the first cube's file.
+  const seenMetricNames = new Set<string>();
+  // Tracks, per emitted measure unique_name, whether its column actually resolved to a
+  // declared physical column on its dataset — see the duplicate-measure handling below.
+  const metricHasKnownColumn = new Map<string, boolean>();
+  // Signature (dataset|column|calculation_method) of whichever definition currently backs
+  // each emitted metric unique_name — used to tell "same measure reused by another cube"
+  // (just add a reference) from "different measure that happens to share a name" (rename).
+  const metricDefSignature = new Map<string, string>();
+
   for (const cube of cubeEls) {
     const cubeName = a(cube, "name") ?? schemaName;
 
@@ -466,14 +555,6 @@ export async function convertXmlToSml(
       : false;
 
     const metricNames: Array<{ uniqueName: string; folder?: string }> = [];
-    // The same measure/calc name can legitimately appear under multiple XML attribute ids
-    // in the same cube (e.g. a visible=false leftover copy from a rename, or a stale "TEMP"
-    // duplicate the modeler never cleaned up) — every one is still a real object declared in
-    // the source, so none are dropped. Each name collision after the first is disambiguated
-    // with a deterministic "_2", "_3", ... suffix (dedupeUniqueName) rather than excluded, so
-    // the model's metrics: list never contains the same unique_name twice but every source
-    // attribute still lands in the output under its own.
-    const seenMetricNames = new Set<string>();
     // User Defined Aggregates reference measures/calc members by attribute id — record each
     // emitted metric's id alongside its transformed unique_name so aggregate parsing (below)
     // can resolve them the same way the reference converter does.
@@ -493,6 +574,8 @@ export async function convertXmlToSml(
       folder?: string;
       visible: boolean;
       description?: string;
+      unrelatedDimensionsHandling?: string;
+      isAggregatable?: boolean;
       position: string;
       attrRefIds: string[];
     }> = [];
@@ -545,9 +628,17 @@ export async function convertXmlToSml(
         const countNonNullEl = first(arr(typeEl["count-nonnull"])) as
           | Record<string, unknown>
           | undefined;
-        const quantileInstanceEl = first(arr(typeEl["quantile-instance"])) as
+        const sumDistinctEl = first(arr(typeEl["sum-distinct"])) as
           | Record<string, unknown>
           | undefined;
+        // AtScale represents a percentile measure as two linked attributes: a hidden
+        // <quantile-group> (base column + compression) and one or more <quantile-instance>
+        // attributes, each pinning a specific quantile of that group (see quantileGroupDefs
+        // pre-pass above). quantileGroupEl is detected here only so its own attribute is
+        // excluded from every branch below — it carries no value of its own; only
+        // quantile-instance converts to a real percentile metric.
+        const quantileGroupEl = first(arr(typeEl["quantile-group"])) as Record<string, unknown> | undefined;
+        const quantileInstanceEl = first(arr(typeEl["quantile-instance"])) as Record<string, unknown> | undefined;
         const exprEl = s(first(arr((attrEl as Record<string, unknown>).expression)));
 
         const caption = s(first(arr(props.caption)));
@@ -559,21 +650,36 @@ export async function convertXmlToSml(
         const formatString = fmtEl ? s(first(arr(fmtEl["format-string"]))) : undefined;
         const namedFormat = fmtEl ? s(first(arr(fmtEl["named-format"]))) : undefined;
         const format = resolveFormat(formatString, namedFormat);
+        // <properties><is-aggregatable>false</is-aggregatable></properties> — defaults to true.
+        const isAggregatableStr = s(first(arr(props["is-aggregatable"])));
+        const isAggregatable = isAggregatableStr === "false" ? false : undefined;
 
-        if (measureEl || countDistEl || countNonNullEl) {
+        if (measureEl || countDistEl || countNonNullEl || sumDistinctEl) {
           // Regular measure
+          // <count-distinct> defaults to exact ("count distinct") unless explicitly marked
+          // <approximate>true</approximate> — mapping every count-distinct to the estimated
+          // variant silently changes query precision for exact-count measures.
+          const countDistApprox = countDistEl ? s(first(arr(countDistEl.approximate))) === "true" : false;
+          // <unrelated-dimensions> is nested under the measure/count-distinct/count-nonnull/
+          // sum-distinct element itself, as a choice of empty
+          // <unrelated-dimensions-{empty,repeat,error}/>.
+          const measureTypeElForUnrelated = measureEl ?? countDistEl ?? countNonNullEl ?? sumDistinctEl;
+          const unrelatedDimensionsHandling = parseUnrelatedDimensionsHandling(measureTypeElForUnrelated);
           const aggText = measureEl
             ? (s(first(arr(measureEl["default-aggregation"])))?.toUpperCase() ?? "SUM")
             : countDistEl
-            ? "DISTINCT_COUNT_ESTIMATE"
+            ? (countDistApprox ? "DISTINCT_COUNT_ESTIMATE" : "COUNT_DISTINCT")
+            : sumDistinctEl
+            ? "SUM_DISTINCT"
             : "COUNT";
           const aggregation = mapAggregation(aggText);
 
           // Resolve column: prefer the inline <key-ref id="..."> nested under <measure>/
-          // <count-distinct>/<count-nonnull> (resolved through keyMap, same as dimension
-          // level attributes), then attrMap[attrId] (attribute-ref in the fact dataset's
-          // logical section), then fall back to guessing the column from the attribute's own name.
-          const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+          // <count-distinct>/<count-nonnull>/<sum-distinct> (resolved through keyMap, same
+          // as dimension level attributes), then attrMap[attrId] (attribute-ref in the fact
+          // dataset's logical section), then fall back to guessing the column from the
+          // attribute's own name.
+          const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl ?? sumDistinctEl;
           const keyRefEl = measureTypeEl
             ? (first(arr(measureTypeEl["key-ref"])) as Record<string, unknown> | undefined)
             : undefined;
@@ -636,25 +742,97 @@ export async function convertXmlToSml(
           // behave, and the reference converter) — BI tools like Power BI/Excel/Tableau
           // bind report fields to the exact unique_name string, so force-lowercasing here
           // silently breaks every existing report built against a prior deployment.
-          // Collision detection below still normalizes to lowercase, so a same-name
-          // collision that only differs by case is still caught (and disambiguated) rather
-          // than producing two SML objects a case-insensitive target might treat as
-          // duplicates anyway.
-          const baseUniqueName = truncateUniqueName(safeName(attrNameRaw));
-          const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
-          seenMetricNames.add(uniqueName.toLowerCase());
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          // Dedup key is case-insensitive — matching the reference converter's own
+          // CASE_INSENSITIVE_ORDER qnMap — so "Sales" and "sales" collide even though
+          // their unique_name strings differ, but the emitted file/unique_name still uses
+          // the original casing.
+          const dedupKey = uniqueName.toLowerCase();
+          const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
+          // Dedup is project-wide (see metricDefSignature above): a measure with the exact
+          // same definition (dataset|column|calculation_method) already emitted — by this
+          // cube or an earlier one — just gets referenced again, matching the reference
+          // converter's existsExactlyInProject check; only a genuinely different definition
+          // sharing the same name needs to be told apart.
+          const sig = `${measureDatasetName}|${column}|${aggregation}`;
+          if (seenMetricNames.has(dedupKey)) {
+            if (metricDefSignature.get(dedupKey) === sig) {
+              attrIdToMetricUniqueName.set(attrId, uniqueName);
+              metricNames.push({ uniqueName, folder: folder || undefined });
+              continue;
+            }
+            // The source XML can define the same measure name twice, bound to different
+            // columns — e.g. a stale duplicate whose column was never actually declared on
+            // its dataset. Silently keeping "whichever came first" can pin the measure to a
+            // column SML can't type (falls back to string), breaking any calc that does
+            // arithmetic with it. Prefer whichever duplicate resolves to a real declared
+            // physical column, matching the reference converter's own dedup behavior.
+            if (isKnownColumn && !metricHasKnownColumn.get(dedupKey)) {
+              attrIdToMetricUniqueName.set(attrId, uniqueName);
+              metricHasKnownColumn.set(dedupKey, true);
+              metricDefSignature.set(dedupKey, sig);
+              const fname = safeFilename(uniqueName);
+              output.set(
+                `metrics/${fname}.yml`,
+                buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable),
+              );
+              if (semiAdditive) {
+                pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable, ...semiAdditive });
+              }
+              logger.log(`  → metrics/${fname}.yml (replacing an earlier duplicate with an unresolved column)`);
+              continue;
+            }
+            // Different real definition under the same name (typically two different cubes
+            // legitimately reusing a measure name) — give it a distinct unique_name instead
+            // of silently overwriting the earlier cube's metrics/*.yml with this one's
+            // definition, which would corrupt whatever already references the original name.
+            const altUniqueName = truncateUniqueName(`${safeName(attrNameRaw)}_${safeName(cubeName)}`);
+            const altDedupKey = altUniqueName.toLowerCase();
+            if (!seenMetricNames.has(altDedupKey)) {
+              seenMetricNames.add(altDedupKey);
+              metricHasKnownColumn.set(altDedupKey, isKnownColumn);
+              metricDefSignature.set(altDedupKey, sig);
+              attrIdToMetricUniqueName.set(attrId, altUniqueName);
+              const fname = safeFilename(altUniqueName);
+              output.set(
+                `metrics/${fname}.yml`,
+                buildMetricYaml(altUniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable),
+              );
+              if (semiAdditive) {
+                pendingSemiAdditiveMetrics.push({ fname, uniqueName: altUniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable, ...semiAdditive });
+              }
+              logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
+              metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
+              rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
+            } else {
+              rptOmissions.push({
+                category: "Metric",
+                item: attrNameRaw,
+                reason: `Duplicate measure name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid corrupting the existing metrics/*.yml file.`,
+                recommendation: "Rename one of the source measures in the XML so they produce distinct unique_names.",
+              });
+            }
+            continue;
+          }
+          seenMetricNames.add(dedupKey);
+          metricHasKnownColumn.set(dedupKey, isKnownColumn);
+          metricDefSignature.set(dedupKey, sig);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
-            buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description),
+            buildMetricYaml(uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable),
           );
           if (semiAdditive) {
-            pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, ...semiAdditive });
+            pendingSemiAdditiveMetrics.push({ fname, uniqueName, label, aggregation, measureDatasetName, column, format, folder, visible, description, unrelatedDimensionsHandling, isAggregatable, ...semiAdditive });
           }
-          logger.log(`  → metrics/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${attrNameRaw}")` : ""}`);
+          logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
+        } else if (quantileGroupEl) {
+          // Hidden plumbing — see the quantileGroupDefs pre-pass and the quantile-instance
+          // branch below, which is what actually converts to a percentile metric. This
+          // attribute carries no value of its own.
         } else if (quantileInstanceEl) {
           // Percentile measure (see the quantile-group pre-pass above for context).
           const groupRefEl = first(arr(quantileInstanceEl["quantile-group-ref"])) as
@@ -679,31 +857,105 @@ export async function convertXmlToSml(
           }
 
           const label = caption ?? toTitleCase(attrNameRaw);
-          const baseUniqueName = truncateUniqueName(safeName(attrNameRaw));
-          const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
-          seenMetricNames.add(uniqueName.toLowerCase());
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          const dedupKey = uniqueName.toLowerCase();
+          // Same project-wide dedup pattern as regular measures above: a percentile metric
+          // with the exact same definition already emitted just gets referenced again; a
+          // different definition under the same name gets its own distinct unique_name.
+          const sig = `${measureDatasetName}|${column}|percentile`;
+          if (seenMetricNames.has(dedupKey)) {
+            if (metricDefSignature.get(dedupKey) === sig) {
+              attrIdToMetricUniqueName.set(attrId, uniqueName);
+              metricNames.push({ uniqueName, folder: folder || undefined });
+              continue;
+            }
+            const altUniqueName = truncateUniqueName(`${safeName(attrNameRaw)}_${safeName(cubeName)}`);
+            const altDedupKey = altUniqueName.toLowerCase();
+            if (!seenMetricNames.has(altDedupKey)) {
+              seenMetricNames.add(altDedupKey);
+              metricDefSignature.set(altDedupKey, sig);
+              attrIdToMetricUniqueName.set(attrId, altUniqueName);
+              const fname = safeFilename(altUniqueName);
+              output.set(
+                `metrics/${fname}.yml`,
+                buildPercentileMetricYaml(altUniqueName, label, measureDatasetName, column, groupDef.compression, quantileVal, format, folder, visible, description),
+              );
+              logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
+              metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
+              rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation: "percentile", folder: folder || undefined, isHidden: !visible });
+            } else {
+              rptOmissions.push({
+                category: "Metric",
+                item: attrNameRaw,
+                reason: `Duplicate measure name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+                recommendation: "Rename one of the source measures in the XML so they produce distinct unique_names.",
+              });
+            }
+            continue;
+          }
+          seenMetricNames.add(dedupKey);
+          metricDefSignature.set(dedupKey, sig);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
           output.set(
             `metrics/${fname}.yml`,
             buildPercentileMetricYaml(uniqueName, label, measureDatasetName, column, groupDef.compression, quantileVal, format, folder, visible, description),
           );
-          logger.log(`  → metrics/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${attrNameRaw}")` : ""}`);
+          logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation: "percentile", folder: folder || undefined, isHidden: !visible });
         } else if (exprEl) {
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
-          const baseUniqueName = truncateUniqueName(safeName(attrNameRaw));
-          const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
-          seenMetricNames.add(uniqueName.toLowerCase());
+          const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          const dedupKey = uniqueName.toLowerCase();
+          if (seenMetricNames.has(dedupKey)) {
+            if (metricDefSignature.get(dedupKey) === attrId) {
+              // Same attribute (by id), reused by another cube — just reference it.
+              attrIdToMetricUniqueName.set(attrId, uniqueName);
+              metricNames.push({ uniqueName, folder: folder || undefined });
+              continue;
+            }
+            // Different real definition under the same name — Java always renames a colliding
+            // calculated member (via recordQueryNameOverrides) rather than dropping it, so
+            // give this one a distinct unique_name too instead of losing it entirely.
+            const altUniqueName = truncateUniqueName(`${safeName(attrNameRaw)}_${safeName(cubeName)}`);
+            const altDedupKey = altUniqueName.toLowerCase();
+            if (!seenMetricNames.has(altDedupKey)) {
+              seenMetricNames.add(altDedupKey);
+              metricDefSignature.set(altDedupKey, attrId);
+              attrIdToMetricUniqueName.set(attrId, altUniqueName);
+              const fname = safeFilename(altUniqueName);
+              output.set(
+                `metrics/${fname}.yml`,
+                buildCalcMemberYaml(altUniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
+              );
+              logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
+              metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
+              rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "calculated_measure", folder: folder || undefined, isHidden: !visible });
+            } else {
+              rptOmissions.push({
+                category: "Metric",
+                item: attrNameRaw,
+                reason: `Duplicate measure name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+                recommendation: "Rename one of the source measures in the XML so they produce distinct unique_names.",
+              });
+            }
+            continue;
+          }
+          seenMetricNames.add(dedupKey);
+          metricDefSignature.set(dedupKey, attrId);
           attrIdToMetricUniqueName.set(attrId, uniqueName);
           const fname = safeFilename(uniqueName);
+          // The reference converter has no "calculated measure inline on a cube attribute"
+          // shape distinct from a schema-level <calculated-member> — both always become an
+          // SML metric_calc (object_type: metric_calc, expression:), never a plain metric
+          // with an unrecognized "formula" key.
           output.set(
             `metrics/${fname}.yml`,
-            buildCalcMetricYaml(uniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
+            buildCalcMemberYaml(uniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
           );
-          logger.log(`  → metrics/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${attrNameRaw}")` : ""}`);
+          logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
           rptMetrics.push({ name: uniqueName, label, file: `metrics/${fname}.yml`, metricType: "calculated_measure", folder: folder || undefined, isHidden: !visible });
         }
@@ -718,17 +970,72 @@ export async function convertXmlToSml(
         if (!def) continue;
         emittedCalcMemberIds.add(refId!);
         const label = def.caption ?? def.name;
-        const baseUniqueName = truncateUniqueName(safeName(def.name));
-        const uniqueName = dedupeUniqueName(baseUniqueName, seenMetricNames);
-        seenMetricNames.add(uniqueName.toLowerCase());
+        const uniqueName = truncateUniqueName(safeName(def.name));
+        const dedupKey = uniqueName.toLowerCase();
+        if (seenMetricNames.has(dedupKey)) {
+          if (metricDefSignature.get(dedupKey) === refId) {
+            // Same calculated member (by id), shared across multiple cubes — just reference it.
+            attrIdToMetricUniqueName.set(refId!, uniqueName);
+            metricNames.push({ uniqueName, folder: def.folder || undefined });
+            continue;
+          }
+          // Different real definition under the same name — Java always renames a colliding
+          // calculated member (via recordQueryNameOverrides) rather than dropping it.
+          const altUniqueName = truncateUniqueName(`${safeName(def.name)}_${safeName(cubeName)}`);
+          const altDedupKey = altUniqueName.toLowerCase();
+          if (!seenMetricNames.has(altDedupKey)) {
+            seenMetricNames.add(altDedupKey);
+            metricDefSignature.set(altDedupKey, refId!);
+            attrIdToMetricUniqueName.set(refId!, altUniqueName);
+            const format = resolveFormat(def.formatString, def.namedFormat);
+            const fname = safeFilename(altUniqueName);
+            output.set(
+              `calculations/${fname}.yml`,
+              buildCalcMemberYaml(
+                altUniqueName,
+                label,
+                rewriteMeasureRefs(def.expression, measureRefMap),
+                format,
+                def.folder,
+                def.visible,
+                def.description,
+                def.mdxAggregateFunction,
+                def.dimension,
+              ),
+            );
+            logger.log(`  → calculations/${fname}.yml (renamed — "${uniqueName}" already denotes a different calculated member elsewhere)`);
+            metricNames.push({ uniqueName: altUniqueName, folder: def.folder || undefined });
+            rptMetrics.push({ name: altUniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
+          } else {
+            rptOmissions.push({
+              category: "Calculated Member",
+              item: def.name,
+              reason: `Duplicate calculated member name (unique_name "${uniqueName}") with a different definition than the one already emitted elsewhere in the project — excluded to avoid an invalid duplicate entry in the model's metrics list.`,
+              recommendation: "Rename one of the source calculated members in the XML so they produce distinct unique_names.",
+            });
+          }
+          continue;
+        }
+        seenMetricNames.add(dedupKey);
+        metricDefSignature.set(dedupKey, refId!);
         attrIdToMetricUniqueName.set(refId!, uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
         output.set(
           `calculations/${fname}.yml`,
-          buildCalcMemberYaml(uniqueName, label, rewriteMeasureRefs(def.expression, measureRefMap), format, def.folder, def.visible, def.description),
+          buildCalcMemberYaml(
+            uniqueName,
+            label,
+            rewriteMeasureRefs(def.expression, measureRefMap),
+            format,
+            def.folder,
+            def.visible,
+            def.description,
+            def.mdxAggregateFunction,
+            def.dimension,
+          ),
         );
-        logger.log(`  → calculations/${fname}.yml${uniqueName !== baseUniqueName ? ` (disambiguated from a duplicate name "${def.name}")` : ""}`);
+        logger.log(`  → calculations/${fname}.yml`);
         metricNames.push({ uniqueName, folder: def.folder || undefined });
         rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
       }
@@ -750,6 +1057,15 @@ export async function convertXmlToSml(
       for (const aggEl of arr((aggsSec as Record<string, unknown>).aggregate)) {
         const aggName = a(aggEl, "name");
         if (!aggName) continue;
+
+        // <properties><name>...</name><caching/></properties> — the aggregate's own display
+        // label (distinct from its XML "name" attribute, which is really an id/technical
+        // name) and whether it's pinned in the engine's local cache.
+        const aggPropsEl = first(arr((aggEl as Record<string, unknown>).properties)) as
+          | Record<string, unknown>
+          | undefined;
+        const aggLabel = aggPropsEl ? s(first(arr(aggPropsEl.name))) : undefined;
+        const aggCaching = aggPropsEl && arr(aggPropsEl.caching).length > 0 ? "engine-memory" : undefined;
 
         const attributes: AggregateDef["attributes"] = [];
         const metrics: string[] = [];
@@ -797,7 +1113,7 @@ export async function convertXmlToSml(
         }
 
         if (attributes.length === 0 && metrics.length === 0) continue;
-        aggregates.push({ uniqueName: aggName, label: aggName, attributes, metrics });
+        aggregates.push({ uniqueName: aggName, label: aggLabel ?? aggName, attributes, metrics, caching: aggCaching });
       }
     }
 
@@ -837,28 +1153,75 @@ export async function convertXmlToSml(
     // silently emitted with an empty/wrong relationships list.
     for (const pm of pendingSemiAdditiveMetrics) {
       const resolvedRelationshipNames: string[] = [];
+      const resolvedDegenerateDims: Array<{ name: string; level: string }> = [];
+      let ambiguous = false;
       for (const refId of pm.attrRefIds) {
         const levelDef = attrDef.get(refId);
-        const rel = levelDef
-          ? relationships.find((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelDef.name)
-          : undefined;
-        if (rel) resolvedRelationshipNames.push(rel.uniqueName);
+        // A role-played dimension (e.g. "Order Date"/"Ship Date" both pointing at the same
+        // Date level from this fact dataset) can produce MORE THAN ONE relationship matching
+        // (fromDataset, toLevel) — picking the first arbitrarily would silently attach
+        // semi-additivity to the wrong role. There's no reliable way to resolve which
+        // specific role a semi-additive <attribute-ref>'s <ref-path> names (it's an id-path
+        // through existing keyed-attribute-refs, not the ref-naming string relationships are
+        // keyed by), so a genuine ambiguity is reported instead of guessed.
+        const levelUniqueName = levelDef ? levelUniqueNameFor(levelDef.name) : undefined;
+        const matches = levelUniqueName
+          ? relationships.filter((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelUniqueName)
+          : [];
+        if (matches.length > 1) {
+          ambiguous = true;
+          continue;
+        }
+        if (matches.length === 1) {
+          resolvedRelationshipNames.push(matches[0].uniqueName);
+          continue;
+        }
+        // No relationship at all — the level may belong to a degenerate dimension on this
+        // cube, which SML expresses via semi_additive.degenerate_dimensions instead of a
+        // relationship reference.
+        const dimName = attrIdToDimName.get(refId);
+        if (dimName && degenerateDimNames.includes(dimName) && levelUniqueName) {
+          resolvedDegenerateDims.push({ name: dimName, level: levelUniqueName });
+        }
       }
-      if (resolvedRelationshipNames.length === 0) {
+      if (ambiguous) {
         rptOmissions.push({
           category: "Metric",
           item: pm.uniqueName,
-          reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship (it may be a degenerate dimension) — converted without a semi_additive block.",
+          reason: "Semi-additive metric's non-summarized dimension level matches more than one relationship in this cube (likely a role-played dimension) — which specific role was intended can't be determined, so it was converted without a semi_additive block rather than risk attaching it to the wrong one.",
+          recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, choosing the correct role-played relationship.`,
+        });
+        continue;
+      }
+      if (resolvedRelationshipNames.length === 0 && resolvedDegenerateDims.length === 0) {
+        rptOmissions.push({
+          category: "Metric",
+          item: pm.uniqueName,
+          reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship or a degenerate dimension — converted without a semi_additive block.",
           recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, using relationships or degenerate_dimensions as appropriate.`,
         });
         continue;
       }
       output.set(
         `metrics/${pm.fname}.yml`,
-        buildMetricYaml(pm.uniqueName, pm.label, pm.aggregation, pm.measureDatasetName, pm.column, pm.format, pm.folder, pm.visible, pm.description, {
-          position: pm.position,
-          relationships: resolvedRelationshipNames,
-        }),
+        buildMetricYaml(
+          pm.uniqueName,
+          pm.label,
+          pm.aggregation,
+          pm.measureDatasetName,
+          pm.column,
+          pm.format,
+          pm.folder,
+          pm.visible,
+          pm.description,
+          pm.unrelatedDimensionsHandling,
+          pm.isAggregatable,
+          {
+            position: pm.position,
+            relationships: resolvedRelationshipNames.length ? resolvedRelationshipNames : undefined,
+            degenerateDimensions: resolvedDegenerateDims.length ? resolvedDegenerateDims : undefined,
+          },
+        ),
       );
     }
 
@@ -941,12 +1304,23 @@ export async function convertXmlToSml(
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
+    // Calculation groups (a dimension-level construct, e.g. time-intelligence YTD/QTD member
+    // templates) have no conversion support at all — surface it the same way KPIs/Named Sets
+    // are, rather than letting every calc-group member vanish with zero trace.
+    if (arr((dimEl as Record<string, unknown>)["calculation-group"]).length > 0) {
+      rptOmissions.push({
+        category: "Structural",
+        item: `Calculation Group in dimension "${dimName}"`,
+        reason: "Dimension-level calculation groups are not converted — no direct SML equivalent implemented.",
+        recommendation: "Recreate the calculation group's member templates as calculated members manually after conversion.",
+      });
+    }
     // A real relationship anywhere wins over a degenerate determination elsewhere — a
     // dimension used by multiple cubes could be degenerate in one and properly joined
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
     const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, degenerateBindingsForDim);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -965,6 +1339,22 @@ export async function convertXmlToSml(
         item: `attribute ${skipped.attrId} in dimension "${skipped.dimName}"`,
         reason: "Cross-dimension embedded relationship (ref-id) cannot be represented as a secondary attribute in SML",
         recommendation: "Verify that the dimension-to-dimension relationship is covered by a model relationship, or add it manually as a secondary attribute referencing the correct dataset.",
+      });
+    }
+    for (const name of dimMeta.skippedMetricalQuantiles) {
+      rptOmissions.push({
+        category: "Metric",
+        item: `metrical attribute "${name}" in dimension "${dimName}"`,
+        reason: "Quantile/percentile metrical attributes are not yet converted (no calculation_method: percentile support).",
+        recommendation: "Add this metric manually to the dimension's level metrics after verifying the quantile configuration.",
+      });
+    }
+    for (const name of dimMeta.skippedMetricalUnresolved) {
+      rptOmissions.push({
+        category: "Metric",
+        item: `metrical attribute "${name}" in dimension "${dimName}"`,
+        reason: "Could not resolve the metrical attribute's column/dataset reference.",
+        recommendation: "Add this metric manually to the dimension's level metrics after verifying the source column.",
       });
     }
   }
@@ -1124,6 +1514,27 @@ interface AttrDefEntry {
   visible: boolean;
   description?: string;
   allowedCalcTypes?: string[];
+  /** id of the <key-ref> named in this attribute's own <properties><ordering><sort-key><key-ref id="..."/>. */
+  sortKeyUuid?: string;
+}
+
+/** A schema-level plain <attribute> ("metrical attribute") — a measure attached to a dimension level. */
+interface MetricalAttrDef {
+  id: string;
+  name: string;
+  caption?: string;
+  folder?: string;
+  visible: boolean;
+  description?: string;
+  formatString?: string;
+  namedFormat?: string;
+  /** SML calculation_method, or undefined for a quantile/percentile type (not yet supported). */
+  aggregation?: string;
+  isQuantile: boolean;
+  unrelatedDimensionsHandling?: string;
+  isAggregatable?: boolean;
+  /** id of the <key-ref> nested under this attribute's measure/count-distinct/etc element, for column resolution. */
+  keyRefId?: string;
 }
 
 interface CalcMemberDef {
@@ -1135,6 +1546,8 @@ interface CalcMemberDef {
   namedFormat?: string;
   expression: string;
   description?: string;
+  mdxAggregateFunction?: string;
+  dimension?: string;
 }
 
 interface DatasetPhysical {
@@ -1142,8 +1555,21 @@ interface DatasetPhysical {
   schema?: string;
   tableName?: string;
   sql?: string;
+  /** Per-dialect overrides of `sql` (e.g. Snowflake vs. Postgres variants of the same query). */
+  dialects?: Array<{ dialect: string; sql: string }>;
   connectionName?: string;
-  columns?: Array<{ name: string; dataType: string; sql?: string }>;
+  columns?: Array<{
+    name: string;
+    /** Optional because a <map-column> itself carries no data_type — SML requires one unless the column is a map. */
+    dataType?: string;
+    sql?: string;
+    /** Per-dialect overrides of a computed column's `sql`. */
+    dialects?: Array<{ dialect: string; sql: string }>;
+    /** A semi-structured MAP-typed physical column (e.g. Hive MAP<string,string>). */
+    map?: { fieldTerminator: string; keyTerminator: string; keyType: string; valueType: string; isPrefixed?: boolean };
+    /** For a map's sub-column: the name of the <map-column> it's projected out of. */
+    parentColumn?: string;
+  }>;
   immutable?: boolean;
 }
 
@@ -1210,6 +1636,7 @@ interface AggregateDef {
   label: string;
   attributes: Array<{ name: string; dimension: string; relationshipsPath?: string[] }>;
   metrics: string[];
+  caching?: string;
 }
 
 interface OmissionRecord {
@@ -1227,6 +1654,25 @@ interface DimMeta {
   hasDefaultMembers: boolean;
   /** Secondary attribute refs skipped because they carried a cross-dimension ref-id. */
   skippedCrossDimRefs: Array<{ dimName: string; attrId: string }>;
+  /** Metrical attribute names skipped because they're a quantile/percentile type (unsupported). */
+  skippedMetricalQuantiles: string[];
+  /** Metrical attribute names skipped because their column/dataset couldn't be resolved. */
+  skippedMetricalUnresolved: string[];
+}
+
+/** A metrical attribute (dimension-level metric) resolved for one hierarchy level. */
+interface MetricalAttrOut {
+  uniqueName: string;
+  label: string;
+  dataset: string;
+  column: string;
+  calculationMethod: string;
+  format?: string;
+  folder?: string;
+  description?: string;
+  isHidden?: boolean;
+  unrelatedDimensionsHandling?: string;
+  isAggregatable?: boolean;
 }
 
 interface RelationshipDef {
@@ -1334,22 +1780,15 @@ function truncateUniqueName(name: string): string {
 }
 
 /**
- * Resolve a name collision within a cube's metrics/calculations by appending a
- * deterministic "_2", "_3", ... suffix instead of dropping the colliding object — every
- * <attribute>/<calculated-member-ref> the source XML declares becomes its own SML object,
- * even when two of them share the exact same name (a common leftover from copy/paste
- * "TEMP" duplicates or abandoned renames in real-world exports). Returns `base` unchanged
- * when there is no collision.
+ * A dimension level's unique_name, exactly as buildDimensionYaml, findCubeMatchingLevels,
+ * and the semi-additive resolution loop each independently derive it — sanitized (illegal
+ * characters replaced, matching every other unique_name in this file) and truncated to
+ * SML's 63-char limit. Centralized so all three call sites always agree; a mismatch here
+ * silently breaks relationships[].to.level, semi_additive.degenerate_dimensions[].level, and
+ * the shared-degenerate-bindings lookup.
  */
-function dedupeUniqueName(base: string, seen: ReadonlySet<string>): string {
-  if (!seen.has(base.toLowerCase())) return base;
-  let n = 2;
-  let candidate = truncateUniqueName(`${base}_${n}`);
-  while (seen.has(candidate.toLowerCase())) {
-    n++;
-    candidate = truncateUniqueName(`${base}_${n}`);
-  }
-  return candidate;
+function levelUniqueNameFor(name: string): string {
+  return truncateUniqueName(safeName(name));
 }
 
 /**
@@ -1422,6 +1861,21 @@ function unescapeHtml(s: string): string {
 }
 
 /** Map XML aggregation string → SML calculation_method. */
+/**
+ * Reads a measure/count-distinct/count-nonnull element's <unrelated-dimensions> child,
+ * a choice of empty <unrelated-dimensions-{empty,repeat,error}/> elements, into the SML
+ * `unrelated_dimensions_handling` enum token.
+ */
+function parseUnrelatedDimensionsHandling(typeChildEl: Record<string, unknown> | undefined): string | undefined {
+  if (!typeChildEl) return undefined;
+  const udEl = first(arr(typeChildEl["unrelated-dimensions"])) as Record<string, unknown> | undefined;
+  if (!udEl) return undefined;
+  if (arr(udEl["unrelated-dimensions-repeat"]).length > 0) return "repeat";
+  if (arr(udEl["unrelated-dimensions-error"]).length > 0) return "error";
+  if (arr(udEl["unrelated-dimensions-empty"]).length > 0) return "empty";
+  return undefined;
+}
+
 function mapAggregation(raw: string): string {
   switch (raw.toUpperCase()) {
     case "SUM":            return "sum";
@@ -1432,6 +1886,7 @@ function mapAggregation(raw: string): string {
     case "COUNT_DISTINCT":                return "count distinct";
     case "DISTINCT_COUNT_ESTIMATE":
     case "DISTINCTCOUNTESTIMATE":         return "estimated count distinct";
+    case "SUM_DISTINCT":                  return "sum distinct";
     default:               return "sum";
   }
 }
@@ -1637,8 +2092,8 @@ function mapDataType(xmlType: string | undefined): string {
     case "int":
     case "integer":   return "int";
     case "long":      return "long";
-    case "float":
-    case "double":
+    case "float":     return "float";
+    case "double":    return "double";
     case "decimal":
     case "numeric":   return "decimal";
     case "date":      return "date";
@@ -1675,24 +2130,105 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   // rather than a direct passthrough of a real table column) — without it, the computed
   // column's own name would be queried against the real table as if it existed there
   // directly. Source XML can genuinely declare the same column twice (a copy-paste
-  // artifact) — dedupe by name, keeping the first occurrence, since a duplicate column
-  // name is invalid SML.
-  const columns: Array<{ name: string; dataType: string; sql?: string }> = [];
-  const seenColumnNames = new Set<string>();
+  // artifact, or a plain base column shadowed by a later computed override with the
+  // same name) — dedupe by name, but prefer whichever duplicate carries a <sql>
+  // expression, since dropping a computed override silently turns it into a plain
+  // passthrough column.
+  type ColEntry = DatasetPhysical["columns"] extends Array<infer T> | undefined ? T : never;
+  const columnsByName = new Map<string, ColEntry>();
+  const columnOrder: string[] = [];
+  function addColumn(name: string, entry: ColEntry, preferOverExisting: boolean): void {
+    const existing = columnsByName.get(name);
+    if (!existing) {
+      columnOrder.push(name);
+      columnsByName.set(name, entry);
+    } else if (preferOverExisting) {
+      columnsByName.set(name, entry);
+    }
+  }
+  /** A column with no computed SQL, map, or parent-column linkage — safe to silently replace. */
+  const isPlainColumn = (c: ColEntry): boolean => !c.sql && !c.map && !c.parentColumn;
   for (const col of arr(physSec.column)) {
     const colName = s(first(arr((col as Record<string, unknown>).name)));
     const colType = s(first(arr((col as Record<string, unknown>).type)));
-    const colSqlRaw = s(first(arr((col as Record<string, unknown>).sql)));
+    const colSqlEls = arr((col as Record<string, unknown>).sql);
+    // A computed column can declare multiple <sql dialect="..."> variants — the base
+    // definition is the one with no dialect attribute; other variants become dialects:.
+    const colSqlRaw = pickBaseSql(colSqlEls);
     const colSql = colSqlRaw ? unescapeHtml(colSqlRaw).replace(/\t/g, "  ") : undefined;
-    if (colName && !seenColumnNames.has(colName)) {
-      seenColumnNames.add(colName);
-      columns.push({ name: colName, dataType: mapDataType(colType), sql: colSql });
+    const colDialectEls = colSqlEls.filter((el) => a(el, "dialect"));
+    const colDialects = colDialectEls
+      .map((el) => {
+        const dialect = a(el, "dialect");
+        const sqlText = s(el);
+        return dialect && sqlText ? { dialect, sql: unescapeHtml(sqlText).replace(/\t/g, "  ") } : undefined;
+      })
+      .filter((d): d is { dialect: string; sql: string } => Boolean(d));
+    if (!colName) continue;
+    addColumn(
+      colName,
+      { name: colName, dataType: mapDataType(colType), sql: colSql, dialects: colDialects.length ? colDialects : undefined },
+      Boolean(colSql && !columnsByName.get(colName)?.sql),
+    );
+  }
+
+  // <map-column>: a semi-structured MAP-typed physical column (e.g. Hive MAP<string,string>),
+  // delimited into keys/values, with its own nested <columns> projecting individual keys out
+  // of the map. Emitted as a `map:` column (no data_type) plus one sub-column per nested key,
+  // each carrying `parent_column` back to the map column's own name.
+  for (const mapCol of arr(physSec["map-column"])) {
+    const mapColEl = mapCol as Record<string, unknown>;
+    const mapColName = s(first(arr(mapColEl.name)));
+    if (!mapColName) continue;
+    const delimitedEl = first(arr(mapColEl.delimited)) as Record<string, unknown> | undefined;
+    const fieldTerminator = delimitedEl ? s(first(arr(delimitedEl["field-terminator"]))) : undefined;
+    const keyTerminator = delimitedEl ? s(first(arr(delimitedEl["key-terminator"]))) : undefined;
+    const isPrefixed = delimitedEl ? a(delimitedEl, "prefixed") === "true" : false;
+    const mapKeyEl = first(arr(mapColEl["map-key"])) as Record<string, unknown> | undefined;
+    const mapValueEl = first(arr(mapColEl["map-value"])) as Record<string, unknown> | undefined;
+    const keyType = mapKeyEl ? s(first(arr(mapKeyEl.type))) : undefined;
+    const valueType = mapValueEl ? s(first(arr(mapValueEl.type))) : undefined;
+    if (!fieldTerminator || !keyTerminator || !keyType || !valueType) continue;
+    // Only replace a same-named collision if the existing entry is a plain passthrough
+    // column — never silently discard another column's computed <sql>, its own map:
+    // definition, or its parent-column linkage (a genuine name collision between two
+    // distinct physical/computed columns is a source-data ambiguity, not something to
+    // resolve by picking whichever happened to be seen last).
+    const existingMapCol = columnsByName.get(mapColName);
+    addColumn(
+      mapColName,
+      {
+        name: mapColName,
+        map: { fieldTerminator, keyTerminator, keyType, valueType, isPrefixed: isPrefixed || undefined },
+      },
+      !existingMapCol || isPlainColumn(existingMapCol),
+    );
+
+    const colsEl = first(arr(mapColEl.columns)) as Record<string, unknown> | undefined;
+    for (const subCol of arr(colsEl?.column)) {
+      const subColEl = subCol as Record<string, unknown>;
+      const subColName = s(first(arr(subColEl.name)));
+      const subColType = s(first(arr(subColEl.type)));
+      if (!subColName) continue;
+      const existingSubCol = columnsByName.get(subColName);
+      addColumn(
+        subColName,
+        { name: subColName, dataType: mapDataType(subColType), parentColumn: mapColName },
+        !existingSubCol || isPlainColumn(existingSubCol),
+      );
     }
   }
+
+  const columns = columnOrder.map((name) => columnsByName.get(name)!);
   const colsResult = columns.length ? columns : undefined;
 
   const tableEl = first(arr(physSec.table)) as Record<string, unknown> | undefined;
-  const queryEl = first(arr(physSec.query)) as Record<string, unknown> | undefined;
+  // A dataset can declare multiple <query> elements: the base query (no "alternate"
+  // attribute) plus alternate query/table bindings (alternate="true") — alternates aren't
+  // converted, so picking whichever <query> comes first in document order can silently
+  // treat an alternate binding as if it were the dataset's primary definition.
+  const queryEls = arr(physSec.query);
+  const queryEl = queryEls.find((q) => !a(q, "alternate")) as Record<string, unknown> | undefined;
 
   if (tableEl) {
     const db = s(first(arr(tableEl.database)));
@@ -1702,14 +2238,42 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   }
 
   if (queryEl) {
-    const rawSql = s(first(arr(queryEl.sql)));
+    const sqlEls = arr(queryEl.sql);
+    const rawSql = pickBaseSql(sqlEls);
     if (rawSql) {
+      const dialectEls = sqlEls.filter((el) => a(el, "dialect"));
+      const dialects = dialectEls
+        .map((el) => {
+          const dialect = a(el, "dialect");
+          const sqlText = s(el);
+          return dialect && sqlText ? { dialect, sql: unescapeHtml(sqlText).replace(/\t/g, "  ") } : undefined;
+        })
+        .filter((d): d is { dialect: string; sql: string } => Boolean(d));
       // Replace tabs with spaces so js-yaml can use block literal (| style) rather than quoted
-      return { sql: unescapeHtml(rawSql).replace(/\t/g, "  "), connectionName, columns: colsResult, immutable };
+      return {
+        sql: unescapeHtml(rawSql).replace(/\t/g, "  "),
+        dialects: dialects.length ? dialects : undefined,
+        connectionName,
+        columns: colsResult,
+        immutable,
+      };
     }
   }
 
   return { connectionName, columns: colsResult, immutable };
+}
+
+/** Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants. */
+/**
+ * Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants.
+ * Matches the reference converter's getBaseSql()/getBaseQuery(): if every <sql> is
+ * dialect-tagged, there is no base definition at all — returning one of the dialect-specific
+ * variants here would silently promote (and duplicate into `dialects:`) one engine's SQL as
+ * if it were the universal default.
+ */
+function pickBaseSql(sqlEls: Record<string, unknown>[]): string | undefined {
+  const base = sqlEls.find((el) => !a(el, "dialect"));
+  return base ? s(base) : undefined;
 }
 
 // ============================================================
@@ -1736,6 +2300,7 @@ function buildDatasetYaml(
 
   if (phys.sql) {
     obj.sql = phys.sql;
+    if (phys.dialects?.length) obj.dialects = phys.dialects;
   } else {
     // db/schema always live on the connection (see connectionIdByDataset) — a dataset's
     // own table is always a plain string; a nested {db, schema, name} object here is
@@ -1743,15 +2308,23 @@ function buildDatasetYaml(
     obj.table = phys.tableName ?? dsName;
   }
 
-  const columns: Array<{ name: string; data_type: string; sql?: string }> =
+  const columns: Array<Record<string, unknown>> =
     (phys.columns ?? [])
       // A column whose XML type has no SML equivalent (e.g. Snowflake BINARY) is only
       // safe to keep if something actually references it (a key/relationship column);
       // otherwise it's dead physical metadata that fails catalog validation outright —
       // drop it, matching the reference converter's own "unused, will be removed"
-      // behavior for these columns.
-      .filter((c) => !c.dataType.startsWith("binary") || referencedColumns?.has(c.name))
-      .map((c) => ({ name: c.name, data_type: c.dataType, ...(c.sql ? { sql: c.sql } : {}) }));
+      // behavior for these columns. A map column has no data_type at all (SML only
+      // requires one unless the column is a map), so it's never subject to this filter.
+      .filter((c) => !c.dataType?.startsWith("binary") || referencedColumns?.has(c.name))
+      .map((c) => ({
+        name: c.name,
+        ...(c.dataType ? { data_type: c.dataType } : {}),
+        ...(c.sql ? { sql: c.sql } : {}),
+        ...(c.dialects?.length ? { dialects: c.dialects } : {}),
+        ...(c.map ? { map: { field_terminator: c.map.fieldTerminator, key_terminator: c.map.keyTerminator, key_type: c.map.keyType, value_type: c.map.valueType, ...(c.map.isPrefixed ? { is_prefixed: true } : {}) } } : {}),
+        ...(c.parentColumn ? { parent_column: c.parentColumn } : {}),
+      }));
 
   if (referencedColumns?.size) {
     const known = new Set(columns.map((c) => c.name));
@@ -1869,6 +2442,27 @@ function collectSoleKeyColumns(
  * If every column ends up excluded, or nothing does, there is no positive signal to act
  * on, so the original first-column default is kept unchanged.
  */
+/**
+ * Resolve a keyed-attribute's sort_column from its own <properties><ordering><sort-key>
+ * <key-ref id="..."/></sort-key></ordering> — a <key-ref> id resolved through keyMap, the
+ * same mechanism used for the attribute's own key columns, not the attribute-ref/column
+ * lookup used for name_column. Every keyed-attribute (primary level attribute or
+ * secondary attribute alike) can declare its own custom sort key this way; absent one,
+ * there is no override and the caller should fall back to name_column.
+ */
+function resolveSortColumn(
+  sortKeyUuid: string | undefined,
+  keyMap: Map<string, KeyRefEntry[]>,
+  preferredDatasetName?: string,
+): string | undefined {
+  if (!sortKeyUuid) return undefined;
+  const entries = keyMap.get(sortKeyUuid);
+  if (!entries || entries.length === 0) return undefined;
+  const preferred = preferredDatasetName ? entries.find((e) => e.datasetName === preferredDatasetName) : undefined;
+  const entry = preferred ?? entries.find((e) => e.complete === "true") ?? entries[0];
+  return entry.columns[0];
+}
+
 function defaultNameColumn(
   keyColumns: string[],
   datasetName: string,
@@ -1901,6 +2495,8 @@ interface SecondaryAttrDef {
   sortColumn: string;
   allowedCalcsForDma?: string[];
   format?: string;
+  isHidden?: boolean;
+  isUniqueKey?: boolean;
 }
 
 interface LevelAttrDef {
@@ -1937,6 +2533,7 @@ function buildDimensionYaml(
    * default name_column. */
   soleKeyColumns: Set<string>,
   datasetNameToPhysical: Map<string, DatasetPhysical>,
+  metricalAttrDef: Map<string, MetricalAttrDef>,
   /** Per-level fact-dataset bindings gathered across every cube that uses this dimension
    * (levelName -> datasetName -> keyColumns), only meaningful when isDegenerate is true. A
    * level backed by more than one distinct dataset here emits shared_degenerate_columns
@@ -1953,6 +2550,8 @@ function buildDimensionYaml(
   let metaTotalLevels = 0;
   let metaHasDefaultMembers = false;
   const metaSkippedCrossDimRefs: Array<{ dimName: string; attrId: string }> = [];
+  const metaSkippedMetricalQuantiles: string[] = [];
+  const metaSkippedMetricalUnresolved: string[] = [];
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
@@ -1969,6 +2568,7 @@ function buildDimensionYaml(
       timeUnit?: string;
       isHidden?: boolean;
       secondaryAttributes?: SecondaryAttrDef[];
+      metrics?: MetricalAttrOut[];
     }>;
   }> = [];
 
@@ -2011,6 +2611,7 @@ function buildDimensionYaml(
       timeUnit?: string;
       isHidden?: boolean;
       secondaryAttributes?: SecondaryAttrDef[];
+      metrics?: MetricalAttrOut[];
     }> = [];
 
     for (const levelEl of arr(hierEl.level)) {
@@ -2021,7 +2622,10 @@ function buildDimensionYaml(
       if (!def) continue;
 
       const levelName = def.caption ?? def.name;
-      const levelUniqueName = def.name;
+      // Same 63-char SML unique_name constraint applied to secondary attributes (see
+      // truncateUniqueName) — the level's own primary attribute is the most common case
+      // for a long name, since every level has exactly one, and was previously missed.
+      const levelUniqueName = levelUniqueNameFor(def.name);
 
       // Resolve key columns for the primary level attribute
       const keyEntries = keyMap.get(def.keyUuid) ?? [];
@@ -2032,64 +2636,113 @@ function buildDimensionYaml(
       const datasetRef = `${authEntry.datasetName}.dataset`;
       const isUniqueKey = authEntry.unique ?? false;
 
-      // Process keyed-attribute-refs:
-      //   role="name"|"label"  → overrides name_column for the primary level attribute
-      //   role="sort"          → sets sort_column for the primary level attribute
-      //   no role / ref-id set → secondary attribute (or cross-dim ref, skipped if ref-id present)
-      let nameColumn = defaultNameColumn(keyColumns, authEntry.datasetName, soleKeyColumns, datasetNameToPhysical);
-      let sortColumn: string | undefined;
+      // The level's own attribute-ref (same id as its primary-attribute) is the
+      // authoritative source for the display column — an XML dataset's <logical>
+      // section can declare both a <key-ref id="ka.key-ref"> (the key columns) and
+      // an independent <attribute-ref id="ka.id"> for the same keyed-attribute,
+      // and the latter's column is the intended name_column regardless of what the
+      // key looks like (single or composite). Only fall back to the key-column
+      // heuristic when no such attribute-ref exists.
+      const primaryAttrRefEntry = attrMap.get(primaryAttrUuid);
+      const nameColumn =
+        primaryAttrRefEntry?.column ??
+        defaultNameColumn(keyColumns, authEntry.datasetName, soleKeyColumns, datasetNameToPhysical);
+      // sort_column comes from this attribute's own <properties><ordering><sort-key>
+      // <key-ref id="..."/></sort-key></ordering> — a *key-ref*, resolved through keyMap
+      // like the key columns, not through attrMap (which holds attribute-refs). Absent an
+      // explicit sort key, sort by the attribute's own displayed value (name_column) —
+      // the XSD's own default when no <ordering> is declared.
+      const sortColumn = resolveSortColumn(def.sortKeyUuid, keyMap, authEntry.datasetName) ?? nameColumn;
       const secondaryAttrs: SecondaryAttrDef[] = [];
 
+      // <keyed-attribute-ref> has no "role" attribute in the real schema (only ref-id and
+      // attribute-id) — every entry here is a secondary attribute of this level, except
+      // ones carrying ref-id, which are cross-dimension embedded relationships and are
+      // skipped (not yet supported).
       for (const kref of arr(levelEl["keyed-attribute-ref"])) {
         const attrId = a(kref, "attribute-id");
-        const role = a(kref, "role");
         const refId = a(kref, "ref-id"); // cross-dimension embedded relationship — skip
         if (!attrId || refId) {
           if (refId && attrId) metaSkippedCrossDimRefs.push({ dimName, attrId });
           continue;
         }
 
-        // Resolve the display column for this attribute reference
-        let resolvedCol: string | undefined;
-        const attrRefEntry = attrMap.get(attrId);
-        if (attrRefEntry) {
-          resolvedCol = attrRefEntry.column;
-        }
-
-        if (role === "sort") {
-          // Explicit sort role → sets sort_column on the primary level attr
-          if (resolvedCol) sortColumn = resolvedCol;
-        } else if (role === "name" || role === "label") {
-          // Explicit name/label role → overrides name_column on the primary level attr
-          if (resolvedCol) nameColumn = resolvedCol;
-        } else {
-          // No role (or unrecognised role) → secondary attribute
-          const kaDef = attrDef.get(attrId);
-          if (!kaDef) continue;
-          const kaKeyEntries = keyMap.get(kaDef.keyUuid) ?? [];
-          const kaAuthEntry = kaKeyEntries.find((e) => e.complete === "true") ?? kaKeyEntries[0];
-          if (!kaAuthEntry) continue;
-          const saKeyColumns = kaAuthEntry.columns;
-          const saDataset = `${kaAuthEntry.datasetName}.dataset`;
-          const saNameCol = resolvedCol ?? saKeyColumns[0];
-          secondaryAttrs.push({
-            uniqueName: truncateUniqueName(kaDef.name),
-            label: kaDef.caption ?? kaDef.name,
-            dataset: saDataset,
-            keyColumns: saKeyColumns,
-            nameColumn: saNameCol,
-            sortColumn: saNameCol, // reference converter defaults sort_column to name_column
-            allowedCalcsForDma: kaDef.allowedCalcTypes,
-            format: resolveFormat(kaDef.formatString, kaDef.namedFormat),
-          });
-        }
+        const kaDef = attrDef.get(attrId);
+        if (!kaDef) continue;
+        const kaKeyEntries = keyMap.get(kaDef.keyUuid) ?? [];
+        const kaAuthEntry = kaKeyEntries.find((e) => e.complete === "true") ?? kaKeyEntries[0];
+        if (!kaAuthEntry) continue;
+        const saKeyColumns = kaAuthEntry.columns;
+        const saDataset = `${kaAuthEntry.datasetName}.dataset`;
+        const saAttrRefEntry = attrMap.get(attrId);
+        const saNameCol = saAttrRefEntry?.column ?? saKeyColumns[0];
+        const saSortCol = resolveSortColumn(kaDef.sortKeyUuid, keyMap, kaAuthEntry.datasetName) ?? saNameCol;
+        secondaryAttrs.push({
+          uniqueName: truncateUniqueName(safeName(kaDef.name)),
+          label: kaDef.caption ?? kaDef.name,
+          dataset: saDataset,
+          keyColumns: saKeyColumns,
+          nameColumn: saNameCol,
+          sortColumn: saSortCol,
+          allowedCalcsForDma: kaDef.allowedCalcTypes,
+          format: resolveFormat(kaDef.formatString, kaDef.namedFormat),
+          // Matches the reference converter: is_hidden applies only to secondary attributes
+          // (never the level's own primary attribute), from the keyed-attribute's own
+          // <properties><visible>; is_unique_key applies to every keyed attribute, from its
+          // key-ref's own unique flag — the same signal already used for level_attributes.
+          isHidden: !kaDef.visible || undefined,
+          isUniqueKey: kaAuthEntry.unique || undefined,
+        });
       }
 
+      // Metrical attributes: a schema-level plain <attribute-ref attribute-id="..."> (NOT
+      // <keyed-attribute-ref>) links a measure defined once at schema level to this level —
+      // these become the level's own `metrics:` array in SML rather than a cube's metric.
+      const levelMetrics: MetricalAttrOut[] = [];
+      for (const aref of arr(levelEl["attribute-ref"])) {
+        const attrId = a(aref, "attribute-id");
+        if (!attrId) continue;
+        const maDef = metricalAttrDef.get(attrId);
+        if (!maDef) continue;
+        if (maDef.isQuantile || !maDef.aggregation) {
+          metaSkippedMetricalQuantiles.push(maDef.name);
+          continue;
+        }
+        const maAttrRefEntry = attrMap.get(attrId);
+        const maKeyRefEntries = maDef.keyRefId ? keyMap.get(maDef.keyRefId) ?? [] : [];
+        const maKeyRefAuthEntry = maKeyRefEntries.find((e) => e.complete === "true") ?? maKeyRefEntries[0];
+        const column = maKeyRefAuthEntry?.columns[0] ?? maAttrRefEntry?.column;
+        const datasetName = maKeyRefAuthEntry?.datasetName ?? maAttrRefEntry?.datasetName;
+        if (!column || !datasetName) {
+          metaSkippedMetricalUnresolved.push(maDef.name);
+          continue;
+        }
+        levelMetrics.push({
+          uniqueName: truncateUniqueName(safeName(maDef.name)),
+          label: maDef.caption ?? maDef.name,
+          dataset: `${datasetName}.dataset`,
+          column,
+          calculationMethod: maDef.aggregation,
+          format: resolveFormat(maDef.formatString, maDef.namedFormat),
+          folder: maDef.folder,
+          description: maDef.description,
+          isHidden: !maDef.visible || undefined,
+          unrelatedDimensionsHandling: maDef.unrelatedDimensionsHandling,
+          isAggregatable: maDef.isAggregatable,
+        });
+      }
+
+      // Visibility for a level (and its level_attributes entry) comes from the LEVEL's own
+      // <properties><visible> only — the reference converter never lets the primary keyed-
+      // attribute's own visibility hide the level (that flag only applies to secondary
+      // attributes, see the secondaryAttrs.push above). Mixing the two meant a level whose
+      // attribute happened to be marked invisible for unrelated reasons was hidden even
+      // though the level itself was never marked hidden.
       const levelVisibleStr = (() => {
         const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
         return lProps ? s(first(arr(lProps.visible))) : undefined;
       })();
-      const isHidden = levelVisibleStr === "false" || !def.visible;
+      const isHidden = levelVisibleStr === "false";
 
       const levelTypeRaw = (() => {
         const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
@@ -2135,6 +2788,7 @@ function buildDimensionYaml(
         timeUnit,
         isHidden: isHidden || undefined,
         secondaryAttributes: secondaryAttrs.length ? secondaryAttrs : undefined,
+        metrics: levelMetrics.length ? levelMetrics : undefined,
       });
     }
 
@@ -2147,7 +2801,7 @@ function buildDimensionYaml(
         ? [...hierLevels].sort((a, b) => (TIME_UNIT_RANK[a.timeUnit ?? ""] ?? 99) - (TIME_UNIT_RANK[b.timeUnit ?? ""] ?? 99))
         : hierLevels;
       hierarchies.push({
-        uniqueName: hierName,
+        uniqueName: truncateUniqueName(safeName(hierName)),
         label: hierCaption ?? hierName,
         filterEmpty,
         folder: hierFolder,
@@ -2195,13 +2849,33 @@ function buildDimensionYaml(
               dataset: sa.dataset,
               key_columns: sa.keyColumns,
               name_column: sa.nameColumn,
-              sort_column: sa.sortColumn,
             };
+            if (sa.sortColumn && sa.sortColumn !== sa.nameColumn) saObj.sort_column = sa.sortColumn;
             if (sa.format) saObj.format = sa.format;
             if (sa.allowedCalcsForDma?.length) {
               saObj.allowed_calcs_for_dma = sa.allowedCalcsForDma;
             }
+            if (sa.isHidden) saObj.is_hidden = true;
+            if (sa.isUniqueKey) saObj.is_unique_key = true;
             return saObj;
+          });
+        }
+        if (l.metrics?.length) {
+          lObj.metrics = l.metrics.map((m) => {
+            const mObj: Record<string, unknown> = {
+              unique_name: m.uniqueName,
+              label: m.label,
+              dataset: m.dataset,
+              column: m.column,
+              calculation_method: m.calculationMethod,
+            };
+            if (m.description) mObj.description = m.description;
+            if (m.format) mObj.format = m.format;
+            if (m.folder) mObj.folder = m.folder;
+            if (m.isHidden) mObj.is_hidden = true;
+            if (m.unrelatedDimensionsHandling) mObj.unrelated_dimensions_handling = m.unrelatedDimensionsHandling;
+            if (m.isAggregatable === false) mObj.is_aggregatable = false;
+            return mObj;
           });
         }
         return lObj;
@@ -2247,6 +2921,8 @@ function buildDimensionYaml(
     levelCount: metaTotalLevels,
     hasDefaultMembers: metaHasDefaultMembers,
     skippedCrossDimRefs: metaSkippedCrossDimRefs,
+    skippedMetricalQuantiles: metaSkippedMetricalQuantiles,
+    skippedMetricalUnresolved: metaSkippedMetricalUnresolved,
   };
 
   return { yaml: toYaml(obj), meta };
@@ -2266,7 +2942,13 @@ function buildMetricYaml(
   folder?: string,
   visible = true,
   description?: string,
-  semiAdditive?: { position: string; relationships: string[] },
+  unrelatedDimensionsHandling?: string,
+  isAggregatable?: boolean,
+  semiAdditive?: {
+    position: string;
+    relationships?: string[];
+    degenerateDimensions?: Array<{ name: string; level: string }>;
+  },
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
@@ -2277,7 +2959,12 @@ function buildMetricYaml(
   // Matches the field order production deployments use: semi_additive sits between
   // calculation_method and dataset/column.
   if (semiAdditive) {
-    obj.semi_additive = { position: semiAdditive.position, relationships: semiAdditive.relationships };
+    const semiAdditiveObj: Record<string, unknown> = { position: semiAdditive.position };
+    if (semiAdditive.relationships?.length) semiAdditiveObj.relationships = semiAdditive.relationships;
+    if (semiAdditive.degenerateDimensions?.length) {
+      semiAdditiveObj.degenerate_dimensions = semiAdditive.degenerateDimensions;
+    }
+    obj.semi_additive = semiAdditiveObj;
   }
   obj.dataset = `${factDatasetName}.dataset`;
   obj.column = column;
@@ -2285,6 +2972,8 @@ function buildMetricYaml(
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
   if (!visible) obj.is_hidden = true;
+  if (unrelatedDimensionsHandling) obj.unrelated_dimensions_handling = unrelatedDimensionsHandling;
+  if (isAggregatable === false) obj.is_aggregatable = false;
   return toYaml(obj);
 }
 
@@ -2322,28 +3011,6 @@ function buildPercentileMetricYaml(
   return toYaml(obj);
 }
 
-function buildCalcMetricYaml(
-  uniqueName: string,
-  label: string,
-  formula: string,
-  format?: string,
-  folder?: string,
-  visible = true,
-  description?: string,
-): string {
-  const obj: Record<string, unknown> = {
-    unique_name: uniqueName,
-    object_type: "metric",
-    label,
-    formula,
-  };
-  if (description) obj.description = description;
-  if (format) obj.format = format;
-  if (folder) obj.folder = folder;
-  if (!visible) obj.is_hidden = true;
-  return toYaml(obj);
-}
-
 /**
  * Emit a schema-level calculated member as a `metric_calc` YAML object.
  * These live in /calculations/ and use `expression:` rather than `formula:`.
@@ -2356,6 +3023,8 @@ function buildCalcMemberYaml(
   folder?: string,
   visible = true,
   description?: string,
+  mdxAggregateFunction?: string,
+  dimension?: string,
 ): string {
   const obj: Record<string, unknown> = {
     unique_name: uniqueName,
@@ -2367,6 +3036,8 @@ function buildCalcMemberYaml(
   if (format) obj.format = format;
   if (folder) obj.folder = folder;
   if (!visible) obj.is_hidden = true;
+  if (mdxAggregateFunction) obj.mdx_aggregate_function = mdxAggregateFunction;
+  if (dimension) obj.dimension = dimension;
   return toYaml(obj);
 }
 
@@ -2388,6 +3059,11 @@ function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined
   const namedFormat = fmtEl ? s(first(arr(fmtEl["named-format"]))) : undefined;
   const exprRaw = s(first(arr(cm.expression)));
   if (!exprRaw) return undefined;
+  // <mdx-aggregate-function> and the dimension="..." XML attribute (defaults to "Measures"
+  // per the XSD) live directly on <calculated-member>, not under <properties>.
+  const mdxAggregateFunctionRaw = s(first(arr(cm["mdx-aggregate-function"])));
+  const mdxAggregateFunction = mdxAggregateFunctionRaw ? mdxAggregateFunctionRaw.toUpperCase() : undefined;
+  const dimension = a(cm, "dimension") ?? "Measures";
   return {
     name,
     caption,
@@ -2397,6 +3073,8 @@ function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined
     formatString,
     namedFormat,
     expression: unescapeHtml(exprRaw),
+    mdxAggregateFunction,
+    dimension,
   };
 }
 
@@ -2443,12 +3121,17 @@ function findCubeMatchingLevels(
       const pa = a(levelEl, "primary-attribute");
       if (!pa) continue;
       const def = attrDef.get(pa);
+      // toLevel must match the level's actual emitted unique_name (buildDimensionYaml
+      // truncates it — see truncateUniqueName there) so relationships[].to.level,
+      // semi_additive.degenerate_dimensions[].level, and the shared-degenerate-bindings
+      // lookup key all agree with what the dimension file itself uses; otherwise a level
+      // with a name over 63 chars silently fails every one of those lookups.
       if (cubeKeyRoles.has(pa)) {
-        matches.push({ matchId: pa, toLevel: def?.name ?? pa, dimKeyUuid: def?.keyUuid });
+        matches.push({ matchId: pa, toLevel: levelUniqueNameFor(def?.name ?? pa), dimKeyUuid: def?.keyUuid });
         continue;
       }
       if (def?.keyUuid && cubeKeyRoles.has(def.keyUuid)) {
-        matches.push({ matchId: def.keyUuid, toLevel: def.name, dimKeyUuid: def.keyUuid });
+        matches.push({ matchId: def.keyUuid, toLevel: levelUniqueNameFor(def.name), dimKeyUuid: def.keyUuid });
       }
     }
   }
@@ -2873,6 +3556,7 @@ function buildModelYaml(
         });
       }
       if (agg.metrics.length > 0) aggObj.metrics = agg.metrics;
+      if (agg.caching) aggObj.caching = agg.caching;
       return aggObj;
     });
   }

@@ -26,6 +26,11 @@
 #   "none"   – disable PII exclusion entirely
 pii-severity: MEDIUM
 
+# Compatibility policy for query-facing technical names. Leave unset when no
+# collision exists. Use "new" when no downstream assets depend on established
+# names, or "existing" when reports, queries, or applications may depend on them.
+# model-mode: new
+
 # Tables to force-classify as fact tables, overriding automatic FK-topology
 # detection.  List format; empty list means fully automatic.
 fact-tables: []
