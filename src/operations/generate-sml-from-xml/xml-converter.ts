@@ -165,6 +165,13 @@ export async function convertXmlToSml(
   const keyMap = new Map<string, KeyRefEntry[]>();
   // attrMap: UUID → AttrRefEntry
   const attrMap = new Map<string, AttrRefEntry>();
+  // A dimension's own <keyed-attribute-ref ref-id="X"> (a cross-dimension embedded/snowflake
+  // relationship) names its join not by a key-ref id directly, but by this separate "ref-path
+  // id" X, which some OTHER key-ref elsewhere carries as a plain <ref-path><ref id="X"/></ref-
+  // path> child — that key-ref's own id is what keyMap actually indexes. This map bridges the
+  // two: ref-path id (X) → the key-ref id that declares it, so the snowflake join's dataset/
+  // column pair can be looked up the normal way once the bridge is resolved.
+  const refPathIdToKeyRefId = new Map<string, string>();
 
   function ingestLogical(logicalEl: Record<string, unknown>, datasetName: string): void {
     for (const kr of arr(logicalEl["key-ref"])) {
@@ -182,6 +189,12 @@ export async function convertXmlToSml(
           const refNaming = s(first(arr(newRefEl["ref-naming"])));
           if (refNaming) rolePlay = refNaming;
         }
+        // A plain <ref-path><ref id="X"/></ref-path> (no <new-ref> wrapper) is how a
+        // cross-dimension embedded/snowflake attribute names the key-ref that completes its
+        // join — see refPathIdToKeyRefId's own comment above.
+        const plainRefEl = first(arr(refPathEl.ref)) as Record<string, unknown> | undefined;
+        const plainRefId = plainRefEl ? a(plainRefEl, "id") : undefined;
+        if (plainRefId) refPathIdToKeyRefId.set(plainRefId, id);
       }
       if (columns.length > 0) {
         const entries = keyMap.get(id) ?? [];
@@ -518,6 +531,19 @@ export async function convertXmlToSml(
   // each emitted metric unique_name — used to tell "same measure reused by another cube"
   // (just add a reference) from "different measure that happens to share a name" (rename).
   const metricDefSignature = new Map<string, string>();
+
+  // Each cube's model file is built once Phase 3b (below) has resolved every dimension's
+  // snowflake relationships — see the comment where this is pushed to, further down.
+  const pendingModels: Array<{
+    cubeName: string;
+    relationships: RelationshipDef[];
+    cubeDimNames: string[];
+    metricNames: Array<{ uniqueName: string; folder?: string }>;
+    aggregates: AggregateDef[];
+    cubeVisible: boolean;
+    includeDefaultDrillthrough: boolean;
+    cubeBoundDatasets: string[];
+  }> = [];
 
   for (const cube of cubeEls) {
     const cubeName = a(cube, "name") ?? schemaName;
@@ -1261,71 +1287,24 @@ export async function convertXmlToSml(
       globalDegenerateBindings.set(b.dimName, byLevel);
     }
 
-    // Some User Defined Aggregates (Phase 8, above) resolve an attribute-ref to a dimension
-    // that never ends up joined to this cube — no relationship, not degenerate either —
-    // e.g. the aggregate pre-joins a dimension purely for its own acceleration, with no
-    // corresponding fact-to-dimension relationship declared anywhere else in the XML. SML
-    // requires every aggregate attribute's dimension to already be one of the model's own
-    // relationships/degenerate dimensions; a dangling one isn't merely incomplete, it's
-    // invalid — the engine rejects the relationship_path as non-existent — so it's filtered
-    // out and reported here rather than passed through broken.
-    const cubeReferencedDimNames = new Set(cubeDimNames);
-    for (const rel of relationships) cubeReferencedDimNames.add(rel.toDimension);
-    for (const agg of aggregates) {
-      agg.attributes = agg.attributes.filter((attrOut) => {
-        if (cubeReferencedDimNames.has(attrOut.dimension)) return true;
-        rptOmissions.push({
-          category: "User Defined Aggregate",
-          item: `${agg.uniqueName} → ${attrOut.name}`,
-          reason: `References dimension "${attrOut.dimension}", which has no relationship or degenerate binding to this cube — the aggregate would otherwise point at a non-existent relationship_path.`,
-          recommendation: "Add a relationship (or degenerate binding) for this dimension to the model, or remove this attribute from the aggregate manually.",
-        });
-        return false;
-      });
-    }
-    // An aggregate left with nothing to aggregate after that filtering has no reason to exist.
-    for (let i = aggregates.length - 1; i >= 0; i--) {
-      if (aggregates[i].attributes.length === 0 && aggregates[i].metrics.length === 0) {
-        rptOmissions.push({
-          category: "User Defined Aggregate",
-          item: aggregates[i].uniqueName,
-          reason: "Every attribute/metric this aggregate referenced was excluded — nothing left to aggregate.",
-          recommendation: "Recreate this aggregate manually once its referenced dimensions/measures are available in the model.",
-        });
-        aggregates.splice(i, 1);
-      }
-    }
-
     // Cube visibility
     const cubeProps = first(arr(cube.properties)) as Record<string, unknown> | undefined;
     const cubeVisible = cubeProps ? s(first(arr(cubeProps.visible))) !== "false" : true;
 
-    // Emit model file
-    const modelYaml = buildModelYaml(cubeName, relationships, cubeDimNames, metricNames, aggregates, !cubeVisible, includeDefaultDrillthrough);
-    const fname = safeFilename(cubeName);
-    output.set(`models/${fname}.yml`, modelYaml);
-    logger.log(`  → models/${fname}.yml`);
-
-    // Dimension datasets: datasets backing this cube's dimensions (not the fact tables)
-    const dimDsSet = new Set<string>();
-    for (const rel of relationships) {
-      if (rel.dimensionDataset && !cubeBoundDatasets.includes(rel.dimensionDataset)) {
-        dimDsSet.add(rel.dimensionDataset);
-      }
-    }
-
-    rptModels.push({
-      name: cubeName,
-      file: `models/${fname}.yml`,
+    // Model emission (and the aggregate-dimension validity filter that must precede it) is
+    // deferred to Phase 8b, after every dimension — and every snowflake relationship a
+    // dimension discovers to ANOTHER dimension — is known (Phase 3b, below, hasn't even run
+    // yet at this point in the per-cube loop). Filtering now would wrongly treat a dimension
+    // reachable only via such a snowflake join as unreferenced.
+    pendingModels.push({
+      cubeName,
       relationships,
-      relationshipCount: relationships.length,
-      dimensionCount: cubeDimNames.length,
-      metricCount: metricNames.length,
-      aggregateCount: aggregates.length,
-      hasDefaultDrillthrough: includeDefaultDrillthrough,
-      isHidden: !cubeVisible,
-      factDatasets: cubeBoundDatasets,
-      dimensionDatasets: [...dimDsSet],
+      cubeDimNames,
+      metricNames,
+      aggregates,
+      cubeVisible,
+      includeDefaultDrillthrough,
+      cubeBoundDatasets,
     });
   }
 
@@ -1350,6 +1329,12 @@ export async function convertXmlToSml(
   // Phase 3b: Emit dimension YAML files for all referenced dims
   // ---------------------------------------------------------------
 
+  // Every dimension a snowflake relationship (discovered below) reaches from another
+  // dimension — consulted by the aggregate-attribute filter (Phase 8b, after this loop) so a
+  // dimension reachable only via a snowflake join, not a direct cube relationship, still
+  // counts as "used" by the cube that joins to its host.
+  const dimSnowflakeTargets = new Map<string, string[]>();
+
   for (const dimName of referencedDimNames) {
     const dimEl = allDims.get(dimName);
     if (!dimEl) continue;
@@ -1369,7 +1354,7 @@ export async function convertXmlToSml(
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
     const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1406,6 +1391,96 @@ export async function convertXmlToSml(
         recommendation: "Add this metric manually to the dimension's level metrics after verifying the source column.",
       });
     }
+    if (dimMeta.snowflakeRelationships.length > 0) {
+      dimSnowflakeTargets.set(dimName, dimMeta.snowflakeRelationships.map((r) => r.toDimension));
+      // A snowflake-joined dimension is "used" precisely because this dimension reaches it —
+      // add it to the same set this very loop is iterating so its own file gets emitted too
+      // (Set iteration visits entries added during iteration, so this is safe mid-loop).
+      for (const r of dimMeta.snowflakeRelationships) referencedDimNames.add(r.toDimension);
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Phase 8b: Filter aggregate dimension references, then emit each cube's model file
+  // ---------------------------------------------------------------
+  // Deferred until now (rather than done inline in the per-cube loop above) because it needs
+  // dimSnowflakeTargets, which Phase 3b — just above — is what actually discovers.
+  for (const pm of pendingModels) {
+    const cubeReferencedDimNames = new Set(pm.cubeDimNames);
+    for (const rel of pm.relationships) cubeReferencedDimNames.add(rel.toDimension);
+    // Expand transitively: a dimension reached via a snowflake relationship from anything
+    // already in the set counts as used too (and so does whatever ITS OWN snowflake
+    // relationships reach, and so on) — a plain BFS over dimSnowflakeTargets.
+    const queue = [...cubeReferencedDimNames];
+    while (queue.length > 0) {
+      const next = queue.shift()!;
+      for (const target of dimSnowflakeTargets.get(next) ?? []) {
+        if (!cubeReferencedDimNames.has(target)) {
+          cubeReferencedDimNames.add(target);
+          queue.push(target);
+        }
+      }
+    }
+
+    // Some User Defined Aggregates (Phase 8, above) resolve an attribute-ref to a dimension
+    // that never ends up joined to this cube — no relationship, not degenerate, not reached
+    // via a snowflake join either — e.g. the aggregate pre-joins a dimension purely for its
+    // own acceleration, with no corresponding fact-to-dimension relationship declared
+    // anywhere else in the XML. SML requires every aggregate attribute's dimension to already
+    // be one the model can actually reach; a dangling one isn't merely incomplete, it's
+    // invalid — the engine rejects the relationship_path as non-existent — so it's filtered
+    // out and reported here rather than passed through broken.
+    for (const agg of pm.aggregates) {
+      agg.attributes = agg.attributes.filter((attrOut) => {
+        if (cubeReferencedDimNames.has(attrOut.dimension)) return true;
+        rptOmissions.push({
+          category: "User Defined Aggregate",
+          item: `${agg.uniqueName} → ${attrOut.name}`,
+          reason: `References dimension "${attrOut.dimension}", which has no relationship, degenerate, or snowflake binding to this cube — the aggregate would otherwise point at a non-existent relationship_path.`,
+          recommendation: "Add a relationship (or degenerate binding) for this dimension to the model, or remove this attribute from the aggregate manually.",
+        });
+        return false;
+      });
+    }
+    // An aggregate left with nothing to aggregate after that filtering has no reason to exist.
+    for (let i = pm.aggregates.length - 1; i >= 0; i--) {
+      if (pm.aggregates[i].attributes.length === 0 && pm.aggregates[i].metrics.length === 0) {
+        rptOmissions.push({
+          category: "User Defined Aggregate",
+          item: pm.aggregates[i].uniqueName,
+          reason: "Every attribute/metric this aggregate referenced was excluded — nothing left to aggregate.",
+          recommendation: "Recreate this aggregate manually once its referenced dimensions/measures are available in the model.",
+        });
+        pm.aggregates.splice(i, 1);
+      }
+    }
+
+    const modelYaml = buildModelYaml(pm.cubeName, pm.relationships, pm.cubeDimNames, pm.metricNames, pm.aggregates, !pm.cubeVisible, pm.includeDefaultDrillthrough);
+    const fname = safeFilename(pm.cubeName);
+    output.set(`models/${fname}.yml`, modelYaml);
+    logger.log(`  → models/${fname}.yml`);
+
+    // Dimension datasets: datasets backing this cube's dimensions (not the fact tables)
+    const dimDsSet = new Set<string>();
+    for (const rel of pm.relationships) {
+      if (rel.dimensionDataset && !pm.cubeBoundDatasets.includes(rel.dimensionDataset)) {
+        dimDsSet.add(rel.dimensionDataset);
+      }
+    }
+
+    rptModels.push({
+      name: pm.cubeName,
+      file: `models/${fname}.yml`,
+      relationships: pm.relationships,
+      relationshipCount: pm.relationships.length,
+      dimensionCount: pm.cubeDimNames.length,
+      metricCount: pm.metricNames.length,
+      aggregateCount: pm.aggregates.length,
+      hasDefaultDrillthrough: pm.includeDefaultDrillthrough,
+      isHidden: !pm.cubeVisible,
+      factDatasets: pm.cubeBoundDatasets,
+      dimensionDatasets: [...dimDsSet],
+    });
   }
 
   // Schema-level dimensions no cube joins to are excluded from output (matching how an
@@ -1703,6 +1778,16 @@ interface DimMeta {
   hasDefaultMembers: boolean;
   /** Secondary attribute refs skipped because they carried a cross-dimension ref-id. */
   skippedCrossDimRefs: Array<{ dimName: string; attrId: string }>;
+  /** Cross-dimension embedded refs successfully resolved into a snowflake relationship —
+   *  emitted on this dimension's own YAML (obj.relationships) and reported back to the
+   *  caller so the target dimension gets marked referenced (and its own file emitted). */
+  snowflakeRelationships: Array<{
+    uniqueName: string;
+    fromDataset: string;
+    fromColumns: string[];
+    toDimension: string;
+    toLevel: string;
+  }>;
   /** Metrical attribute names skipped because they're a quantile/percentile type (unsupported). */
   skippedMetricalQuantiles: string[];
   /** Metrical attribute names skipped because their column/dataset couldn't be resolved. */
@@ -2445,6 +2530,48 @@ function collectAttributeDimensionOwnership(
 }
 
 /**
+ * Resolve a cross-dimension embedded <keyed-attribute-ref ref-id attribute-id> into a proper
+ * SML snowflake relationship, the same way a fact-to-dimension join is inferred elsewhere in
+ * this file: the host dataset declares an incomplete key-ref, the target dataset declares the
+ * complete/unique counterpart sharing the same key-ref id, and matching the two up is the join.
+ *
+ * `refId` names the ref-path (not a key-ref id directly) — refPathIdToKeyRefId bridges it to
+ * the key-ref id that actually carries it, which keyMap then resolves to every dataset bound
+ * to that id. Returns undefined (caller reports an omission) when the join can't be traced
+ * end to end: no bridging key-ref, an ambiguous set of bindings, the target attribute's owning
+ * dimension is unknown, or it resolves back to this same dimension.
+ */
+function resolveSnowflakeRelationship(
+  refId: string,
+  attrId: string,
+  hostDimName: string,
+  keyMap: Map<string, KeyRefEntry[]>,
+  attrDef: Map<string, AttrDefEntry>,
+  refPathIdToKeyRefId: Map<string, string>,
+  attrIdToDimName: Map<string, string>,
+): DimMeta["snowflakeRelationships"][number] | undefined {
+  const hostKeyRefId = refPathIdToKeyRefId.get(refId);
+  const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
+  if (!entries || entries.length !== 2) return undefined;
+
+  const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
+  const hostEntry = entries.find((e) => e !== targetEntry);
+  if (!targetEntry || !hostEntry) return undefined;
+
+  const targetDimName = attrIdToDimName.get(attrId);
+  const targetAttrDef = attrDef.get(attrId);
+  if (!targetDimName || !targetAttrDef || targetDimName === hostDimName) return undefined;
+
+  return {
+    uniqueName: `${hostDimName.replace(/\s+/g, "")}_${targetDimName.replace(/\s+/g, "")}`,
+    fromDataset: `${hostEntry.datasetName}.dataset`,
+    fromColumns: hostEntry.columns,
+    toDimension: targetDimName,
+    toLevel: levelUniqueNameFor(targetAttrDef.name),
+  };
+}
+
+/**
  * Collects every column that is, on its own, the entire (single-column) key of some level
  * anywhere in the schema — used to pick a sane default name_column for a DIFFERENT level
  * whose own key is composite.
@@ -2602,7 +2729,13 @@ function buildDimensionYaml(
    * (levelName -> datasetName -> keyColumns), only meaningful when isDegenerate is true. A
    * level backed by more than one distinct dataset here emits shared_degenerate_columns
    * instead of a single dataset/key_columns/name_column. */
-  degenerateBindingsForDim?: Map<string, Map<string, string[]>>,
+  degenerateBindingsForDim: Map<string, Map<string, string[]>> | undefined,
+  /** Every keyed-attribute id's owning (native) dimension name — resolves a cross-dimension
+   *  embedded ref's attribute-id to the dimension whose file its attribute actually lives on. */
+  attrIdToDimName: Map<string, string>,
+  /** ref-path id -> the key-ref id that completes it — see its own declaration for why this
+   *  indirection exists. */
+  refPathIdToKeyRefId: Map<string, string>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -2616,6 +2749,7 @@ function buildDimensionYaml(
   const metaSkippedCrossDimRefs: Array<{ dimName: string; attrId: string }> = [];
   const metaSkippedMetricalQuantiles: string[] = [];
   const metaSkippedMetricalUnresolved: string[] = [];
+  const metaSnowflakeRelationships: DimMeta["snowflakeRelationships"] = [];
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
@@ -2720,14 +2854,25 @@ function buildDimensionYaml(
       const secondaryAttrs: SecondaryAttrDef[] = [];
 
       // <keyed-attribute-ref> has no "role" attribute in the real schema (only ref-id and
-      // attribute-id) — every entry here is a secondary attribute of this level, except
-      // ones carrying ref-id, which are cross-dimension embedded relationships and are
-      // skipped (not yet supported).
+      // attribute-id) — every entry here is a secondary attribute of this level, except ones
+      // carrying ref-id, which are cross-dimension embedded relationships: this dimension
+      // doesn't host the target attribute's data itself, it reaches it via a snowflake join
+      // to whichever dimension actually owns it. Resolved into a proper SML snowflake
+      // relationship (obj.relationships) when the join can be traced end to end; reported as
+      // an omission when it can't, rather than guessed.
       for (const kref of arr(levelEl["keyed-attribute-ref"])) {
         const attrId = a(kref, "attribute-id");
-        const refId = a(kref, "ref-id"); // cross-dimension embedded relationship — skip
-        if (!attrId || refId) {
-          if (refId && attrId) metaSkippedCrossDimRefs.push({ dimName, attrId });
+        const refId = a(kref, "ref-id");
+        if (!attrId) continue;
+        if (refId) {
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, keyMap, attrDef, refPathIdToKeyRefId, attrIdToDimName);
+          if (resolved) {
+            if (!metaSnowflakeRelationships.some((r) => r.uniqueName === resolved.uniqueName)) {
+              metaSnowflakeRelationships.push(resolved);
+            }
+          } else {
+            metaSkippedCrossDimRefs.push({ dimName, attrId });
+          }
           continue;
         }
 
@@ -2979,6 +3124,15 @@ function buildDimensionYaml(
     });
   }
 
+  if (metaSnowflakeRelationships.length > 0) {
+    obj.relationships = metaSnowflakeRelationships.map((r) => ({
+      unique_name: r.uniqueName,
+      from: { dataset: r.fromDataset, join_columns: r.fromColumns },
+      to: { dimension: r.toDimension, level: r.toLevel },
+      type: "snowflake",
+    }));
+  }
+
   const meta: DimMeta = {
     type: isDegenerate ? "degenerate" : isTime ? "time" : "standard",
     hierarchyCount: hierarchies.length,
@@ -2987,6 +3141,7 @@ function buildDimensionYaml(
     skippedCrossDimRefs: metaSkippedCrossDimRefs,
     skippedMetricalQuantiles: metaSkippedMetricalQuantiles,
     skippedMetricalUnresolved: metaSkippedMetricalUnresolved,
+    snowflakeRelationships: metaSnowflakeRelationships,
   };
 
   return { yaml: toYaml(obj), meta };
