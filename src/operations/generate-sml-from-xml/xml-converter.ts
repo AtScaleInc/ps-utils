@@ -2537,16 +2537,23 @@ function collectAttributeDimensionOwnership(
  *
  * `refId` names the ref-path (not a key-ref id directly) — refPathIdToKeyRefId bridges it to
  * the key-ref id that actually carries it, which keyMap then resolves to every dataset bound
- * to that id. Returns undefined (caller reports an omission) when the join can't be traced
- * end to end: no bridging key-ref, an ambiguous set of bindings, the target attribute's owning
- * dimension is unknown, or it resolves back to this same dimension.
+ * to that id. `to.level` names a level of THIS (host) dimension, not the target's — confirmed
+ * against the reference `dim_room.yml`/`dim-property` example in resources/verticals: the
+ * live engine looks it up as one of the host dimension's own attributes and rejects the
+ * relationship outright if it isn't. The keyed-attribute-ref's own enclosing level is exactly
+ * that — the host-side grain this snowflake join attaches to — so the caller passes it in
+ * rather than this function trying to derive one from the target side.
+ *
+ * Returns undefined (caller reports an omission) when the join can't be traced end to end: no
+ * bridging key-ref, an ambiguous set of bindings, the target attribute's owning dimension is
+ * unknown, or it resolves back to this same dimension.
  */
 function resolveSnowflakeRelationship(
   refId: string,
   attrId: string,
   hostDimName: string,
+  hostLevelUniqueName: string,
   keyMap: Map<string, KeyRefEntry[]>,
-  attrDef: Map<string, AttrDefEntry>,
   refPathIdToKeyRefId: Map<string, string>,
   attrIdToDimName: Map<string, string>,
 ): DimMeta["snowflakeRelationships"][number] | undefined {
@@ -2559,15 +2566,14 @@ function resolveSnowflakeRelationship(
   if (!targetEntry || !hostEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
-  const targetAttrDef = attrDef.get(attrId);
-  if (!targetDimName || !targetAttrDef || targetDimName === hostDimName) return undefined;
+  if (!targetDimName || targetDimName === hostDimName) return undefined;
 
   return {
     uniqueName: `${hostDimName.replace(/\s+/g, "")}_${targetDimName.replace(/\s+/g, "")}`,
     fromDataset: `${hostEntry.datasetName}.dataset`,
     fromColumns: hostEntry.columns,
     toDimension: targetDimName,
-    toLevel: levelUniqueNameFor(targetAttrDef.name),
+    toLevel: hostLevelUniqueName,
   };
 }
 
@@ -2865,7 +2871,7 @@ function buildDimensionYaml(
         const refId = a(kref, "ref-id");
         if (!attrId) continue;
         if (refId) {
-          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, keyMap, attrDef, refPathIdToKeyRefId, attrIdToDimName);
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
           if (resolved) {
             if (!metaSnowflakeRelationships.some((r) => r.uniqueName === resolved.uniqueName)) {
               metaSnowflakeRelationships.push(resolved);
