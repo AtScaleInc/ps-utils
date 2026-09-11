@@ -369,7 +369,7 @@ export async function convertXmlToSml(
   for (const entry of attrMap.values()) {
     addReferencedColumn(entry.datasetName, entry.column);
   }
-  collectMeasureColumns(cubeEls, datasetIdToName, keyMap, attrMap, addReferencedColumn);
+  collectMeasureColumns(cubeEls, datasetIdToName, keyMap, attrMap, datasetNameToPhysical, addReferencedColumn);
 
   // The actual dataset-emission loop runs after Phase 3b (dimensions), once
   // referencedDatasetNames also accounts for datasets only used by dimensions — see there.
@@ -688,20 +688,34 @@ export async function convertXmlToSml(
           const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
 
           const colRef = attrMap.get(attrId);
-          const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
+          const resolvedFromReference = keyRefAuthEntry?.columns[0] ?? colRef?.column;
+          const column = resolvedFromReference ?? parseColumnFromAttrName(attrNameRaw);
           // A cube can bind multiple fact datasets (data-set-refs); factDatasetName is only
           // the first one and is a last-resort fallback for name-guessed columns with no
           // resolved reference. Whenever the key-ref/attribute-ref actually resolved, prefer
           // ITS dataset — otherwise every measure in a multi-fact cube silently gets bound to
           // the first fact table regardless of which one its own column actually lives in.
           const measureDatasetName = keyRefAuthEntry?.datasetName ?? colRef?.datasetName ?? factDatasetName;
-          if (!column || !measureDatasetName) {
+          // An attribute with no key-ref and no attribute-ref anywhere (a genuinely
+          // incomplete/orphaned definition left over in the source schema — see
+          // m_PAID_LOSS_NUMERATOR_sum_2 for a real example) falls back to guessing a column
+          // from the attribute's own name. When the target dataset declares its physical
+          // columns and the guess doesn't match any of them, that guess is worthless —
+          // without this check it manufactures a "phantom" column (string-typed, since
+          // nothing else is known about it) and binds the metric to a column the real table
+          // doesn't have, instead of being reported as unresolved like every other measure
+          // this converter genuinely can't place.
+          const knownColumns = datasetNameToPhysical.get(measureDatasetName)?.columns;
+          const isUnverifiableGuess = !resolvedFromReference && !!knownColumns?.length && !knownColumns.some((c) => c.name === column);
+          if (!column || !measureDatasetName || isUnverifiableGuess) {
             rptOmissions.push({
               category: "Metric",
               item: attrNameRaw,
               reason: !measureDatasetName
                 ? "No fact dataset could be identified for this cube"
-                : "Could not resolve the measure column reference from attribute-ref mapping",
+                : isUnverifiableGuess
+                  ? `Could not resolve a real column reference for this measure (no key-ref or attribute-ref) — guessed column "${column}" from the attribute's own name, but ${measureDatasetName} has no such column`
+                  : "Could not resolve the measure column reference from attribute-ref mapping",
               recommendation: "Add this measure manually to the appropriate metrics/*.yml file after verifying the fact table column name.",
             });
             continue;
@@ -1245,6 +1259,41 @@ export async function convertXmlToSml(
       if (!byDataset.has(b.dataset)) byDataset.set(b.dataset, b.keyColumns);
       byLevel.set(b.toLevel, byDataset);
       globalDegenerateBindings.set(b.dimName, byLevel);
+    }
+
+    // Some User Defined Aggregates (Phase 8, above) resolve an attribute-ref to a dimension
+    // that never ends up joined to this cube — no relationship, not degenerate either —
+    // e.g. the aggregate pre-joins a dimension purely for its own acceleration, with no
+    // corresponding fact-to-dimension relationship declared anywhere else in the XML. SML
+    // requires every aggregate attribute's dimension to already be one of the model's own
+    // relationships/degenerate dimensions; a dangling one isn't merely incomplete, it's
+    // invalid — the engine rejects the relationship_path as non-existent — so it's filtered
+    // out and reported here rather than passed through broken.
+    const cubeReferencedDimNames = new Set(cubeDimNames);
+    for (const rel of relationships) cubeReferencedDimNames.add(rel.toDimension);
+    for (const agg of aggregates) {
+      agg.attributes = agg.attributes.filter((attrOut) => {
+        if (cubeReferencedDimNames.has(attrOut.dimension)) return true;
+        rptOmissions.push({
+          category: "User Defined Aggregate",
+          item: `${agg.uniqueName} → ${attrOut.name}`,
+          reason: `References dimension "${attrOut.dimension}", which has no relationship or degenerate binding to this cube — the aggregate would otherwise point at a non-existent relationship_path.`,
+          recommendation: "Add a relationship (or degenerate binding) for this dimension to the model, or remove this attribute from the aggregate manually.",
+        });
+        return false;
+      });
+    }
+    // An aggregate left with nothing to aggregate after that filtering has no reason to exist.
+    for (let i = aggregates.length - 1; i >= 0; i--) {
+      if (aggregates[i].attributes.length === 0 && aggregates[i].metrics.length === 0) {
+        rptOmissions.push({
+          category: "User Defined Aggregate",
+          item: aggregates[i].uniqueName,
+          reason: "Every attribute/metric this aggregate referenced was excluded — nothing left to aggregate.",
+          recommendation: "Recreate this aggregate manually once its referenced dimensions/measures are available in the model.",
+        });
+        aggregates.splice(i, 1);
+      }
     }
 
     // Cube visibility
@@ -1943,8 +1992,13 @@ function resolveFormat(formatString?: string, namedFormat?: string): string | un
 function parseColumnFromAttrName(attrName: string): string {
   // Strip leading m_ prefix
   const withoutPrefix = attrName.replace(/^m_/i, "");
-  // Strip trailing _sum / _avg / _min / _max / _count / _distinct
-  return withoutPrefix.replace(/_(sum|avg|min|max|count|distinct|average|minimum|maximum)$/i, "");
+  // Strip trailing _sum / _avg / _min / _max / _count / _distinct, optionally followed by a
+  // "_2"/"_3"/... disambiguation suffix — the same collision-numbering scheme this schema
+  // uses for duplicate measure *names* (e.g. m_CLAIM_CWLP_sum / m_CLAIM_CWLP_sum_2 as two
+  // distinct attributes) shows up here too on attributes with no real key-ref/attribute-ref
+  // at all, where it's not part of the column name (e.g. m_PAID_LOSS_NUMERATOR_sum_2 is just
+  // a second, differently-labeled attribute over the same PAID_LOSS_NUMERATOR column).
+  return withoutPrefix.replace(/_(sum|avg|min|max|count|distinct|average|minimum|maximum)(_\d+)?$/i, "");
 }
 
 /** The fact dataset for a cube is the first <data-set-ref> listed under its <data-sets>. */
@@ -1972,6 +2026,7 @@ function collectMeasureColumns(
   datasetIdToName: Map<string, string>,
   keyMap: Map<string, KeyRefEntry[]>,
   attrMap: Map<string, AttrRefEntry>,
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
   addReferencedColumn: (datasetName: string, column: string) => void,
 ): void {
   for (const cube of cubeEls) {
@@ -2005,13 +2060,22 @@ function collectMeasureColumns(
         const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
 
         const colRef = attrMap.get(attrId);
-        const column = keyRefAuthEntry?.columns[0] ?? colRef?.column ?? parseColumnFromAttrName(attrNameRaw);
+        const resolvedFromReference = keyRefAuthEntry?.columns[0] ?? colRef?.column;
+        const column = resolvedFromReference ?? parseColumnFromAttrName(attrNameRaw);
         // Mirror the dataset resolution used at emission time (see the Phase 4 measure
         // loop) — otherwise a multi-fact cube's measures get their referenced columns
         // recorded against the wrong dataset, which manufactures a "phantom" column on
         // the cube's first fact dataset instead of the one the measure actually lives on.
         const measureDatasetName = keyRefAuthEntry?.datasetName ?? colRef?.datasetName ?? factDatasetName;
-        if (column) addReferencedColumn(measureDatasetName, column);
+        // A name-guessed column (no real key-ref/attribute-ref backing it at all) is only
+        // trustworthy when it actually matches a column the dataset declares. Recording an
+        // unverifiable guess here manufactures a phantom column (defaulted to a "string"
+        // data_type, since nothing else is known about it) that the real table doesn't have
+        // — Phase 4 independently rejects the same measure as unresolved, so it shouldn't
+        // leave this phantom column behind for it.
+        const knownColumns = datasetNameToPhysical.get(measureDatasetName)?.columns;
+        const isUnverifiableGuess = !resolvedFromReference && !!knownColumns?.length && !knownColumns.some((c) => c.name === column);
+        if (column && !isUnverifiableGuess) addReferencedColumn(measureDatasetName, column);
       }
     }
   }
