@@ -1759,6 +1759,66 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 
 ---
 
+### `generate-report-from-xml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more
+
+**Endpoint:** `POST /rest/generate-report-from-xml`  |  **GraphQL:** `generateReportFromXml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlFile` | `String` | Yes\* | Path to the AtScale XML project file to report on |
+| `xmlFileContent` | `String` | No | Raw string content — alternative to `xmlFile` |
+| `xmlFileUpload` | file field | No | Multipart upload — alternative to `xmlFile` |
+| `title` | `String` | No | H1 title for the report. Defaults to the XML schema name. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-report-from-xml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-report-from-xml \
+  -F "xmlFileUpload=@/path/to/file"
+```
+
+---
+
+### `generate-report-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more
+
+**Endpoint:** `POST /rest/generate-report-from-sml`  |  **GraphQL:** `generateReportFromSml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-report-from-sml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
+```
+
+---
+
 ### `apply-style-to-sml`
 
 [↑ Table of Contents](#table-of-contents)

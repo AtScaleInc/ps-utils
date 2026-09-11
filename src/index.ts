@@ -222,6 +222,40 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
   } finally { cleanup(); }
 }
 
+export type GenerateReportFromXMLParams = {
+  xmlFile:     FileInput;
+  outputFile?: FileOutput;
+  title?:      string;
+};
+
+export async function generateReportFromXML(p: GenerateReportFromXMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["xmlFile"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("generate-report-from-xml", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GenerateReportFromSMLParams = {
+  smlDir:      DirInput;
+  outputFile?: FileOutput;
+  title?:      string;
+};
+
+export async function generateReportFromSML(p: GenerateReportFromSMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputDirs: ["smlDir"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("generate-report-from-sml", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSharedModelPlanParams = {
   /** Comma-separated paths, or a Readable ZIP whose top-level folders are the directories. */
   inputDirs: DirInput;
