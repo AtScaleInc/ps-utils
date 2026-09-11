@@ -46,6 +46,7 @@ flowchart LR
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
     SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
+    SML --> L["clean-unused-sml-objects"] --> SML
 ```
 
 ### Synthetic Data Generation
@@ -145,6 +146,7 @@ flowchart LR
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-sml-docs`](#generate-sml-docs)
+    - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
   - Synthetic Data Generation
@@ -706,6 +708,36 @@ With optional overrides:
 | `--title` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
 
 **Output:** Writes the Markdown document (default `<sml-dir>/README.md`).
+
+---
+
+### `clean-unused-sml-objects`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and reports every connection, dataset, dimension, metric, and calculation that no model reaches — directly, or transitively through a dimension's own level attributes, secondary attributes, or snowflake relationships. This is a **structural** check (is the object wired into a model at all), not a usage audit (has it actually been queried against a live instance) — pairing it with `extract-query-stats-from-atscale`'s occurrence data for a genuine usage-based pass is a natural next step, not implemented here.
+
+Defaults to a preview: nothing is deleted unless `--apply true` is passed. Always review the report first — the analysis can't see `row_security` references or cross-references from an object type it doesn't recognize, so a small number of false positives are possible.
+
+```bash
+./atscale-utils clean-unused-sml-objects \
+  --sml-dir "./sml-output"
+```
+
+To actually remove the unused files once you've reviewed the report:
+
+```bash
+./atscale-utils clean-unused-sml-objects \
+  --sml-dir "./sml-output" \
+  --apply true
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML directory to clean |
+| `--apply` | No | `false` | Actually delete the unused files. Defaults to a preview-only report. |
+| `--output-file` | No | stdout | Output Markdown report file path |
+| `--title` | No | | H1 title for the report. Defaults to the catalog label / `unique_name`. |
 
 ---
 

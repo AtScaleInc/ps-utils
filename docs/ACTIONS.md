@@ -30,6 +30,7 @@ flowchart LR
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
     SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
+    SML --> L["clean-unused-sml-objects"] --> SML
 ```
 
 ### Synthetic Data Generation
@@ -126,6 +127,7 @@ flowchart LR
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-sml-docs`](#generate-sml-docs)
+    - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
   - Synthetic Data Generation
@@ -565,6 +567,36 @@ Reads an SML directory and generates a single Markdown reference of every SML ob
 | `sml-dir` | Yes | | Path to the SML directory to document |
 | `output-file` | No | `README.md` | Output Markdown file. A relative path is written inside `<sml-dir>`; an absolute path is used as-is. |
 | `title` | No | | H1 title for the document. Defaults to the catalog label / `unique_name`. |
+
+---
+
+### `clean-unused-sml-objects`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and reports every connection, dataset, dimension, metric, and calculation that no model reaches — directly, or transitively through a dimension's own level attributes, secondary attributes, or snowflake relationships. A structural check (is the object wired into a model at all), not a usage audit (has it actually been queried against a live instance). Defaults to a preview: nothing is deleted unless `apply` is `true`. Always review the report first — the analysis can't see `row_security` references or cross-references from an object type it doesn't recognize.
+
+**Requires:** No secrets — the SML directory must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: clean-unused-sml-objects
+    sml-dir: sml-output
+    apply: "false"          # optional — set "true" to actually delete the unused files
+    output-file: CLEANUP.md # optional
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML directory to clean |
+| `apply` | No | `false` | Actually delete the unused files. Defaults to a preview-only report. |
+| `output-file` | No | stdout | Output Markdown report file path |
+| `title` | No | | H1 title for the report. Defaults to the catalog label / `unique_name`. |
 
 ---
 

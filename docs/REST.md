@@ -1821,6 +1821,32 @@ curl -X POST http://localhost:4000/rest/generate-sml-docs \
 
 ---
 
+### `clean-unused-sml-objects`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit
+
+**Endpoint:** `POST /rest/clean-unused-sml-objects`  |  **GraphQL:** `cleanUnusedSmlObjects`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `apply` | `Boolean` | No | Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it. |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/clean-unused-sml-objects \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
+```
+
+---
+
 ### `version`
 
 [↑ Table of Contents](#table-of-contents)
