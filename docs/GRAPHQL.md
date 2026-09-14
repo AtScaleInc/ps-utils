@@ -2198,6 +2198,92 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateReportFromXml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more
+
+**CLI name:** `generate-report-from-xml`  |  **REST:** `POST /rest/generate-report-from-xml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlFile` | `String` | Yes\* | Path to the AtScale XML project file to report on |
+| `xmlFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlFile` |
+| `xmlFileContent` | `String` | No | Raw string content — alternative to `xmlFile` |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the report. Defaults to the XML schema name. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateReportFromXml(input: {
+    xmlFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateReportFromXml(input:{xmlFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateReportFromXml(input:{xmlFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateReportFromSml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more
+
+**CLI name:** `generate-report-from-sml`  |  **REST:** `POST /rest/generate-report-from-sml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateReportFromSml(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateReportFromSml(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
 ### `applyStyleToSml`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2585,6 +2671,30 @@ input GenerateSmlFromXmlInput {
   connectionSchema: String
   """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
   modelMode: String
+}
+
+"""Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""
+input GenerateReportFromXmlInput {
+  """Path to the AtScale XML project file to report on"""
+  xmlFile: String
+  """Uploaded file — alternative to xmlFile"""
+  xmlFileUpload: Upload
+  """Raw file content as a string — alternative to xmlFile"""
+  xmlFileContent: String
+  """Output Markdown file path. Omit to print to stdout."""
+  outputFile: String
+  """H1 title for the report. Defaults to the XML schema name."""
+  title: String
+}
+
+"""Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more"""
+input GenerateReportFromSmlInput {
+  """Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)"""
+  smlDir: String!
+  """Output Markdown file path. Omit to print to stdout."""
+  outputFile: String
+  """H1 title for the report. Defaults to the catalog label / unique_name."""
+  title: String
 }
 
 """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
@@ -3321,6 +3431,10 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""
+  generateReportFromXml(input: GenerateReportFromXmlInput): OperationResult!
+  """Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more"""
+  generateReportFromSml(input: GenerateReportFromSmlInput): OperationResult!
   """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
   applyStyleToSml(input: ApplyStyleToSmlInput): OperationResult!
   """Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""

@@ -88,6 +88,8 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromConnection`](#generatesmlfromconnection)
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
+  - [`generateReportFromXML`](#generatereportfromxml)
+  - [`generateReportFromSML`](#generatereportfromsml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
   - [`applySharedModelPlanOption`](#generatesmlFromsharedmodelplan)
   - [`applyStyleToSML`](#applystyletosml)
@@ -386,6 +388,66 @@ function generateSMLFromXML(
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateReportFromXML`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an AtScale XML project file and writes a single, human-readable Markdown report describing every object found in the model as-is — connections, datasets, the fact-to-dimension join graph, the schema-level attribute library, dimensions (including every scope a name is defined in, to surface cross-cube naming collisions), cubes (measures, calculated members, User Defined Aggregates, named sets, KPIs, drillthrough), and the schema-level calculated-member formula library.
+
+```typescript
+import { generateReportFromXML } from "@atscale-ps/ps-utils";
+
+await generateReportFromXML({
+  xmlFile:    "./project.xml",
+  outputFile: "./project-report.md",
+});
+```
+
+```typescript
+function generateReportFromXML(
+  params: GenerateReportFromXMLParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `xmlFile` | `FileInput` | Yes | | Path to AtScale XML project file, or a `Readable` of its contents |
+| `outputFile` | `FileOutput` | No | | Output path for the Markdown report, or a `Writable` to receive it (stdout if omitted) |
+| `title` | `string` | No | | H1 title for the report (defaults to the XML schema name) |
+
+---
+
+### `generateReportFromSML`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and writes a single, human-readable Markdown report describing every object found in the model as-is — connections, datasets, the fact-to-dimension join graph, dimensions (hierarchies, levels, secondary attributes, snowflake/embedded joins), models (relationships, metrics used, calculations used, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), the metrics library, the calculations library, and security. Mirrors `generateReportFromXML`'s report shape, sourced from an SML directory instead of an AtScale XML project file.
+
+```typescript
+import { generateReportFromSML } from "@atscale-ps/ps-utils";
+
+await generateReportFromSML({
+  smlDir:     "./sml-output",
+  outputFile: "./sml-report.md",
+});
+```
+
+```typescript
+function generateReportFromSML(
+  params: GenerateReportFromSMLParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `smlDir` | `DirInput` | Yes | | Path to the SML directory to report on, or a `Readable` ZIP of its contents |
+| `outputFile` | `FileOutput` | No | | Output path for the Markdown report, or a `Writable` to receive it (stdout if omitted) |
+| `title` | `string` | No | | H1 title for the report (defaults to the catalog label / `unique_name`) |
 
 ---
 

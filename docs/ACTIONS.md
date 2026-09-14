@@ -23,6 +23,8 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
+    SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
     SML2B["SML Dir B"] --> H
     PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
@@ -122,6 +124,8 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-report-from-xml`](#generate-report-from-xml)
+    - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
@@ -444,6 +448,64 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 | `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+---
+
+### `generate-report-from-xml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an AtScale XML project file (`project_2_0` format — the same source format `generate-sml-from-xml` converts) and writes a single, human-readable Markdown report describing every object found in the model as-is: connections, datasets (tables/queries/columns), the fact-to-dimension join graph, the schema-level attribute library, dimensions (hierarchies, levels, secondary attributes — including every scope a name is defined in, to surface cross-cube naming collisions), cubes (measures, calculated members, User Defined Aggregates, named sets, KPIs, drillthrough), and the schema-level calculated-member formula library. No database connection or secrets required.
+
+**Requires:** No secrets — the XML file must be present in the repository.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-report-from-xml
+    xml-file: MyModel.xml
+    output-file: MyModel-report.md   # optional — omit to print to stdout
+    title: "My Model Report"         # optional — defaults to the XML schema name
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `xml-file` | Yes | | Path to the AtScale XML project file |
+| `output-file` | No | stdout | Output Markdown file path |
+| `title` | No | XML schema name | H1 title for the report |
+
+---
+
+### `generate-report-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory (`catalog.yml` plus `datasets/`, `dimensions/`, `metrics/`, `models/`, and optionally `connections/` and `calculations/`) and writes a single, human-readable Markdown report describing every object found in the model as-is: connections, datasets (tables/queries/columns), the fact-to-dimension join graph, dimensions (hierarchies, levels, secondary attributes, snowflake/embedded joins), models (relationships, metrics used, calculations used, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), the metrics library, the calculations library, and security. Mirrors `generate-report-from-xml`'s report shape and read-only intent, sourced from an SML directory instead of an AtScale XML project file. No database connection or secrets required.
+
+**Requires:** No secrets — the SML directory must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-report-from-sml
+    sml-dir: sml-output
+    output-file: sml-report.md   # optional — omit to print to stdout
+    title: "My Model Report"     # optional — defaults to the catalog label / unique_name
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML directory to report on |
+| `output-file` | No | stdout | Output Markdown file path |
+| `title` | No | catalog label / `unique_name` | H1 title for the report |
 
 ---
 

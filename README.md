@@ -39,6 +39,8 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
+    SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
     SML2B["SML Dir B"] --> H
     PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
@@ -141,6 +143,8 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-report-from-xml`](#generate-report-from-xml)
+    - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
@@ -550,6 +554,77 @@ With optional overrides:
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
 ```
+
+---
+
+### `generate-report-from-xml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an AtScale XML project file (schema version `project_2_0` — the same source format `generate-sml-from-xml` converts) and writes a single, human-readable Markdown report describing every object found in the model, as-is. No database connection is required.
+
+Unlike `generate-sml-from-xml`, this is a read-only report: nothing is renamed, deduplicated, or reshaped for SML compatibility, and objects the converter deliberately skips (perspectives, roles, translations, named sets, KPIs) are still listed, so the report is a complete inventory of the source model. The report covers:
+
+- **Connections** — every connection id referenced by a dataset, and how many datasets use it
+- **Datasets** — physical table or SQL query, columns with data types, and every key-ref/attribute-ref count
+- **Attribute Library** — every schema-level keyed attribute, resolved to the dataset.column(s) it's bound to
+- **Dimensions** — every dimension definition found anywhere (schema-level and per-cube inline), with hierarchies, levels, secondary attributes, and a callout when the same name is defined more than once across different scopes (a common source of real modeling bugs)
+- **Cubes** — datasets used, the actual fact-to-dimension join graph (resolved independently of any SML shaping), dimensions used, measures (aggregation, semi-additive info, resolved or inferred dataset/column binding), calculated members used, User Defined Aggregates, named sets, KPIs, and drillthrough settings
+- **Calculated Member Library** — every schema-level calculated-member formula, whether or not a cube currently uses it
+
+```bash
+./atscale-utils generate-report-from-xml \
+  --xml-file "./MyModel.xml" \
+  --output-file "./MyModel-report.md"
+```
+
+Omit `--output-file` to print the report to stdout:
+
+```bash
+./atscale-utils generate-report-from-xml --xml-file "./MyModel.xml"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--xml-file` | Yes | | Path to the AtScale XML project file (`project_2_0` format) |
+| `--output-file` | No | stdout | Output Markdown file path |
+| `--title` | No | XML schema name | H1 title for the report |
+
+---
+
+### `generate-report-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory (`catalog.yml` plus `datasets/`, `dimensions/`, `metrics/`, `models/`, and optionally `connections/` and `calculations/`) and writes a single, human-readable Markdown report describing every object found in the model, as-is. No database connection is required.
+
+Mirrors `generate-report-from-xml`'s report shape and read-only intent — nothing is renamed, deduplicated, or reshaped — sourced from an SML directory instead of an AtScale XML project file. The report covers:
+
+- **Connections** — every SML connection object
+- **Datasets** — physical table or SQL query, columns with data types, and how many level attributes / relationships reference it
+- **Dimensions** — every dimension file, with hierarchies, levels, secondary attributes, and snowflake/embedded joins
+- **Models** — datasets used, the fact-to-dimension join graph, dimensions used, metrics used and calculations used (resolved against their libraries, same as measures resolve in the XML report), perspectives, aggregates, query-name overrides, and drillthrough settings
+- **Metrics** — the metrics library: every metric defined, whether or not a model currently references it
+- **Calculations** — the calculations library: every calculated-metric formula defined, whether or not a model currently references it
+- **Security** — any `row_security`/`dimension_security` definitions found
+
+```bash
+./atscale-utils generate-report-from-sml \
+  --sml-dir "./sml-output" \
+  --output-file "./sml-report.md"
+```
+
+Omit `--output-file` to print the report to stdout:
+
+```bash
+./atscale-utils generate-report-from-sml --sml-dir "./sml-output"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML directory to report on |
+| `--output-file` | No | stdout | Output Markdown file path |
+| `--title` | No | catalog label / `unique_name` | H1 title for the report |
 
 ---
 

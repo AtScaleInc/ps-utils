@@ -171,6 +171,16 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.generate-report-from-xml",
+        "title": "generate-report-from-xml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-report-from-sml",
+        "title": "generate-report-from-sml",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.apply-style-to-sml",
         "title": "apply-style-to-sml",
         "category": "PS-Utils"
@@ -504,27 +514,37 @@
           "group": "1_ops@5"
         },
         {
-          "command": "psUtils.op.apply-style-to-sml",
+          "command": "psUtils.op.generate-report-from-xml",
           "group": "1_ops@6",
-          "when": "explorerResourceIsFolder"
+          "when": "!explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-sml-docs",
+          "command": "psUtils.op.generate-report-from-sml",
           "group": "1_ops@7",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-shared-model-plan",
+          "command": "psUtils.op.apply-style-to-sml",
           "group": "1_ops@8",
           "when": "explorerResourceIsFolder"
         },
         {
+          "command": "psUtils.op.generate-sml-docs",
+          "group": "1_ops@9",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-shared-model-plan",
+          "group": "1_ops@10",
+          "when": "explorerResourceIsFolder"
+        },
+        {
           "command": "psUtils.op.apply-shared-model-plan-option",
-          "group": "1_ops@9"
+          "group": "1_ops@11"
         },
         {
           "command": "psUtils.op.generate-ddl-from-atscale",
-          "group": "1_ops@10",
+          "group": "1_ops@12",
           "when": "explorerResourceIsFolder"
         }
       ],
