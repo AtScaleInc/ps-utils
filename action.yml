@@ -51,6 +51,9 @@ inputs:
         deploy-atscale-microk8s
         execute-web-services
         get-dso-count
+        atscale-list-aggregates
+        atscale-rebuild-aggregates
+        atscale-list-aggregate-build-history
     required: true
 
   # ── Shared ────────────────────────────────────────────────────────────────
@@ -295,6 +298,7 @@ inputs:
       For clean-unused-sml-objects: Markdown report output file (omit to print to stdout).
       For generate-report-from-xml: Markdown report output file (omit to print to stdout).
       For generate-report-from-sml: Markdown report output file (omit to print to stdout).
+      For atscale-list-aggregates: CSV export path (omit to skip the CSV export).
     required: false
   apply:
     description: >
@@ -536,6 +540,8 @@ inputs:
     description: >
       Page size for the AtScale query history API.
       Used by: extract-query-stats-from-atscale.
+      Also used by: atscale-list-aggregates (default: 200),
+      atscale-list-aggregate-build-history (default: 20).
     required: false
 
   # ── generate-enhanced-query-results ──────────────────────────────────────
@@ -711,7 +717,9 @@ inputs:
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
                atscale-list-deployments, atscale-deploy-catalog,
-               atscale-list-model-errors, generate-ddl-from-atscale.
+               atscale-list-model-errors, generate-ddl-from-atscale,
+               atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history.
     required: false
   data-source-name:
     description: >
@@ -761,7 +769,29 @@ inputs:
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
                atscale-list-deployments, atscale-deploy-catalog,
-               atscale-list-model-errors, generate-ddl-from-atscale.
+               atscale-list-model-errors, generate-ddl-from-atscale,
+               atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history.
+    required: false
+    default: "true"
+
+  # ── atscale-list-aggregates / atscale-rebuild-aggregates / atscale-list-aggregate-build-history ──
+  catalog-id:
+    description: >
+      Catalog (project) UUID, from atscale-list-deployments.
+      Used by: atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history.
+    required: false
+  model-id:
+    description: >
+      Model (cube) UUID, from atscale-list-deployments.
+      Used by: atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history.
+    required: false
+  full-build:
+    description: >
+      Trigger a full build when true, or an incremental build when false. Defaults to true.
+      Used by: atscale-rebuild-aggregates.
     required: false
     default: "true"
 
@@ -899,7 +929,10 @@ runs:
          inputs.operation == 'extract-queries-from-atscale' ||
          inputs.operation == 'execute-atscale-query-harness' ||
          inputs.operation == 'execute-query-on-connection' ||
-         inputs.operation == 'generate-enhanced-query-results')
+         inputs.operation == 'generate-enhanced-query-results' ||
+         inputs.operation == 'atscale-list-aggregates' ||
+         inputs.operation == 'atscale-rebuild-aggregates' ||
+         inputs.operation == 'atscale-list-aggregate-build-history')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -1293,6 +1326,53 @@ runs:
           --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
           --insecure "${{ inputs.insecure }}" \
           --verbose true
+      shell: bash
+
+    # ── atscale-list-aggregates ───────────────────────────────────────────────
+    - name: List AtScale aggregates
+      if: inputs.operation == 'atscale-list-aggregates'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --catalog-id              "${{ inputs.catalog-id }}"
+          --model-id                "${{ inputs.model-id }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.limit }}" ]]       && ARGS+=(--limit       "${{ inputs.limit }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-aggregates "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-rebuild-aggregates ────────────────────────────────────────────
+    - name: Rebuild AtScale aggregates
+      if: inputs.operation == 'atscale-rebuild-aggregates'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" atscale-rebuild-aggregates \
+          --connection-file "${{ github.action_path }}/connection.yml" \
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
+          --catalog-id "${{ inputs.catalog-id }}" \
+          --model-id "${{ inputs.model-id }}" \
+          --full-build "${{ inputs.full-build }}" \
+          --insecure "${{ inputs.insecure }}" \
+          --verbose true
+      shell: bash
+
+    # ── atscale-list-aggregate-build-history ──────────────────────────────────
+    - name: List AtScale aggregate build history
+      if: inputs.operation == 'atscale-list-aggregate-build-history'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --catalog-id              "${{ inputs.catalog-id }}"
+          --model-id                "${{ inputs.model-id }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.limit }}" ]] && ARGS+=(--limit "${{ inputs.limit }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-aggregate-build-history "${ARGS[@]}"
       shell: bash
 
     # ── atscale-deploy-catalog ───────────────────────────────────────────────────
