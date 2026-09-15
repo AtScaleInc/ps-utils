@@ -206,9 +206,27 @@ export async function convertXmlToSml(
       const id = a(ar, "id");
       if (!id) continue;
       const cols = extractColumns(arr(ar.column));
-      if (cols.length > 0) {
-        attrMap.set(id, { datasetName, column: cols[0] });
+      if (cols.length === 0) continue;
+      const column = cols[0];
+      const existing = attrMap.get(id);
+      if (!existing) {
+        attrMap.set(id, { datasetName, column });
+        continue;
       }
+      // The same attribute-ref id can be redeclared once per dataset/cube's own <logical>
+      // section — a still-incompletely-wired source definition can leave one redeclaration
+      // naming a real physical column and another naming a placeholder (often the
+      // attribute's own caption text, with spaces, rather than a real snake_case column).
+      // Last-write-wins would let a later, bogus redeclaration silently clobber a working
+      // one purely by document order — only overwrite an already-valid entry if the
+      // existing one doesn't actually verify against its own dataset's known physical
+      // columns.
+      const existingKnown = datasetNameToPhysical.get(existing.datasetName)?.columns;
+      const existingValid = !!existingKnown?.length && existingKnown.some((c) => c.name === existing.column);
+      if (existingValid) continue;
+      const newKnown = datasetNameToPhysical.get(datasetName)?.columns;
+      const newValid = !!newKnown?.length && newKnown.some((c) => c.name === column);
+      if (newValid) attrMap.set(id, { datasetName, column });
     }
   }
 
@@ -531,6 +549,28 @@ export async function convertXmlToSml(
   // each emitted metric unique_name — used to tell "same measure reused by another cube"
   // (just add a reference) from "different measure that happens to share a name" (rename).
   const metricDefSignature = new Map<string, string>();
+  // A calculated member's expression can reference another calculated member by its original
+  // XML name — but that other member's final unique_name isn't settled until dedup/rename
+  // resolution actually runs, which can rename it away from the naive safeName transform to
+  // avoid colliding with an unrelated, differently-defined calc member whose name collapses
+  // to the same string once punctuation is stripped (e.g. "Foo$" and "Foo%" both become
+  // "Foo"). measureRefMap is built once, up front, before any of that resolution has
+  // happened, so a formula referencing a member that later gets renamed was rewritten against
+  // its stale, pre-rename target — and if that stale name happens to equal the *referencing*
+  // member's own final name, the rewritten formula ends up referencing itself. Calculated-
+  // member emission is deferred (pendingCalcMembers) until every cube has been processed and
+  // every member's real final name is known, then rewritten using calcOriginalNameToFinalName
+  // layered over the naive measureRefMap — the same reasoning as why semi-additive metrics
+  // already defer past relationship inference.
+  const pendingCalcMembers: Array<{
+    fname: string;
+    uniqueName: string;
+    label: string;
+    def: CalcMemberDef;
+    format?: string;
+    renamedFrom?: string;
+  }> = [];
+  const calcOriginalNameToFinalName = new Map<string, string>();
 
   // Each cube's model file is built once Phase 3b (below) has resolved every dimension's
   // snowflake relationships — see the comment where this is pushed to, further down.
@@ -711,7 +751,7 @@ export async function convertXmlToSml(
             : undefined;
           const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
           const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
-          const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+          const keyRefAuthEntry = pickAuthEntry(keyRefEntries, datasetNameToPhysical);
 
           const colRef = attrMap.get(attrId);
           const resolvedFromReference = keyRefAuthEntry?.columns[0] ?? colRef?.column;
@@ -1027,23 +1067,10 @@ export async function convertXmlToSml(
             seenMetricNames.add(altDedupKey);
             metricDefSignature.set(altDedupKey, refId!);
             attrIdToMetricUniqueName.set(refId!, altUniqueName);
+            calcOriginalNameToFinalName.set(def.name.toLowerCase(), altUniqueName);
             const format = resolveFormat(def.formatString, def.namedFormat);
             const fname = safeFilename(altUniqueName);
-            output.set(
-              `calculations/${fname}.yml`,
-              buildCalcMemberYaml(
-                altUniqueName,
-                label,
-                rewriteMeasureRefs(def.expression, measureRefMap),
-                format,
-                def.folder,
-                def.visible,
-                def.description,
-                def.mdxAggregateFunction,
-                def.dimension,
-              ),
-            );
-            logger.log(`  → calculations/${fname}.yml (renamed — "${uniqueName}" already denotes a different calculated member elsewhere)`);
+            pendingCalcMembers.push({ fname, uniqueName: altUniqueName, label, def, format, renamedFrom: uniqueName });
             metricNames.push({ uniqueName: altUniqueName, folder: def.folder || undefined });
             rptMetrics.push({ name: altUniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
           } else {
@@ -1059,23 +1086,10 @@ export async function convertXmlToSml(
         seenMetricNames.add(dedupKey);
         metricDefSignature.set(dedupKey, refId!);
         attrIdToMetricUniqueName.set(refId!, uniqueName);
+        calcOriginalNameToFinalName.set(def.name.toLowerCase(), uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
-        output.set(
-          `calculations/${fname}.yml`,
-          buildCalcMemberYaml(
-            uniqueName,
-            label,
-            rewriteMeasureRefs(def.expression, measureRefMap),
-            format,
-            def.folder,
-            def.visible,
-            def.description,
-            def.mdxAggregateFunction,
-            def.dimension,
-          ),
-        );
-        logger.log(`  → calculations/${fname}.yml`);
+        pendingCalcMembers.push({ fname, uniqueName, label, def, format });
         metricNames.push({ uniqueName, folder: def.folder || undefined });
         rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
       }
@@ -1133,7 +1147,13 @@ export async function convertXmlToSml(
               continue;
             }
 
-            const attrOut: AggregateDef["attributes"][number] = { name: truncateUniqueName(kaDef.name), dimension: targetDimName };
+            // Must match the level's own unique_name convention (safeName + truncate — see
+            // levelUniqueNameFor), not just the raw attribute name: the level this aggregate
+            // references was itself emitted with spaces replaced (e.g. "Foo_Bar"), so
+            // referencing it here with the raw spaced name ("Foo Bar") points at an object
+            // that doesn't exist, even though the dimension itself legitimately keeps spaces
+            // in its own name.
+            const attrOut: AggregateDef["attributes"][number] = { name: levelUniqueNameFor(kaDef.name), dimension: targetDimName };
 
             const refPathEl = first(arr((attrRef as Record<string, unknown>)["ref-path"])) as
               | Record<string, unknown>
@@ -1326,6 +1346,35 @@ export async function convertXmlToSml(
   }
 
   // ---------------------------------------------------------------
+  // Phase 7c: Emit deferred calculated members, now that every cube has been processed and
+  // every calc member's real final (collision-resolved) unique_name is known — see
+  // pendingCalcMembers/calcOriginalNameToFinalName above for why this can't happen inline.
+  // ---------------------------------------------------------------
+  const calcAwareRefMap = new Map(measureRefMap);
+  for (const [origName, finalName] of calcOriginalNameToFinalName) calcAwareRefMap.set(origName, finalName);
+  for (const pc of pendingCalcMembers) {
+    output.set(
+      `calculations/${pc.fname}.yml`,
+      buildCalcMemberYaml(
+        pc.uniqueName,
+        pc.label,
+        rewriteMeasureRefs(pc.def.expression, calcAwareRefMap),
+        pc.format,
+        pc.def.folder,
+        pc.def.visible,
+        pc.def.description,
+        pc.def.mdxAggregateFunction,
+        pc.def.dimension,
+      ),
+    );
+    logger.log(
+      pc.renamedFrom
+        ? `  → calculations/${pc.fname}.yml (renamed — "${pc.renamedFrom}" already denotes a different calculated member elsewhere)`
+        : `  → calculations/${pc.fname}.yml`,
+    );
+  }
+
+  // ---------------------------------------------------------------
   // Phase 3b: Emit dimension YAML files for all referenced dims
   // ---------------------------------------------------------------
 
@@ -1389,6 +1438,14 @@ export async function convertXmlToSml(
         item: `metrical attribute "${name}" in dimension "${dimName}"`,
         reason: "Could not resolve the metrical attribute's column/dataset reference.",
         recommendation: "Add this metric manually to the dimension's level metrics after verifying the source column.",
+      });
+    }
+    for (const dropped of dimMeta.droppedSecondaryAttrsForSharedDegenerate) {
+      rptOmissions.push({
+        category: "Secondary Attribute",
+        item: `${dropped.secondaryAttrName} on level "${dropped.level}" in dimension "${dimName}"`,
+        reason: "This level is bound to more than one fact dataset (shared_degenerate_columns) — the engine does not allow secondary attributes on a level shaped that way.",
+        recommendation: "Add this attribute as its own separate degenerate dimension, or as a level metric, if it's still needed.",
       });
     }
     if (dimMeta.snowflakeRelationships.length > 0) {
@@ -1522,16 +1579,31 @@ export async function convertXmlToSml(
   const connectionIdByDataset = new Map<string, string>(); // dataset name -> connection unique_name
   const connectionDbSchema = new Map<string, { db?: string; schema?: string }>(); // connection unique_name -> its db/schema
   if (!opts.connectionDb && !opts.connectionSchema) {
+    // A <table> can name a <schema> without a <database> — that means "use whichever
+    // database the rest of this schema's tables use," not "a genuinely database-less
+    // location." Resolving each schema's database in its own pass first (preferring any
+    // dataset that does specify one) means such a table joins the schema's one real
+    // connection instead of splitting off a second, broken one with no database — the live
+    // engine requires a table-backed connection to declare a database.
+    const schemaToDb = new Map<string, string>();
+    for (const dsName of referencedDatasetNames) {
+      const phys = datasetNameToPhysical.get(dsName);
+      if (phys?.schema && phys.db && !schemaToDb.has(phys.schema)) {
+        schemaToDb.set(phys.schema, phys.db);
+      }
+    }
+
     const pairToConnId = new Map<string, string>();
     for (const dsName of referencedDatasetNames) {
       const phys = datasetNameToPhysical.get(dsName);
       if (!phys?.db && !phys?.schema) continue;
-      const pairKey = `${phys.db ?? ""}|${phys.schema ?? ""}`;
+      const resolvedDb = phys.db ?? (phys.schema ? schemaToDb.get(phys.schema) : undefined);
+      const pairKey = `${resolvedDb ?? ""}|${phys.schema ?? ""}`;
       let connId = pairToConnId.get(pairKey);
       if (!connId) {
-        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? phys.db}`;
+        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? resolvedDb}`;
         pairToConnId.set(pairKey, connId);
-        connectionDbSchema.set(connId, { db: phys.db, schema: phys.schema });
+        connectionDbSchema.set(connId, { db: resolvedDb, schema: phys.schema });
       }
       connectionIdByDataset.set(dsName, connId);
     }
@@ -1621,6 +1693,29 @@ interface KeyRefEntry {
   complete: string; // "true" | "false" | "partial"
   unique?: boolean;
   rolePlay?: string;
+}
+
+/**
+ * Pick the authoritative entry when a key-ref/attribute-ref id is redeclared more than
+ * once (once per dataset/cube's own <logical> section) with none marked complete="true" —
+ * a still-partially-wired source definition can leave one redeclaration naming a real
+ * physical column and another naming a placeholder (often the attribute's own caption
+ * text, not a real column), and which one comes first in document order is incidental.
+ * Falls back to entries[0] — the prior, order-dependent behavior — only when no entry's
+ * columns can be verified against its own dataset's known physical columns (i.e. every
+ * candidate is equally unverifiable, so there's no positive signal to prefer one).
+ */
+function pickAuthEntry<T extends { complete: string; columns: string[]; datasetName: string }>(
+  entries: T[],
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
+): T {
+  const complete = entries.find((e) => e.complete === "true");
+  if (complete) return complete;
+  const valid = entries.find((e) => {
+    const knownColumns = datasetNameToPhysical.get(e.datasetName)?.columns;
+    return !!knownColumns?.length && e.columns.every((col) => knownColumns.some((c) => c.name === col));
+  });
+  return valid ?? entries[0];
 }
 
 interface AttrRefEntry {
@@ -1792,6 +1887,9 @@ interface DimMeta {
   skippedMetricalQuantiles: string[];
   /** Metrical attribute names skipped because their column/dataset couldn't be resolved. */
   skippedMetricalUnresolved: string[];
+  /** Secondary attributes dropped from a level that ended up using shared_degenerate_columns
+   *  (multi-dataset) — the engine disallows secondary attributes there entirely. */
+  droppedSecondaryAttrsForSharedDegenerate: Array<{ level: string; secondaryAttrName: string }>;
 }
 
 /** A metrical attribute (dimension-level metric) resolved for one hierarchy level. */
@@ -1935,9 +2033,15 @@ function buildMeasureRefMap(
   cubeEls: Record<string, unknown>[],
   calcMemberDefs: Map<string, CalcMemberDef>,
 ): Map<string, string> {
+  // Keyed case-insensitively — a calc formula's own [Measures].[Name] reference doesn't
+  // always match the target's declared name byte-for-byte (e.g. this schema references
+  // "Number of Days" for an attribute actually named "Number Of Days"); MDX member name
+  // resolution isn't case-sensitive, and the reference converter's own name-collision
+  // tracking already treats names this way for the same reason (see the dedupKey comment
+  // in the Phase 4 measure loop below).
   const map = new Map<string, string>();
   for (const def of calcMemberDefs.values()) {
-    map.set(def.name, truncateUniqueName(safeName(def.name)));
+    map.set(def.name.toLowerCase(), truncateUniqueName(safeName(def.name)));
   }
   for (const cube of cubeEls) {
     for (const attrsSec of arr(cube.attributes)) {
@@ -1957,7 +2061,7 @@ function buildMeasureRefMap(
           arr(typeEl["quantile-instance"]).length > 0;
         const hasExpr = arr((attrEl as Record<string, unknown>).expression).length > 0;
         if (!isMeasure && !hasExpr) continue;
-        map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw)));
+        map.set(attrNameRaw.toLowerCase(), truncateUniqueName(safeName(attrNameRaw)));
       }
     }
   }
@@ -1966,8 +2070,17 @@ function buildMeasureRefMap(
 
 /** Rewrite "[Measures].[Original Name]" references to match transformed unique_names. */
 function rewriteMeasureRefs(text: string, nameMap: Map<string, string>): string {
-  return text.replace(/\[Measures\]\.\[([^\]]+)\]/g, (full, name) => {
-    const mapped = nameMap.get(name);
+  // MDX allows the "Measures" dimension name unbracketed when it's unambiguous
+  // (Measures.[Number of Days ESTIMATE], not just [Measures].[Number of Days ESTIMATE]) —
+  // both forms appear in this same source file. Matching only the fully-bracketed form left
+  // every unbracketed reference untouched, so its original (pre-safeName) spaced-out name
+  // never got rewritten to the transformed unique_name the target metric actually has,
+  // producing a calc formula that references a metric name nothing in the model has.
+  return text.replace(/\[?Measures\]?\.\[([^\]]+)\]/g, (full, name) => {
+    // nameMap is keyed case-insensitively (see buildMeasureRefMap/calcOriginalNameToFinalName)
+    // — a formula's own reference doesn't always match the target's declared name byte-for-
+    // byte, and MDX member name resolution isn't case-sensitive either.
+    const mapped = nameMap.get(name.toLowerCase());
     return mapped ? `[Measures].[${mapped}]` : full;
   });
 }
@@ -2142,7 +2255,7 @@ function collectMeasureColumns(
           : undefined;
         const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
         const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
-        const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+        const keyRefAuthEntry = pickAuthEntry(keyRefEntries, datasetNameToPhysical);
 
         const colRef = attrMap.get(attrId);
         const resolvedFromReference = keyRefAuthEntry?.columns[0] ?? colRef?.column;
@@ -2694,6 +2807,8 @@ interface SecondaryAttrDef {
   format?: string;
   isHidden?: boolean;
   isUniqueKey?: boolean;
+  folder?: string;
+  description?: string;
 }
 
 interface LevelAttrDef {
@@ -2746,7 +2861,13 @@ function buildDimensionYaml(
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
   const isTime = dimTypeRaw === "Time";
-  const label = props ? (s(first(arr(props.caption))) ?? dimName) : dimName;
+  // Fall back to the dimension's own raw XML name, not dimName — dimName is the
+  // collision-disambiguated unique_name (e.g. "Foo_2" when two different dimensions
+  // elsewhere in the project share the display name "Foo"), and that "_2" suffix has no
+  // business appearing in a user-facing label when the source never had a caption to
+  // override it with.
+  const rawDimName = a(dimEl, "name") ?? dimName;
+  const label = props ? (s(first(arr(props.caption))) ?? rawDimName) : rawDimName;
   const dimDescription = props ? s(first(arr(props.description))) : undefined;
 
   // Meta tracking
@@ -2756,9 +2877,31 @@ function buildDimensionYaml(
   const metaSkippedMetricalQuantiles: string[] = [];
   const metaSkippedMetricalUnresolved: string[] = [];
   const metaSnowflakeRelationships: DimMeta["snowflakeRelationships"] = [];
+  const metaDroppedSecondaryAttrsForSharedDegenerate: DimMeta["droppedSecondaryAttrsForSharedDegenerate"] = [];
+
+  // Once ANY level of this degenerate dimension is bound to more than one fact dataset (see
+  // degenerateBindingsForDim), the engine requires EVERY level of the same dimension to use
+  // the shared_degenerate_columns shape — mixing it with plain dataset/key_columns/
+  // name_column levels in one dimension is rejected as "Level attributes in a degenerate
+  // dimension must be of the same type." A level that only happens to bind to a single fact
+  // dataset still gets wrapped in a one-element shared_degenerate_columns array below so
+  // every level in the dimension is consistently shaped.
+  const dimensionUsesSharedDegenerateFormat =
+    isDegenerate &&
+    !!degenerateBindingsForDim &&
+    Array.from(degenerateBindingsForDim.values()).some((m) => m.size > 1);
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
+  // A level shared across multiple hierarchies (e.g. a "Date" leaf common to a Calendar
+  // Hierarchy and a Fiscal Hierarchy) is the same physical level each time — the
+  // engine rejects it if its attached secondary_attributes/metrics differ between
+  // occurrences ("Level X is duplicated in hierarchies ... but levels below it differ").
+  // The source XML only declares the full keyed-attribute-ref list once, on whichever
+  // hierarchy's <level> element happens to carry it; every other hierarchy's <level> for
+  // the same primary-attribute has none. Emit the attached set once, on the level's first
+  // occurrence, and leave later occurrences bare rather than reproducing the mismatch.
+  const levelExtrasEmitted = new Set<string>();
 
   const hierarchies: Array<{
     uniqueName: string;
@@ -2818,7 +2961,49 @@ function buildDimensionYaml(
       metrics?: MetricalAttrOut[];
     }> = [];
 
-    for (const levelEl of arr(hierEl.level)) {
+    const levelEls = arr(hierEl.level);
+    // Pre-resolve every level's time_unit positionally, up front, so a level whose XML
+    // level-type doesn't map to any known unit — e.g. AtScale's own "TimeUndefined", used
+    // for a custom retail-calendar period that doesn't fit year/quarter/month/week/day —
+    // can still get a usable one inferred from its place between recognized neighbors,
+    // rather than being left without one entirely. SML requires every level of a `type:
+    // time` dimension to declare a time_unit; standard/degenerate dimensions don't use this
+    // at all, and their (not necessarily granularity-ordered) level order is unaffected.
+    const rawTimeUnits: (string | undefined)[] = isTime
+      ? levelEls.map((levelEl) => {
+          const primaryAttrUuid = a(levelEl, "primary-attribute");
+          const def = primaryAttrUuid ? attrDef.get(primaryAttrUuid) : undefined;
+          const levelName = def ? (def.caption ?? def.name) : undefined;
+          const lProps = first(arr((levelEl as Record<string, unknown>).properties)) as Record<string, unknown> | undefined;
+          const levelTypeRaw = lProps ? s(first(arr(lProps["level-type"]))) : undefined;
+          return mapLevelType(levelTypeRaw) ?? (levelName ? inferTimeUnitFromName(levelName) : undefined);
+        })
+      : [];
+    if (isTime) {
+      for (let i = 0; i < rawTimeUnits.length; i++) {
+        if (rawTimeUnits[i]) continue;
+        // Nearest known neighbors by position (already coarse-to-fine per the source XML's
+        // own level order, same assumption the final sort below relies on). A gap of more
+        // than one rank between them (e.g. year, then week) means this level occupies an
+        // intermediate granularity the schema just didn't name — one rank finer than the
+        // coarser neighbor is a reasonable "period" to slot it into; anything else (only one
+        // neighbor known, or an adjacent gap) just reuses whichever neighbor is known.
+        let before: string | undefined;
+        for (let j = i - 1; j >= 0; j--) { if (rawTimeUnits[j]) { before = rawTimeUnits[j]; break; } }
+        let after: string | undefined;
+        for (let j = i + 1; j < rawTimeUnits.length; j++) { if (rawTimeUnits[j]) { after = rawTimeUnits[j]; break; } }
+        const beforeRank = before ? TIME_UNIT_RANK[before] : undefined;
+        const afterRank = after ? TIME_UNIT_RANK[after] : undefined;
+        if (beforeRank !== undefined && afterRank !== undefined && afterRank > beforeRank + 1) {
+          const targetRank = beforeRank + 1;
+          rawTimeUnits[i] = Object.keys(TIME_UNIT_RANK).find((u) => TIME_UNIT_RANK[u] === targetRank);
+        } else {
+          rawTimeUnits[i] = before ?? after;
+        }
+      }
+    }
+
+    for (const [levelIndex, levelEl] of levelEls.entries()) {
       const primaryAttrUuid = a(levelEl, "primary-attribute");
       if (!primaryAttrUuid) continue;
 
@@ -2833,7 +3018,7 @@ function buildDimensionYaml(
 
       // Resolve key columns for the primary level attribute
       const keyEntries = keyMap.get(def.keyUuid) ?? [];
-      const authEntry = keyEntries.find((e) => e.complete === "true") ?? keyEntries[0];
+      const authEntry = pickAuthEntry(keyEntries, datasetNameToPhysical);
       if (!authEntry) continue;
 
       const keyColumns = authEntry.columns;
@@ -2873,6 +3058,28 @@ function buildDimensionYaml(
         if (refId) {
           const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
           if (resolved) {
+            // The engine requires a relationship's to.level key to have the same column
+            // count as its own join_columns. That holds when the enclosing level's key IS
+            // the join key (e.g. a single-attribute level joining on its own one column),
+            // but not when the level is keyed on something else entirely (e.g. a
+            // composite-keyed bridge level hosting several unrelated single-column FKs as
+            // secondary attributes) — there the containing level's key arity never matches
+            // any individual FK's. Give the join its own single-purpose level, keyed by the
+            // same columns the join itself uses, so the two arities always agree.
+            if (resolved.fromColumns.length !== keyColumns.length) {
+              const kaDef = attrDef.get(attrId);
+              const ownLevelName = truncateUniqueName(safeName(kaDef?.name ?? attrId));
+              if (!levelAttrMap.has(ownLevelName)) {
+                levelAttrMap.set(ownLevelName, {
+                  uniqueName: ownLevelName,
+                  label: kaDef?.caption ?? kaDef?.name ?? ownLevelName,
+                  dataset: resolved.fromDataset,
+                  keyColumns: resolved.fromColumns,
+                  nameColumn: resolved.fromColumns[resolved.fromColumns.length - 1],
+                });
+              }
+              resolved.toLevel = ownLevelName;
+            }
             if (!metaSnowflakeRelationships.some((r) => r.uniqueName === resolved.uniqueName)) {
               metaSnowflakeRelationships.push(resolved);
             }
@@ -2885,7 +3092,7 @@ function buildDimensionYaml(
         const kaDef = attrDef.get(attrId);
         if (!kaDef) continue;
         const kaKeyEntries = keyMap.get(kaDef.keyUuid) ?? [];
-        const kaAuthEntry = kaKeyEntries.find((e) => e.complete === "true") ?? kaKeyEntries[0];
+        const kaAuthEntry = pickAuthEntry(kaKeyEntries, datasetNameToPhysical);
         if (!kaAuthEntry) continue;
         const saKeyColumns = kaAuthEntry.columns;
         const saDataset = `${kaAuthEntry.datasetName}.dataset`;
@@ -2907,6 +3114,8 @@ function buildDimensionYaml(
           // key-ref's own unique flag — the same signal already used for level_attributes.
           isHidden: !kaDef.visible || undefined,
           isUniqueKey: kaAuthEntry.unique || undefined,
+          folder: kaDef.folder,
+          description: kaDef.description,
         });
       }
 
@@ -2925,7 +3134,7 @@ function buildDimensionYaml(
         }
         const maAttrRefEntry = attrMap.get(attrId);
         const maKeyRefEntries = maDef.keyRefId ? keyMap.get(maDef.keyRefId) ?? [] : [];
-        const maKeyRefAuthEntry = maKeyRefEntries.find((e) => e.complete === "true") ?? maKeyRefEntries[0];
+        const maKeyRefAuthEntry = pickAuthEntry(maKeyRefEntries, datasetNameToPhysical);
         const column = maKeyRefAuthEntry?.columns[0] ?? maAttrRefEntry?.column;
         const datasetName = maKeyRefAuthEntry?.datasetName ?? maAttrRefEntry?.datasetName;
         if (!column || !datasetName) {
@@ -2959,16 +3168,15 @@ function buildDimensionYaml(
       })();
       const isHidden = levelVisibleStr === "false";
 
-      const levelTypeRaw = (() => {
-        const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
-        return lProps ? s(first(arr(lProps["level-type"]))) : undefined;
-      })();
-      const timeUnit = mapLevelType(levelTypeRaw) ?? (isTime ? inferTimeUnitFromName(levelName) : undefined);
+      const timeUnit = rawTimeUnits[levelIndex];
 
       // A degenerate level backed by more than one distinct fact dataset (e.g. a flag column
       // present on both a cube's primary fact table and its YTD fact table) needs
       // shared_degenerate_columns instead of a single dataset/key_columns/name_column —
-      // one dataset alone (the common case) keeps the plain fields, unchanged from before.
+      // one dataset alone (the common case) keeps the plain fields, unchanged from before,
+      // UNLESS some other level in this same dimension does need the shared shape, in which
+      // case this level must match it (see dimensionUsesSharedDegenerateFormat above) —
+      // wrapped as a one-element array using this level's own single binding.
       const datasetBindings = isDegenerate ? degenerateBindingsForDim?.get(levelUniqueName) : undefined;
       const sharedDegenerateColumns =
         datasetBindings && datasetBindings.size > 1
@@ -2977,6 +3185,8 @@ function buildDimensionYaml(
               keyColumns: bindingColumns,
               nameColumn: defaultNameColumn(bindingColumns, bindingDataset, soleKeyColumns, datasetNameToPhysical),
             }))
+          : dimensionUsesSharedDegenerateFormat
+          ? [{ dataset: datasetRef, keyColumns, nameColumn }]
           : undefined;
 
       // Build or merge the level attribute entry (de-duplicated by unique name)
@@ -2998,12 +3208,27 @@ function buildDimensionYaml(
         });
       }
 
+      const alreadyEmittedElsewhere = levelExtrasEmitted.has(levelUniqueName);
+      if ((secondaryAttrs.length || levelMetrics.length) && !alreadyEmittedElsewhere) {
+        levelExtrasEmitted.add(levelUniqueName);
+      }
+
+      // The engine disallows secondary attributes entirely on a level that uses
+      // shared_degenerate_columns (multi-dataset) — report the drop as an omission rather
+      // than silently emitting an invalid combination.
+      if (sharedDegenerateColumns && !alreadyEmittedElsewhere) {
+        for (const sa of secondaryAttrs) {
+          metaDroppedSecondaryAttrsForSharedDegenerate.push({ level: levelUniqueName, secondaryAttrName: sa.uniqueName });
+        }
+      }
+
       hierLevels.push({
         uniqueName: levelUniqueName,
         timeUnit,
         isHidden: isHidden || undefined,
-        secondaryAttributes: secondaryAttrs.length ? secondaryAttrs : undefined,
-        metrics: levelMetrics.length ? levelMetrics : undefined,
+        secondaryAttributes:
+          !alreadyEmittedElsewhere && !sharedDegenerateColumns && secondaryAttrs.length ? secondaryAttrs : undefined,
+        metrics: !alreadyEmittedElsewhere && levelMetrics.length ? levelMetrics : undefined,
       });
     }
 
@@ -3027,6 +3252,51 @@ function buildDimensionYaml(
     }
   }
 
+  // A level shared by name across multiple hierarchies (e.g. "Category" common to three
+  // different product hierarchies) must have an identical sequence of levels below it
+  // everywhere it's used — the engine rejects a mismatch (e.g. one hierarchy going
+  // straight from "Category" to a leaf level, skipping an intermediate "Sub Category"
+  // that the others include) as "Level X is duplicated in hierarchies ... but levels below
+  // it differ", even though the source XML genuinely models it that way. Disambiguate by
+  // renaming every occurrence whose "below" shape doesn't match the first-seen shape for
+  // that level name, cloning its level_attributes entry under the new name so it still
+  // resolves to the same physical column.
+  {
+    const canonicalBelowSignature = new Map<string, string>();
+    const renamedNameForSignature = new Map<string, string>();
+    const nextSuffix = new Map<string, number>();
+    for (const h of hierarchies) {
+      for (let i = 0; i < h.levels.length; i++) {
+        const level = h.levels[i];
+        const originalName = level.uniqueName;
+        const signature = h.levels
+          .slice(i + 1)
+          .map((l) => l.uniqueName)
+          .join(">");
+        const canonical = canonicalBelowSignature.get(originalName);
+        if (canonical === undefined) {
+          canonicalBelowSignature.set(originalName, signature);
+          continue;
+        }
+        if (canonical === signature) continue;
+
+        const dedupeKey = `${originalName} ${signature}`;
+        let renamed = renamedNameForSignature.get(dedupeKey);
+        if (!renamed) {
+          const suffix = (nextSuffix.get(originalName) ?? 1) + 1;
+          nextSuffix.set(originalName, suffix);
+          renamed = truncateUniqueName(`${originalName}_${suffix}`);
+          renamedNameForSignature.set(dedupeKey, renamed);
+          const baseAttr = levelAttrMap.get(originalName);
+          if (baseAttr && !levelAttrMap.has(renamed)) {
+            levelAttrMap.set(renamed, { ...baseAttr, uniqueName: renamed });
+          }
+        }
+        level.uniqueName = renamed;
+      }
+    }
+  }
+
   // Build YAML structure
   const obj: Record<string, unknown> = {
     unique_name: dimName,
@@ -3035,11 +3305,15 @@ function buildDimensionYaml(
   };
 
   if (dimDescription) obj.description = dimDescription;
-  if (isDegenerate) {
-    obj.is_degenerate = true;
-  } else if (isTime) {
+  // type and is_degenerate are independent SML properties, not mutually exclusive — a
+  // dimension bound directly to a fact table (degenerate) can still be time-typed (e.g. a
+  // date/time column that only exists on the fact table itself, never joined to a separate
+  // date dimension). The previous if/else-if chain here treated them as exclusive, silently
+  // dropping type: time whenever is_degenerate was also true.
+  if (isDegenerate) obj.is_degenerate = true;
+  if (isTime) {
     obj.type = "time";
-  } else {
+  } else if (!isDegenerate) {
     obj.type = "standard";
   }
 
@@ -3067,6 +3341,8 @@ function buildDimensionYaml(
             };
             if (sa.sortColumn && sa.sortColumn !== sa.nameColumn) saObj.sort_column = sa.sortColumn;
             if (sa.format) saObj.format = sa.format;
+            if (sa.folder) saObj.folder = sa.folder;
+            if (sa.description) saObj.description = sa.description;
             if (sa.allowedCalcsForDma?.length) {
               saObj.allowed_calcs_for_dma = sa.allowedCalcsForDma;
             }
@@ -3148,6 +3424,7 @@ function buildDimensionYaml(
     skippedMetricalQuantiles: metaSkippedMetricalQuantiles,
     skippedMetricalUnresolved: metaSkippedMetricalUnresolved,
     snowflakeRelationships: metaSnowflakeRelationships,
+    droppedSecondaryAttrsForSharedDegenerate: metaDroppedSecondaryAttrsForSharedDegenerate,
   };
 
   return { yaml: toYaml(obj), meta };
