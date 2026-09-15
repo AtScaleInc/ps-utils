@@ -1522,16 +1522,31 @@ export async function convertXmlToSml(
   const connectionIdByDataset = new Map<string, string>(); // dataset name -> connection unique_name
   const connectionDbSchema = new Map<string, { db?: string; schema?: string }>(); // connection unique_name -> its db/schema
   if (!opts.connectionDb && !opts.connectionSchema) {
+    // A <table> can name a <schema> without a <database> — that means "use whichever
+    // database the rest of this schema's tables use," not "a genuinely database-less
+    // location." Resolving each schema's database in its own pass first (preferring any
+    // dataset that does specify one) means such a table joins the schema's one real
+    // connection instead of splitting off a second, broken one with no database — the live
+    // engine requires a table-backed connection to declare a database.
+    const schemaToDb = new Map<string, string>();
+    for (const dsName of referencedDatasetNames) {
+      const phys = datasetNameToPhysical.get(dsName);
+      if (phys?.schema && phys.db && !schemaToDb.has(phys.schema)) {
+        schemaToDb.set(phys.schema, phys.db);
+      }
+    }
+
     const pairToConnId = new Map<string, string>();
     for (const dsName of referencedDatasetNames) {
       const phys = datasetNameToPhysical.get(dsName);
       if (!phys?.db && !phys?.schema) continue;
-      const pairKey = `${phys.db ?? ""}|${phys.schema ?? ""}`;
+      const resolvedDb = phys.db ?? (phys.schema ? schemaToDb.get(phys.schema) : undefined);
+      const pairKey = `${resolvedDb ?? ""}|${phys.schema ?? ""}`;
       let connId = pairToConnId.get(pairKey);
       if (!connId) {
-        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? phys.db}`;
+        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? resolvedDb}`;
         pairToConnId.set(pairKey, connId);
-        connectionDbSchema.set(connId, { db: phys.db, schema: phys.schema });
+        connectionDbSchema.set(connId, { db: resolvedDb, schema: phys.schema });
       }
       connectionIdByDataset.set(dsName, connId);
     }
