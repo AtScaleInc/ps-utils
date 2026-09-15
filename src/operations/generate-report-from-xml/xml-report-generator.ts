@@ -288,6 +288,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // ── Phase 2: schema-level attribute library ────────────────────────────────
 
   const attrDef = new Map<string, AttrDef>();
+  // id → name for every plain <attribute> (measures and other non-keyed attributes)
+  // alongside every <keyed-attribute>, spanning schema- and cube-level scopes.
+  // attrDef itself stays keyed-attribute-only — it backs the Attribute Library
+  // section and its count, which should not include measures — but anything that
+  // resolves an attribute-ref id to a display name (e.g. a User Defined
+  // Aggregate's attribute list, which can point at a measure's plain <attribute>
+  // or — via calcMemberDef, checked as a further fallback where this map is used —
+  // a calculated member) needs the full id space, or the ref renders as a raw
+  // internal UUID instead of a name.
+  const attrNameById = new Map<string, string>();
   function ingestKeyedAttrs(container: El): void {
     for (const ka of arr(container["keyed-attribute"])) {
       const id = a(ka, "id");
@@ -307,6 +317,12 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         format: fmtEl ? (s(first(arr(fmtEl["format-string"]))) ?? s(first(arr(fmtEl["named-format"])))) : undefined,
         allowedCalcTypes: allowedEl ? arr(allowedEl["calculation-type"]).map((c) => s(c) ?? "").filter(Boolean) : [],
       });
+      attrNameById.set(id, name);
+    }
+    for (const attrEl of arr(container.attribute)) {
+      const id = a(attrEl, "id");
+      const name = a(attrEl, "name");
+      if (id && name) attrNameById.set(id, name);
     }
   }
   for (const attrsSec of arr(schemaEl.attributes)) ingestKeyedAttrs(attrsSec);
@@ -873,7 +889,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           for (const attrRef of arr(attrsWrap["attribute-ref"])) {
             const refId = a(attrRef, "id");
             const def = refId ? attrDef.get(refId) : undefined;
-            attrIds.push(def?.name ?? refId ?? "?");
+            const resolvedName =
+              def?.name ?? (refId ? attrNameById.get(refId) ?? calcMemberDef.get(refId)?.name : undefined);
+            attrIds.push(resolvedName ?? refId ?? "?");
           }
         }
         aggRows.push([code(aggName), code(targetConn), String(attrIds.length), attrIds.map((n) => `\`${n}\``).join(", ")]);

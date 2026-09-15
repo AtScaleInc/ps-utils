@@ -522,7 +522,21 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (aggregates.length || raw.allow_aggregates !== undefined) {
       o.push("**Aggregates**", "");
       if (raw.allow_aggregates !== undefined) o.push(`- Allow aggregates: ${flag(raw.allow_aggregates) || "no"}`);
-      if (aggregates.length) o.push(`- ${aggregates.length} aggregate definition(s)`);
+      if (aggregates.length) {
+        const aggRows = aggregates.map((ag) => {
+          const attrNames = asArray<Raw>(ag?.attributes).map((at) => String(at?.name ?? at?.dimension ?? "?"));
+          const metricNames = asArray(ag?.metrics).map((m) => String(m));
+          return [
+            code(ag?.unique_name ?? ag?.label),
+            cell(ag?.label),
+            String(attrNames.length),
+            attrNames.map((n) => `\`${n}\``).join(", "),
+            String(metricNames.length),
+            metricNames.map((n) => `\`${n}\``).join(", "),
+          ];
+        });
+        o.push(...table(["Name", "Label", "# attributes", "Attributes", "# metrics", "Metrics"], aggRows));
+      }
       o.push("");
     }
 
