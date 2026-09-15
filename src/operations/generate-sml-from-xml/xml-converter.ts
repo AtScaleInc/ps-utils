@@ -2807,6 +2807,8 @@ interface SecondaryAttrDef {
   format?: string;
   isHidden?: boolean;
   isUniqueKey?: boolean;
+  folder?: string;
+  description?: string;
 }
 
 interface LevelAttrDef {
@@ -2859,7 +2861,13 @@ function buildDimensionYaml(
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
   const isTime = dimTypeRaw === "Time";
-  const label = props ? (s(first(arr(props.caption))) ?? dimName) : dimName;
+  // Fall back to the dimension's own raw XML name, not dimName — dimName is the
+  // collision-disambiguated unique_name (e.g. "Foo_2" when two different dimensions
+  // elsewhere in the project share the display name "Foo"), and that "_2" suffix has no
+  // business appearing in a user-facing label when the source never had a caption to
+  // override it with.
+  const rawDimName = a(dimEl, "name") ?? dimName;
+  const label = props ? (s(first(arr(props.caption))) ?? rawDimName) : rawDimName;
   const dimDescription = props ? s(first(arr(props.description))) : undefined;
 
   // Meta tracking
@@ -3106,6 +3114,8 @@ function buildDimensionYaml(
           // key-ref's own unique flag — the same signal already used for level_attributes.
           isHidden: !kaDef.visible || undefined,
           isUniqueKey: kaAuthEntry.unique || undefined,
+          folder: kaDef.folder,
+          description: kaDef.description,
         });
       }
 
@@ -3295,11 +3305,15 @@ function buildDimensionYaml(
   };
 
   if (dimDescription) obj.description = dimDescription;
-  if (isDegenerate) {
-    obj.is_degenerate = true;
-  } else if (isTime) {
+  // type and is_degenerate are independent SML properties, not mutually exclusive — a
+  // dimension bound directly to a fact table (degenerate) can still be time-typed (e.g. a
+  // date/time column that only exists on the fact table itself, never joined to a separate
+  // date dimension). The previous if/else-if chain here treated them as exclusive, silently
+  // dropping type: time whenever is_degenerate was also true.
+  if (isDegenerate) obj.is_degenerate = true;
+  if (isTime) {
     obj.type = "time";
-  } else {
+  } else if (!isDegenerate) {
     obj.type = "standard";
   }
 
@@ -3327,6 +3341,8 @@ function buildDimensionYaml(
             };
             if (sa.sortColumn && sa.sortColumn !== sa.nameColumn) saObj.sort_column = sa.sortColumn;
             if (sa.format) saObj.format = sa.format;
+            if (sa.folder) saObj.folder = sa.folder;
+            if (sa.description) saObj.description = sa.description;
             if (sa.allowedCalcsForDma?.length) {
               saObj.allowed_calcs_for_dma = sa.allowedCalcsForDma;
             }
