@@ -206,9 +206,27 @@ export async function convertXmlToSml(
       const id = a(ar, "id");
       if (!id) continue;
       const cols = extractColumns(arr(ar.column));
-      if (cols.length > 0) {
-        attrMap.set(id, { datasetName, column: cols[0] });
+      if (cols.length === 0) continue;
+      const column = cols[0];
+      const existing = attrMap.get(id);
+      if (!existing) {
+        attrMap.set(id, { datasetName, column });
+        continue;
       }
+      // The same attribute-ref id can be redeclared once per dataset/cube's own <logical>
+      // section — a still-incompletely-wired source definition can leave one redeclaration
+      // naming a real physical column and another naming a placeholder (often the
+      // attribute's own caption text, with spaces, rather than a real snake_case column).
+      // Last-write-wins would let a later, bogus redeclaration silently clobber a working
+      // one purely by document order — only overwrite an already-valid entry if the
+      // existing one doesn't actually verify against its own dataset's known physical
+      // columns.
+      const existingKnown = datasetNameToPhysical.get(existing.datasetName)?.columns;
+      const existingValid = !!existingKnown?.length && existingKnown.some((c) => c.name === existing.column);
+      if (existingValid) continue;
+      const newKnown = datasetNameToPhysical.get(datasetName)?.columns;
+      const newValid = !!newKnown?.length && newKnown.some((c) => c.name === column);
+      if (newValid) attrMap.set(id, { datasetName, column });
     }
   }
 
@@ -733,7 +751,7 @@ export async function convertXmlToSml(
             : undefined;
           const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
           const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
-          const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+          const keyRefAuthEntry = pickAuthEntry(keyRefEntries, datasetNameToPhysical);
 
           const colRef = attrMap.get(attrId);
           const resolvedFromReference = keyRefAuthEntry?.columns[0] ?? colRef?.column;
@@ -1129,7 +1147,13 @@ export async function convertXmlToSml(
               continue;
             }
 
-            const attrOut: AggregateDef["attributes"][number] = { name: truncateUniqueName(kaDef.name), dimension: targetDimName };
+            // Must match the level's own unique_name convention (safeName + truncate — see
+            // levelUniqueNameFor), not just the raw attribute name: the level this aggregate
+            // references was itself emitted with spaces replaced (e.g. "Foo_Bar"), so
+            // referencing it here with the raw spaced name ("Foo Bar") points at an object
+            // that doesn't exist, even though the dimension itself legitimately keeps spaces
+            // in its own name.
+            const attrOut: AggregateDef["attributes"][number] = { name: levelUniqueNameFor(kaDef.name), dimension: targetDimName };
 
             const refPathEl = first(arr((attrRef as Record<string, unknown>)["ref-path"])) as
               | Record<string, unknown>
@@ -1661,6 +1685,29 @@ interface KeyRefEntry {
   complete: string; // "true" | "false" | "partial"
   unique?: boolean;
   rolePlay?: string;
+}
+
+/**
+ * Pick the authoritative entry when a key-ref/attribute-ref id is redeclared more than
+ * once (once per dataset/cube's own <logical> section) with none marked complete="true" —
+ * a still-partially-wired source definition can leave one redeclaration naming a real
+ * physical column and another naming a placeholder (often the attribute's own caption
+ * text, not a real column), and which one comes first in document order is incidental.
+ * Falls back to entries[0] — the prior, order-dependent behavior — only when no entry's
+ * columns can be verified against its own dataset's known physical columns (i.e. every
+ * candidate is equally unverifiable, so there's no positive signal to prefer one).
+ */
+function pickAuthEntry<T extends { complete: string; columns: string[]; datasetName: string }>(
+  entries: T[],
+  datasetNameToPhysical: Map<string, DatasetPhysical>,
+): T {
+  const complete = entries.find((e) => e.complete === "true");
+  if (complete) return complete;
+  const valid = entries.find((e) => {
+    const knownColumns = datasetNameToPhysical.get(e.datasetName)?.columns;
+    return !!knownColumns?.length && e.columns.every((col) => knownColumns.some((c) => c.name === col));
+  });
+  return valid ?? entries[0];
 }
 
 interface AttrRefEntry {
@@ -2197,7 +2244,7 @@ function collectMeasureColumns(
           : undefined;
         const keyRefId = keyRefEl ? a(keyRefEl, "id") : undefined;
         const keyRefEntries = keyRefId ? keyMap.get(keyRefId) ?? [] : [];
-        const keyRefAuthEntry = keyRefEntries.find((e) => e.complete === "true") ?? keyRefEntries[0];
+        const keyRefAuthEntry = pickAuthEntry(keyRefEntries, datasetNameToPhysical);
 
         const colRef = attrMap.get(attrId);
         const resolvedFromReference = keyRefAuthEntry?.columns[0] ?? colRef?.column;
@@ -2939,7 +2986,7 @@ function buildDimensionYaml(
 
       // Resolve key columns for the primary level attribute
       const keyEntries = keyMap.get(def.keyUuid) ?? [];
-      const authEntry = keyEntries.find((e) => e.complete === "true") ?? keyEntries[0];
+      const authEntry = pickAuthEntry(keyEntries, datasetNameToPhysical);
       if (!authEntry) continue;
 
       const keyColumns = authEntry.columns;
@@ -3013,7 +3060,7 @@ function buildDimensionYaml(
         const kaDef = attrDef.get(attrId);
         if (!kaDef) continue;
         const kaKeyEntries = keyMap.get(kaDef.keyUuid) ?? [];
-        const kaAuthEntry = kaKeyEntries.find((e) => e.complete === "true") ?? kaKeyEntries[0];
+        const kaAuthEntry = pickAuthEntry(kaKeyEntries, datasetNameToPhysical);
         if (!kaAuthEntry) continue;
         const saKeyColumns = kaAuthEntry.columns;
         const saDataset = `${kaAuthEntry.datasetName}.dataset`;
@@ -3053,7 +3100,7 @@ function buildDimensionYaml(
         }
         const maAttrRefEntry = attrMap.get(attrId);
         const maKeyRefEntries = maDef.keyRefId ? keyMap.get(maDef.keyRefId) ?? [] : [];
-        const maKeyRefAuthEntry = maKeyRefEntries.find((e) => e.complete === "true") ?? maKeyRefEntries[0];
+        const maKeyRefAuthEntry = pickAuthEntry(maKeyRefEntries, datasetNameToPhysical);
         const column = maKeyRefAuthEntry?.columns[0] ?? maAttrRefEntry?.column;
         const datasetName = maKeyRefAuthEntry?.datasetName ?? maAttrRefEntry?.datasetName;
         if (!column || !datasetName) {
