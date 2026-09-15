@@ -1547,16 +1547,31 @@ export async function convertXmlToSml(
   const connectionIdByDataset = new Map<string, string>(); // dataset name -> connection unique_name
   const connectionDbSchema = new Map<string, { db?: string; schema?: string }>(); // connection unique_name -> its db/schema
   if (!opts.connectionDb && !opts.connectionSchema) {
+    // A <table> can name a <schema> without a <database> — that means "use whichever
+    // database the rest of this schema's tables use," not "a genuinely database-less
+    // location." Resolving each schema's database in its own pass first (preferring any
+    // dataset that does specify one) means such a table joins the schema's one real
+    // connection instead of splitting off a second, broken one with no database — the live
+    // engine requires a table-backed connection to declare a database.
+    const schemaToDb = new Map<string, string>();
+    for (const dsName of referencedDatasetNames) {
+      const phys = datasetNameToPhysical.get(dsName);
+      if (phys?.schema && phys.db && !schemaToDb.has(phys.schema)) {
+        schemaToDb.set(phys.schema, phys.db);
+      }
+    }
+
     const pairToConnId = new Map<string, string>();
     for (const dsName of referencedDatasetNames) {
       const phys = datasetNameToPhysical.get(dsName);
       if (!phys?.db && !phys?.schema) continue;
-      const pairKey = `${phys.db ?? ""}|${phys.schema ?? ""}`;
+      const resolvedDb = phys.db ?? (phys.schema ? schemaToDb.get(phys.schema) : undefined);
+      const pairKey = `${resolvedDb ?? ""}|${phys.schema ?? ""}`;
       let connId = pairToConnId.get(pairKey);
       if (!connId) {
-        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? phys.db}`;
+        connId = pairToConnId.size === 0 ? connName : `${connName}_${phys.schema ?? resolvedDb}`;
         pairToConnId.set(pairKey, connId);
-        connectionDbSchema.set(connId, { db: phys.db, schema: phys.schema });
+        connectionDbSchema.set(connId, { db: resolvedDb, schema: phys.schema });
       }
       connectionIdByDataset.set(dsName, connId);
     }
@@ -2799,6 +2814,15 @@ function buildDimensionYaml(
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
+  // A level shared across multiple hierarchies (e.g. a "Date" leaf common to a Calendar
+  // Hierarchy and a Fiscal Hierarchy) is the same physical level each time — the
+  // engine rejects it if its attached secondary_attributes/metrics differ between
+  // occurrences ("Level X is duplicated in hierarchies ... but levels below it differ").
+  // The source XML only declares the full keyed-attribute-ref list once, on whichever
+  // hierarchy's <level> element happens to carry it; every other hierarchy's <level> for
+  // the same primary-attribute has none. Emit the attached set once, on the level's first
+  // occurrence, and leave later occurrences bare rather than reproducing the mismatch.
+  const levelExtrasEmitted = new Set<string>();
 
   const hierarchies: Array<{
     uniqueName: string;
@@ -2858,7 +2882,49 @@ function buildDimensionYaml(
       metrics?: MetricalAttrOut[];
     }> = [];
 
-    for (const levelEl of arr(hierEl.level)) {
+    const levelEls = arr(hierEl.level);
+    // Pre-resolve every level's time_unit positionally, up front, so a level whose XML
+    // level-type doesn't map to any known unit — e.g. AtScale's own "TimeUndefined", used
+    // for a custom retail-calendar period that doesn't fit year/quarter/month/week/day —
+    // can still get a usable one inferred from its place between recognized neighbors,
+    // rather than being left without one entirely. SML requires every level of a `type:
+    // time` dimension to declare a time_unit; standard/degenerate dimensions don't use this
+    // at all, and their (not necessarily granularity-ordered) level order is unaffected.
+    const rawTimeUnits: (string | undefined)[] = isTime
+      ? levelEls.map((levelEl) => {
+          const primaryAttrUuid = a(levelEl, "primary-attribute");
+          const def = primaryAttrUuid ? attrDef.get(primaryAttrUuid) : undefined;
+          const levelName = def ? (def.caption ?? def.name) : undefined;
+          const lProps = first(arr((levelEl as Record<string, unknown>).properties)) as Record<string, unknown> | undefined;
+          const levelTypeRaw = lProps ? s(first(arr(lProps["level-type"]))) : undefined;
+          return mapLevelType(levelTypeRaw) ?? (levelName ? inferTimeUnitFromName(levelName) : undefined);
+        })
+      : [];
+    if (isTime) {
+      for (let i = 0; i < rawTimeUnits.length; i++) {
+        if (rawTimeUnits[i]) continue;
+        // Nearest known neighbors by position (already coarse-to-fine per the source XML's
+        // own level order, same assumption the final sort below relies on). A gap of more
+        // than one rank between them (e.g. year, then week) means this level occupies an
+        // intermediate granularity the schema just didn't name — one rank finer than the
+        // coarser neighbor is a reasonable "period" to slot it into; anything else (only one
+        // neighbor known, or an adjacent gap) just reuses whichever neighbor is known.
+        let before: string | undefined;
+        for (let j = i - 1; j >= 0; j--) { if (rawTimeUnits[j]) { before = rawTimeUnits[j]; break; } }
+        let after: string | undefined;
+        for (let j = i + 1; j < rawTimeUnits.length; j++) { if (rawTimeUnits[j]) { after = rawTimeUnits[j]; break; } }
+        const beforeRank = before ? TIME_UNIT_RANK[before] : undefined;
+        const afterRank = after ? TIME_UNIT_RANK[after] : undefined;
+        if (beforeRank !== undefined && afterRank !== undefined && afterRank > beforeRank + 1) {
+          const targetRank = beforeRank + 1;
+          rawTimeUnits[i] = Object.keys(TIME_UNIT_RANK).find((u) => TIME_UNIT_RANK[u] === targetRank);
+        } else {
+          rawTimeUnits[i] = before ?? after;
+        }
+      }
+    }
+
+    for (const [levelIndex, levelEl] of levelEls.entries()) {
       const primaryAttrUuid = a(levelEl, "primary-attribute");
       if (!primaryAttrUuid) continue;
 
@@ -2913,6 +2979,28 @@ function buildDimensionYaml(
         if (refId) {
           const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
           if (resolved) {
+            // The engine requires a relationship's to.level key to have the same column
+            // count as its own join_columns. That holds when the enclosing level's key IS
+            // the join key (e.g. a single-attribute level joining on its own one column),
+            // but not when the level is keyed on something else entirely (e.g. a
+            // composite-keyed bridge level hosting several unrelated single-column FKs as
+            // secondary attributes) — there the containing level's key arity never matches
+            // any individual FK's. Give the join its own single-purpose level, keyed by the
+            // same columns the join itself uses, so the two arities always agree.
+            if (resolved.fromColumns.length !== keyColumns.length) {
+              const kaDef = attrDef.get(attrId);
+              const ownLevelName = truncateUniqueName(safeName(kaDef?.name ?? attrId));
+              if (!levelAttrMap.has(ownLevelName)) {
+                levelAttrMap.set(ownLevelName, {
+                  uniqueName: ownLevelName,
+                  label: kaDef?.caption ?? kaDef?.name ?? ownLevelName,
+                  dataset: resolved.fromDataset,
+                  keyColumns: resolved.fromColumns,
+                  nameColumn: resolved.fromColumns[resolved.fromColumns.length - 1],
+                });
+              }
+              resolved.toLevel = ownLevelName;
+            }
             if (!metaSnowflakeRelationships.some((r) => r.uniqueName === resolved.uniqueName)) {
               metaSnowflakeRelationships.push(resolved);
             }
@@ -2999,11 +3087,7 @@ function buildDimensionYaml(
       })();
       const isHidden = levelVisibleStr === "false";
 
-      const levelTypeRaw = (() => {
-        const lProps = first(arr(levelEl.properties)) as Record<string, unknown> | undefined;
-        return lProps ? s(first(arr(lProps["level-type"]))) : undefined;
-      })();
-      const timeUnit = mapLevelType(levelTypeRaw) ?? (isTime ? inferTimeUnitFromName(levelName) : undefined);
+      const timeUnit = rawTimeUnits[levelIndex];
 
       // A degenerate level backed by more than one distinct fact dataset (e.g. a flag column
       // present on both a cube's primary fact table and its YTD fact table) needs
@@ -3038,12 +3122,17 @@ function buildDimensionYaml(
         });
       }
 
+      const alreadyEmittedElsewhere = levelExtrasEmitted.has(levelUniqueName);
+      if ((secondaryAttrs.length || levelMetrics.length) && !alreadyEmittedElsewhere) {
+        levelExtrasEmitted.add(levelUniqueName);
+      }
+
       hierLevels.push({
         uniqueName: levelUniqueName,
         timeUnit,
         isHidden: isHidden || undefined,
-        secondaryAttributes: secondaryAttrs.length ? secondaryAttrs : undefined,
-        metrics: levelMetrics.length ? levelMetrics : undefined,
+        secondaryAttributes: !alreadyEmittedElsewhere && secondaryAttrs.length ? secondaryAttrs : undefined,
+        metrics: !alreadyEmittedElsewhere && levelMetrics.length ? levelMetrics : undefined,
       });
     }
 
@@ -3064,6 +3153,51 @@ function buildDimensionYaml(
         defaultMember,
         levels: orderedLevels,
       });
+    }
+  }
+
+  // A level shared by name across multiple hierarchies (e.g. "Category" common to three
+  // different product hierarchies) must have an identical sequence of levels below it
+  // everywhere it's used — the engine rejects a mismatch (e.g. one hierarchy going
+  // straight from "Category" to a leaf level, skipping an intermediate "Sub Category"
+  // that the others include) as "Level X is duplicated in hierarchies ... but levels below
+  // it differ", even though the source XML genuinely models it that way. Disambiguate by
+  // renaming every occurrence whose "below" shape doesn't match the first-seen shape for
+  // that level name, cloning its level_attributes entry under the new name so it still
+  // resolves to the same physical column.
+  {
+    const canonicalBelowSignature = new Map<string, string>();
+    const renamedNameForSignature = new Map<string, string>();
+    const nextSuffix = new Map<string, number>();
+    for (const h of hierarchies) {
+      for (let i = 0; i < h.levels.length; i++) {
+        const level = h.levels[i];
+        const originalName = level.uniqueName;
+        const signature = h.levels
+          .slice(i + 1)
+          .map((l) => l.uniqueName)
+          .join(">");
+        const canonical = canonicalBelowSignature.get(originalName);
+        if (canonical === undefined) {
+          canonicalBelowSignature.set(originalName, signature);
+          continue;
+        }
+        if (canonical === signature) continue;
+
+        const dedupeKey = `${originalName} ${signature}`;
+        let renamed = renamedNameForSignature.get(dedupeKey);
+        if (!renamed) {
+          const suffix = (nextSuffix.get(originalName) ?? 1) + 1;
+          nextSuffix.set(originalName, suffix);
+          renamed = truncateUniqueName(`${originalName}_${suffix}`);
+          renamedNameForSignature.set(dedupeKey, renamed);
+          const baseAttr = levelAttrMap.get(originalName);
+          if (baseAttr && !levelAttrMap.has(renamed)) {
+            levelAttrMap.set(renamed, { ...baseAttr, uniqueName: renamed });
+          }
+        }
+        level.uniqueName = renamed;
+      }
     }
   }
 
