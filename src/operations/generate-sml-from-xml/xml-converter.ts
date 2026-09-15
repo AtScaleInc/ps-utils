@@ -3271,10 +3271,16 @@ function buildCalcMemberYaml(
 // ============================================================
 
 function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined {
-  const name = a(cm, "name");
-  if (!name) return undefined;
   const props = first(arr(cm.properties)) as Record<string, unknown> | undefined;
   const caption = props ? s(first(arr(props.caption))) : undefined;
+  // A calculated member's own name="" attribute can be empty/absent while it still has a
+  // real caption (e.g. "IN+OUT") — the XML schema doesn't require name to be non-empty, and
+  // AtScale itself still deploys these to the cube using the caption as the effective label.
+  // Requiring `name` here silently dropped every one of these from the SML output entirely;
+  // fall back to the caption so it still gets a usable unique_name, and only give up if
+  // neither is present (nothing to identify it by at all).
+  const name = a(cm, "name") || caption;
+  if (!name) return undefined;
   const folder = props ? s(first(arr(props.folder))) : undefined;
   const description = props ? s(first(arr(props.description))) : undefined;
   const visibleStr = props ? s(first(arr(props.visible))) : undefined;
