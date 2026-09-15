@@ -531,6 +531,28 @@ export async function convertXmlToSml(
   // each emitted metric unique_name — used to tell "same measure reused by another cube"
   // (just add a reference) from "different measure that happens to share a name" (rename).
   const metricDefSignature = new Map<string, string>();
+  // A calculated member's expression can reference another calculated member by its original
+  // XML name — but that other member's final unique_name isn't settled until dedup/rename
+  // resolution actually runs, which can rename it away from the naive safeName transform to
+  // avoid colliding with an unrelated, differently-defined calc member whose name collapses
+  // to the same string once punctuation is stripped (e.g. "Foo$" and "Foo%" both become
+  // "Foo"). measureRefMap is built once, up front, before any of that resolution has
+  // happened, so a formula referencing a member that later gets renamed was rewritten against
+  // its stale, pre-rename target — and if that stale name happens to equal the *referencing*
+  // member's own final name, the rewritten formula ends up referencing itself. Calculated-
+  // member emission is deferred (pendingCalcMembers) until every cube has been processed and
+  // every member's real final name is known, then rewritten using calcOriginalNameToFinalName
+  // layered over the naive measureRefMap — the same reasoning as why semi-additive metrics
+  // already defer past relationship inference.
+  const pendingCalcMembers: Array<{
+    fname: string;
+    uniqueName: string;
+    label: string;
+    def: CalcMemberDef;
+    format?: string;
+    renamedFrom?: string;
+  }> = [];
+  const calcOriginalNameToFinalName = new Map<string, string>();
 
   // Each cube's model file is built once Phase 3b (below) has resolved every dimension's
   // snowflake relationships — see the comment where this is pushed to, further down.
@@ -1027,23 +1049,10 @@ export async function convertXmlToSml(
             seenMetricNames.add(altDedupKey);
             metricDefSignature.set(altDedupKey, refId!);
             attrIdToMetricUniqueName.set(refId!, altUniqueName);
+            calcOriginalNameToFinalName.set(def.name.toLowerCase(), altUniqueName);
             const format = resolveFormat(def.formatString, def.namedFormat);
             const fname = safeFilename(altUniqueName);
-            output.set(
-              `calculations/${fname}.yml`,
-              buildCalcMemberYaml(
-                altUniqueName,
-                label,
-                rewriteMeasureRefs(def.expression, measureRefMap),
-                format,
-                def.folder,
-                def.visible,
-                def.description,
-                def.mdxAggregateFunction,
-                def.dimension,
-              ),
-            );
-            logger.log(`  → calculations/${fname}.yml (renamed — "${uniqueName}" already denotes a different calculated member elsewhere)`);
+            pendingCalcMembers.push({ fname, uniqueName: altUniqueName, label, def, format, renamedFrom: uniqueName });
             metricNames.push({ uniqueName: altUniqueName, folder: def.folder || undefined });
             rptMetrics.push({ name: altUniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
           } else {
@@ -1059,23 +1068,10 @@ export async function convertXmlToSml(
         seenMetricNames.add(dedupKey);
         metricDefSignature.set(dedupKey, refId!);
         attrIdToMetricUniqueName.set(refId!, uniqueName);
+        calcOriginalNameToFinalName.set(def.name.toLowerCase(), uniqueName);
         const format = resolveFormat(def.formatString, def.namedFormat);
         const fname = safeFilename(uniqueName);
-        output.set(
-          `calculations/${fname}.yml`,
-          buildCalcMemberYaml(
-            uniqueName,
-            label,
-            rewriteMeasureRefs(def.expression, measureRefMap),
-            format,
-            def.folder,
-            def.visible,
-            def.description,
-            def.mdxAggregateFunction,
-            def.dimension,
-          ),
-        );
-        logger.log(`  → calculations/${fname}.yml`);
+        pendingCalcMembers.push({ fname, uniqueName, label, def, format });
         metricNames.push({ uniqueName, folder: def.folder || undefined });
         rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
       }
@@ -1323,6 +1319,35 @@ export async function convertXmlToSml(
       reason: "Declared in the schema's calculated-member library but no cube references it via a calculated-member-ref — excluded from output.",
       recommendation: "If this calculated member is actually needed, add it manually to calculations/*.yml and reference it from the relevant model.",
     });
+  }
+
+  // ---------------------------------------------------------------
+  // Phase 7c: Emit deferred calculated members, now that every cube has been processed and
+  // every calc member's real final (collision-resolved) unique_name is known — see
+  // pendingCalcMembers/calcOriginalNameToFinalName above for why this can't happen inline.
+  // ---------------------------------------------------------------
+  const calcAwareRefMap = new Map(measureRefMap);
+  for (const [origName, finalName] of calcOriginalNameToFinalName) calcAwareRefMap.set(origName, finalName);
+  for (const pc of pendingCalcMembers) {
+    output.set(
+      `calculations/${pc.fname}.yml`,
+      buildCalcMemberYaml(
+        pc.uniqueName,
+        pc.label,
+        rewriteMeasureRefs(pc.def.expression, calcAwareRefMap),
+        pc.format,
+        pc.def.folder,
+        pc.def.visible,
+        pc.def.description,
+        pc.def.mdxAggregateFunction,
+        pc.def.dimension,
+      ),
+    );
+    logger.log(
+      pc.renamedFrom
+        ? `  → calculations/${pc.fname}.yml (renamed — "${pc.renamedFrom}" already denotes a different calculated member elsewhere)`
+        : `  → calculations/${pc.fname}.yml`,
+    );
   }
 
   // ---------------------------------------------------------------
@@ -1935,9 +1960,15 @@ function buildMeasureRefMap(
   cubeEls: Record<string, unknown>[],
   calcMemberDefs: Map<string, CalcMemberDef>,
 ): Map<string, string> {
+  // Keyed case-insensitively — a calc formula's own [Measures].[Name] reference doesn't
+  // always match the target's declared name byte-for-byte (e.g. this schema references
+  // "Number of Days" for an attribute actually named "Number Of Days"); MDX member name
+  // resolution isn't case-sensitive, and the reference converter's own name-collision
+  // tracking already treats names this way for the same reason (see the dedupKey comment
+  // in the Phase 4 measure loop below).
   const map = new Map<string, string>();
   for (const def of calcMemberDefs.values()) {
-    map.set(def.name, truncateUniqueName(safeName(def.name)));
+    map.set(def.name.toLowerCase(), truncateUniqueName(safeName(def.name)));
   }
   for (const cube of cubeEls) {
     for (const attrsSec of arr(cube.attributes)) {
@@ -1957,7 +1988,7 @@ function buildMeasureRefMap(
           arr(typeEl["quantile-instance"]).length > 0;
         const hasExpr = arr((attrEl as Record<string, unknown>).expression).length > 0;
         if (!isMeasure && !hasExpr) continue;
-        map.set(attrNameRaw, truncateUniqueName(safeName(attrNameRaw)));
+        map.set(attrNameRaw.toLowerCase(), truncateUniqueName(safeName(attrNameRaw)));
       }
     }
   }
@@ -1966,8 +1997,17 @@ function buildMeasureRefMap(
 
 /** Rewrite "[Measures].[Original Name]" references to match transformed unique_names. */
 function rewriteMeasureRefs(text: string, nameMap: Map<string, string>): string {
-  return text.replace(/\[Measures\]\.\[([^\]]+)\]/g, (full, name) => {
-    const mapped = nameMap.get(name);
+  // MDX allows the "Measures" dimension name unbracketed when it's unambiguous
+  // (Measures.[Number of Days ESTIMATE], not just [Measures].[Number of Days ESTIMATE]) —
+  // both forms appear in this same source file. Matching only the fully-bracketed form left
+  // every unbracketed reference untouched, so its original (pre-safeName) spaced-out name
+  // never got rewritten to the transformed unique_name the target metric actually has,
+  // producing a calc formula that references a metric name nothing in the model has.
+  return text.replace(/\[?Measures\]?\.\[([^\]]+)\]/g, (full, name) => {
+    // nameMap is keyed case-insensitively (see buildMeasureRefMap/calcOriginalNameToFinalName)
+    // — a formula's own reference doesn't always match the target's declared name byte-for-
+    // byte, and MDX member name resolution isn't case-sensitive either.
+    const mapped = nameMap.get(name.toLowerCase());
     return mapped ? `[Measures].[${mapped}]` : full;
   });
 }
