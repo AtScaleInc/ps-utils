@@ -9,7 +9,7 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
 - -- apply plan should show command
 - graphql output not going to output
 - web interface better + REST
-- tableau, mstr, ssas conversion
+- tableau, mstr conversion
   - find Hive dialect in a workbook
 - Apply style to SML
 - Add kubectl management commands; for example reading log files, updating passwords
@@ -39,6 +39,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -144,6 +145,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
@@ -555,6 +557,63 @@ With optional overrides:
   metrics/<metric-name>.yml        (one per measure or inline expression)
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
+```
+
+---
+
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the TMSL model definition, though every table's partition query is parsed to recover its real physical table/column names where possible.
+
+This is a **Pass 1** structural migration: every fact, dimension, and relationship is built, along with metrics for mechanically-unambiguous measures (bare `SUM`/`AVERAGE`/`MIN`/`MAX`/`DISTINCTCOUNT`/`COUNT`/`COUNTROWS`). Complex DAX (`DIVIDE`, `CALCULATE`, `FILTER`, nested measure references, ...) is deliberately left untranslated in `DEFERRED_MEASURES.md` for a follow-up pass — arbitrary DAX-to-MDX translation needs per-measure human judgment.
+
+**Role-play family detection** is the core value-add: SSAS Tabular cannot role-play a dimension, so when the same real-world dimension is needed multiple times under different names (Order Date vs Ship Date), Tabular fakes it by importing the same source object once per role. This operation reads each table's partition query, resolves what object it actually reads from, and groups dimension tables that share the same source object into one consolidated SML dimension, wired to facts via SML `role_play` (when a fact has genuinely multiple distinct FK columns into the group) or an ordinary relationship (a single FK). Each role's original alias-prefix wording (e.g. "Serv", "AHP", "Refer Prov") is recovered by diffing member column aliases, so `role_play` labels reproduce historical naming.
+
+`--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-ddl`: optional unless a query-name collision occurs, at which point `new` renames colliding objects deterministically and `existing` preserves established names and reports a blocking conflict.
+
+```bash
+./atscale-utils generate-sml-from-tabular \
+  --xmla-file "./Model.xmla" \
+  --warehouse "Snowflake" \
+  --database "MY_DB" \
+  --schema "MY_SCHEMA" \
+  --model-name "my_model" \
+  --output-dir "./sml-output"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--xmla-file` | Yes | | Path to the TMSL/XMLA export (`createOrReplace` JSON) to convert |
+| `--warehouse` | Yes | | Target warehouse dialect: `Snowflake`, `Databricks`, `BigQuery`, or `Postgres` |
+| `--database` | Yes | | Primary connection database/catalog name |
+| `--schema` | Yes | | Primary connection schema name |
+| `--model-name` | Yes | | SML `model_unique_name` (snake_case recommended) |
+| `--output-dir` | Yes | | Directory to write SML files |
+| `--catalog-name` | No | `{model-name}_catalog` | Override the catalog `unique_name` |
+| `--currency` | No | `USD` | Currency code used for currency-formatted metrics |
+| `--description` | No | | Optional catalog/model description override |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
+
+**Output layout:**
+```
+<output-dir>/
+  catalog.yml
+  connections/<connection-name>.yml    (primary + one per cross-database source)
+  datasets/<dataset-name>.yml          (one per kept table/role-play family)
+  dimensions/<dim-name>.yml            (one per dimension table/role-play family)
+  metrics/<metric-name>.yml            (one per SIMPLE measure)
+  models/<model-name>.yml
+  README.md                            (build params, assumptions, generation summary)
+  DEFERRED_MEASURES.md                 (complex DAX left for manual follow-up)
+  CONVERSION_REPORT.md / .json         (complete account of what converted vs. what needs follow-up)
+  context/
+    <source file>                      (verbatim copy of the TMSL/XMLA export)
+    ddl.sql                            (derived CREATE TABLE statements, CONFIRMED or GUESSED per table)
+    erd.mmd                            (derived Mermaid ERD)
+    use_case.md                        (derived from the source model's own measures/hierarchies)
+    build.yaml                         (effective build parameters, incl. detected role-play families)
 ```
 
 ---

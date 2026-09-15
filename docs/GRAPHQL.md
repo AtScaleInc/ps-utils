@@ -2198,6 +2198,64 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSmlFromTabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
+
+**CLI name:** `generate-sml-from-tabular`  |  **REST:** `POST /rest/generate-sml-from-tabular`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
+| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
+| `database` | `String` | Yes | Primary connection database/catalog name |
+| `schema` | `String` | Yes | Primary connection schema name |
+| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
+| `currency` | `String` | No | Currency code used for currency-formatted metrics |
+| `description` | `String` | No | Optional catalog/model description override |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromTabular(input: {
+    xmlaFileContent: "--- # file content"
+    warehouse: "value"
+    database: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromTabular(input:{xmlaFileContent: \"--- # file content\", warehouse: \"value\", database: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromTabular(input:{xmlaFileUpload:$f,warehouse:\"value\",database:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `generateReportFromXml`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2707,6 +2765,34 @@ input GenerateSmlFromXmlInput {
   connectionDb: String
   """Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionSchema: String
+  """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
+  modelMode: String
+}
+
+"""Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
+input GenerateSmlFromTabularInput {
+  """Path to the TMSL/XMLA export (createOrReplace JSON) to convert"""
+  xmlaFile: String
+  """Uploaded file — alternative to xmlaFile"""
+  xmlaFileUpload: Upload
+  """Raw file content as a string — alternative to xmlaFile"""
+  xmlaFileContent: String
+  """Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres"""
+  warehouse: String!
+  """Primary connection database/catalog name"""
+  database: String!
+  """Primary connection schema name"""
+  schema: String!
+  """SML model_unique_name (snake_case recommended)"""
+  modelName: String!
+  """Directory where SML files will be written"""
+  outputDir: String
+  """Override the catalog unique_name (defaults to '{model-name}_catalog')"""
+  catalogName: String
+  """Currency code used for currency-formatted metrics"""
+  currency: String
+  """Optional catalog/model description override"""
+  description: String
   """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
   modelMode: String
 }
@@ -3481,6 +3567,8 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
+  generateSmlFromTabular(input: GenerateSmlFromTabularInput): OperationResult!
   """Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""
   generateReportFromXml(input: GenerateReportFromXmlInput): OperationResult!
   """Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more"""

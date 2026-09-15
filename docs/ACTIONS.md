@@ -23,6 +23,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -125,6 +126,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
@@ -450,6 +452,54 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 | `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+---
+
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) and converts it to AtScale SML YAML files. No database connection or secrets required — the conversion runs entirely from the TMSL model definition, though every table's partition query is parsed to recover its real physical table/column names where possible.
+
+Pass 1 structural migration: every fact, dimension, and relationship is built, plus metrics for mechanically-unambiguous measures. Complex DAX is left untranslated in `DEFERRED_MEASURES.md`. Dimension tables that share the same resolved physical source (Tabular's way of faking role-play, since it can't role-play a dimension) are consolidated into one SML dimension wired to facts via `role_play`.
+
+When a cross-dimension level-attribute query-name collision occurs, set `model-mode: new` to rename every collision member deterministically. Set `model-mode: existing` to preserve established names and fail for explicit compatibility review. With no collision, the input is optional.
+
+**Requires:** No secrets — the TMSL/XMLA file must be present in the repository.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-from-tabular
+    xmla-file: Model.xmla
+    warehouse: Snowflake
+    database: MY_DB
+    schema: MY_SCHEMA
+    model-name: my_model
+    output-dir: sml-output
+    catalog-name: "My Catalog"        # optional — defaults to {model-name}_catalog
+    currency: USD                     # optional — default USD
+    model-mode: new                   # optional; required in CI only when a collision occurs
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `xmla-file` | Yes | | Path to the TMSL/XMLA export (`createOrReplace` JSON) |
+| `warehouse` | Yes | | Target warehouse dialect: `Snowflake`, `Databricks`, `BigQuery`, or `Postgres` |
+| `database` | Yes | | Primary connection database/catalog name |
+| `schema` | Yes | | Primary connection schema name |
+| `model-name` | Yes | | SML `model_unique_name` |
+| `output-dir` | Yes | | Directory to write SML files |
+| `catalog-name` | No | `{model-name}_catalog` | Override the catalog `unique_name` |
+| `currency` | No | `USD` | Currency code used for currency-formatted metrics |
+| `description` | No | | Optional catalog/model description override |
+| `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+**Output:** `catalog.yml`, `connections/*.yml`, `datasets/*.yml`, `dimensions/*.yml`, `metrics/*.yml`, `models/<model-name>.yml`, `README.md`, `DEFERRED_MEASURES.md`, `CONVERSION_REPORT.md`/`.json`, and a `context/` folder (verbatim source copy + derived `ddl.sql`/`erd.mmd`/`use_case.md`/`build.yaml`).
 
 ---
 
