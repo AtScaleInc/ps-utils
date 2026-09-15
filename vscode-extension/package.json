@@ -296,6 +296,21 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.atscale-list-aggregates",
+        "title": "atscale-list-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-rebuild-aggregates",
+        "title": "atscale-rebuild-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-aggregate-build-history",
+        "title": "atscale-list-aggregate-build-history",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-ddl-from-atscale",
         "title": "generate-ddl-from-atscale",
         "category": "PS-Utils"
@@ -411,6 +426,10 @@
         "label": "AtScale Config"
       },
       {
+        "id": "psUtils.group.aggregate-management",
+        "label": "Aggregate Management"
+      },
+      {
         "id": "psUtils.group.general",
         "label": "General"
       }
@@ -449,8 +468,13 @@
           "group": "1_groups@6"
         },
         {
+          "submenu": "psUtils.group.aggregate-management",
+          "group": "1_groups@7",
+          "when": "explorerResourceIsFolder"
+        },
+        {
           "submenu": "psUtils.group.general",
-          "group": "1_groups@7"
+          "group": "1_groups@8"
         },
         {
           "command": "psUtils.settings",
@@ -657,6 +681,13 @@
           "when": "explorerResourceIsFolder"
         }
       ],
+      "psUtils.group.aggregate-management": [
+        {
+          "command": "psUtils.op.atscale-list-aggregates",
+          "group": "1_ops@1",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
       "psUtils.group.general": [
         {
           "command": "psUtils.op.echo-connection-metadata",
@@ -683,16 +714,24 @@
           "group": "1_ops@6"
         },
         {
-          "command": "psUtils.op.get-dso-count",
+          "command": "psUtils.op.atscale-rebuild-aggregates",
           "group": "1_ops@7"
         },
         {
-          "command": "psUtils.op.execute-web-services",
+          "command": "psUtils.op.atscale-list-aggregate-build-history",
           "group": "1_ops@8"
         },
         {
-          "command": "psUtils.op.version",
+          "command": "psUtils.op.get-dso-count",
           "group": "1_ops@9"
+        },
+        {
+          "command": "psUtils.op.execute-web-services",
+          "group": "1_ops@10"
+        },
+        {
+          "command": "psUtils.op.version",
+          "group": "1_ops@11"
         }
       ],
       "commandPalette": [

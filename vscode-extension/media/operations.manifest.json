@@ -75,6 +75,12 @@
       ]
     },
     {
+      "name": "Aggregate Management",
+      "operations": [
+        "atscale-list-aggregates"
+      ]
+    },
+    {
       "name": "General",
       "operations": [
         "echo-connection-metadata",
@@ -83,6 +89,8 @@
         "atscale-list-repos",
         "atscale-create-repo",
         "atscale-list-deployments",
+        "atscale-rebuild-aggregates",
+        "atscale-list-aggregate-build-history",
         "get-dso-count",
         "execute-web-services",
         "version"
@@ -2189,6 +2197,186 @@
           "role": "scalar",
           "required": false,
           "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-list-aggregates": {
+      "description": "List aggregates for a catalog/model with a computed summary and health check",
+      "group": "Aggregate Management",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID, from atscale-list-deployments",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID, from atscale-list-deployments",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "limit",
+          "description": "Maximum number of aggregates to fetch",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 200
+        },
+        {
+          "name": "output-file",
+          "description": "When provided, also write a CSV export of the aggregates to this path",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-rebuild-aggregates": {
+      "description": "Trigger a full or incremental aggregate rebuild for a catalog/model",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID, from atscale-list-deployments",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID, from atscale-list-deployments",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "full-build",
+          "description": "Trigger a full build when true, or an incremental build when false. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-list-aggregate-build-history": {
+      "description": "List aggregate build history for a catalog/model with a computed summary",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID, from atscale-list-deployments",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID, from atscale-list-deployments",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "limit",
+          "description": "Maximum number of build batches to fetch",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 20
         },
         {
           "name": "insecure",

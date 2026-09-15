@@ -131,6 +131,17 @@ flowchart LR
     ATS --> H["atscale-list-model-errors"] --> INFO
 ```
 
+### Aggregate Management
+
+List, analyze, rebuild, and inspect the build history of AtScale aggregates for a given catalog/model.
+
+```mermaid
+flowchart LR
+    CONN["connections.yaml"] --> A["atscale-list-aggregates"] --> INFO["Aggregates + Summary + Health (stdout / CSV)"]
+    CONN --> B["atscale-rebuild-aggregates"] --> ATS["AtScale Instance"]
+    CONN --> C["atscale-list-aggregate-build-history"] --> HIST["Build History + Summary (stdout)"]
+```
+
 ## Table of Contents
 
 - [Setup](#setup)
@@ -182,6 +193,10 @@ flowchart LR
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+  - Aggregate Management
+    - [`atscale-list-aggregates`](#atscale-list-aggregates)
+    - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
+    - [`atscale-list-aggregate-build-history`](#atscale-list-aggregate-build-history)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
   - Utilities
@@ -2068,6 +2083,92 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 † Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
+
+---
+
+#### Aggregate Management
+
+### `atscale-list-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists aggregates for a catalog/model, with a computed summary (type/subtype/status breakdowns, row and build-time totals, fastest/slowest/largest/smallest aggregate) and a health check (inactive aggregates, zero-row aggregates, slow builds).
+
+```bash
+./atscale-utils atscale-list-aggregates \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35" \
+  --output-file "./aggregates.csv"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--limit` | No | `200` | Maximum number of aggregates to fetch |
+| `--output-file` | No | | When provided, also write a CSV export of the aggregates to this path |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with `catalogId`, `modelId`, `total`, `aggregates` array, `summary` (breakdowns and totals), and `health` (`issues`, `warnings`, `healthScore`).
+
+---
+
+### `atscale-rebuild-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Triggers a full (default) or incremental aggregate rebuild for a catalog/model.
+
+```bash
+./atscale-utils atscale-rebuild-aggregates \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35" \
+  --full-build "true"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--full-build` | No | `true` | Trigger a full build when `true`, or an incremental build when `false` |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with the raw rebuild-trigger response from AtScale.
+
+---
+
+### `atscale-list-aggregate-build-history`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists recent aggregate build batches for a catalog/model, with parsed durations and a computed summary (success/failed/running counts, full-build count, average/min/max duration).
+
+```bash
+./atscale-utils atscale-list-aggregate-build-history \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--limit` | No | `20` | Maximum number of build batches to fetch |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with `catalogId`, `modelId`, `total`, `batches` array (with parsed `durationMs`/`estimateTimeMs`/`sumOfInstanceBuildTimesMs`), and `summary` (success/failed/running/full-build counts, avg/min/max duration).
 
 ---
 
