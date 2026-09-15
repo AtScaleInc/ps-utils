@@ -222,6 +222,32 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
   } finally { cleanup(); }
 }
 
+export type GenerateSMLFromTabularParams = {
+  xmlaFile: FileInput;
+  warehouse: "Snowflake" | "Databricks" | "BigQuery" | "Postgres";
+  database: string;
+  schema: string;
+  modelName: string;
+  outputDir: DirOutput;
+  catalogName?: string;
+  currency?: string;      // default: "USD"
+  description?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromTabular(p: GenerateSMLFromTabularParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["xmlaFile"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-tabular", Object.assign({
+      "currency": "USD",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateReportFromXMLParams = {
   xmlFile:     FileInput;
   outputFile?: FileOutput;

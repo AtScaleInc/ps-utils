@@ -42,6 +42,7 @@ inputs:
         generate-queries-from-model
         extract-query-stats-from-atscale
         generate-sml-from-xml
+        generate-sml-from-tabular
         generate-report-from-xml
         generate-report-from-sml
         generate-shared-model-plan
@@ -92,7 +93,8 @@ inputs:
       Model name used when reading or generating an SML project, or the model
       label/unique_name to validate.
       Used by: extract-model-from-sml, generate-sml-from-connection,
-               generate-sml-from-ddl, atscale-list-model-errors.
+               generate-sml-from-ddl, atscale-list-model-errors,
+               generate-sml-from-tabular.
     required: false
 
   # ── extract-model-from-atscale / extract-model-from-sml ──────────────────
@@ -132,7 +134,8 @@ inputs:
     description: >
       Model compatibility policy for query-name collisions: new permits
       deterministic renaming; existing preserves names and reports a blocking conflict.
-      Used by: generate-sml-from-connection, generate-sml-from-ddl, generate-sml-from-xml.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl, generate-sml-from-xml,
+               generate-sml-from-tabular.
     required: false
 
   # ── generate-sml-from-connection ─────────────────────────────────────────
@@ -217,6 +220,29 @@ inputs:
       dataset shares one connection instead of a separate connection per distinct
       database/schema pair found in the XML.
       Used by: generate-sml-from-xml.
+    required: false
+
+  # ── generate-sml-from-tabular ────────────────────────────────────────────
+  xmla-file:
+    description: >
+      Path to the TMSL/XMLA export (createOrReplace JSON) to convert.
+      Used by: generate-sml-from-tabular.
+    required: false
+  warehouse:
+    description: >
+      Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres.
+      Used by: generate-sml-from-tabular.
+    required: false
+  currency:
+    description: >
+      Currency code used for currency-formatted metrics. Defaults to USD.
+      Used by: generate-sml-from-tabular.
+    required: false
+    default: "USD"
+  description:
+    description: >
+      Optional catalog/model description override.
+      Used by: generate-sml-from-tabular.
     required: false
 
   # ── apply-shared-model-plan-option ──────────────────────────────────
@@ -998,6 +1024,26 @@ runs:
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.model-mode }}"         ]] && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-tabular ─────────────────────────────────────────────
+    - name: Generate SML from Tabular (TMSL/XMLA)
+      if: inputs.operation == 'generate-sml-from-tabular'
+      run: |
+        ARGS=(
+          --xmla-file  "${{ inputs.xmla-file }}"
+          --warehouse  "${{ inputs.warehouse }}"
+          --database   "${{ inputs.database }}"
+          --schema     "${{ inputs.schema }}"
+          --model-name "${{ inputs.model-name }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --currency   "${{ inputs.currency }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-name }}" ]] && ARGS+=(--catalog-name "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.description }}"  ]] && ARGS+=(--description  "${{ inputs.description }}")
+        [[ -n "${{ inputs.model-mode }}"   ]] && ARGS+=(--model-mode   "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-tabular "${ARGS[@]}"
       shell: bash
 
     # ── generate-report-from-xml ─────────────────────────────────────────────

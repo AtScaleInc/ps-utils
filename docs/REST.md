@@ -1759,6 +1759,54 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 
 ---
 
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
+
+**Endpoint:** `POST /rest/generate-sml-from-tabular`  |  **GraphQL:** `generateSmlFromTabular`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
+| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
+| `database` | `String` | Yes | Primary connection database/catalog name |
+| `schema` | `String` | Yes | Primary connection schema name |
+| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
+| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
+| `currency` | `String` | No | Currency code used for currency-formatted metrics |
+| `description` | `String` | No | Optional catalog/model description override |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlaFileContent": "--- # inline YAML/file content",
+      "warehouse": "value",
+      "database": "value",
+      "schema": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
+  -F "xmlaFileUpload=@/path/to/file" \
+  -F "warehouse=value" \
+  -F "database=value" \
+  -F "schema=value"
+```
+
+---
+
 ### `generate-report-from-xml`
 
 [↑ Table of Contents](#table-of-contents)
