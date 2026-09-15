@@ -47,6 +47,7 @@ inputs:
         generate-shared-model-plan
         apply-shared-model-plan-option
         generate-sml-docs
+        clean-unused-sml-objects
         deploy-atscale-microk8s
         execute-web-services
         get-dso-count
@@ -107,6 +108,7 @@ inputs:
       Used by: extract-model-from-sml,
                atscale-deploy-catalog (required),
                atscale-list-model-errors (local mode — provide this OR repo-name/repo-id),
+               clean-unused-sml-objects,
                generate-report-from-sml.
     required: false
 
@@ -263,6 +265,7 @@ inputs:
     description: >
       Title for the generated namespace / Tableau workbook.
       For generate-sml-docs: H1 title of the docs (default: catalog label / unique_name).
+      For clean-unused-sml-objects: H1 title of the report (default: catalog label / unique_name).
       For generate-report-from-xml: H1 title of the report (default: XML schema name).
       For generate-report-from-sml: H1 title of the report (default: catalog label / unique_name).
     required: false
@@ -289,9 +292,16 @@ inputs:
       For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
       For execute-query-on-connection: path to write query results (CSV for SQL, XML for XMLA).
       For generate-sml-docs: Markdown output file; relative paths are written inside the SML dir (default: README.md).
+      For clean-unused-sml-objects: Markdown report output file (omit to print to stdout).
       For generate-report-from-xml: Markdown report output file (omit to print to stdout).
       For generate-report-from-sml: Markdown report output file (omit to print to stdout).
     required: false
+  apply:
+    description: >
+      Actually delete the unused files. Defaults to a preview-only report.
+      Used by: clean-unused-sml-objects.
+    required: false
+    default: "false"
 
   # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
   namespace-file:
@@ -1041,6 +1051,20 @@ runs:
         [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-docs "${ARGS[@]}"
+      shell: bash
+
+    # ── clean-unused-sml-objects ─────────────────────────────────────────
+    - name: Clean unused SML objects
+      if: inputs.operation == 'clean-unused-sml-objects'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.apply }}" ]]       && ARGS+=(--apply       "${{ inputs.apply }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" clean-unused-sml-objects "${ARGS[@]}"
       shell: bash
 
     # ── apply-shared-model-plan-option ──────────────────────────────────

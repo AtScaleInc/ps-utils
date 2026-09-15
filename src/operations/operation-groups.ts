@@ -45,6 +45,7 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "generate-report-from-sml",
       "apply-style-to-sml",
       "generate-sml-docs",
+      "clean-unused-sml-objects",
       "generate-shared-model-plan",
       "apply-shared-model-plan-option",
       "generate-ddl-from-atscale",
