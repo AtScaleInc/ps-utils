@@ -1440,6 +1440,14 @@ export async function convertXmlToSml(
         recommendation: "Add this metric manually to the dimension's level metrics after verifying the source column.",
       });
     }
+    for (const dropped of dimMeta.droppedSecondaryAttrsForSharedDegenerate) {
+      rptOmissions.push({
+        category: "Secondary Attribute",
+        item: `${dropped.secondaryAttrName} on level "${dropped.level}" in dimension "${dimName}"`,
+        reason: "This level is bound to more than one fact dataset (shared_degenerate_columns) — the engine does not allow secondary attributes on a level shaped that way.",
+        recommendation: "Add this attribute as its own separate degenerate dimension, or as a level metric, if it's still needed.",
+      });
+    }
     if (dimMeta.snowflakeRelationships.length > 0) {
       dimSnowflakeTargets.set(dimName, dimMeta.snowflakeRelationships.map((r) => r.toDimension));
       // A snowflake-joined dimension is "used" precisely because this dimension reaches it —
@@ -1879,6 +1887,9 @@ interface DimMeta {
   skippedMetricalQuantiles: string[];
   /** Metrical attribute names skipped because their column/dataset couldn't be resolved. */
   skippedMetricalUnresolved: string[];
+  /** Secondary attributes dropped from a level that ended up using shared_degenerate_columns
+   *  (multi-dataset) — the engine disallows secondary attributes there entirely. */
+  droppedSecondaryAttrsForSharedDegenerate: Array<{ level: string; secondaryAttrName: string }>;
 }
 
 /** A metrical attribute (dimension-level metric) resolved for one hierarchy level. */
@@ -2858,6 +2869,19 @@ function buildDimensionYaml(
   const metaSkippedMetricalQuantiles: string[] = [];
   const metaSkippedMetricalUnresolved: string[] = [];
   const metaSnowflakeRelationships: DimMeta["snowflakeRelationships"] = [];
+  const metaDroppedSecondaryAttrsForSharedDegenerate: DimMeta["droppedSecondaryAttrsForSharedDegenerate"] = [];
+
+  // Once ANY level of this degenerate dimension is bound to more than one fact dataset (see
+  // degenerateBindingsForDim), the engine requires EVERY level of the same dimension to use
+  // the shared_degenerate_columns shape — mixing it with plain dataset/key_columns/
+  // name_column levels in one dimension is rejected as "Level attributes in a degenerate
+  // dimension must be of the same type." A level that only happens to bind to a single fact
+  // dataset still gets wrapped in a one-element shared_degenerate_columns array below so
+  // every level in the dimension is consistently shaped.
+  const dimensionUsesSharedDegenerateFormat =
+    isDegenerate &&
+    !!degenerateBindingsForDim &&
+    Array.from(degenerateBindingsForDim.values()).some((m) => m.size > 1);
 
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
@@ -3139,7 +3163,10 @@ function buildDimensionYaml(
       // A degenerate level backed by more than one distinct fact dataset (e.g. a flag column
       // present on both a cube's primary fact table and its YTD fact table) needs
       // shared_degenerate_columns instead of a single dataset/key_columns/name_column —
-      // one dataset alone (the common case) keeps the plain fields, unchanged from before.
+      // one dataset alone (the common case) keeps the plain fields, unchanged from before,
+      // UNLESS some other level in this same dimension does need the shared shape, in which
+      // case this level must match it (see dimensionUsesSharedDegenerateFormat above) —
+      // wrapped as a one-element array using this level's own single binding.
       const datasetBindings = isDegenerate ? degenerateBindingsForDim?.get(levelUniqueName) : undefined;
       const sharedDegenerateColumns =
         datasetBindings && datasetBindings.size > 1
@@ -3148,6 +3175,8 @@ function buildDimensionYaml(
               keyColumns: bindingColumns,
               nameColumn: defaultNameColumn(bindingColumns, bindingDataset, soleKeyColumns, datasetNameToPhysical),
             }))
+          : dimensionUsesSharedDegenerateFormat
+          ? [{ dataset: datasetRef, keyColumns, nameColumn }]
           : undefined;
 
       // Build or merge the level attribute entry (de-duplicated by unique name)
@@ -3174,11 +3203,21 @@ function buildDimensionYaml(
         levelExtrasEmitted.add(levelUniqueName);
       }
 
+      // The engine disallows secondary attributes entirely on a level that uses
+      // shared_degenerate_columns (multi-dataset) — report the drop as an omission rather
+      // than silently emitting an invalid combination.
+      if (sharedDegenerateColumns && !alreadyEmittedElsewhere) {
+        for (const sa of secondaryAttrs) {
+          metaDroppedSecondaryAttrsForSharedDegenerate.push({ level: levelUniqueName, secondaryAttrName: sa.uniqueName });
+        }
+      }
+
       hierLevels.push({
         uniqueName: levelUniqueName,
         timeUnit,
         isHidden: isHidden || undefined,
-        secondaryAttributes: !alreadyEmittedElsewhere && secondaryAttrs.length ? secondaryAttrs : undefined,
+        secondaryAttributes:
+          !alreadyEmittedElsewhere && !sharedDegenerateColumns && secondaryAttrs.length ? secondaryAttrs : undefined,
         metrics: !alreadyEmittedElsewhere && levelMetrics.length ? levelMetrics : undefined,
       });
     }
@@ -3369,6 +3408,7 @@ function buildDimensionYaml(
     skippedMetricalQuantiles: metaSkippedMetricalQuantiles,
     skippedMetricalUnresolved: metaSkippedMetricalUnresolved,
     snowflakeRelationships: metaSnowflakeRelationships,
+    droppedSecondaryAttrsForSharedDegenerate: metaDroppedSecondaryAttrsForSharedDegenerate,
   };
 
   return { yaml: toYaml(obj), meta };
