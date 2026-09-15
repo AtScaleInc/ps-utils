@@ -665,6 +665,24 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     // Joins: this cube's own key-ref bindings, resolved against every dimension's
     // keyed-attribute to show which fact dataset joins to which dimension level
     // on which column(s) — the actual join graph, independent of SML shaping.
+    //
+    // A degenerate attribute (its value is a plain column on the fact table itself, no
+    // separate physical dimension table involved at all) has exactly one key-ref entry
+    // total, declared complete="true" directly in the fact dataset's own <logical>
+    // section. A genuine cross-table join instead has TWO entries for the same key: the
+    // dimension's own authoritative definition (complete="true", on its own separate
+    // table) plus the fact table's FK reference to it (typically complete="false"/
+    // "partial", on the fact dataset). A binding only counts as a real join when some
+    // OTHER complete="true" entry for the same key exists on a dataset that is (a)
+    // different from this binding's own dataset AND (b) not itself one of this cube's own
+    // fact datasets — otherwise the "other" dataset is just a second fact table the same
+    // degenerate value happens to also live on (shared_degenerate_columns), not a lookup
+    // table this cube is actually joining to.
+    const dsRefSet = new Set(dsRefs);
+    function isRealJoin(b: KeyBinding, allBindings: KeyBinding[]): boolean {
+      const homeDatasets = allBindings.filter((e) => e.complete === "true").map((e) => e.dataset);
+      return homeDatasets.some((home) => home !== b.dataset && !dsRefSet.has(home));
+    }
     const joinRows: string[][] = [];
     for (const [dimName, dimEl] of schemaDims) {
       for (const hier of arr(dimEl.hierarchy)) {
@@ -672,8 +690,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           const primaryId = a(level, "primary-attribute");
           const def = primaryId ? attrDef.get(primaryId) : undefined;
           if (!def?.keyUuid) continue;
-          for (const b of keyMap.get(def.keyUuid) ?? []) {
-            if (b.cube !== cubeName) continue;
+          const allBindings = keyMap.get(def.keyUuid) ?? [];
+          for (const b of allBindings) {
+            if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
             joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
           }
         }
@@ -688,8 +707,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const primaryId = a(level, "primary-attribute");
             const def = primaryId ? attrDef.get(primaryId) : undefined;
             if (!def?.keyUuid) continue;
-            for (const b of keyMap.get(def.keyUuid) ?? []) {
-              if (b.cube !== cubeName) continue;
+            const allBindings = keyMap.get(def.keyUuid) ?? [];
+            for (const b of allBindings) {
+              if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
               joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
             }
           }
