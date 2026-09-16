@@ -645,6 +645,8 @@ This is a **Pass 1** structural migration: regular fact-to-dimension relationshi
 
 `--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-tabular`.
 
+**Getting the XMLA export:** this operation does not connect to SSAS itself — you supply the export file. In SQL Server Management Studio (SSMS), connect to the Analysis Services **Multidimensional** instance (Object Explorer → Connect → Analysis Services), right-click the target database (not the server) → **Script Database as** → **Create To** → **File...**, and save it. For a Multidimensional database this is genuine XML containing the full `<Create><ObjectDefinition><Database>` script this operation expects — pass that file straight to `--xmla-file`.
+
 ```bash
 ./atscale-utils generate-sml-from-ssas-multidimensional \
   --xmla-file "./Cube.xml" \
@@ -662,6 +664,13 @@ This is a **Pass 1** structural migration: regular fact-to-dimension relationshi
 | `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
 
 **Output layout:** same as `generate-sml-from-xml`, plus `context/generated-project.xml` (the intermediate AtScale project XML this was derived from) and an "SSAS Multidimensional Import Notes" section appended to `README.md` listing every many-to-many/reference/parent-child relationship that was detected but not converted.
+
+**What to expect:** a Pass 1 structural migration, not a deploy-ready model. After it runs:
+
+1. Read the generated `README.md` — the "SSAS Multidimensional Import Notes" section lists every issue found, sorted by severity (`error` > `action_needed` > `warning` > `info`): `error` means something was dropped and likely needs a fix, `action_needed` means it's usable but a human should confirm something (e.g. a many-to-many or reference dimension that needs a manual relationship, or a table whose physical source couldn't be confirmed).
+2. Any **many-to-many**, **reference (snowflaked/chained)**, or **parent-child** dimension is deliberately not converted — the notes list each one so a human can design the relationship manually. This matches (or improves on) the reference converter's own conservative behavior for these cases, not a shortcut unique to this operation.
+3. Inspect `context/generated-project.xml` (the intermediate AtScale project XML) if you need to trace exactly how a specific SSAS construct was translated before it reached SML.
+4. Run the result through `atscale-list-model-errors` (or your normal SML validation step) before deploying, the same as any other generated SML.
 
 ---
 

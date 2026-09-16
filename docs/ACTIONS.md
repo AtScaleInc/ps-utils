@@ -532,6 +532,10 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 
 **Requires:** No secrets — the XMLA file must be present in the repository.
 
+**Getting the XMLA export:** in SSMS, connect to the Analysis Services **Multidimensional** instance, right-click the database → **Script Database as** → **Create To** → **File...**. This produces the full `<Create><ObjectDefinition><Database>` XMLA script this operation expects.
+
+**What to expect:** a Pass 1 structural migration, not a deploy-ready model. Pull the generated `README.md` as a workflow artifact — its "SSAS Multidimensional Import Notes" section lists every issue by severity, including every many-to-many/reference/parent-child dimension that was detected but deliberately not converted and needs a manual relationship design. See the `generate-sml-from-ssas-multidimensional` section of the main README for the full checklist.
+
 #### Using the composite action
 
 ```yaml
