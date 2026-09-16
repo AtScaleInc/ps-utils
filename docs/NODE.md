@@ -88,6 +88,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromConnection`](#generatesmlfromconnection)
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
+  - [`generateSMLFromTabular`](#generatesmlfromtabular)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
@@ -392,6 +393,47 @@ function generateSMLFromXML(
 | `catalogName` | `string` | No | | Override the catalog label |
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateSMLFromTabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) to SML files, consolidating role-play dimension families and deferring complex DAX measures to `DEFERRED_MEASURES.md`.
+
+```typescript
+import { generateSMLFromTabular } from "@atscale-ps/ps-utils";
+
+await generateSMLFromTabular({
+  xmlaFile:  "./Model.xmla",
+  warehouse: "Snowflake",
+  database:  "MY_DB",
+  schema:    "MY_SCHEMA",
+  modelName: "my_model",
+  outputDir: "./sml-output",
+});
+```
+
+```typescript
+function generateSMLFromTabular(
+  params: GenerateSMLFromTabularParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `xmlaFile` | `FileInput` | Yes | | Path to the TMSL/XMLA export, or a `Readable` of its contents |
+| `warehouse` | `"Snowflake" \| "Databricks" \| "BigQuery" \| "Postgres"` | Yes | | Target warehouse dialect |
+| `database` | `string` | Yes | | Primary connection database/catalog name |
+| `schema` | `string` | Yes | | Primary connection schema name |
+| `modelName` | `string` | Yes | | SML `model_unique_name` |
+| `outputDir` | `DirOutput` | Yes | | Directory where SML files will be written, or a `Writable` to receive a ZIP |
+| `catalogName` | `string` | No | `{modelName}_catalog` | Override the catalog `unique_name` |
+| `currency` | `string` | No | `"USD"` | Currency code used for currency-formatted metrics |
+| `description` | `string` | No | | Optional catalog/model description override |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 
 ---

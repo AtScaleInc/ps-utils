@@ -9,6 +9,7 @@ import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOpe
 import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connection/GenerateSMLFromConnectionOperation.js";
 import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
 import { GenerateSMLFromXMLOperation } from "./generate-sml-from-xml/GenerateSMLFromXMLOperation.js";
+import { GenerateSMLFromTabularOperation } from "./generate-sml-from-tabular/GenerateSMLFromTabularOperation.js";
 import { GenerateReportFromXMLOperation } from "./generate-report-from-xml/GenerateReportFromXMLOperation.js";
 import { GenerateReportFromSMLOperation } from "./generate-report-from-sml/GenerateReportFromSMLOperation.js";
 import { ApplyStyleToSMLOperation } from "./apply-style-to-sml/ApplyStyleToSMLOperation.js";
@@ -70,6 +71,7 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromConnectionOperation(services, logger));
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
   registry.register(new GenerateSMLFromXMLOperation(services, logger));
+  registry.register(new GenerateSMLFromTabularOperation(services, logger));
   registry.register(new GenerateReportFromXMLOperation(services, logger));
   registry.register(new GenerateReportFromSMLOperation(services, logger));
   registry.register(new ApplyStyleToSMLOperation(services, logger));
