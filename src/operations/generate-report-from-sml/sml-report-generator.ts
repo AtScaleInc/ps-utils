@@ -246,7 +246,8 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   // ── Dimensions ──────────────────────────────────────────────────────────────
 
   out.push("## Dimensions", "");
-  for (const d of c.dimensions) renderDimension(out, d);
+  const sortedDimensions = [...c.dimensions].sort((x, y) => label(x).localeCompare(label(y)));
+  for (const d of sortedDimensions) renderDimension(out, d);
 
   // ── Models ──────────────────────────────────────────────────────────────────
 
@@ -406,8 +407,14 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
       o.push("**Secondary attributes**", "");
       o.push(
         ...table(
-          ["Level", "Attribute", "Label", "Bound to (dataset.column)"],
-          secondaries.map((a) => [code(a.level), code(a?.unique_name), cell(a?.label), code(bindingLabel(a))]),
+          ["Level", "Attribute", "Label", "Bound to (dataset.column)", "Folder"],
+          secondaries.map((a) => [
+            code(a.level),
+            code(a?.unique_name),
+            cell(a?.label),
+            code(bindingLabel(a)),
+            cell(a?.folder),
+          ]),
         ),
       );
     }
