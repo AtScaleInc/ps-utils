@@ -171,6 +171,11 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.generate-sml-from-tabular",
+        "title": "generate-sml-from-tabular",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
         "title": "generate-sml-from-ssas-multidimensional",
         "category": "PS-Utils"
@@ -301,6 +306,21 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.atscale-list-aggregates",
+        "title": "atscale-list-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-rebuild-aggregates",
+        "title": "atscale-rebuild-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-aggregate-build-history",
+        "title": "atscale-list-aggregate-build-history",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-ddl-from-atscale",
         "title": "generate-ddl-from-atscale",
         "category": "PS-Utils"
@@ -416,6 +436,10 @@
         "label": "AtScale Config"
       },
       {
+        "id": "psUtils.group.aggregate-management",
+        "label": "Aggregate Management"
+      },
+      {
         "id": "psUtils.group.general",
         "label": "General"
       }
@@ -454,8 +478,13 @@
           "group": "1_groups@6"
         },
         {
+          "submenu": "psUtils.group.aggregate-management",
+          "group": "1_groups@7",
+          "when": "explorerResourceIsFolder"
+        },
+        {
           "submenu": "psUtils.group.general",
-          "group": "1_groups@7"
+          "group": "1_groups@8"
         },
         {
           "command": "psUtils.settings",
@@ -524,46 +553,50 @@
           "group": "1_ops@5"
         },
         {
-          "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
+          "command": "psUtils.op.generate-sml-from-tabular",
           "group": "1_ops@6"
         },
         {
+          "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
+          "group": "1_ops@7"
+        },
+        {
           "command": "psUtils.op.generate-report-from-xml",
-          "group": "1_ops@7",
+          "group": "1_ops@8",
           "when": "!explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.generate-report-from-sml",
-          "group": "1_ops@8",
-          "when": "explorerResourceIsFolder"
-        },
-        {
-          "command": "psUtils.op.apply-style-to-sml",
           "group": "1_ops@9",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-sml-docs",
+          "command": "psUtils.op.apply-style-to-sml",
           "group": "1_ops@10",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.clean-unused-sml-objects",
+          "command": "psUtils.op.generate-sml-docs",
           "group": "1_ops@11",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-shared-model-plan",
+          "command": "psUtils.op.clean-unused-sml-objects",
           "group": "1_ops@12",
           "when": "explorerResourceIsFolder"
         },
         {
+          "command": "psUtils.op.generate-shared-model-plan",
+          "group": "1_ops@13",
+          "when": "explorerResourceIsFolder"
+        },
+        {
           "command": "psUtils.op.apply-shared-model-plan-option",
-          "group": "1_ops@13"
+          "group": "1_ops@14"
         },
         {
           "command": "psUtils.op.generate-ddl-from-atscale",
-          "group": "1_ops@14",
+          "group": "1_ops@15",
           "when": "explorerResourceIsFolder"
         }
       ],
@@ -666,6 +699,13 @@
           "when": "explorerResourceIsFolder"
         }
       ],
+      "psUtils.group.aggregate-management": [
+        {
+          "command": "psUtils.op.atscale-list-aggregates",
+          "group": "1_ops@1",
+          "when": "explorerResourceIsFolder"
+        }
+      ],
       "psUtils.group.general": [
         {
           "command": "psUtils.op.echo-connection-metadata",
@@ -692,16 +732,24 @@
           "group": "1_ops@6"
         },
         {
-          "command": "psUtils.op.get-dso-count",
+          "command": "psUtils.op.atscale-rebuild-aggregates",
           "group": "1_ops@7"
         },
         {
-          "command": "psUtils.op.execute-web-services",
+          "command": "psUtils.op.atscale-list-aggregate-build-history",
           "group": "1_ops@8"
         },
         {
-          "command": "psUtils.op.version",
+          "command": "psUtils.op.get-dso-count",
           "group": "1_ops@9"
+        },
+        {
+          "command": "psUtils.op.execute-web-services",
+          "group": "1_ops@10"
+        },
+        {
+          "command": "psUtils.op.version",
+          "group": "1_ops@11"
         }
       ],
       "commandPalette": [

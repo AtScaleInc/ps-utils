@@ -41,6 +41,7 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "generate-sml-from-connection",
       "generate-sml-from-ddl",
       "generate-sml-from-xml",
+      "generate-sml-from-tabular",
       "generate-sml-from-ssas-multidimensional",
       "generate-report-from-xml",
       "generate-report-from-sml",
@@ -95,6 +96,14 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "atscale-deploy-catalog",
       "atscale-list-model-errors",
       "get-dso-count",
+    ],
+  },
+  {
+    name: "Aggregate Management",
+    operations: [
+      "atscale-list-aggregates",
+      "atscale-rebuild-aggregates",
+      "atscale-list-aggregate-build-history",
     ],
   },
   {

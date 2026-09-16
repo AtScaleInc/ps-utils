@@ -1759,6 +1759,54 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 
 ---
 
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
+
+**Endpoint:** `POST /rest/generate-sml-from-tabular`  |  **GraphQL:** `generateSmlFromTabular`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
+| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
+| `database` | `String` | Yes | Primary connection database/catalog name |
+| `schema` | `String` | Yes | Primary connection schema name |
+| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
+| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
+| `currency` | `String` | No | Currency code used for currency-formatted metrics |
+| `description` | `String` | No | Optional catalog/model description override |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlaFileContent": "--- # inline YAML/file content",
+      "warehouse": "value",
+      "database": "value",
+      "schema": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
+  -F "xmlaFileUpload=@/path/to/file" \
+  -F "warehouse=value" \
+  -F "database=value" \
+  -F "schema=value"
+```
+
+---
+
 ### `generate-sml-from-ssas-multidimensional`
 
 [↑ Table of Contents](#table-of-contents)
@@ -1942,6 +1990,135 @@ curl -X POST http://localhost:4000/rest/clean-unused-sml-objects \
   -d '{
       "smlDir": "value"
   }'
+```
+
+---
+
+### `atscale-list-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> List aggregates for a catalog/model with a computed summary and health check
+
+**Endpoint:** `POST /rest/atscale-list-aggregates`  |  **GraphQL:** `atscaleListAggregates`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
+| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
+| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `limit` | `Int` | No | Maximum number of aggregates to fetch |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/atscale-list-aggregates \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "atscaleConnectionName": "value",
+      "catalogId": "value",
+      "modelId": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/atscale-list-aggregates \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "atscaleConnectionName=value" \
+  -F "catalogId=value" \
+  -F "modelId=value"
+```
+
+---
+
+### `atscale-rebuild-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Trigger a full or incremental aggregate rebuild for a catalog/model
+
+**Endpoint:** `POST /rest/atscale-rebuild-aggregates`  |  **GraphQL:** `atscaleRebuildAggregates`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
+| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
+| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `fullBuild` | `Boolean` | No | Trigger a full build when true, or an incremental build when false. Defaults to true. |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/atscale-rebuild-aggregates \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "atscaleConnectionName": "value",
+      "catalogId": "value",
+      "modelId": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/atscale-rebuild-aggregates \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "atscaleConnectionName=value" \
+  -F "catalogId=value" \
+  -F "modelId=value"
+```
+
+---
+
+### `atscale-list-aggregate-build-history`
+
+[↑ Table of Contents](#table-of-contents)
+
+> List aggregate build history for a catalog/model with a computed summary
+
+**Endpoint:** `POST /rest/atscale-list-aggregate-build-history`  |  **GraphQL:** `atscaleListAggregateBuildHistory`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
+| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
+| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `limit` | `Int` | No | Maximum number of build batches to fetch |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/atscale-list-aggregate-build-history \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "atscaleConnectionName": "value",
+      "catalogId": "value",
+      "modelId": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/atscale-list-aggregate-build-history \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "atscaleConnectionName=value" \
+  -F "catalogId=value" \
+  -F "modelId=value"
 ```
 
 ---

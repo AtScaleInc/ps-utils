@@ -9,6 +9,7 @@ import { EchoConnectionMetaDataOperation } from "./sql/EchoConnectionMetaDataOpe
 import { GenerateSMLFromConnectionOperation } from "./generate-sml-from-connection/GenerateSMLFromConnectionOperation.js";
 import { GenerateSMLFromDDLOperation } from "./generate-sml-from-ddl/GenerateSMLFromDDLOperation.js";
 import { GenerateSMLFromXMLOperation } from "./generate-sml-from-xml/GenerateSMLFromXMLOperation.js";
+import { GenerateSMLFromTabularOperation } from "./generate-sml-from-tabular/GenerateSMLFromTabularOperation.js";
 import { GenerateSMLFromSsasMultidimensionalOperation } from "./generate-sml-from-ssas-multidimensional/GenerateSMLFromSsasMultidimensionalOperation.js";
 import { GenerateReportFromXMLOperation } from "./generate-report-from-xml/GenerateReportFromXMLOperation.js";
 import { GenerateReportFromSMLOperation } from "./generate-report-from-sml/GenerateReportFromSMLOperation.js";
@@ -33,6 +34,9 @@ import { AtScaleCreateRepoOperation } from "./atscale-create-repo/AtScaleCreateR
 import { AtScaleListDeploymentsOperation } from "./atscale-list-deployments/AtScaleListDeploymentsOperation.js";
 import { AtScaleDeployCatalogOperation } from "./atscale-deploy-catalog/AtScaleDeployCatalogOperation.js";
 import { AtScaleListModelErrorsOperation } from "./atscale-list-model-errors/AtScaleListModelErrorsOperation.js";
+import { AtScaleListAggregatesOperation } from "./atscale-list-aggregates/AtScaleListAggregatesOperation.js";
+import { AtScaleRebuildAggregatesOperation } from "./atscale-rebuild-aggregates/AtScaleRebuildAggregatesOperation.js";
+import { AtScaleListAggregateBuildHistoryOperation } from "./atscale-list-aggregate-build-history/AtScaleListAggregateBuildHistoryOperation.js";
 import { GenerateDDLFromAtScaleOperation } from "./generate-ddl-from-atscale/GenerateDDLFromAtScaleOperation.js";
 import { ExtractDataShapeFromConnectionOperation } from "./extract-data-shape-from-connection/ExtractDataShapeFromConnectionOperation.js";
 import { GenerateDDLFromDataShapeOperation } from "./generate-ddl-from-data-shape/GenerateDDLFromDataShapeOperation.js";
@@ -68,6 +72,7 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromConnectionOperation(services, logger));
   registry.register(new GenerateSMLFromDDLOperation(services, logger));
   registry.register(new GenerateSMLFromXMLOperation(services, logger));
+  registry.register(new GenerateSMLFromTabularOperation(services, logger));
   registry.register(new GenerateSMLFromSsasMultidimensionalOperation(services, logger));
   registry.register(new GenerateReportFromXMLOperation(services, logger));
   registry.register(new GenerateReportFromSMLOperation(services, logger));
@@ -94,6 +99,9 @@ export async function buildRegistry(
   registry.register(new AtScaleListDeploymentsOperation(services, logger));
   registry.register(new AtScaleDeployCatalogOperation(services, logger));
   registry.register(new AtScaleListModelErrorsOperation(services, logger));
+  registry.register(new AtScaleListAggregatesOperation(services, logger));
+  registry.register(new AtScaleRebuildAggregatesOperation(services, logger));
+  registry.register(new AtScaleListAggregateBuildHistoryOperation(services, logger));
   registry.register(new GenerateDDLFromAtScaleOperation(services, logger));
   registry.register(new ExtractDataShapeFromConnectionOperation(services, logger));
   registry.register(new GenerateDDLFromDataShapeOperation(services, logger));

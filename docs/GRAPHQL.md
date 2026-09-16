@@ -2198,6 +2198,64 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSmlFromTabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
+
+**CLI name:** `generate-sml-from-tabular`  |  **REST:** `POST /rest/generate-sml-from-tabular`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
+| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
+| `database` | `String` | Yes | Primary connection database/catalog name |
+| `schema` | `String` | Yes | Primary connection schema name |
+| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
+| `currency` | `String` | No | Currency code used for currency-formatted metrics |
+| `description` | `String` | No | Optional catalog/model description override |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromTabular(input: {
+    xmlaFileContent: "--- # file content"
+    warehouse: "value"
+    database: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromTabular(input:{xmlaFileContent: \"--- # file content\", warehouse: \"value\", database: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromTabular(input:{xmlaFileUpload:$f,warehouse:\"value\",database:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `generateSmlFromSsasMultidimensional`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2457,6 +2515,163 @@ mutation {
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
   -d '{"query":"mutation{cleanUnusedSmlObjects(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
+### `atscaleListAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> List aggregates for a catalog/model with a computed summary and health check
+
+**CLI name:** `atscale-list-aggregates`  |  **REST:** `POST /rest/atscale-list-aggregates`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
+| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
+| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `limit` | `Int` | No | Maximum number of aggregates to fetch |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  atscaleListAggregates(input: {
+    connectionFileContent: "--- # file content"
+    atscaleConnectionName: "value"
+    catalogId: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{atscaleListAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", catalogId: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleListAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\",catalogId:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `atscaleRebuildAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Trigger a full or incremental aggregate rebuild for a catalog/model
+
+**CLI name:** `atscale-rebuild-aggregates`  |  **REST:** `POST /rest/atscale-rebuild-aggregates`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
+| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
+| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `fullBuild` | `Boolean` | No | Trigger a full build when true, or an incremental build when false. Defaults to true. |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  atscaleRebuildAggregates(input: {
+    connectionFileContent: "--- # file content"
+    atscaleConnectionName: "value"
+    catalogId: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{atscaleRebuildAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", catalogId: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleRebuildAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\",catalogId:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `atscaleListAggregateBuildHistory`
+
+[↑ Table of Contents](#table-of-contents)
+
+> List aggregate build history for a catalog/model with a computed summary
+
+**CLI name:** `atscale-list-aggregate-build-history`  |  **REST:** `POST /rest/atscale-list-aggregate-build-history`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
+| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
+| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `limit` | `Int` | No | Maximum number of build batches to fetch |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  atscaleListAggregateBuildHistory(input: {
+    connectionFileContent: "--- # file content"
+    atscaleConnectionName: "value"
+    catalogId: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{atscaleListAggregateBuildHistory(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", catalogId: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleListAggregateBuildHistory(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\",catalogId:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
 ```
 
 ---
@@ -2760,6 +2975,34 @@ input GenerateSmlFromXmlInput {
   connectionDb: String
   """Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionSchema: String
+  """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
+  modelMode: String
+}
+
+"""Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
+input GenerateSmlFromTabularInput {
+  """Path to the TMSL/XMLA export (createOrReplace JSON) to convert"""
+  xmlaFile: String
+  """Uploaded file — alternative to xmlaFile"""
+  xmlaFileUpload: Upload
+  """Raw file content as a string — alternative to xmlaFile"""
+  xmlaFileContent: String
+  """Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres"""
+  warehouse: String!
+  """Primary connection database/catalog name"""
+  database: String!
+  """Primary connection schema name"""
+  schema: String!
+  """SML model_unique_name (snake_case recommended)"""
+  modelName: String!
+  """Directory where SML files will be written"""
+  outputDir: String
+  """Override the catalog unique_name (defaults to '{model-name}_catalog')"""
+  catalogName: String
+  """Currency code used for currency-formatted metrics"""
+  currency: String
+  """Optional catalog/model description override"""
+  description: String
   """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
   modelMode: String
 }
@@ -3308,6 +3551,68 @@ input AtscaleListModelErrorsInput {
   insecure: Boolean
 }
 
+"""List aggregates for a catalog/model with a computed summary and health check"""
+input AtscaleListAggregatesInput {
+  """Path to the connections YAML file"""
+  connectionFile: String
+  """Uploaded file — alternative to connectionFile"""
+  connectionFileUpload: Upload
+  """Raw file content as a string — alternative to connectionFile"""
+  connectionFileContent: String
+  """Name of the AtScale connection entry in the connections file"""
+  atscaleConnectionName: String!
+  """Catalog (project) UUID, from atscale-list-deployments"""
+  catalogId: String!
+  """Model (cube) UUID, from atscale-list-deployments"""
+  modelId: String!
+  """Maximum number of aggregates to fetch"""
+  limit: Int
+  """When provided, also write a CSV export of the aggregates to this path"""
+  outputFile: String
+  """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
+  insecure: Boolean
+}
+
+"""Trigger a full or incremental aggregate rebuild for a catalog/model"""
+input AtscaleRebuildAggregatesInput {
+  """Path to the connections YAML file"""
+  connectionFile: String
+  """Uploaded file — alternative to connectionFile"""
+  connectionFileUpload: Upload
+  """Raw file content as a string — alternative to connectionFile"""
+  connectionFileContent: String
+  """Name of the AtScale connection entry in the connections file"""
+  atscaleConnectionName: String!
+  """Catalog (project) UUID, from atscale-list-deployments"""
+  catalogId: String!
+  """Model (cube) UUID, from atscale-list-deployments"""
+  modelId: String!
+  """Trigger a full build when true, or an incremental build when false. Defaults to true."""
+  fullBuild: Boolean
+  """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
+  insecure: Boolean
+}
+
+"""List aggregate build history for a catalog/model with a computed summary"""
+input AtscaleListAggregateBuildHistoryInput {
+  """Path to the connections YAML file"""
+  connectionFile: String
+  """Uploaded file — alternative to connectionFile"""
+  connectionFileUpload: Upload
+  """Raw file content as a string — alternative to connectionFile"""
+  connectionFileContent: String
+  """Name of the AtScale connection entry in the connections file"""
+  atscaleConnectionName: String!
+  """Catalog (project) UUID, from atscale-list-deployments"""
+  catalogId: String!
+  """Model (cube) UUID, from atscale-list-deployments"""
+  modelId: String!
+  """Maximum number of build batches to fetch"""
+  limit: Int
+  """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
+  insecure: Boolean
+}
+
 """Generate DDL from an AtScale data source by reading table metadata via the REST API"""
 input GenerateDdlFromAtscaleInput {
   """Path to the connections YAML file"""
@@ -3556,6 +3861,8 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
+  generateSmlFromTabular(input: GenerateSmlFromTabularInput): OperationResult!
   """Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
   generateSmlFromSsasMultidimensional(input: GenerateSmlFromSsasMultidimensionalInput): OperationResult!
   """Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""
@@ -3608,6 +3915,12 @@ type Mutation {
   atscaleDeployCatalog(input: AtscaleDeployCatalogInput): OperationResult!
   """Validate an SML model and list structural and engine-level problems"""
   atscaleListModelErrors(input: AtscaleListModelErrorsInput): OperationResult!
+  """List aggregates for a catalog/model with a computed summary and health check"""
+  atscaleListAggregates(input: AtscaleListAggregatesInput): OperationResult!
+  """Trigger a full or incremental aggregate rebuild for a catalog/model"""
+  atscaleRebuildAggregates(input: AtscaleRebuildAggregatesInput): OperationResult!
+  """List aggregate build history for a catalog/model with a computed summary"""
+  atscaleListAggregateBuildHistory(input: AtscaleListAggregateBuildHistoryInput): OperationResult!
   """Generate DDL from an AtScale data source by reading table metadata via the REST API"""
   generateDdlFromAtscale(input: GenerateDdlFromAtscaleInput): OperationResult!
   """Connect to a database and extract a statistical fingerprint of the SML model data shape"""

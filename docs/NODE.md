@@ -88,6 +88,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromConnection`](#generatesmlfromconnection)
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
+  - [`generateSMLFromTabular`](#generatesmlfromtabular)
   - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
@@ -128,6 +129,10 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`atScaleDeployCatalog`](#atscaledeploycatalog)
   - [`atScaleListModelErrors`](#atscalelistmodelerrors)
   - [`getDsoCount`](#getDsoCount)
+- [Aggregate Management](#aggregate-management)
+  - [`atScaleListAggregates`](#atscalelistaggregates)
+  - [`atScaleRebuildAggregates`](#atscalerebuildaggregates)
+  - [`atScaleListAggregateBuildHistory`](#atscalelistaggregatebuildhistory)
 - [Web Services](#web-services)
   - [`executeWebServices`](#executewebservices)
 - [Utilities](#utilities)
@@ -389,6 +394,47 @@ function generateSMLFromXML(
 | `catalogName` | `string` | No | | Override the catalog label |
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateSMLFromTabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) to SML files, consolidating role-play dimension families and deferring complex DAX measures to `DEFERRED_MEASURES.md`.
+
+```typescript
+import { generateSMLFromTabular } from "@atscale-ps/ps-utils";
+
+await generateSMLFromTabular({
+  xmlaFile:  "./Model.xmla",
+  warehouse: "Snowflake",
+  database:  "MY_DB",
+  schema:    "MY_SCHEMA",
+  modelName: "my_model",
+  outputDir: "./sml-output",
+});
+```
+
+```typescript
+function generateSMLFromTabular(
+  params: GenerateSMLFromTabularParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `xmlaFile` | `FileInput` | Yes | | Path to the TMSL/XMLA export, or a `Readable` of its contents |
+| `warehouse` | `"Snowflake" \| "Databricks" \| "BigQuery" \| "Postgres"` | Yes | | Target warehouse dialect |
+| `database` | `string` | Yes | | Primary connection database/catalog name |
+| `schema` | `string` | Yes | | Primary connection schema name |
+| `modelName` | `string` | Yes | | SML `model_unique_name` |
+| `outputDir` | `DirOutput` | Yes | | Directory where SML files will be written, or a `Writable` to receive a ZIP |
+| `catalogName` | `string` | No | `{modelName}_catalog` | Override the catalog `unique_name` |
+| `currency` | `string` | No | `"USD"` | Currency code used for currency-formatted metrics |
+| `description` | `string` | No | | Optional catalog/model description override |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 
 ---
@@ -1593,6 +1639,111 @@ function getDsoCount(
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
 | `catalog` | No | all available catalogs | Count only models from the specified catalog |
 | `model` | No | all available models | Count only the specified model |
+
+---
+
+#### Aggregate Management
+
+### `atScaleListAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists aggregates for a catalog/model, with a computed summary and health check.
+
+```typescript
+import { atScaleListAggregates } from "@atscale-ps/ps-utils";
+
+await atScaleListAggregates({
+  atscaleConnectionName: "ats_prod",
+  catalogId: "39e90725-98d4-5a17-aedd-02568e197062",
+  modelId:   "e20faf8b-9939-5fb2-96ee-07cfec79dc35",
+});
+```
+
+```typescript
+function atScaleListAggregates(
+  params: AtScaleListAggregatesParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `atscaleConnectionName` | `string` | Yes | | AtScale connection entry |
+| `catalogId` | `string` | Yes | | Catalog (project) UUID, from `atScaleListDeployments` |
+| `modelId` | `string` | Yes | | Model (cube) UUID, from `atScaleListDeployments` |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `limit` | `number` | No | `200` | Maximum number of aggregates to fetch |
+| `outputFile` | `FileOutput` | No | | When provided, also write a CSV export of the aggregates |
+| `insecure` | `boolean` | No | | Skip TLS certificate verification |
+
+---
+
+### `atScaleRebuildAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Triggers a full (default) or incremental aggregate rebuild for a catalog/model.
+
+```typescript
+import { atScaleRebuildAggregates } from "@atscale-ps/ps-utils";
+
+await atScaleRebuildAggregates({
+  atscaleConnectionName: "ats_prod",
+  catalogId: "39e90725-98d4-5a17-aedd-02568e197062",
+  modelId:   "e20faf8b-9939-5fb2-96ee-07cfec79dc35",
+});
+```
+
+```typescript
+function atScaleRebuildAggregates(
+  params: AtScaleRebuildAggregatesParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `atscaleConnectionName` | `string` | Yes | | AtScale connection entry |
+| `catalogId` | `string` | Yes | | Catalog (project) UUID, from `atScaleListDeployments` |
+| `modelId` | `string` | Yes | | Model (cube) UUID, from `atScaleListDeployments` |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `fullBuild` | `boolean` | No | `true` | Trigger a full build when `true`, or an incremental build when `false` |
+| `insecure` | `boolean` | No | | Skip TLS certificate verification |
+
+---
+
+### `atScaleListAggregateBuildHistory`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists recent aggregate build batches for a catalog/model, with parsed durations and a computed summary.
+
+```typescript
+import { atScaleListAggregateBuildHistory } from "@atscale-ps/ps-utils";
+
+await atScaleListAggregateBuildHistory({
+  atscaleConnectionName: "ats_prod",
+  catalogId: "39e90725-98d4-5a17-aedd-02568e197062",
+  modelId:   "e20faf8b-9939-5fb2-96ee-07cfec79dc35",
+});
+```
+
+```typescript
+function atScaleListAggregateBuildHistory(
+  params: AtScaleListAggregateBuildHistoryParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `atscaleConnectionName` | `string` | Yes | | AtScale connection entry |
+| `catalogId` | `string` | Yes | | Catalog (project) UUID, from `atScaleListDeployments` |
+| `modelId` | `string` | Yes | | Model (cube) UUID, from `atScaleListDeployments` |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `limit` | `number` | No | `20` | Maximum number of build batches to fetch |
+| `insecure` | `boolean` | No | | Skip TLS certificate verification |
 
 ---
 

@@ -9,7 +9,7 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
 - -- apply plan should show command
 - graphql output not going to output
 - web interface better + REST
-- tableau, mstr, ssas conversion
+- tableau, mstr conversion
   - find Hive dialect in a workbook
 - Apply style to SML
 - Add kubectl management commands; for example reading log files, updating passwords
@@ -39,7 +39,8 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
-    SSASMD["SSAS Multidimensional XMLA"] --> N["generate-sml-from-ssas-multidimensional"] --> SML
+    TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
+    SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -132,6 +133,17 @@ flowchart LR
     ATS --> H["atscale-list-model-errors"] --> INFO
 ```
 
+### Aggregate Management
+
+List, analyze, rebuild, and inspect the build history of AtScale aggregates for a given catalog/model.
+
+```mermaid
+flowchart LR
+    CONN["connections.yaml"] --> A["atscale-list-aggregates"] --> INFO["Aggregates + Summary + Health (stdout / CSV)"]
+    CONN --> B["atscale-rebuild-aggregates"] --> ATS["AtScale Instance"]
+    CONN --> C["atscale-list-aggregate-build-history"] --> HIST["Build History + Summary (stdout)"]
+```
+
 ## Table of Contents
 
 - [Setup](#setup)
@@ -145,6 +157,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -184,6 +197,10 @@ flowchart LR
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+  - Aggregate Management
+    - [`atscale-list-aggregates`](#atscale-list-aggregates)
+    - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
+    - [`atscale-list-aggregate-build-history`](#atscale-list-aggregate-build-history)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
   - Utilities
@@ -557,6 +574,63 @@ With optional overrides:
   metrics/<metric-name>.yml        (one per measure or inline expression)
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
+```
+
+---
+
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the TMSL model definition, though every table's partition query is parsed to recover its real physical table/column names where possible.
+
+This is a **Pass 1** structural migration: every fact, dimension, and relationship is built, along with metrics for mechanically-unambiguous measures (bare `SUM`/`AVERAGE`/`MIN`/`MAX`/`DISTINCTCOUNT`/`COUNT`/`COUNTROWS`). Complex DAX (`DIVIDE`, `CALCULATE`, `FILTER`, nested measure references, ...) is deliberately left untranslated in `DEFERRED_MEASURES.md` for a follow-up pass — arbitrary DAX-to-MDX translation needs per-measure human judgment.
+
+**Role-play family detection** is the core value-add: SSAS Tabular cannot role-play a dimension, so when the same real-world dimension is needed multiple times under different names (Order Date vs Ship Date), Tabular fakes it by importing the same source object once per role. This operation reads each table's partition query, resolves what object it actually reads from, and groups dimension tables that share the same source object into one consolidated SML dimension, wired to facts via SML `role_play` (when a fact has genuinely multiple distinct FK columns into the group) or an ordinary relationship (a single FK). Each role's original alias-prefix wording (e.g. "Serv", "AHP", "Refer Prov") is recovered by diffing member column aliases, so `role_play` labels reproduce historical naming.
+
+`--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-ddl`: optional unless a query-name collision occurs, at which point `new` renames colliding objects deterministically and `existing` preserves established names and reports a blocking conflict.
+
+```bash
+./atscale-utils generate-sml-from-tabular \
+  --xmla-file "./Model.xmla" \
+  --warehouse "Snowflake" \
+  --database "MY_DB" \
+  --schema "MY_SCHEMA" \
+  --model-name "my_model" \
+  --output-dir "./sml-output"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--xmla-file` | Yes | | Path to the TMSL/XMLA export (`createOrReplace` JSON) to convert |
+| `--warehouse` | Yes | | Target warehouse dialect: `Snowflake`, `Databricks`, `BigQuery`, or `Postgres` |
+| `--database` | Yes | | Primary connection database/catalog name |
+| `--schema` | Yes | | Primary connection schema name |
+| `--model-name` | Yes | | SML `model_unique_name` (snake_case recommended) |
+| `--output-dir` | Yes | | Directory to write SML files |
+| `--catalog-name` | No | `{model-name}_catalog` | Override the catalog `unique_name` |
+| `--currency` | No | `USD` | Currency code used for currency-formatted metrics |
+| `--description` | No | | Optional catalog/model description override |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
+
+**Output layout:**
+```
+<output-dir>/
+  catalog.yml
+  connections/<connection-name>.yml    (primary + one per cross-database source)
+  datasets/<dataset-name>.yml          (one per kept table/role-play family)
+  dimensions/<dim-name>.yml            (one per dimension table/role-play family)
+  metrics/<metric-name>.yml            (one per SIMPLE measure)
+  models/<model-name>.yml
+  README.md                            (build params, assumptions, generation summary)
+  DEFERRED_MEASURES.md                 (complex DAX left for manual follow-up)
+  CONVERSION_REPORT.md / .json         (complete account of what converted vs. what needs follow-up)
+  context/
+    <source file>                      (verbatim copy of the TMSL/XMLA export)
+    ddl.sql                            (derived CREATE TABLE statements, CONFIRMED or GUESSED per table)
+    erd.mmd                            (derived Mermaid ERD)
+    use_case.md                        (derived from the source model's own measures/hierarchies)
+    build.yaml                         (effective build parameters, incl. detected role-play families)
 ```
 
 ---
@@ -2100,6 +2174,92 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 † Provide exactly one of `--sml-dir`, `--repo-name`, or `--repo-id`.
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
+
+---
+
+#### Aggregate Management
+
+### `atscale-list-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists aggregates for a catalog/model, with a computed summary (type/subtype/status breakdowns, row and build-time totals, fastest/slowest/largest/smallest aggregate) and a health check (inactive aggregates, zero-row aggregates, slow builds).
+
+```bash
+./atscale-utils atscale-list-aggregates \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35" \
+  --output-file "./aggregates.csv"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--limit` | No | `200` | Maximum number of aggregates to fetch |
+| `--output-file` | No | | When provided, also write a CSV export of the aggregates to this path |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with `catalogId`, `modelId`, `total`, `aggregates` array, `summary` (breakdowns and totals), and `health` (`issues`, `warnings`, `healthScore`).
+
+---
+
+### `atscale-rebuild-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Triggers a full (default) or incremental aggregate rebuild for a catalog/model.
+
+```bash
+./atscale-utils atscale-rebuild-aggregates \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35" \
+  --full-build "true"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--full-build` | No | `true` | Trigger a full build when `true`, or an incremental build when `false` |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with the raw rebuild-trigger response from AtScale.
+
+---
+
+### `atscale-list-aggregate-build-history`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists recent aggregate build batches for a catalog/model, with parsed durations and a computed summary (success/failed/running counts, full-build count, average/min/max duration).
+
+```bash
+./atscale-utils atscale-list-aggregate-build-history \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--limit` | No | `20` | Maximum number of build batches to fetch |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with `catalogId`, `modelId`, `total`, `batches` array (with parsed `durationMs`/`estimateTimeMs`/`sumOfInstanceBuildTimesMs`), and `summary` (success/failed/running/full-build counts, avg/min/max duration).
 
 ---
 

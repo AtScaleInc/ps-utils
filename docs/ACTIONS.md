@@ -23,7 +23,8 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
-    SSASMD["SSAS Multidimensional XMLA"] --> N["generate-sml-from-ssas-multidimensional"] --> SML
+    TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
+    SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -101,6 +102,17 @@ flowchart LR
     ATS --> H["atscale-list-model-errors"] --> INFO
 ```
 
+### Aggregate Management
+
+List, analyze, rebuild, and inspect the build history of AtScale aggregates for a given catalog/model.
+
+```mermaid
+flowchart LR
+    CONN["connections.yaml"] --> A["atscale-list-aggregates"] --> INFO["Aggregates + Summary + Health (stdout / CSV)"]
+    CONN --> B["atscale-rebuild-aggregates"] --> ATS["AtScale Instance"]
+    CONN --> C["atscale-list-aggregate-build-history"] --> HIST["Build History + Summary (stdout)"]
+```
+
 ### Web Services
 
 Start an HTTP server that exposes every operation as both a GraphQL mutation and a REST endpoint.
@@ -126,6 +138,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -166,6 +179,10 @@ flowchart LR
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
     - [`deploy-atscale-microk8s`](#deploy-atscale-microk8s)
     - [`get-dso-count`](#get-dso-count)
+  - Aggregate Management
+    - [`atscale-list-aggregates`](#atscale-list-aggregates)
+    - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
+    - [`atscale-list-aggregate-build-history`](#atscale-list-aggregate-build-history)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
   - Utilities
@@ -189,7 +206,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 
 | Secret | Used by | Contents |
 |---|---|---|
-| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors` | Full contents of your `connections.yaml` file (or a `systems.properties` file for the query harness operations) |
+| `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors`, `atscale-list-aggregates`, `atscale-rebuild-aggregates`, `atscale-list-aggregate-build-history` | Full contents of your `connections.yaml` file (or a `systems.properties` file for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
 A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](../README.md#connection-yaml-connectionsyaml) for the full format reference.
@@ -452,6 +469,54 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 | `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+---
+
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) and converts it to AtScale SML YAML files. No database connection or secrets required — the conversion runs entirely from the TMSL model definition, though every table's partition query is parsed to recover its real physical table/column names where possible.
+
+Pass 1 structural migration: every fact, dimension, and relationship is built, plus metrics for mechanically-unambiguous measures. Complex DAX is left untranslated in `DEFERRED_MEASURES.md`. Dimension tables that share the same resolved physical source (Tabular's way of faking role-play, since it can't role-play a dimension) are consolidated into one SML dimension wired to facts via `role_play`.
+
+When a cross-dimension level-attribute query-name collision occurs, set `model-mode: new` to rename every collision member deterministically. Set `model-mode: existing` to preserve established names and fail for explicit compatibility review. With no collision, the input is optional.
+
+**Requires:** No secrets — the TMSL/XMLA file must be present in the repository.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-from-tabular
+    xmla-file: Model.xmla
+    warehouse: Snowflake
+    database: MY_DB
+    schema: MY_SCHEMA
+    model-name: my_model
+    output-dir: sml-output
+    catalog-name: "My Catalog"        # optional — defaults to {model-name}_catalog
+    currency: USD                     # optional — default USD
+    model-mode: new                   # optional; required in CI only when a collision occurs
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `xmla-file` | Yes | | Path to the TMSL/XMLA export (`createOrReplace` JSON) |
+| `warehouse` | Yes | | Target warehouse dialect: `Snowflake`, `Databricks`, `BigQuery`, or `Postgres` |
+| `database` | Yes | | Primary connection database/catalog name |
+| `schema` | Yes | | Primary connection schema name |
+| `model-name` | Yes | | SML `model_unique_name` |
+| `output-dir` | Yes | | Directory to write SML files |
+| `catalog-name` | No | `{model-name}_catalog` | Override the catalog `unique_name` |
+| `currency` | No | `USD` | Currency code used for currency-formatted metrics |
+| `description` | No | | Optional catalog/model description override |
+| `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+**Output:** `catalog.yml`, `connections/*.yml`, `datasets/*.yml`, `dimensions/*.yml`, `metrics/*.yml`, `models/<model-name>.yml`, `README.md`, `DEFERRED_MEASURES.md`, `CONVERSION_REPORT.md`/`.json`, and a `context/` folder (verbatim source copy + derived `ddl.sql`/`erd.mmd`/`use_case.md`/`build.yaml`).
 
 ---
 
@@ -1941,6 +2006,104 @@ Installs MicroK8s, configures it, and deploys AtScale via Helm on a remote VM ov
 1. Copies `genCerts.sh` and `values.yaml` from the repo to `/home/atscale/` on the remote host via SCP
 2. Installs `microk8s`, `kubectl`, `helm`, `yq`, and `net-tools` via SSH
 3. Generates TLS certs, enables `hostpath-storage` and `metallb`, patches the ingress gateway service, and deploys AtScale via `helm install`
+
+---
+
+#### Aggregate Management
+
+### `atscale-list-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists aggregates for a catalog/model, with a computed summary (type/subtype/status breakdowns, row and build-time totals, fastest/slowest/largest/smallest aggregate) and a health check (inactive aggregates, zero-row aggregates, slow builds).
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: atscale-list-aggregates
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    catalog-id: 39e90725-98d4-5a17-aedd-02568e197062
+    model-id: e20faf8b-9939-5fb2-96ee-07cfec79dc35
+    output-file: aggregates.csv
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `catalog-id` | Yes | | Catalog (project) UUID, from `atscale-list-deployments` |
+| `model-id` | Yes | | Model (cube) UUID, from `atscale-list-deployments` |
+| `limit` | No | `200` | Maximum number of aggregates to fetch |
+| `output-file` | No | | When provided, also write a CSV export of the aggregates to this path |
+| `connection-file` | Yes | `connections.yaml` | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with `catalogId`, `modelId`, `total`, `aggregates` array, `summary` (breakdowns and totals), and `health` (`issues`, `warnings`, `healthScore`).
+
+---
+
+### `atscale-rebuild-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Triggers a full (default) or incremental aggregate rebuild for a catalog/model.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: atscale-rebuild-aggregates
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    catalog-id: 39e90725-98d4-5a17-aedd-02568e197062
+    model-id: e20faf8b-9939-5fb2-96ee-07cfec79dc35
+    full-build: "true"
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `catalog-id` | Yes | | Catalog (project) UUID, from `atscale-list-deployments` |
+| `model-id` | Yes | | Model (cube) UUID, from `atscale-list-deployments` |
+| `full-build` | No | `true` | Trigger a full build when `true`, or an incremental build when `false` |
+| `connection-file` | Yes | `connections.yaml` | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with the raw rebuild-trigger response from AtScale.
+
+---
+
+### `atscale-list-aggregate-build-history`
+
+[↑ Table of Contents](#table-of-contents)
+
+Lists recent aggregate build batches for a catalog/model, with parsed durations and a computed summary (success/failed/running counts, full-build count, average/min/max duration).
+
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the named connection.
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: atscale-list-aggregate-build-history
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    atscale-connection-name: my_atscale
+    catalog-id: 39e90725-98d4-5a17-aedd-02568e197062
+    model-id: e20faf8b-9939-5fb2-96ee-07cfec79dc35
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
+| `catalog-id` | Yes | | Catalog (project) UUID, from `atscale-list-deployments` |
+| `model-id` | Yes | | Model (cube) UUID, from `atscale-list-deployments` |
+| `limit` | No | `20` | Maximum number of build batches to fetch |
+| `connection-file` | Yes | `connections.yaml` | Contents of the connections YAML (pass via secret) |
+| `insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with `catalogId`, `modelId`, `total`, `batches` array (with parsed `durationMs`/`estimateTimeMs`/`sumOfInstanceBuildTimesMs`), and `summary` (success/failed/running/full-build counts, avg/min/max duration).
 
 ---
 
