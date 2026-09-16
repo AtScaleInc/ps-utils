@@ -1641,6 +1641,12 @@ export async function convertXmlToSml(
     }
   }
 
+  // Aggregate-eligibility flags (from each <data-set>'s <properties>) keyed by the emitted
+  // dataset's unique_name — these have no home on the dataset object itself (see
+  // parseDatasetPhysical), so they're collected here and written onto catalog.yml's
+  // repository-wide `dataset_properties` map instead.
+  const datasetAggPropsByUniqueName = new Map<string, Record<string, boolean>>();
+
   for (const dsSec of arr(schemaEl["data-sets"])) {
     for (const ds of arr(dsSec["data-set"])) {
       const dsName = a(ds, "name");
@@ -1667,6 +1673,14 @@ export async function convertXmlToSml(
       const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
       const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
       for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
+
+      const aggProps: Record<string, boolean> = {};
+      if (physRpt?.allowAggregates !== undefined) aggProps.allow_aggregates = physRpt.allowAggregates;
+      if (physRpt?.allowLocalAggs !== undefined) aggProps.allow_local_aggs = physRpt.allowLocalAggs;
+      if (physRpt?.allowPeerAggs !== undefined) aggProps.allow_peer_aggs = physRpt.allowPeerAggs;
+      if (physRpt?.allowPreferredAggs !== undefined) aggProps.allow_preferred_aggs = physRpt.allowPreferredAggs;
+      if (Object.keys(aggProps).length) datasetAggPropsByUniqueName.set(`${dsName}.dataset`, aggProps);
+
       rptDatasets.push({
         name: dsName,
         file: `datasets/${fname}.yml`,
@@ -1682,7 +1696,7 @@ export async function convertXmlToSml(
   // Phase 6: Catalog and connection
   // ---------------------------------------------------------------
 
-  output.set("catalog.yml", buildCatalogYaml(catalogName));
+  output.set("catalog.yml", buildCatalogYaml(catalogName, datasetAggPropsByUniqueName));
 
   // Always emit the default connection, plus one per extra db/schema pair discovered
   // above (all variants of the same underlying AtScale-registered connection).
@@ -1822,6 +1836,16 @@ interface DatasetPhysical {
     parentColumn?: string;
   }>;
   immutable?: boolean;
+  /**
+   * Aggregate-eligibility flags from the dataset's sibling `<properties>` element (a peer
+   * of `<physical>`, not nested inside it). SML has no equivalent property on the dataset
+   * object itself — these are repository-wide overrides that belong on catalog.yml's
+   * `dataset_properties`, keyed by the dataset's unique_name (see buildCatalogYaml).
+   */
+  allowAggregates?: boolean;
+  allowLocalAggs?: boolean;
+  allowPeerAggs?: boolean;
+  allowPreferredAggs?: boolean;
 }
 
 // ============================================================
@@ -2419,6 +2443,23 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const immutableStr = s(first(arr(physSec.immutable)));
   const immutable = immutableStr === "true" ? true : undefined;
 
+  // Aggregate-eligibility flags from the sibling <properties> element:
+  //   <properties>
+  //     <allow-aggregates>true</allow-aggregates>
+  //     <aggregate-destinations>
+  //       <allow-local>true</allow-local><allow-peer>true</allow-peer><allow-preferred>true</allow-preferred>
+  //     </aggregate-destinations>
+  //   </properties>
+  // `<properties>` is a peer of `<physical>` on the <data-set> element (dsEl), not nested
+  // inside it.
+  const boolFrom = (v: string | undefined): boolean | undefined => (v === "true" ? true : v === "false" ? false : undefined);
+  const propsSec = first(arr(dsEl.properties)) as Record<string, unknown> | undefined;
+  const allowAggregates = boolFrom(s(first(arr(propsSec?.["allow-aggregates"]))));
+  const aggDestEl = first(arr(propsSec?.["aggregate-destinations"])) as Record<string, unknown> | undefined;
+  const allowLocalAggs = boolFrom(s(first(arr(aggDestEl?.["allow-local"]))));
+  const allowPeerAggs = boolFrom(s(first(arr(aggDestEl?.["allow-peer"]))));
+  const allowPreferredAggs = boolFrom(s(first(arr(aggDestEl?.["allow-preferred"]))));
+
   // Column definitions from <column><name>...</name><type>...</type></column>, optionally
   // <sql>...</sql> for a computed column (an expression aliased under this column name,
   // rather than a direct passthrough of a real table column) — without it, the computed
@@ -2515,6 +2556,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
 
   const columns = columnOrder.map((name) => columnsByName.get(name)!);
   const colsResult = columns.length ? columns : undefined;
+  const aggFlags = { allowAggregates, allowLocalAggs, allowPeerAggs, allowPreferredAggs };
 
   const tableEl = first(arr(physSec.table)) as Record<string, unknown> | undefined;
   // A dataset can declare multiple <query> elements: the base query (no "alternate"
@@ -2528,7 +2570,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     const db = s(first(arr(tableEl.database)));
     const schema = s(first(arr(tableEl.schema)));
     const tableName = s(first(arr(tableEl.name)));
-    return { db, schema, tableName, connectionName, columns: colsResult, immutable };
+    return { db, schema, tableName, connectionName, columns: colsResult, immutable, ...aggFlags };
   }
 
   if (queryEl) {
@@ -2550,11 +2592,12 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
         connectionName,
         columns: colsResult,
         immutable,
+        ...aggFlags,
       };
     }
   }
 
-  return { connectionName, columns: colsResult, immutable };
+  return { connectionName, columns: colsResult, immutable, ...aggFlags };
 }
 
 /** Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants. */
@@ -3997,15 +4040,24 @@ function inferRelationships(
 // Phase 6: Catalog, connection, model YAML
 // ============================================================
 
-function buildCatalogYaml(catalogName: string): string {
-  return toYaml({
+function buildCatalogYaml(
+  catalogName: string,
+  /** Per-dataset aggregate-eligibility overrides (unique_name → flags), from each XML
+   * <data-set>'s <properties> — see the `dataset_properties` property in the SML reference. */
+  datasetProperties?: Map<string, Record<string, boolean>>,
+): string {
+  const obj: Record<string, unknown> = {
     unique_name: `${catalogName}.catalog`,
     object_type: "catalog",
     label: catalogName,
     version: 1.5,
     aggressive_agg_promotion: false,
     build_speculative_aggs: false,
-  });
+  };
+  if (datasetProperties?.size) {
+    obj.dataset_properties = Object.fromEntries(datasetProperties);
+  }
+  return toYaml(obj);
 }
 
 function buildConnectionYaml(
