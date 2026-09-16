@@ -799,6 +799,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const caption = mProps ? s(first(arr(mProps.caption))) : undefined;
         const mVisible = mProps ? s(first(arr(mProps.visible))) !== "false" : true;
         const folder = mProps ? s(first(arr(mProps.folder))) : undefined;
+        const mFmtEl = mProps ? (first(arr(mProps.formatting)) as El | undefined) : undefined;
+        const format = mFmtEl ? (s(first(arr(mFmtEl["format-string"]))) ?? s(first(arr(mFmtEl["named-format"])))) : undefined;
         const typeEl = mProps ? (first(arr(mProps.type)) as El | undefined) : undefined;
         const measureEl = typeEl ? (first(arr(typeEl.measure)) as El | undefined) : undefined;
         const countDistEl = typeEl ? (first(arr(typeEl["count-distinct"])) as El | undefined) : undefined;
@@ -884,13 +886,14 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           semiAdditive,
           code(boundTo),
           cell(folder),
+          cell(format),
           flag(!mVisible) ? "hidden" : "",
         ]);
       }
     }
     if (measureRows.length) {
       o.push("**Measures**", "");
-      o.push(...table(["Name", "Caption", "Kind", "Aggregation", "Semi-additive", "Bound to (dataset.column)", "Folder", "Hidden"], measureRows));
+      o.push(...table(["Name", "Caption", "Kind", "Aggregation", "Semi-additive", "Bound to (dataset.column)", "Folder", "Format", "Hidden"], measureRows));
     }
 
     // Calculated members used by this cube (resolved against the schema library).
