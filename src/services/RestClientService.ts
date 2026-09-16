@@ -83,8 +83,10 @@ export abstract class RestEnvironment {
    * Axios options every request through this environment should carry.
    * Kept here so the auth paths, which build their own axios calls rather than
    * going through `RestClientService`, cannot silently miss them.
+   *
+   * @internal — also called by `RestClientService.dispatch()`.
    */
-  protected requestDefaults(): { timeout?: number } {
+  requestDefaults(): { timeout?: number } {
     return this.timeoutMs === undefined ? {} : { timeout: this.timeoutMs };
   }
 
@@ -329,7 +331,7 @@ export class RestClientService extends ServiceProvider {
       httpsAgent: environment.insecure
         ? new https.Agent({ rejectUnauthorized: false })
         : undefined,
-      ...(environment.timeoutMs === undefined ? {} : { timeout: environment.timeoutMs }),
+      ...environment.requestDefaults(),
     };
 
     this.logger?.verbose(`[REST] → ${request.method} ${url}`);
