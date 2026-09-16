@@ -337,7 +337,14 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (raw.connection_id) meta.push(`- Connection: \`${cell(raw.connection_id)}\``);
     if (raw.table) meta.push(`- Table: \`${cell(tableRef(raw.table))}\``);
     if (raw.sql) meta.push(`- Backed by a SQL query (view)`);
-    if (raw.allow_aggregates !== undefined) meta.push(`- Allow aggregates: ${flag(raw.allow_aggregates) || "no"}`);
+    if (raw.immutable !== undefined) meta.push(`- Immutable: ${flag(raw.immutable) || "no"}`);
+    // `allow_aggregates` is not a dataset-object property in SML — it's a repository-wide
+    // override on catalog.yml's `dataset_properties`, keyed by the dataset's unique_name.
+    // Fall back to a value on the dataset object itself in case a hand-authored file put it
+    // there directly (harmless either way; the schema is permissive).
+    const catalogAggProps = (catalog.dataset_properties as Raw | undefined)?.[String(raw.unique_name ?? "")];
+    const allowAggregates = raw.allow_aggregates !== undefined ? raw.allow_aggregates : catalogAggProps?.allow_aggregates;
+    if (allowAggregates !== undefined) meta.push(`- Allow aggregates: ${flag(allowAggregates) || "no"}`);
     meta.push(
       `- Used by ${datasetAttrCount.get(nn) ?? 0} level attribute(s) across all dimensions, ${datasetMetricCount.get(nn) ?? 0} metric(s), and ${datasetRelCount.get(nn) ?? 0} relationship(s) across all models`,
     );
