@@ -1030,6 +1030,76 @@ export async function getDsoCount(p: GetDsoCountParams, o: LibraryOptions = {}) 
   } finally { cleanup(); }
 }
 
+// ── Aggregate Management ──────────────────────────────────────────────────────
+
+export type AtScaleListAggregatesParams = {
+  atscaleConnectionName: string;
+  catalogId: string;
+  modelId: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  limit?: number;              // default: 200
+  outputFile?: FileOutput;
+  insecure?: boolean;
+};
+
+export async function atScaleListAggregates(p: AtScaleListAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("atscale-list-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+      "limit": 200,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleRebuildAggregatesParams = {
+  atscaleConnectionName: string;
+  catalogId: string;
+  modelId: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  fullBuild?: boolean;         // default: true
+  insecure?: boolean;
+};
+
+export async function atScaleRebuildAggregates(p: AtScaleRebuildAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+  });
+  try {
+    await run("atscale-rebuild-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+      "full-build": true,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleListAggregateBuildHistoryParams = {
+  atscaleConnectionName: string;
+  catalogId: string;
+  modelId: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  limit?: number;              // default: 20
+  insecure?: boolean;
+};
+
+export async function atScaleListAggregateBuildHistory(p: AtScaleListAggregateBuildHistoryParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+  });
+  try {
+    await run("atscale-list-aggregate-build-history", Object.assign({
+      "connection-file": "connections.yaml",
+      "limit": 20,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 export type VersionParams = Record<string, never>;

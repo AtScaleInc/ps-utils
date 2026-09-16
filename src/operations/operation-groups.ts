@@ -97,6 +97,14 @@ export const OPERATION_GROUPS: OperationGroup[] = [
     ],
   },
   {
+    name: "Aggregate Management",
+    operations: [
+      "atscale-list-aggregates",
+      "atscale-rebuild-aggregates",
+      "atscale-list-aggregate-build-history",
+    ],
+  },
+  {
     name: "Web Services",
     operations: ["execute-web-services"],
   },

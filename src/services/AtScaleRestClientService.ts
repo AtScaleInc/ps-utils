@@ -924,6 +924,164 @@ class GetTableInfoRequest extends RestRequest<GetTableInfoArgs, TableInfoResult>
   }
 }
 
+// ── 10. List aggregates for a catalog/model ───────────────────────────────────
+
+export type GetAggregatesByCubeArgs = {
+  catalogId: string;
+  modelId:   string;
+  /** Max aggregates to fetch. Defaults to 200. */
+  limit?:    number;
+};
+
+export type AggregateInstanceStats = {
+  buildDurationMs?:          number;
+  numberOfRows?:             number;
+  materializationStartTime?: string;
+  materializationEndTime?:   string;
+};
+
+export type AggregateInstance = {
+  id:            string;
+  catalogId:     string;
+  modelId:       string;
+  connectionId?: string;
+  status:        string;
+  message?:      string;
+  tableName?:    string;
+  tableSchema?:  string;
+  batchId?:      string;
+  stats:         AggregateInstanceStats;
+  [key: string]: unknown;
+};
+
+export type GetAggregatesByCubeResult = {
+  data:  AggregateInstance[];
+  total: number;
+};
+
+class GetAggregatesByCubeRequest extends RestRequest<GetAggregatesByCubeArgs, GetAggregatesByCubeResult> {
+  readonly method = "GET" as const;
+
+  path(_args: GetAggregatesByCubeArgs): string {
+    return "/v1/aggregates/instances";
+  }
+
+  query(args: GetAggregatesByCubeArgs): Record<string, string> {
+    return {
+      catalogId: args.catalogId,
+      modelId:   args.modelId,
+      limit:     String(args.limit ?? 200),
+    };
+  }
+
+  parse(data: unknown): GetAggregatesByCubeResult {
+    const body = (data ?? {}) as Record<string, any>;
+    const instances = (body.data ?? []) as Array<Record<string, any>>;
+    const normalized: AggregateInstance[] = instances.map((agg) => {
+      const stats = agg.stats ?? {};
+      return {
+        id:           agg.definitionId ?? agg.id ?? "",
+        catalogId:    agg.catalogId ?? "",
+        modelId:      agg.modelId ?? "",
+        connectionId: agg.connectionId,
+        status:       agg.status ?? "unknown",
+        message:      agg.message,
+        tableName:    agg.tableName,
+        tableSchema:  agg.tableSchema,
+        batchId:      agg.buildQueryId,
+        stats: {
+          buildDurationMs:          stats.buildDuration,
+          numberOfRows:             stats.numberOfRows,
+          materializationStartTime: stats.materializationStartTime,
+          materializationEndTime:   stats.materializationEndTime,
+        },
+      };
+    });
+    return { data: normalized, total: body.total ?? normalized.length };
+  }
+}
+
+// ── 11. Rebuild aggregates for a catalog/model ────────────────────────────────
+
+export type RebuildAggregatesArgs = {
+  catalogId:   string;
+  modelId:     string;
+  /** Defaults to true (full build). */
+  isFullBuild?: boolean;
+};
+
+export type RebuildAggregatesResult = Record<string, unknown>;
+
+class RebuildAggregatesRequest extends RestRequest<RebuildAggregatesArgs, RebuildAggregatesResult> {
+  readonly method = "POST" as const;
+
+  path(args: RebuildAggregatesArgs): string {
+    return `/v1/aggregates-batch/catalogs/${encodeURIComponent(args.catalogId)}/models/${encodeURIComponent(args.modelId)}`;
+  }
+
+  query(args: RebuildAggregatesArgs): Record<string, string> {
+    return { isFullBuild: String(args.isFullBuild ?? true) };
+  }
+
+  body(_args: RebuildAggregatesArgs): unknown {
+    return { gracePeriodOverrides: {} };
+  }
+
+  parse(data: unknown): RebuildAggregatesResult {
+    return (data ?? {}) as RebuildAggregatesResult;
+  }
+}
+
+// ── 12. Aggregate build history ───────────────────────────────────────────────
+
+export type GetAggregateBuildHistoryArgs = {
+  catalogId: string;
+  modelId:   string;
+  /** Max batches to fetch. Defaults to 20. */
+  limit?:    number;
+};
+
+export type AggregateBuildBatch = {
+  id:                      string;
+  status:                  string;
+  isFullBuild?:            boolean;
+  batchType?:              string;
+  createDate?:             string;
+  startTime?:              string;
+  endTime?:                string;
+  estimateTime?:           number;
+  sumOfInstanceBuildTimes?: string;
+  [key: string]: unknown;
+};
+
+export type GetAggregateBuildHistoryResult = {
+  data:  AggregateBuildBatch[];
+  total: number;
+};
+
+class GetAggregateBuildHistoryRequest extends RestRequest<GetAggregateBuildHistoryArgs, GetAggregateBuildHistoryResult> {
+  readonly method = "GET" as const;
+
+  path(_args: GetAggregateBuildHistoryArgs): string {
+    return "/wapi/p/aggregate/batch-history";
+  }
+
+  query(args: GetAggregateBuildHistoryArgs): Record<string, string> {
+    return {
+      page:      "1",
+      limit:     String(args.limit ?? 20),
+      catalogId: args.catalogId,
+      modelId:   args.modelId,
+    };
+  }
+
+  parse(data: unknown): GetAggregateBuildHistoryResult {
+    const body = (data ?? {}) as Record<string, any>;
+    const batches = (body.data ?? []) as AggregateBuildBatch[];
+    return { data: batches, total: body.total ?? batches.length };
+  }
+}
+
 // ── AtScaleRestClientService ───────────────────────────────────────────────────
 
 /**
@@ -943,6 +1101,9 @@ export class AtScaleRestClientService extends ServiceProvider {
   private readonly listModelsRequest        = new ListModelsRequest();
   private readonly listTablesRequest        = new ListTablesRequest();
   private readonly getTableInfoRequest      = new GetTableInfoRequest();
+  private readonly getAggregatesByCubeRequest       = new GetAggregatesByCubeRequest();
+  private readonly rebuildAggregatesRequest         = new RebuildAggregatesRequest();
+  private readonly getAggregateBuildHistoryRequest  = new GetAggregateBuildHistoryRequest();
 
   constructor(private readonly restClient: RestClientService) {
     super();
@@ -1046,5 +1207,38 @@ export class AtScaleRestClientService extends ServiceProvider {
    */
   async getTableInfo(env: AtScaleEnvironment, args: GetTableInfoArgs): Promise<TableInfoResult> {
     return this.restClient.execute(this.getTableInfoRequest, args, env);
+  }
+
+  /**
+   * List aggregate instances for a catalog/model.
+   * Maps to: GET /v1/aggregates/instances
+   */
+  async getAggregatesByCube(
+    env: AtScaleEnvironment,
+    args: GetAggregatesByCubeArgs,
+  ): Promise<GetAggregatesByCubeResult> {
+    return this.restClient.execute(this.getAggregatesByCubeRequest, args, env);
+  }
+
+  /**
+   * Trigger a full or incremental aggregate rebuild for a catalog/model.
+   * Maps to: POST /v1/aggregates-batch/catalogs/{catalogId}/models/{modelId}
+   */
+  async rebuildAggregates(
+    env: AtScaleEnvironment,
+    args: RebuildAggregatesArgs,
+  ): Promise<RebuildAggregatesResult> {
+    return this.restClient.execute(this.rebuildAggregatesRequest, args, env);
+  }
+
+  /**
+   * List aggregate build (batch) history for a catalog/model.
+   * Maps to: GET /wapi/p/aggregate/batch-history
+   */
+  async getAggregateBuildHistory(
+    env: AtScaleEnvironment,
+    args: GetAggregateBuildHistoryArgs,
+  ): Promise<GetAggregateBuildHistoryResult> {
+    return this.restClient.execute(this.getAggregateBuildHistoryRequest, args, env);
   }
 }
