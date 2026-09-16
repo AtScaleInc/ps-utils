@@ -484,6 +484,10 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 
 **Requires:** No secrets — the TMSL/XMLA file must be present in the repository.
 
+**Getting the TMSL/XMLA export:** in SSMS, connect to the Analysis Services **Tabular** instance, right-click the database → **Script Database as** → **Create To** → **File...**. For a Tabular database (compatibility level 1200+) the saved file's contents are the TMSL `createOrReplace` JSON this operation expects, despite the `.xmla` extension. [Tabular Editor](https://tabulareditor.com/)'s Advanced Scripting (Create or Replace) produces the same script, and `Invoke-ASCmd`/the `Microsoft.AnalysisServices.Tabular` API can generate it non-interactively for a pipeline that needs to pull it fresh before conversion.
+
+**What to expect:** a Pass 1 structural migration, not a deploy-ready model. After the step runs, pull the generated `README.md`, `DEFERRED_MEASURES.md` (untranslated DAX needing manual follow-up), and `CONVERSION_REPORT.md`/`.json` (issues by severity) as workflow artifacts so a human can review them — see the `generate-sml-from-tabular` section of the main README for the full checklist.
+
 #### Using the composite action
 
 ```yaml

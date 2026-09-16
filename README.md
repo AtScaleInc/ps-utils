@@ -590,6 +590,14 @@ This is a **Pass 1** structural migration: every fact, dimension, and relationsh
 
 `--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-ddl`: optional unless a query-name collision occurs, at which point `new` renames colliding objects deterministically and `existing` preserves established names and reports a blocking conflict.
 
+**Getting the TMSL/XMLA export:** this operation does not connect to SSAS itself — you supply the export file. To produce it:
+
+1. In SQL Server Management Studio (SSMS), connect to the Analysis Services **Tabular** instance (Object Explorer → Connect → Analysis Services).
+2. Right-click the target database (not the server) → **Script Database as** → **Create To** → **File...**, and save it.
+3. SSMS saves this with an `.xmla` extension for both Tabular and Multidimensional servers, but for a Tabular database (compatibility level 1200+) the body of the file is actually the **TMSL `createOrReplace` JSON** this operation expects — pass that file straight to `--xmla-file`.
+
+Alternatives: [Tabular Editor](https://tabulareditor.com/) can produce the same `createOrReplace` script (Advanced Scripting → Create or Replace), and `Invoke-ASCmd`/the `Microsoft.AnalysisServices.Tabular` API can script this non-interactively for CI pipelines.
+
 ```bash
 ./atscale-utils generate-sml-from-tabular \
   --xmla-file "./Model.xmla" \
@@ -632,6 +640,14 @@ This is a **Pass 1** structural migration: every fact, dimension, and relationsh
     use_case.md                        (derived from the source model's own measures/hierarchies)
     build.yaml                         (effective build parameters, incl. detected role-play families)
 ```
+
+**What to expect:** this is a Pass 1 structural migration, not a finished, deploy-ready model — treat the output as a strong first draft, not the final word. After it runs:
+
+1. Read the generated `README.md` first — it documents every assumption the conversion made (role-play families detected, any table whose physical source couldn't be confirmed and had to be guessed from its Tabular display name, cross-database connections it created automatically) and a summary of what got built.
+2. Check `DEFERRED_MEASURES.md` — every DAX measure that wasn't a bare `SUM`/`AVERAGE`/`MIN`/`MAX`/`DISTINCTCOUNT`/`COUNT`/`COUNTROWS` is listed here with its original DAX, untranslated. These need a human to design the equivalent SML metric (`calculations/`) — arbitrary DAX-to-MDX translation isn't something this operation attempts.
+3. Check `CONVERSION_REPORT.md`/`.json` for the full list of issues by severity — `error` means something was dropped and likely needs a fix, `action_needed` means it's usable but a human should confirm something (e.g. a guessed physical table name) before trusting it in production.
+4. Verify any table/column marked "GUESSED" (rather than "CONFIRMED") in `context/ddl.sql` against real DDL or a data profile before deploying — a guess is a naming-convention fallback, not a confirmed physical source.
+5. Run the result through `atscale-list-model-errors` (or your normal SML validation step) before deploying, the same as any other generated SML.
 
 ---
 
