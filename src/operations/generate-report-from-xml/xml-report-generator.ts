@@ -215,6 +215,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   const datasetIdToName = new Map<string, string>();
   const datasets: DatasetDef[] = [];
+  // Populated alongside `datasets` in Phase 1 so Phase 5 (cube-scoped data-set-ref
+  // key-refs/attribute-refs) can add its counts onto the same DatasetDef instance
+  // instead of only feeding keyMap/attrMap — see the Phase 5 comment below.
+  const datasetByName = new Map<string, DatasetDef>();
   const keyMap = new Map<string, KeyBinding[]>();
   const attrMap = new Map<string, AttrBinding[]>();
   const connectionIds = new Set<string>();
@@ -281,7 +285,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         attrRefCount += attrRefs;
       }
 
-      datasets.push({ name, id, allowAggregates, connectionId, table, sql, immutable, columns, keyRefCount, attrRefCount });
+      const datasetDef = { name, id, allowAggregates, connectionId, table, sql, immutable, columns, keyRefCount, attrRefCount };
+      datasets.push(datasetDef);
+      datasetByName.set(name, datasetDef);
     }
   }
 
@@ -378,7 +384,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   // ── Phase 5: cubes — need each cube's OWN data-set-ref key-refs/attribute-refs
   //    ingested into keyMap/attrMap (tagged with the cube name) so joins and
-  //    measure/dimension dataset bindings resolve per cube, same as datasets. ──
+  //    measure/dimension dataset bindings resolve per cube, same as datasets.
+  //    A dataset's own top-level <logical> block (Phase 1) can be empty even when
+  //    the dataset is fully bound — the bindings live only under the referencing
+  //    cube's <data-set-ref><logical>, so these counts must ALSO be added onto the
+  //    dataset's own keyRefCount/attrRefCount, or the report undercounts usage. ──
 
   const cubeEls = arr(schemaEl.cubes).flatMap((c) => arr(c.cube));
   for (const cube of cubeEls) {
@@ -389,7 +399,14 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(dsRef, "id");
         const dsName = refId ? datasetIdToName.get(refId) ?? refId : undefined;
         if (!dsName) continue;
-        for (const logSec of arr(dsRef.logical)) ingestLogical(logSec, dsName, cubeName);
+        const targetDs = datasetByName.get(dsName);
+        for (const logSec of arr(dsRef.logical)) {
+          const { keyRefs, attrRefs } = ingestLogical(logSec, dsName, cubeName);
+          if (targetDs) {
+            targetDs.keyRefCount += keyRefs;
+            targetDs.attrRefCount += attrRefs;
+          }
+        }
       }
     }
     for (const dimsSec of arr(cube.dimensions)) {
@@ -802,9 +819,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             semiAdditive = fn ?? "";
           }
         } else if (countDistEl) {
-          kind = "count-distinct";
+          // "count distinct" (spaced) is the canonical SML aggregation-type wording,
+          // not the raw XML element/tag name — matches generate-sml-from-xml's mapping.
+          kind = "count distinct";
         } else if (countNonNullEl) {
-          kind = "count-nonnull";
+          kind = "count non-null";
         } else if (quantileInstanceEl) {
           kind = "percentile";
           const quantileVal = s(first(arr(quantileInstanceEl["quantile-val"])));
