@@ -36,6 +36,8 @@ import { AtScaleListModelErrorsOperation } from "./atscale-list-model-errors/AtS
 import { AtScaleListAggregatesOperation } from "./atscale-list-aggregates/AtScaleListAggregatesOperation.js";
 import { AtScaleRebuildAggregatesOperation } from "./atscale-rebuild-aggregates/AtScaleRebuildAggregatesOperation.js";
 import { AtScaleListAggregateBuildHistoryOperation } from "./atscale-list-aggregate-build-history/AtScaleListAggregateBuildHistoryOperation.js";
+import { AtScaleExportAggregatesOperation } from "./atscale-export-aggregates/AtScaleExportAggregatesOperation.js";
+import { AtScaleImportAggregatesOperation } from "./atscale-import-aggregates/AtScaleImportAggregatesOperation.js";
 import { GenerateDDLFromAtScaleOperation } from "./generate-ddl-from-atscale/GenerateDDLFromAtScaleOperation.js";
 import { ExtractDataShapeFromConnectionOperation } from "./extract-data-shape-from-connection/ExtractDataShapeFromConnectionOperation.js";
 import { GenerateDDLFromDataShapeOperation } from "./generate-ddl-from-data-shape/GenerateDDLFromDataShapeOperation.js";
@@ -100,6 +102,8 @@ export async function buildRegistry(
   registry.register(new AtScaleListAggregatesOperation(services, logger));
   registry.register(new AtScaleRebuildAggregatesOperation(services, logger));
   registry.register(new AtScaleListAggregateBuildHistoryOperation(services, logger));
+  registry.register(new AtScaleExportAggregatesOperation(services, logger));
+  registry.register(new AtScaleImportAggregatesOperation(services, logger));
   registry.register(new GenerateDDLFromAtScaleOperation(services, logger));
   registry.register(new ExtractDataShapeFromConnectionOperation(services, logger));
   registry.register(new GenerateDDLFromDataShapeOperation(services, logger));

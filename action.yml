@@ -55,6 +55,8 @@ inputs:
         atscale-list-aggregates
         atscale-rebuild-aggregates
         atscale-list-aggregate-build-history
+        atscale-export-aggregates
+        atscale-import-aggregates
     required: true
 
   # ── Shared ────────────────────────────────────────────────────────────────
@@ -325,6 +327,7 @@ inputs:
       For generate-report-from-xml: Markdown report output file (omit to print to stdout).
       For generate-report-from-sml: Markdown report output file (omit to print to stdout).
       For atscale-list-aggregates: CSV export path (omit to skip the CSV export).
+      For atscale-export-aggregates: export JSON output path (default: aggregates-export-<catalog-id>-<model-id>.json).
     required: false
   apply:
     description: >
@@ -745,7 +748,8 @@ inputs:
                atscale-list-deployments, atscale-deploy-catalog,
                atscale-list-model-errors, generate-ddl-from-atscale,
                atscale-list-aggregates, atscale-rebuild-aggregates,
-               atscale-list-aggregate-build-history.
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
     required: false
   data-source-name:
     description: >
@@ -797,27 +801,60 @@ inputs:
                atscale-list-deployments, atscale-deploy-catalog,
                atscale-list-model-errors, generate-ddl-from-atscale,
                atscale-list-aggregates, atscale-rebuild-aggregates,
-               atscale-list-aggregate-build-history.
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
     required: false
     default: "true"
 
-  # ── atscale-list-aggregates / atscale-rebuild-aggregates / atscale-list-aggregate-build-history ──
+  # ── atscale-list-aggregates / atscale-rebuild-aggregates / atscale-list-aggregate-build-history / atscale-export-aggregates / atscale-import-aggregates ──
   catalog-id:
     description: >
-      Catalog (project) UUID, from atscale-list-deployments.
+      Catalog (project) UUID, from atscale-list-deployments. When omitted (with model-id),
+      deployed catalogs/models are listed and an error lists them (GitHub Actions runs non-interactively).
       Used by: atscale-list-aggregates, atscale-rebuild-aggregates,
-               atscale-list-aggregate-build-history.
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
     required: false
   model-id:
     description: >
-      Model (cube) UUID, from atscale-list-deployments.
+      Model (cube) UUID, from atscale-list-deployments. See catalog-id for behavior when omitted.
       Used by: atscale-list-aggregates, atscale-rebuild-aggregates,
-               atscale-list-aggregate-build-history.
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
     required: false
   full-build:
     description: >
       Trigger a full build when true, or an incremental build when false. Defaults to true.
       Used by: atscale-rebuild-aggregates.
+    required: false
+    default: "true"
+  input-file:
+    description: >
+      Path to the export JSON file to import.
+      Used by: atscale-import-aggregates.
+    required: false
+  connection-remap:
+    description: >
+      Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by
+      the imported aggregates.
+      Used by: atscale-import-aggregates.
+    required: false
+  import-distribution-key:
+    description: >
+      Import distribution-key hints. Defaults to true.
+      Used by: atscale-import-aggregates.
+    required: false
+    default: "true"
+  import-partition-keys:
+    description: >
+      Import partition-key hints. Defaults to true.
+      Used by: atscale-import-aggregates.
+    required: false
+    default: "true"
+  import-replication:
+    description: >
+      Import replication hints. Defaults to true.
+      Used by: atscale-import-aggregates.
     required: false
     default: "true"
 
@@ -958,7 +995,9 @@ runs:
          inputs.operation == 'generate-enhanced-query-results' ||
          inputs.operation == 'atscale-list-aggregates' ||
          inputs.operation == 'atscale-rebuild-aggregates' ||
-         inputs.operation == 'atscale-list-aggregate-build-history')
+         inputs.operation == 'atscale-list-aggregate-build-history' ||
+         inputs.operation == 'atscale-export-aggregates' ||
+         inputs.operation == 'atscale-import-aggregates')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -1381,11 +1420,11 @@ runs:
         ARGS=(
           --connection-file         "${{ github.action_path }}/connection.yml"
           --atscale-connection-name "${{ inputs.atscale-connection-name }}"
-          --catalog-id              "${{ inputs.catalog-id }}"
-          --model-id                "${{ inputs.model-id }}"
           --insecure                "${{ inputs.insecure }}"
           --verbose true
         )
+        [[ -n "${{ inputs.catalog-id }}" ]]  && ARGS+=(--catalog-id  "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]    && ARGS+=(--model-id    "${{ inputs.model-id }}")
         [[ -n "${{ inputs.limit }}" ]]       && ARGS+=(--limit       "${{ inputs.limit }}")
         [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" atscale-list-aggregates "${ARGS[@]}"
@@ -1395,14 +1434,16 @@ runs:
     - name: Rebuild AtScale aggregates
       if: inputs.operation == 'atscale-rebuild-aggregates'
       run: |
-        node "${{ github.action_path }}/dist/cli.js" atscale-rebuild-aggregates \
-          --connection-file "${{ github.action_path }}/connection.yml" \
-          --atscale-connection-name "${{ inputs.atscale-connection-name }}" \
-          --catalog-id "${{ inputs.catalog-id }}" \
-          --model-id "${{ inputs.model-id }}" \
-          --full-build "${{ inputs.full-build }}" \
-          --insecure "${{ inputs.insecure }}" \
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --full-build "${{ inputs.full-build }}"
+          --insecure "${{ inputs.insecure }}"
           --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]] && ARGS+=(--catalog-id "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]   && ARGS+=(--model-id   "${{ inputs.model-id }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-rebuild-aggregates "${ARGS[@]}"
       shell: bash
 
     # ── atscale-list-aggregate-build-history ──────────────────────────────────
@@ -1412,13 +1453,49 @@ runs:
         ARGS=(
           --connection-file         "${{ github.action_path }}/connection.yml"
           --atscale-connection-name "${{ inputs.atscale-connection-name }}"
-          --catalog-id              "${{ inputs.catalog-id }}"
-          --model-id                "${{ inputs.model-id }}"
           --insecure                "${{ inputs.insecure }}"
           --verbose true
         )
+        [[ -n "${{ inputs.catalog-id }}" ]] && ARGS+=(--catalog-id "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]   && ARGS+=(--model-id   "${{ inputs.model-id }}")
         [[ -n "${{ inputs.limit }}" ]] && ARGS+=(--limit "${{ inputs.limit }}")
         node "${{ github.action_path }}/dist/cli.js" atscale-list-aggregate-build-history "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-export-aggregates ──────────────────────────────────────────────
+    - name: Export AtScale aggregates
+      if: inputs.operation == 'atscale-export-aggregates'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]]  && ARGS+=(--catalog-id  "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]    && ARGS+=(--model-id    "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-export-aggregates "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-import-aggregates ──────────────────────────────────────────────
+    - name: Import AtScale aggregates
+      if: inputs.operation == 'atscale-import-aggregates'
+      run: |
+        ARGS=(
+          --connection-file             "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name     "${{ inputs.atscale-connection-name }}"
+          --input-file                  "${{ inputs.input-file }}"
+          --import-distribution-key     "${{ inputs.import-distribution-key }}"
+          --import-partition-keys       "${{ inputs.import-partition-keys }}"
+          --import-replication          "${{ inputs.import-replication }}"
+          --insecure                    "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]]        && ARGS+=(--catalog-id       "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]          && ARGS+=(--model-id         "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.connection-remap }}" ]]  && ARGS+=(--connection-remap "${{ inputs.connection-remap }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-import-aggregates "${ARGS[@]}"
       shell: bash
 
     # ── atscale-deploy-catalog ───────────────────────────────────────────────────

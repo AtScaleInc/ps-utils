@@ -134,13 +134,20 @@ flowchart LR
 
 ### Aggregate Management
 
-List, analyze, rebuild, and inspect the build history of AtScale aggregates for a given catalog/model.
+List, analyze, rebuild, and inspect the build history of AtScale aggregates for a given catalog/model, and export/import aggregate definitions to promote them between environments (e.g. dev → prod).
+
+Across every operation in this group, `--catalog-id`/`--model-id` are optional: when either is omitted, the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session (CI, scripts), an error is raised listing the available `--catalog-id`/`--model-id` pairs to choose from.
 
 ```mermaid
 flowchart LR
     CONN["connections.yaml"] --> A["atscale-list-aggregates"] --> INFO["Aggregates + Summary + Health (stdout / CSV)"]
     CONN --> B["atscale-rebuild-aggregates"] --> ATS["AtScale Instance"]
     CONN --> C["atscale-list-aggregate-build-history"] --> HIST["Build History + Summary (stdout)"]
+    CONN --> D["atscale-export-aggregates"] --> EXP["Export JSON File"]
+    EXP -->|hand-edit for target model| IMPFILE["Export JSON File (edited)"]
+    CONN --> E["atscale-import-aggregates"]
+    IMPFILE --> E
+    E --> ATS2["AtScale Instance (target)"]
 ```
 
 ## Table of Contents
@@ -199,6 +206,8 @@ flowchart LR
     - [`atscale-list-aggregates`](#atscale-list-aggregates)
     - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
     - [`atscale-list-aggregate-build-history`](#atscale-list-aggregate-build-history)
+    - [`atscale-export-aggregates`](#atscale-export-aggregates)
+    - [`atscale-import-aggregates`](#atscale-import-aggregates)
   - Web Services
     - [`execute-web-services`](#execute-web-services)
   - Utilities
@@ -2165,8 +2174,8 @@ Lists aggregates for a catalog/model, with a computed summary (type/subtype/stat
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
-| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--catalog-id` | No | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments). When omitted (with `--model-id`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `--model-id` | No | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments). See `--catalog-id` for behavior when omitted |
 | `--limit` | No | `200` | Maximum number of aggregates to fetch |
 | `--output-file` | No | | When provided, also write a CSV export of the aggregates to this path |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
@@ -2194,8 +2203,8 @@ Triggers a full (default) or incremental aggregate rebuild for a catalog/model.
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
-| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--catalog-id` | No | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments). When omitted (with `--model-id`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `--model-id` | No | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments). See `--catalog-id` for behavior when omitted |
 | `--full-build` | No | `true` | Trigger a full build when `true`, or an incremental build when `false` |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--insecure` | No | `true` | Skip TLS certificate verification |
@@ -2221,13 +2230,75 @@ Lists recent aggregate build batches for a catalog/model, with parsed durations 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `--atscale-connection-name` | Yes | | Name of the AtScale connection entry (must have an `atscale:` block) |
-| `--catalog-id` | Yes | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
-| `--model-id` | Yes | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments) |
+| `--catalog-id` | No | | Catalog (project) UUID, from [`atscale-list-deployments`](#atscale-list-deployments). When omitted (with `--model-id`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `--model-id` | No | | Model (cube) UUID, from [`atscale-list-deployments`](#atscale-list-deployments). See `--catalog-id` for behavior when omitted |
 | `--limit` | No | `20` | Maximum number of build batches to fetch |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--insecure` | No | `true` | Skip TLS certificate verification |
 
 **Output:** JSON with `catalogId`, `modelId`, `total`, `batches` array (with parsed `durationMs`/`estimateTimeMs`/`sumOfInstanceBuildTimesMs`), and `summary` (success/failed/running/full-build counts, avg/min/max duration).
+
+---
+
+### `atscale-export-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Exports a catalog/model's System-Defined aggregate definitions to a JSON file, via AtScale's [Container API export endpoint](https://documentation.atscale.com/container-api/export). This is the first half of the manual cross-environment aggregate promotion workflow: export from a source (e.g. dev) catalog/model, hand-edit the resulting JSON file if the target (e.g. prod) catalog/model has different names/IDs or connections, then feed it to [`atscale-import-aggregates`](#atscale-import-aggregates) against the target instance.
+
+User-Defined Aggregates (UDAs) are not included in the export — this is an AtScale API limitation.
+
+```bash
+./atscale-utils atscale-export-aggregates \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale_dev" \
+  --catalog-id "39e90725-98d4-5a17-aedd-02568e197062" \
+  --model-id "e20faf8b-9939-5fb2-96ee-07cfec79dc35" \
+  --output-file "./aggregates-export.json"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry for the source instance (must have an `atscale:` block) |
+| `--catalog-id` | No | | Catalog (project) UUID to export from, from [`atscale-list-deployments`](#atscale-list-deployments). When omitted (with `--model-id`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `--model-id` | No | | Model (cube) UUID to export from, from [`atscale-list-deployments`](#atscale-list-deployments). See `--catalog-id` for behavior when omitted |
+| `--output-file` | No | `aggregates-export-<catalog-id>-<model-id>.json` | Path to write the export JSON to |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** the raw export JSON is written to `--output-file`; stdout receives a summary JSON with `catalogId`, `modelId`, `outputFile`, `aggregateCount`.
+
+---
+
+### `atscale-import-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Imports aggregate definitions (typically produced by [`atscale-export-aggregates`](#atscale-export-aggregates), then possibly hand-edited) into a target catalog/model, via AtScale's [Container API import endpoint](https://documentation.atscale.com/container-api/import). Per AtScale's own docs, the identical model must already exist in the target system, and importing from a newer AtScale version into an older one is not supported.
+
+```bash
+./atscale-utils atscale-import-aggregates \
+  --connection-file "./connections.yaml" \
+  --atscale-connection-name "my_atscale_prod" \
+  --input-file "./aggregates-export.json" \
+  --catalog-id "8f2a1c3d-98d4-5a17-aedd-02568e197062" \
+  --model-id "1b4e2f7a-9939-5fb2-96ee-07cfec79dc35"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--atscale-connection-name` | Yes | | Name of the AtScale connection entry for the target instance (must have an `atscale:` block) |
+| `--input-file` | Yes | | Path to the export JSON file to import (from [`atscale-export-aggregates`](#atscale-export-aggregates), optionally hand-edited) |
+| `--catalog-id` | No | | Target catalog (project) UUID to import into, from [`atscale-list-deployments`](#atscale-list-deployments). When omitted (with `--model-id`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `--model-id` | No | | Target model (cube) UUID to import into, from [`atscale-list-deployments`](#atscale-list-deployments). See `--catalog-id` for behavior when omitted |
+| `--connection-remap` | No | | Comma-separated list of `originalConnId:newConnId` pairs to remap connections referenced by the imported aggregates |
+| `--import-distribution-key` | No | `true` | Import distribution-key hints |
+| `--import-partition-keys` | No | `true` | Import partition-key hints |
+| `--import-replication` | No | `true` | Import replication hints |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--insecure` | No | `true` | Skip TLS certificate verification |
+
+**Output:** JSON with the raw import response — `numberOfDefinitionsImported`, `numberOfDefinitionsIgnored`, and `aggregates.values[]` (each with `id`, `newId`, `imported`, optional `reason`).
 
 ---
 
