@@ -285,6 +285,15 @@ export async function convertXmlToSml(
   // level links to one via a plain <attribute-ref attribute-id="..."> child (distinct from
   // <keyed-attribute-ref>, which is always a secondary attribute).
   const metricalAttrDef = new Map<string, MetricalAttrDef>();
+  // A plain <attribute> can instead carry <properties><dynamic-constraint><user-constraint
+  // enabled="true"/></dynamic-constraint></properties> — AtScale's row-level-security
+  // binding, wiring a hidden dimension/table pair to the engine's per-user constraint
+  // system rather than to a normal fact-to-dimension join. It has no measure/count/sum
+  // type, so the loop below never builds a metricalAttrDef entry for it, but it is still
+  // real, active content — recorded here so the schema-level dimension it's attached to
+  // (checked further down, once schemaDims/referencedDimNames exist) isn't misclassified
+  // as dead schema cruft just because no cube ever joins to it.
+  const rlsBoundAttrIds = new Set<string>();
   function ingestMetricalAttrs(attrsEl: Record<string, unknown>): void {
     for (const attrEl of arr(attrsEl.attribute)) {
       const id = a(attrEl, "id");
@@ -294,6 +303,11 @@ export async function convertXmlToSml(
         | Record<string, unknown>
         | undefined;
       if (!props) continue;
+      const dynamicConstraintEl = first(arr(props["dynamic-constraint"])) as Record<string, unknown> | undefined;
+      const userConstraintEl = dynamicConstraintEl
+        ? (first(arr(dynamicConstraintEl["user-constraint"])) as Record<string, unknown> | undefined)
+        : undefined;
+      if (userConstraintEl && a(userConstraintEl, "enabled") !== "false") rlsBoundAttrIds.add(id);
       const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
       if (!typeEl) continue;
 
@@ -473,6 +487,24 @@ export async function convertXmlToSml(
 
   // We emit dimension YAMLs after processing cubes (so we know which dims are referenced)
   const referencedDimNames = new Set<string>();
+  // A schema-level dimension whose level attaches an RLS-bound attribute (rlsBoundAttrIds,
+  // above) via a plain <attribute-ref attribute-id="..."> is genuine, active content even
+  // though no cube ever joins to it. Seed referencedDimNames with it up front so the
+  // "Schema-level dimensions no cube joins to are excluded from output" check further down
+  // treats it like any cube-referenced dimension instead of dropping it — and its backing
+  // dataset — as dead schema cruft.
+  if (rlsBoundAttrIds.size > 0) {
+    for (const [dimName, dimEl] of schemaDims) {
+      for (const hierEl of arr(dimEl.hierarchy)) {
+        for (const levelEl of arr(hierEl.level)) {
+          for (const aref of arr((levelEl as Record<string, unknown>)["attribute-ref"])) {
+            const attrId = a(aref, "attribute-id");
+            if (attrId && rlsBoundAttrIds.has(attrId)) referencedDimNames.add(dimName);
+          }
+        }
+      }
+    }
+  }
   // inferRelationships already determines, per cube, whether a dimension is degenerate
   // (no relationship, attaches directly) or has a real relationship — buildDimensionYaml
   // must use that same determination for its own is_degenerate/type field rather than
