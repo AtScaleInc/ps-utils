@@ -861,8 +861,19 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         } else if (quantileBindings.length) {
           boundTo = quantileBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
         } else {
+          // No key-ref/attribute-ref binding exists anywhere for this attribute — a genuinely
+          // incomplete/orphaned definition left over in the source schema. Guessing a column
+          // from the attribute's own name (e.g. "m_FOO_sum" → FOO) is only worth reporting when
+          // the guess actually matches a column the target dataset declares; otherwise it
+          // fabricates a specific-looking binding for a column that does not exist, which is
+          // worse than reporting no binding at all. Matches the same guard in
+          // generate-sml-from-xml's xml-converter.ts, which excludes an unverifiable guess like
+          // this from SML entirely rather than emitting it.
           const guessedDataset = getFactDatasetName(cube);
-          boundTo = guessedDataset ? `${guessedDataset}.${parseColumnFromAttrName(name)} (inferred)` : "";
+          const guessedColumn = parseColumnFromAttrName(name);
+          const knownColumns = guessedDataset ? datasetByName.get(guessedDataset)?.columns : undefined;
+          const isUnverifiableGuess = !!knownColumns?.length && !knownColumns.some((c) => c.name === guessedColumn);
+          boundTo = guessedDataset && !isUnverifiableGuess ? `${guessedDataset}.${guessedColumn} (inferred)` : "";
         }
 
         measureRows.push([
