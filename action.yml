@@ -42,6 +42,7 @@ inputs:
         generate-queries-from-model
         extract-query-stats-from-atscale
         generate-sml-from-xml
+        generate-sml-from-ssas-multidimensional
         generate-report-from-xml
         generate-report-from-sml
         generate-shared-model-plan
@@ -132,7 +133,8 @@ inputs:
     description: >
       Model compatibility policy for query-name collisions: new permits
       deterministic renaming; existing preserves names and reports a blocking conflict.
-      Used by: generate-sml-from-connection, generate-sml-from-ddl, generate-sml-from-xml.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl, generate-sml-from-xml,
+               generate-sml-from-ssas-multidimensional.
     required: false
 
   # ── generate-sml-from-connection ─────────────────────────────────────────
@@ -199,24 +201,29 @@ inputs:
       Path to the AtScale XML project file (project_2_0 format) to convert or report on.
       Used by: generate-sml-from-xml, generate-report-from-xml.
     required: false
+  xmla-file:
+    description: >
+      Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert.
+      Used by: generate-sml-from-ssas-multidimensional.
+    required: false
   connection-type:
     description: >
       Database dialect for the connection file (e.g. "snowflake", "bigquery").
-      Used by: generate-sml-from-xml.
+      Used by: generate-sml-from-xml, generate-sml-from-ssas-multidimensional.
     required: false
   connection-db:
     description: >
       Database or project name written into the connection file. When set, every
       dataset shares one connection instead of a separate connection per distinct
       database/schema pair found in the XML.
-      Used by: generate-sml-from-xml.
+      Used by: generate-sml-from-xml, generate-sml-from-ssas-multidimensional.
     required: false
   connection-schema:
     description: >
       Schema or dataset name written into the connection file. When set, every
       dataset shares one connection instead of a separate connection per distinct
       database/schema pair found in the XML.
-      Used by: generate-sml-from-xml.
+      Used by: generate-sml-from-xml, generate-sml-from-ssas-multidimensional.
     required: false
 
   # ── apply-shared-model-plan-option ──────────────────────────────────
@@ -998,6 +1005,23 @@ runs:
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.model-mode }}"         ]] && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-ssas-multidimensional ───────────────────────────────
+    - name: Generate SML from SSAS Multidimensional
+      if: inputs.operation == 'generate-sml-from-ssas-multidimensional'
+      run: |
+        ARGS=(
+          --xmla-file  "${{ inputs.xmla-file }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.connection-type }}"   ]] && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]] && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.model-mode }}"        ]] && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ssas-multidimensional "${ARGS[@]}"
       shell: bash
 
     # ── generate-report-from-xml ─────────────────────────────────────────────

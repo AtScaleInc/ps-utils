@@ -2198,6 +2198,59 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSmlFromSsasMultidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Multidimensional XMLA export to AtScale SML files
+
+**CLI name:** `generate-sml-from-ssas-multidimensional`  |  **REST:** `POST /rest/generate-sml-from-ssas-multidimensional`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert |
+| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `catalogName` | `String` | No | Override the catalog label (defaults to a name derived from the XMLA file) |
+| `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
+| `connectionDb` | `String` | No | Database name written into the connection file |
+| `connectionSchema` | `String` | No | Schema name written into the connection file |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromSsasMultidimensional(input: {
+    xmlaFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromSsasMultidimensional(input:{xmlaFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromSsasMultidimensional(input:{xmlaFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `generateReportFromXml`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2706,6 +2759,28 @@ input GenerateSmlFromXmlInput {
   """Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionDb: String
   """Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
+  connectionSchema: String
+  """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
+  modelMode: String
+}
+
+"""Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
+input GenerateSmlFromSsasMultidimensionalInput {
+  """Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert"""
+  xmlaFile: String
+  """Uploaded file — alternative to xmlaFile"""
+  xmlaFileUpload: Upload
+  """Raw file content as a string — alternative to xmlaFile"""
+  xmlaFileContent: String
+  """Directory where SML files will be written"""
+  outputDir: String
+  """Override the catalog label (defaults to a name derived from the XMLA file)"""
+  catalogName: String
+  """Database dialect for the connection file (e.g. "snowflake", "postgresql")"""
+  connectionType: String
+  """Database name written into the connection file"""
+  connectionDb: String
+  """Schema name written into the connection file"""
   connectionSchema: String
   """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
   modelMode: String
@@ -3481,6 +3556,8 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
+  generateSmlFromSsasMultidimensional(input: GenerateSmlFromSsasMultidimensionalInput): OperationResult!
   """Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""
   generateReportFromXml(input: GenerateReportFromXmlInput): OperationResult!
   """Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more"""

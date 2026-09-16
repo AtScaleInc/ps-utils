@@ -39,6 +39,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    SSASMD["SSAS Multidimensional XMLA"] --> N["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -144,6 +145,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
@@ -556,6 +558,36 @@ With optional overrides:
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
 ```
+
+---
+
+### `generate-sml-from-ssas-multidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Multidimensional (classic OLAP cube) XMLA export and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the XMLA model definition, using each cube's DataSourceView to recover physical table/column names. Internally this operation converts the XMLA to an AtScale project XML first, then reuses `generate-sml-from-xml`'s own converter to produce the SML — the intermediate XML is written to `context/generated-project.xml` for traceability.
+
+This is a **Pass 1** structural migration: regular fact-to-dimension relationships, role-played dimensions (multiple cube-dimension usages sharing one underlying dimension — the naming prefix for each role is recovered from the distinguishing part of its name, e.g. "Order"/"Ship" from "Order Date"/"Ship Date"), degenerate dimensions (attributes hosted directly on the fact table, detected by physical table identity rather than assumed from SSAS's own type label), synthesized hierarchies (when a dimension declares none, one is built from its Key attribute and `AttributeRelationships`), and simple measures (Sum/Count/DistinctCount/Min/Max/Average) all convert. Many-to-many measure-group dimensions, reference (snowflaked/chained) dimensions, and parent-child dimensions are detected and reported — not converted — matching or improving on the conservative behavior of the reference SSAS-to-AtScale converter for these same cases.
+
+`--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-tabular`.
+
+```bash
+./atscale-utils generate-sml-from-ssas-multidimensional \
+  --xmla-file "./Cube.xml" \
+  --output-dir "./sml-output"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--xmla-file` | Yes | | Path to the SSAS Multidimensional XMLA export (`Create`/`ObjectDefinition`/`Database` script) |
+| `--output-dir` | Yes | | Directory to write SML files |
+| `--catalog-name` | No | Derived from the XMLA file | Override the catalog label |
+| `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `postgresql`) |
+| `--connection-db` | No | | Database name written into the connection file |
+| `--connection-schema` | No | | Schema name written into the connection file |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
+
+**Output layout:** same as `generate-sml-from-xml`, plus `context/generated-project.xml` (the intermediate AtScale project XML this was derived from) and an "SSAS Multidimensional Import Notes" section appended to `README.md` listing every many-to-many/reference/parent-child relationship that was detected but not converted.
 
 ---
 

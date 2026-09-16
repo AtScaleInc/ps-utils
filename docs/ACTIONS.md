@@ -23,6 +23,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    SSASMD["SSAS Multidimensional XMLA"] --> N["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -125,6 +126,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
@@ -449,6 +451,44 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 | `connection-db` | No | | Database/project name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
+| `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+---
+
+### `generate-sml-from-ssas-multidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Multidimensional (classic OLAP cube) XMLA export and converts it to AtScale SML YAML files. No database connection or secrets required — the conversion runs entirely from the XMLA model definition, though each cube's DataSourceView is used to recover physical table/column names. Internally converts the XMLA to an AtScale project XML first, then reuses `generate-sml-from-xml`'s own converter.
+
+Pass 1 structural migration: regular relationships, role-played dimensions, degenerate dimensions, synthesized hierarchies, and simple measures all convert. Many-to-many, reference (snowflaked), and parent-child dimensions are detected and reported, not converted.
+
+When a cross-dimension level-attribute query-name collision occurs, set `model-mode: new` to rename every collision member deterministically. Set `model-mode: existing` to preserve established names and fail for explicit compatibility review. With no collision, the input is optional.
+
+**Requires:** No secrets — the XMLA file must be present in the repository.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-from-ssas-multidimensional
+    xmla-file: Cube.xml
+    output-dir: sml-output
+    catalog-name: "My Catalog"        # optional — defaults to a name derived from the XMLA file
+    model-mode: new                   # optional; required in CI only when a collision occurs
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `xmla-file` | Yes | | Path to the SSAS Multidimensional XMLA export |
+| `output-dir` | Yes | | Directory to write SML files |
+| `catalog-name` | No | Derived from the XMLA file | Override the catalog label |
+| `connection-type` | No | | Database dialect for the connection file |
+| `connection-db` | No | | Database name written to the connection file |
+| `connection-schema` | No | | Schema name written to the connection file |
 | `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
 
 ---

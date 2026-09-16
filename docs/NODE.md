@@ -88,6 +88,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromConnection`](#generatesmlfromconnection)
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
+  - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
@@ -388,6 +389,40 @@ function generateSMLFromXML(
 | `catalogName` | `string` | No | | Override the catalog label |
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateSMLFromSsasMultidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts an SSAS Multidimensional (classic OLAP cube) XMLA export to SML files. Internally converts the XMLA to an AtScale project XML first, then reuses the same converter as `generateSMLFromXML`.
+
+```typescript
+import { generateSMLFromSsasMultidimensional } from "@atscale-ps/ps-utils";
+
+await generateSMLFromSsasMultidimensional({
+  xmlaFile:  "./Cube.xml",
+  outputDir: "./sml-output",
+});
+```
+
+```typescript
+function generateSMLFromSsasMultidimensional(
+  params: GenerateSMLFromSsasMultidimensionalParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `xmlaFile` | `FileInput` | Yes | | Path to the SSAS Multidimensional XMLA export, or a `Readable` of its contents |
+| `outputDir` | `DirOutput` | Yes | | Directory where SML files will be written, or a `Writable` to receive a ZIP |
+| `catalogName` | `string` | No | Derived from the XMLA file | Override the catalog label |
+| `connectionType` | `string` | No | | Database dialect for the connection file |
+| `connectionDb` | `string` | No | | Database name written into the connection file |
+| `connectionSchema` | `string` | No | | Schema name written into the connection file |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 
 ---
