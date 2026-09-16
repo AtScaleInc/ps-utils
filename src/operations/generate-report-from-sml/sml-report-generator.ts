@@ -142,8 +142,16 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   const datasetAttrCount = new Map<string, number>();
   for (const d of c.dimensions) {
     for (const la of asArray<Raw>(d.raw.level_attributes)) {
-      const ds = normDataset(la?.dataset);
-      if (ds) {
+      // A level bound to more than one physical dataset carries its bindings under
+      // `shared_degenerate_columns` instead of a top-level `dataset` — same shape
+      // bindingLabel/datasetsForDimension below already unwrap. Falling back to
+      // `la?.dataset` alone silently dropped every shared-degenerate level attribute
+      // (the common case: most degenerate dimensions in a multi-fact cube use it) from
+      // this count and from dimDatasets.
+      const shared = asArray<Raw>(la?.shared_degenerate_columns);
+      const levelDatasets = shared.length ? shared.map((s) => normDataset(s?.dataset)) : [normDataset(la?.dataset)];
+      for (const ds of levelDatasets) {
+        if (!ds) continue;
         dimDatasets.add(ds);
         datasetAttrCount.set(ds, (datasetAttrCount.get(ds) ?? 0) + 1);
       }
