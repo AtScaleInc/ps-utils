@@ -128,6 +128,17 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
       datasetRelCount.set(ds, (datasetRelCount.get(ds) ?? 0) + 1);
     }
   }
+  // A metric binds straight to a dataset column (`dataset:`/`column:`) rather than
+  // through a model relationship, so a denormalized fact table with no dimension
+  // joins (`relationships: []`) would otherwise never register as a fact dataset —
+  // and its usage stats would omit every measure that reads it.
+  const datasetMetricCount = new Map<string, number>();
+  for (const m of c.metrics) {
+    const ds = normDataset(m.raw.dataset);
+    if (!ds) continue;
+    factDatasets.add(ds);
+    datasetMetricCount.set(ds, (datasetMetricCount.get(ds) ?? 0) + 1);
+  }
   const datasetAttrCount = new Map<string, number>();
   for (const d of c.dimensions) {
     for (const la of asArray<Raw>(d.raw.level_attributes)) {
@@ -320,7 +331,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (raw.sql) meta.push(`- Backed by a SQL query (view)`);
     if (raw.allow_aggregates !== undefined) meta.push(`- Allow aggregates: ${flag(raw.allow_aggregates) || "no"}`);
     meta.push(
-      `- Used by ${datasetAttrCount.get(nn) ?? 0} level attribute(s) across all dimensions and ${datasetRelCount.get(nn) ?? 0} relationship(s) across all models`,
+      `- Used by ${datasetAttrCount.get(nn) ?? 0} level attribute(s) across all dimensions, ${datasetMetricCount.get(nn) ?? 0} metric(s), and ${datasetRelCount.get(nn) ?? 0} relationship(s) across all models`,
     );
     o.push(...meta, "");
 
@@ -475,27 +486,42 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
 
     // Metrics used — resolved against the metrics library, mirroring how the
     // XML report resolves a cube's calculated-member refs against its schema library.
+    // Per the SML spec, a model's `metrics:` array legitimately references both
+    // `metric` and `metric_calc` objects, so a ref that misses the metrics library
+    // is retried against the calculations library and rendered in that table instead.
     const metricRows: string[][] = [];
+    const calcRefRows: string[][] = [];
     for (const ref of asArray<Raw>(raw.metrics)) {
       const refName = String(ref?.unique_name ?? ref);
       const def = metricByName.get(refName)?.raw;
-      metricRows.push([
-        code(refName),
-        cell(def?.label),
-        code(def?.calculation_method),
-        code(def?.dataset),
-        code(def?.column),
-        cell(def?.folder),
-        flag(def?.is_hidden),
-      ]);
+      if (def) {
+        metricRows.push([
+          code(refName),
+          cell(def.label),
+          code(def.calculation_method),
+          code(def.dataset),
+          code(def.column),
+          cell(def.folder),
+          flag(def.is_hidden),
+        ]);
+        continue;
+      }
+      const calcDef = calcByName.get(refName)?.raw;
+      if (calcDef) {
+        calcRefRows.push([code(refName), cell(calcDef.label), code(calcDef.expression), cell(calcDef.format), flag(calcDef.is_hidden)]);
+      } else {
+        metricRows.push([code(refName), "", "", "", "", "", ""]);
+      }
     }
     if (metricRows.length) {
       o.push("**Metrics used**", "");
       o.push(...table(["Name", "Label", "Aggregation", "Dataset", "Column", "Folder", "Hidden"], metricRows));
     }
 
-    // Calculations used — resolved against the calculations library.
-    const calcRows: string[][] = [];
+    // Calculations used — resolved against the calculations library. Includes
+    // both an explicit `calculations:` array (if present) and any metric_calc
+    // refs found above while walking `metrics:`.
+    const calcRows: string[][] = [...calcRefRows];
     for (const ref of asArray<Raw>(raw.calculations)) {
       const refName = String(ref?.unique_name ?? ref);
       const def = calcByName.get(refName)?.raw;
