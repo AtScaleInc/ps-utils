@@ -331,7 +331,7 @@ function resolvePhysicalSource(table: TmslTable): PhysicalSource {
   return { kind: "query", fromObject, selectCols: cols };
 }
 
-/** 'EDW_INT.dbo.vd_date' -> ['EDW_INT', 'dbo', 'vd_date']; tolerates fewer
+/** 'MYDB.dbo.vd_date' -> ['MYDB', 'dbo', 'vd_date']; tolerates fewer
  * parts by left-padding with null. */
 function splitQualified(obj: string): [string | null, string | null, string] {
   const parts: Array<string | null> = obj.split(".");
@@ -1247,8 +1247,13 @@ export function convertTabularToSml(
   }
 
   function roleLabelFromColumn(col: string): string {
+    // Fallback only -- generic surrogate-key naming conventions (leading "d_",
+    // trailing "_sk"/"_key"/"_id"), not any particular source schema's own
+    // column-naming vocabulary. Prefer the alias-derived role_play prefix
+    // (recovered from the source's own column aliases) whenever available;
+    // this only fires when that recovery fails.
     let base = col.replace(/^d_/i, "");
-    base = base.replace(/(_sk|_d_date_sk|_d_time_sk|_d_provider_sk|_d_insurance_sk|_d_payer_product_sk|_d_financial_class_sk|_d_diag_code_\d_sk)$/i, "");
+    base = base.replace(/_(sk|key|id)$/i, "");
     base = base.replace(/^_+|_+$/g, "") || col;
     return `${cleanLabel(base)} {0}`;
   }
