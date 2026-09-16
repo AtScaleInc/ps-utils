@@ -128,9 +128,26 @@ interface Monitor extends MonitorConfig {
   disposed: boolean;
   /** Set when the run was killed for exceeding the timeout, so it is reported as such. */
   timedOut: boolean;
+  /**
+   * Set when a full (phase 2 included) run is requested while one is already in
+   * flight. `dirty` alone cannot carry this: it is consumed by whichever run
+   * happens to be in progress, which may itself be a save-triggered, non-full
+   * run — without this flag the dirty re-run would silently fall back to
+   * `--skip-engine-checks` even though the user explicitly asked for the engine
+   * checks via **Validate now**.
+   */
+  dirtyFullCheck: boolean;
 }
 
 const monitors = new Map<string, Monitor>();
+/**
+ * Directories currently mid-`collectConfig` (prompting for a connection file,
+ * connection name, etc.) — not yet in `monitors`. `monitorCommand` checks and
+ * acts on `monitors.has(dir)` across an `await`, so without this a second
+ * invocation for the same directory before the first's prompts resolve would
+ * pass that check too and start a second, duplicate watcher.
+ */
+const pendingDirs = new Set<string>();
 let diagnostics: vscode.DiagnosticCollection;
 let output: vscode.OutputChannel;
 let status: vscode.StatusBarItem;
@@ -147,6 +164,25 @@ const hasModels = (dir: string): boolean => {
 };
 
 /**
+ * Normalize a directory path so `monitors` is never keyed by two different
+ * spellings of the same directory.
+ *
+ * On a case-insensitive filesystem (the default on macOS and Windows), the
+ * same directory can be reached through differently-cased paths that a plain
+ * string comparison — which is all `Map` keys and `resourcePath in ctx` use —
+ * treats as unrelated. `realpath` resolves through the filesystem itself, so
+ * it returns the casing actually stored on disk regardless of how the input
+ * was cased, which is exactly the normalization needed here.
+ */
+function canonicalDir(dir: string): string {
+  try {
+    return fs.realpathSync.native(dir);
+  } catch {
+    return path.resolve(dir);
+  }
+}
+
+/**
  * The directory to pass as `--sml-dir`, given whatever the user right-clicked.
  *
  * Right-clicking `datasets/` is at least as natural as right-clicking the
@@ -160,7 +196,7 @@ function resolveSmlDir(start: string): string | undefined {
   let current = start;
 
   for (;;) {
-    if (hasModels(current)) return current;
+    if (hasModels(current)) return canonicalDir(current);
     const parent = path.dirname(current);
     if (parent === current) return undefined;
     if (roots.some((root) => path.relative(root, current) === "")) return undefined;
@@ -300,6 +336,11 @@ function publish(monitor: Monitor, model: string, problems: ModelProblem[]): voi
   for (const uri of monitor.published) diagnostics.delete(uri);
   monitor.published = [];
 
+  // The common case — a clean save of an already-valid model — has nothing for
+  // the index or fallback anchor below to locate; skip the full re-read of every
+  // SML file in the directory rather than doing it just to go unused.
+  if (problems.length === 0) return;
+
   const files = readSmlFiles(monitor.dir);
   const index = buildNameIndex(files);
   const textOf = new Map(files.map((f) => [f.file, f.text]));
@@ -408,10 +449,17 @@ function refreshStatus(): void {
  *   the engine by default.
  */
 function run(monitor: Monitor, fullCheck = false): void {
+  // Recorded regardless of whether a run is already in flight, so a full-check
+  // request never gets silently absorbed by whichever run happens to be running.
+  if (fullCheck) monitor.dirtyFullCheck = true;
+
   if (monitor.running) {
     monitor.dirty = true;
     return;
   }
+
+  const useFullCheck = monitor.dirtyFullCheck;
+  monitor.dirtyFullCheck = false;
   monitor.running = true;
   monitor.dirty = false;
   monitor.timedOut = false;
@@ -434,7 +482,7 @@ function run(monitor: Monitor, fullCheck = false): void {
     // unreachable engine shows up as a warning in the Problems panel.
     "--timeout",
     String(Math.max(5, Math.floor(timeoutMs() / 1_000 / 2))),
-    ...(fullCheck || engineChecksEnabled() ? [] : ["--skip-engine-checks"]),
+    ...(useFullCheck || engineChecksEnabled() ? [] : ["--skip-engine-checks"]),
   ];
 
   // The exact command, so a run that behaves oddly can be reproduced in a
@@ -510,6 +558,9 @@ function run(monitor: Monitor, fullCheck = false): void {
     }
 
     refreshStatus();
+    // Not `run(monitor, fullCheck)`: whether the re-run should be full is decided
+    // by `dirtyFullCheck`, which reflects every request that arrived while this
+    // run — full or not — was in flight, not just this run's own flavor.
     if (monitor.dirty) run(monitor);
   });
 }
@@ -524,6 +575,35 @@ function schedule(monitor: Monitor): void {
 
 // ── lifecycle ─────────────────────────────────────────────────────────────────
 
+/**
+ * `dir` plus every directory beneath it, so `resourcePath in psUtils.smlMonitoredDirs`
+ * (an exact-membership test — see `MONITORED` in generate-extension-contributes.ts)
+ * matches a right-click on any subfolder of a monitored root, not just the root
+ * itself. Right-clicking a subfolder is an explicitly supported way to start
+ * monitoring (`resolveSmlDir` walks up from it to find the root), so the same
+ * subfolder has to read back as monitored afterwards.
+ */
+function withSubdirs(dir: string): string[] {
+  const found = [dir];
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const full = path.join(current, entry.name);
+      found.push(full);
+      stack.push(full);
+    }
+  }
+  return found;
+}
+
 async function persist(): Promise<void> {
   const configs: MonitorConfig[] = [...monitors.values()].map((m) => ({
     dir: m.dir,
@@ -533,7 +613,7 @@ async function persist(): Promise<void> {
   }));
   await extensionContext.workspaceState.update(STATE_KEY, configs);
   await vscode.commands.executeCommand("setContext", CTX_ACTIVE, configs.length > 0);
-  await vscode.commands.executeCommand("setContext", CTX_DIRS, configs.map((c) => c.dir));
+  await vscode.commands.executeCommand("setContext", CTX_DIRS, configs.flatMap((c) => withSubdirs(c.dir)));
 }
 
 function start(config: MonitorConfig, runNow: boolean): Monitor {
@@ -550,6 +630,7 @@ function start(config: MonitorConfig, runNow: boolean): Monitor {
     failed: false,
     disposed: false,
     timedOut: false,
+    dirtyFullCheck: false,
   };
 
   const changed = (uri: vscode.Uri): void => {
@@ -575,7 +656,19 @@ async function stop(dir: string): Promise<void> {
   monitor.dirty = false;
 
   if (monitor.timer) clearTimeout(monitor.timer);
-  monitor.child?.kill();
+  const child = monitor.child;
+  if (child) {
+    child.kill();
+    // As in `run`'s own timeout path: SIGTERM is enough for a Node process
+    // blocked on a socket, but not for one ignoring it. `run`'s `close` handler
+    // sets `monitor.child = undefined` unconditionally (even once disposed), so
+    // checking it — not the `monitors` map, which this function removes `dir`
+    // from right away regardless of whether the child has actually exited — is
+    // how "did it actually exit" is told apart from "stop() was called".
+    setTimeout(() => {
+      if (monitor.child === child) child.kill("SIGKILL");
+    }, 2_000);
+  }
   monitor.watcher.dispose();
   clearFailure(monitor);
   for (const uri of monitor.published) diagnostics.delete(uri);
@@ -645,8 +738,15 @@ export function registerSmlMonitor(context: vscode.ExtensionContext): void {
     }
 
     if (monitors.has(dir)) return offerRunningActions(dir);
+    if (pendingDirs.has(dir)) return; // already prompting for this directory
 
-    const config = await collectConfig(dir);
+    pendingDirs.add(dir);
+    let config: MonitorConfig | undefined;
+    try {
+      config = await collectConfig(dir);
+    } finally {
+      pendingDirs.delete(dir);
+    }
     if (!config) return;
 
     start(config, true);
