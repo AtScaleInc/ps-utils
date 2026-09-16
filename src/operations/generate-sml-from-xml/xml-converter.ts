@@ -393,8 +393,8 @@ export async function convertXmlToSml(
 
   // Two different cubes — or a cube and the shared schema — can each declare their own
   // dimension under the exact same display name for genuinely different underlying
-  // attributes (e.g. one cube's own inline "Org Group Name" lookup table vs another
-  // cube's completely separate degenerate "Org Group Name" bound directly to its fact
+  // attributes (e.g. one cube's own inline "Shared Dim Name" lookup table vs another
+  // cube's completely separate degenerate "Shared Dim Name" bound directly to its fact
   // table). A raw name is not a safe map key across the whole file: whichever dimension
   // happened to be visited last would silently overwrite the other's entry, and the
   // survivor could end up with one dimension's type/is_degenerate paired with the other's
@@ -724,7 +724,7 @@ export async function convertXmlToSml(
           const measureDatasetName = keyRefAuthEntry?.datasetName ?? colRef?.datasetName ?? factDatasetName;
           // An attribute with no key-ref and no attribute-ref anywhere (a genuinely
           // incomplete/orphaned definition left over in the source schema — see
-          // m_PAID_LOSS_NUMERATOR_sum_2 for a real example) falls back to guessing a column
+          // m_MEASURE_B_sum_2 for a representative example) falls back to guessing a column
           // from the attribute's own name. When the target dataset declares its physical
           // columns and the guess doesn't match any of them, that guess is worthless —
           // without this check it manufactures a "phantom" column (string-typed, since
@@ -1504,7 +1504,7 @@ export async function convertXmlToSml(
   // here, once the dimension YAML (built above) is available to scan.
   for (const [key, dimYaml] of output) {
     if (!key.startsWith("dimensions/")) continue;
-    // Dataset names can contain spaces (e.g. "CUSTOMER AGE MONTHLY") — anchor to the
+    // Dataset names can contain spaces (e.g. "SOME DATASET NAME") — anchor to the
     // trailing ".dataset" at end of line rather than a non-whitespace-only match, which
     // would incorrectly capture just the last word of a multi-word name.
     for (const m of dimYaml.matchAll(/^\s*dataset:\s*(.+)\.dataset\s*$/gm)) {
@@ -1928,7 +1928,7 @@ function levelUniqueNameFor(name: string): string {
 /**
  * Build a map from every measure/calculated-member's original XML name to its final
  * (safeName + truncated) unique_name. Calculation expressions reference other metrics
- * by their original name (e.g. "[Measures].[Sales Amount-Prev]"), but the output uses
+ * by their original name (e.g. "[Measures].[Some Measure-Prev]"), but the output uses
  * the transformed unique_name — this map lets those references be rewritten to match.
  */
 function buildMeasureRefMap(
@@ -2078,11 +2078,11 @@ function parseColumnFromAttrName(attrName: string): string {
   // Strip leading m_ prefix
   const withoutPrefix = attrName.replace(/^m_/i, "");
   // Strip trailing _sum / _avg / _min / _max / _count / _distinct, optionally followed by a
-  // "_2"/"_3"/... disambiguation suffix — the same collision-numbering scheme this schema
-  // uses for duplicate measure *names* (e.g. m_CLAIM_CWLP_sum / m_CLAIM_CWLP_sum_2 as two
+  // "_2"/"_3"/... disambiguation suffix — the same collision-numbering scheme source schemas
+  // use for duplicate measure *names* (e.g. m_MEASURE_A_sum / m_MEASURE_A_sum_2 as two
   // distinct attributes) shows up here too on attributes with no real key-ref/attribute-ref
-  // at all, where it's not part of the column name (e.g. m_PAID_LOSS_NUMERATOR_sum_2 is just
-  // a second, differently-labeled attribute over the same PAID_LOSS_NUMERATOR column).
+  // at all, where it's not part of the column name (e.g. m_MEASURE_B_sum_2 is just
+  // a second, differently-labeled attribute over the same MEASURE_B column).
   return withoutPrefix.replace(/_(sum|avg|min|max|count|distinct|average|minimum|maximum)(_\d+)?$/i, "");
 }
 
@@ -3560,7 +3560,7 @@ function computeEligibleDegenerateDimensions(
     if (!bindings.some((b) => b.isSelfReferencing)) continue; // never degenerate — leave as relationships
 
     // A name shared across cubes can resolve to genuinely different underlying attributes —
-    // e.g. one cube's "Org Channel Name" hosted on a real snowflake dataset (a normal
+    // e.g. one cube's "Shared Dim Name" hosted on a real snowflake dataset (a normal
     // relationship) while another cube's own same-named dimension is degenerate on its fact
     // table directly. Mixing the two into one shared_degenerate_columns array would silently
     // fold a real relationship's dataset in as if it were just another fact table, discarding

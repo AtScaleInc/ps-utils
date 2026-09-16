@@ -94,6 +94,64 @@ const SML_MENU = [
   },
 ];
 
+/**
+ * "Monitor SML Directory", below the SML support checkbox.
+ *
+ * This is a *watch* wrapper around the `atscale-list-model-errors` operation, not
+ * a second copy of it: the operation already appears in the AtScale Config group
+ * for a one-shot run in the terminal, while these re-run it on every change and
+ * route the problems into the Problems panel. It is therefore a plain command
+ * here rather than anything derived from the manifest.
+ *
+ * Like SML_MENU it reads as a checkbox, drawn in the title for the same reason:
+ * `contributes.menus` has no `toggled` property and a command's `title` is static,
+ * so two commands share the slot and `when` clauses decide which is visible.
+ *
+ * The state here is per *directory* rather than global, which a boolean context
+ * key cannot express — with two monitored directories it would tick both. VS
+ * Code's `in` operator tests membership of a context key's value, so
+ * `psUtils.smlMonitoredDirs` is published as an array of paths (see
+ * `setContext` in vscode-extension/src/sml-monitor.ts) and the check appears on
+ * exactly the folder being watched.
+ *
+ * `resourcePath` rather than `resource`: the key holds filesystem paths as the
+ * monitor stores them, not URI strings.
+ */
+const MONITORED = "resourcePath in psUtils.smlMonitoredDirs";
+
+const MONITOR_MENU = [
+  {
+    command: "psUtils.sml.monitor",
+    title: "☐ Monitor SML Directory",
+    when: `explorerResourceIsFolder && !(${MONITORED})`,
+    paletteHidden: true,
+  },
+  {
+    command: "psUtils.sml.monitorActive",
+    title: "☑ Monitor SML Directory",
+    when: `explorerResourceIsFolder && ${MONITORED}`,
+    paletteHidden: true,
+  },
+  // Palette entries. The glyph titles above read badly in a search list, exactly
+  // as for the SML support checkbox, so the palette gets plain verbs instead.
+  {
+    command: "psUtils.sml.monitorPick",
+    title: "Monitor an SML Directory…",
+    when: "false",
+  },
+  {
+    command: "psUtils.sml.stopMonitor",
+    title: "Stop Monitoring SML Directory",
+    when: "false",
+  },
+  {
+    command: "psUtils.sml.showMonitorLog",
+    title: "Show SML Validation Log",
+    when: "false", // status-bar-only; the log is one click from there
+    paletteHidden: true,
+  },
+];
+
 function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -112,7 +170,7 @@ for (const opName of Object.keys(manifest.operations)) {
   commands.push({ command: `psUtils.op.${opName}`, title: opName, category: "PS-Utils" });
 }
 commands.push({ command: "psUtils.settings", title: "Settings…", category: "PS-Utils" });
-for (const entry of SML_MENU) {
+for (const entry of [...SML_MENU, ...MONITOR_MENU]) {
   commands.push({ command: entry.command, title: entry.title, category: "PS-Utils" });
 }
 
@@ -158,14 +216,24 @@ for (const entry of SML_MENU) {
   if (entry.when === "false") continue; // palette-only entries take no menu slot
   menus["psUtils.root"].push({ command: entry.command, group: "9_settings@2", when: entry.when });
 }
+for (const entry of MONITOR_MENU) {
+  if (entry.when === "false") continue;
+  menus["psUtils.root"].push({ command: entry.command, group: "9_settings@3", when: entry.when });
+}
 
 // Command Palette visibility. Only the SML commands are listed: every other
 // contributed command is palette-visible by default, which is the existing
 // behaviour and should stay that way.
-menus["commandPalette"] = SML_MENU.map((entry) => ({
-  command: entry.command,
-  when: entry.paletteHidden ? "false" : undefined,
-}));
+menus["commandPalette"] = [
+  ...SML_MENU.map((entry) => ({
+    command: entry.command,
+    when: entry.paletteHidden ? "false" : undefined,
+  })),
+  ...MONITOR_MENU.map((entry) => ({
+    command: entry.command,
+    when: entry.paletteHidden ? "false" : undefined,
+  })),
+];
 
 // Strip undefined `when` keys so the emitted JSON stays clean.
 function clean<T extends Record<string, unknown>>(obj: T): T {

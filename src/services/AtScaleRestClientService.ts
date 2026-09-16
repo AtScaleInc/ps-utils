@@ -110,6 +110,12 @@ export type AtScaleEnvironmentConfig = {
    */
   insecure?: boolean;
   /**
+   * Per-request timeout in milliseconds, covering authentication too.
+   * Omit to wait indefinitely, which is the historical behaviour and remains
+   * right for deploys and builds.
+   */
+  timeoutMs?: number;
+  /**
    * @internal — When true, `authenticate()` returns a cookie-based auth
    * credential instead of a Bearer JWT.  Set by the deploy operation so
    * that `/wapi/git/deploy/catalog` requests carry the `auth_session` cookie.
@@ -156,6 +162,7 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
     this.cookieAuth     = config.cookieAuth ?? false;
     this.useRawApiToken = config.useRawApiToken ?? false;
     this.insecure       = config.insecure !== false;
+    this.timeoutMs      = config.timeoutMs;
   }
 
   protected override async authenticate(): Promise<RestAuth> {
@@ -206,7 +213,12 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
     const response = await axios.post<{ accessToken: string }>(
       url,
       {},
-      { ...agentConfig, headers: { Authorization: `Bearer ${this.apiToken}` }, validateStatus: () => true },
+      {
+        ...agentConfig,
+        ...this.requestDefaults(),
+        headers: { Authorization: `Bearer ${this.apiToken}` },
+        validateStatus: () => true,
+      },
     );
     this.logger?.verbose(`[REST:Auth] ← ${response.status}`);
     if (response.status < 200 || response.status >= 300) {
@@ -257,7 +269,7 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
       Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
 
     const req = (cfg: Record<string, any>) =>
-      axios({ ...agentCfg, validateStatus: () => true, maxRedirects: 0, ...cfg });
+      axios({ ...agentCfg, ...this.requestDefaults(), validateStatus: () => true, maxRedirects: 0, ...cfg });
 
     this.logger?.verbose(`[REST:Auth] Acquiring auth_session via Keycloak form flow`);
 
