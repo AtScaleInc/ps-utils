@@ -78,7 +78,9 @@
     {
       "name": "Aggregate Management",
       "operations": [
-        "atscale-list-aggregates"
+        "atscale-list-aggregates",
+        "atscale-export-aggregates",
+        "atscale-import-aggregates"
       ]
     },
     {
@@ -2331,18 +2333,18 @@
         },
         {
           "name": "catalog-id",
-          "description": "Catalog (project) UUID, from atscale-list-deployments",
+          "description": "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
           "type": "string",
           "role": "scalar",
-          "required": true,
+          "required": false,
           "default": null
         },
         {
           "name": "model-id",
-          "description": "Model (cube) UUID, from atscale-list-deployments",
+          "description": "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
           "type": "string",
           "role": "scalar",
-          "required": true,
+          "required": false,
           "default": null
         },
         {
@@ -2395,18 +2397,18 @@
         },
         {
           "name": "catalog-id",
-          "description": "Catalog (project) UUID, from atscale-list-deployments",
+          "description": "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
           "type": "string",
           "role": "scalar",
-          "required": true,
+          "required": false,
           "default": null
         },
         {
           "name": "model-id",
-          "description": "Model (cube) UUID, from atscale-list-deployments",
+          "description": "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
           "type": "string",
           "role": "scalar",
-          "required": true,
+          "required": false,
           "default": null
         },
         {
@@ -2451,18 +2453,18 @@
         },
         {
           "name": "catalog-id",
-          "description": "Catalog (project) UUID, from atscale-list-deployments",
+          "description": "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
           "type": "string",
           "role": "scalar",
-          "required": true,
+          "required": false,
           "default": null
         },
         {
           "name": "model-id",
-          "description": "Model (cube) UUID, from atscale-list-deployments",
+          "description": "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
           "type": "string",
           "role": "scalar",
-          "required": true,
+          "required": false,
           "default": null
         },
         {
@@ -2472,6 +2474,158 @@
           "role": "scalar",
           "required": false,
           "default": 20
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-export-aggregates": {
+      "description": "Export a catalog/model's aggregate definitions to a JSON file",
+      "group": "Aggregate Management",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (the source instance/environment to export from) in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID to export from, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID to export from, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Path to write the export JSON to. Defaults to aggregates-export-<catalog-id>-<model-id>.json in the current directory.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-import-aggregates": {
+      "description": "Import aggregate definitions from an export file into a catalog/model",
+      "group": "Aggregate Management",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "input-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (the target instance/environment to import into) in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "input-file",
+          "description": "Path to the export JSON file to import (from atscale-export-aggregates, optionally hand-edited)",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-remap",
+          "description": "Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "import-distribution-key",
+          "description": "Import distribution-key hints. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "import-partition-keys",
+          "description": "Import partition-key hints. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "import-replication",
+          "description": "Import replication hints. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
         },
         {
           "name": "insecure",

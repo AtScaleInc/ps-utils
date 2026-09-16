@@ -1060,8 +1060,8 @@ export async function getDsoCount(p: GetDsoCountParams, o: LibraryOptions = {}) 
 
 export type AtScaleListAggregatesParams = {
   atscaleConnectionName: string;
-  catalogId: string;
-  modelId: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
   connectionFile?: FileInput;  // default: "connections.yaml"
   limit?: number;              // default: 200
   outputFile?: FileOutput;
@@ -1084,8 +1084,8 @@ export async function atScaleListAggregates(p: AtScaleListAggregatesParams, o: L
 
 export type AtScaleRebuildAggregatesParams = {
   atscaleConnectionName: string;
-  catalogId: string;
-  modelId: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
   connectionFile?: FileInput;  // default: "connections.yaml"
   fullBuild?: boolean;         // default: true
   insecure?: boolean;
@@ -1106,8 +1106,8 @@ export async function atScaleRebuildAggregates(p: AtScaleRebuildAggregatesParams
 
 export type AtScaleListAggregateBuildHistoryParams = {
   atscaleConnectionName: string;
-  catalogId: string;
-  modelId: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
   connectionFile?: FileInput;  // default: "connections.yaml"
   limit?: number;              // default: 20
   insecure?: boolean;
@@ -1121,6 +1121,56 @@ export async function atScaleListAggregateBuildHistory(p: AtScaleListAggregateBu
     await run("atscale-list-aggregate-build-history", Object.assign({
       "connection-file": "connections.yaml",
       "limit": 20,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleExportAggregatesParams = {
+  atscaleConnectionName: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  outputFile?: FileOutput;     // default: aggregates-export-<catalog-id>-<model-id>.json
+  insecure?: boolean;
+};
+
+export async function atScaleExportAggregates(p: AtScaleExportAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("atscale-export-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleImportAggregatesParams = {
+  atscaleConnectionName: string;
+  inputFile: FileInput;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  connectionRemap?: string;    // comma-separated originalConnId:newConnId pairs
+  importDistributionKey?: boolean;  // default: true
+  importPartitionKeys?: boolean;    // default: true
+  importReplication?: boolean;      // default: true
+  insecure?: boolean;
+};
+
+export async function atScaleImportAggregates(p: AtScaleImportAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile", "inputFile"],
+  });
+  try {
+    await run("atscale-import-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+      "import-distribution-key": true,
+      "import-partition-keys": true,
+      "import-replication": true,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }

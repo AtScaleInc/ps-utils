@@ -103,6 +103,8 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "atscale-list-aggregates",
       "atscale-rebuild-aggregates",
       "atscale-list-aggregate-build-history",
+      "atscale-export-aggregates",
+      "atscale-import-aggregates",
     ],
   },
   {
