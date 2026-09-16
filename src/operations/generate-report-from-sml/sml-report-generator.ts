@@ -96,13 +96,17 @@ function normDataset(ref: unknown): string {
   return String(ref ?? "").replace(/\.dataset$/, "");
 }
 
-/** Render a `table` value that may be a string or a `{db, schema, name}` object. */
-function tableRef(t: unknown): string {
-  if (t && typeof t === "object") {
-    const o = t as Raw;
-    return [o.db, o.schema, o.name].filter(Boolean).join(".");
-  }
-  return String(t ?? "");
+/**
+ * Render a `table` value that may be a string or a `{db, schema, name}` object,
+ * qualifying it with the owning connection's `database`/`schema` when the table
+ * itself doesn't carry them — the converter moves db/schema qualification onto
+ * the connection file, leaving a bare table name on the dataset.
+ */
+function tableRef(t: unknown, conn?: Raw): string {
+  const name = t && typeof t === "object" ? (t as Raw).name : t;
+  const db = (t && typeof t === "object" && (t as Raw).db) || conn?.database;
+  const schema = (t && typeof t === "object" && (t as Raw).schema) || conn?.schema;
+  return [db, schema, name].filter(Boolean).join(".");
 }
 
 // ============================================================
@@ -172,6 +176,8 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   for (const cc of c.calculations) if (cc.raw.unique_name) calcByName.set(String(cc.raw.unique_name), cc);
   const dimByName = new Map<string, SmlObject>();
   for (const d of c.dimensions) if (d.raw.unique_name) dimByName.set(String(d.raw.unique_name), d);
+  const connByName = new Map<string, SmlObject>();
+  for (const conn of c.connections) if (conn.raw.unique_name) connByName.set(String(conn.raw.unique_name), conn);
 
   // ── Header ──────────────────────────────────────────────────────────────────
 
@@ -336,7 +342,10 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     const nn = normDataset(raw.unique_name);
     const meta: string[] = [];
     if (raw.connection_id) meta.push(`- Connection: \`${cell(raw.connection_id)}\``);
-    if (raw.table) meta.push(`- Table: \`${cell(tableRef(raw.table))}\``);
+    if (raw.table) {
+      const conn = connByName.get(String(raw.connection_id ?? ""))?.raw;
+      meta.push(`- Table: \`${cell(tableRef(raw.table, conn))}\``);
+    }
     if (raw.sql) meta.push(`- Backed by a SQL query (view)`);
     if (raw.immutable !== undefined) meta.push(`- Immutable: ${flag(raw.immutable) || "no"}`);
     // `allow_aggregates` is not a dataset-object property in SML — it's a repository-wide
