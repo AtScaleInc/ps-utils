@@ -91,6 +91,94 @@ const FIXTURE_XMLA = `<Create xmlns="http://schemas.microsoft.com/analysisservic
             </Attribute>
           </Attributes>
         </Dimension>
+        <Dimension>
+          <ID>Dim Geography</ID>
+          <Name>Dim Geography</Name>
+          <Attributes>
+            <Attribute>
+              <ID>Country</ID>
+              <Name>Country</Name>
+              <KeyColumns>
+                <KeyColumn>
+                  <DataType>Integer</DataType>
+                  <Source xsi:type="ColumnBinding">
+                    <TableID>dim_geo</TableID>
+                    <ColumnID>country_id</ColumnID>
+                  </Source>
+                </KeyColumn>
+              </KeyColumns>
+            </Attribute>
+            <Attribute>
+              <ID>State</ID>
+              <Name>State</Name>
+              <KeyColumns>
+                <KeyColumn>
+                  <DataType>Integer</DataType>
+                  <Source xsi:type="ColumnBinding">
+                    <TableID>dim_geo</TableID>
+                    <ColumnID>state_id</ColumnID>
+                  </Source>
+                </KeyColumn>
+              </KeyColumns>
+            </Attribute>
+            <Attribute>
+              <ID>City</ID>
+              <Name>City</Name>
+              <Usage>Key</Usage>
+              <KeyColumns>
+                <KeyColumn>
+                  <DataType>Integer</DataType>
+                  <Source xsi:type="ColumnBinding">
+                    <TableID>dim_geo</TableID>
+                    <ColumnID>city_id</ColumnID>
+                  </Source>
+                </KeyColumn>
+              </KeyColumns>
+            </Attribute>
+            <Attribute>
+              <ID>State Abbr</ID>
+              <Name>State Abbr</Name>
+              <KeyColumns>
+                <KeyColumn>
+                  <DataType>WChar</DataType>
+                  <Source xsi:type="ColumnBinding">
+                    <TableID>dim_geo</TableID>
+                    <ColumnID>state_abbr</ColumnID>
+                  </Source>
+                </KeyColumn>
+              </KeyColumns>
+              <AttributeRelationships>
+                <AttributeRelationship>
+                  <AttributeID>State</AttributeID>
+                  <Name>State</Name>
+                </AttributeRelationship>
+              </AttributeRelationships>
+            </Attribute>
+          </Attributes>
+          <Hierarchies>
+            <Hierarchy>
+              <ID>Geography</ID>
+              <Name>Geography</Name>
+              <Levels>
+                <Level>
+                  <ID>Country</ID>
+                  <Name>Country</Name>
+                  <SourceAttributeID>Country</SourceAttributeID>
+                </Level>
+                <Level>
+                  <ID>State</ID>
+                  <Name>State</Name>
+                  <SourceAttributeID>State</SourceAttributeID>
+                </Level>
+                <Level>
+                  <ID>City</ID>
+                  <Name>City</Name>
+                  <SourceAttributeID>City</SourceAttributeID>
+                </Level>
+              </Levels>
+            </Hierarchy>
+          </Hierarchies>
+        </Dimension>
       </Dimensions>
       <Cubes>
         <Cube>
@@ -119,6 +207,11 @@ const FIXTURE_XMLA = `<Create xmlns="http://schemas.microsoft.com/analysisservic
               <ID>Promo</ID>
               <Name>Promo</Name>
               <DimensionID>Promo Dim</DimensionID>
+            </Dimension>
+            <Dimension>
+              <ID>Geography</ID>
+              <Name>Geography</Name>
+              <DimensionID>Dim Geography</DimensionID>
             </Dimension>
           </Dimensions>
           <MeasureGroups>
@@ -198,6 +291,24 @@ const FIXTURE_XMLA = `<Create xmlns="http://schemas.microsoft.com/analysisservic
                   <CubeDimensionID>Promo</CubeDimensionID>
                   <MeasureGroupID>Fact Promo Bridge</MeasureGroupID>
                 </Dimension>
+                <Dimension xsi:type="RegularMeasureGroupDimension">
+                  <CubeDimensionID>Geography</CubeDimensionID>
+                  <Attributes>
+                    <Attribute>
+                      <AttributeID>City</AttributeID>
+                      <KeyColumns>
+                        <KeyColumn>
+                          <DataType>Integer</DataType>
+                          <Source xsi:type="ColumnBinding">
+                            <TableID>fact_sales</TableID>
+                            <ColumnID>geo_key</ColumnID>
+                          </Source>
+                        </KeyColumn>
+                      </KeyColumns>
+                      <Type>Granularity</Type>
+                    </Attribute>
+                  </Attributes>
+                </Dimension>
               </Dimensions>
             </MeasureGroup>
           </MeasureGroups>
@@ -227,12 +338,23 @@ const FIXTURE_XMLA = `<Create xmlns="http://schemas.microsoft.com/analysisservic
                         </xs:sequence>
                       </xs:complexType>
                     </xs:element>
+                    <xs:element name="dim_geo" msprop:DbTableName="dim_geo">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="country_id" msprop:DbColumnName="country_id" type="xs:int" />
+                          <xs:element name="state_id" msprop:DbColumnName="state_id" type="xs:int" />
+                          <xs:element name="city_id" msprop:DbColumnName="city_id" type="xs:int" />
+                          <xs:element name="state_abbr" msprop:DbColumnName="state_abbr" />
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
                     <xs:element name="fact_sales" msprop:DbTableName="fact_sales">
                       <xs:complexType>
                         <xs:sequence>
                           <xs:element name="order_date_key" msprop:DbColumnName="order_date_key" type="xs:int" />
                           <xs:element name="ship_date_key" msprop:DbColumnName="ship_date_key" type="xs:int" />
                           <xs:element name="lookup_key" msprop:DbColumnName="lookup_key" type="xs:int" />
+                          <xs:element name="geo_key" msprop:DbColumnName="geo_key" type="xs:int" />
                           <xs:element name="amount" msprop:DbColumnName="amount" type="xs:decimal" />
                         </xs:sequence>
                       </xs:complexType>
@@ -290,5 +412,20 @@ describe("generate-sml-from-ssas-multidimensional converter", () => {
     expect(issues.some((i) => i.category === "degenerate_dimension")).toBe(true);
     const model = load([...sml.entries()].find(([k]) => k.startsWith("models/"))![1]) as any;
     expect(model.relationships.some((r: any) => r.to.dimension === "Lookup")).toBe(false);
+  });
+
+  it("attaches a secondary attribute to the intermediate level it's actually related to, not the leaf", async () => {
+    const { sml } = await convert();
+    const dim = load(sml.get("dimensions/dim-geography.yml")!) as any;
+    const levels = dim.hierarchies[0].levels as any[];
+    const stateLevel = levels.find((l) => l.unique_name === "State");
+    const cityLevel = levels.find((l) => l.unique_name === "City");
+    expect(stateLevel).toBeDefined();
+    expect(cityLevel).toBeDefined();
+
+    const stateSecondaryNames = (stateLevel.secondary_attributes ?? []).map((a: any) => a.unique_name);
+    const citySecondaryNames = (cityLevel.secondary_attributes ?? []).map((a: any) => a.unique_name);
+    expect(stateSecondaryNames).toContain("State_Abbr");
+    expect(citySecondaryNames).not.toContain("State_Abbr");
   });
 });

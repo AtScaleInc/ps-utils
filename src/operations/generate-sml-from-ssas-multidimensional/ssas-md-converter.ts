@@ -621,21 +621,26 @@ export async function convertSsasMultidimensionalToXml(
           logIssue("warning", "ragged_hierarchy", `${dim.name}.${level.name}`,
             `Level has HideMemberIf='${level.hideMemberIf}' (ragged hierarchy) — emitted as a normal level; verify manually.`);
         }
-        if (level === hier.levels[hier.levels.length - 1]) {
-          if (!dimensionLevelKeyUuid.has(dim.id)) dimensionLevelKeyUuid.set(dim.id, level.sourceAttributeId);
-          const secondary: XmlNode[] = [];
-          for (const [otherId, otherAttr] of dim.attributes) {
-            if (usedAttrIds.has(otherId) || otherAttr.usage === "Parent") continue;
-            if (!otherAttr.relatedAttributeIds.includes(level.sourceAttributeId) && hier.levels.length > 1) continue;
-            const otherUid = dimensionAttributeKeyUuid.get(`${dim.id}::${otherId}`);
-            if (!otherUid) continue;
-            secondary.push(el("keyed-attribute-ref", { "attribute-id": otherUid }));
-            usedAttrIds.add(otherId);
-          }
-          levelNodes.push(el("level", { "primary-attribute": attrKeyUuid }, secondary));
-        } else {
-          levelNodes.push(el("level", { "primary-attribute": attrKeyUuid }));
+        const isLeaf = level === hier.levels[hier.levels.length - 1];
+        if (isLeaf && !dimensionLevelKeyUuid.has(dim.id)) {
+          dimensionLevelKeyUuid.set(dim.id, level.sourceAttributeId);
         }
+        // Secondary attributes attach to whichever level they're actually related
+        // to via AttributeRelationships -- SSAS lets a descriptive attribute relate
+        // to any attribute in the hierarchy chain, not only the leaf (e.g. "Month
+        // Name" related to "Month", an intermediate level between "Quarter" and
+        // "Day"). A single-level hierarchy has no chain to match against, so every
+        // remaining attribute belongs to its one level regardless of relationship.
+        const secondary: XmlNode[] = [];
+        for (const [otherId, otherAttr] of dim.attributes) {
+          if (usedAttrIds.has(otherId) || otherAttr.usage === "Parent") continue;
+          if (!otherAttr.relatedAttributeIds.includes(level.sourceAttributeId) && hier.levels.length > 1) continue;
+          const otherUid = dimensionAttributeKeyUuid.get(`${dim.id}::${otherId}`);
+          if (!otherUid) continue;
+          secondary.push(el("keyed-attribute-ref", { "attribute-id": otherUid }));
+          usedAttrIds.add(otherId);
+        }
+        levelNodes.push(el("level", { "primary-attribute": attrKeyUuid }, secondary));
       }
       if (levelNodes.length) hierNodes.push(el("hierarchy", { name: hier.name || dim.name }, levelNodes));
     }
