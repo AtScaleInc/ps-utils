@@ -1810,6 +1810,45 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
 
 ---
 
+### `generate-sml-from-ssas-multidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Multidimensional XMLA export to AtScale SML files
+
+**Endpoint:** `POST /rest/generate-sml-from-ssas-multidimensional`  |  **GraphQL:** `generateSmlFromSsasMultidimensional`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
+| `catalogName` | `String` | No | Override the catalog label (defaults to a name derived from the XMLA file) |
+| `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
+| `connectionDb` | `String` | No | Database name written into the connection file |
+| `connectionSchema` | `String` | No | Schema name written into the connection file |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-ssas-multidimensional \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlaFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-sml-from-ssas-multidimensional \
+  -F "xmlaFileUpload=@/path/to/file"
+```
+
+---
+
 ### `generate-report-from-xml`
 
 [↑ Table of Contents](#table-of-contents)

@@ -89,6 +89,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
   - [`generateSMLFromTabular`](#generatesmlfromtabular)
+  - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
@@ -434,6 +435,40 @@ function generateSMLFromTabular(
 | `catalogName` | `string` | No | `{modelName}_catalog` | Override the catalog `unique_name` |
 | `currency` | `string` | No | `"USD"` | Currency code used for currency-formatted metrics |
 | `description` | `string` | No | | Optional catalog/model description override |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateSMLFromSsasMultidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts an SSAS Multidimensional (classic OLAP cube) XMLA export to SML files. Internally converts the XMLA to an AtScale project XML first, then reuses the same converter as `generateSMLFromXML`.
+
+```typescript
+import { generateSMLFromSsasMultidimensional } from "@atscale-ps/ps-utils";
+
+await generateSMLFromSsasMultidimensional({
+  xmlaFile:  "./Cube.xml",
+  outputDir: "./sml-output",
+});
+```
+
+```typescript
+function generateSMLFromSsasMultidimensional(
+  params: GenerateSMLFromSsasMultidimensionalParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `xmlaFile` | `FileInput` | Yes | | Path to the SSAS Multidimensional XMLA export, or a `Readable` of its contents |
+| `outputDir` | `DirOutput` | Yes | | Directory where SML files will be written, or a `Writable` to receive a ZIP |
+| `catalogName` | `string` | No | Derived from the XMLA file | Override the catalog label |
+| `connectionType` | `string` | No | | Database dialect for the connection file |
+| `connectionDb` | `string` | No | | Database name written into the connection file |
+| `connectionSchema` | `string` | No | | Schema name written into the connection file |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
 
 ---

@@ -248,6 +248,27 @@ export async function generateSMLFromTabular(p: GenerateSMLFromTabularParams, o:
   } finally { cleanup(); }
 }
 
+export type GenerateSMLFromSsasMultidimensionalParams = {
+  xmlaFile: FileInput;
+  outputDir: DirOutput;
+  catalogName?: string;
+  connectionType?: string;
+  connectionDb?: string;
+  connectionSchema?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromSsasMultidimensional(p: GenerateSMLFromSsasMultidimensionalParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["xmlaFile"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-ssas-multidimensional", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateReportFromXMLParams = {
   xmlFile:     FileInput;
   outputFile?: FileOutput;

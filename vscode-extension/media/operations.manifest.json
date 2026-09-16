@@ -26,6 +26,7 @@
         "generate-sml-from-ddl",
         "generate-sml-from-xml",
         "generate-sml-from-tabular",
+        "generate-sml-from-ssas-multidimensional",
         "generate-report-from-xml",
         "generate-report-from-sml",
         "apply-style-to-sml",
@@ -812,6 +813,76 @@
         {
           "name": "description",
           "description": "Optional catalog/model description override",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-ssas-multidimensional": {
+      "description": "Convert an SSAS Multidimensional XMLA export to AtScale SML files",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "xmla-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "xmla-file",
+          "description": "Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where SML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-name",
+          "description": "Override the catalog label (defaults to a name derived from the XMLA file)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-type",
+          "description": "Database dialect for the connection file (e.g. \"snowflake\", \"postgresql\")",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-db",
+          "description": "Database name written into the connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-schema",
+          "description": "Schema name written into the connection file",
           "type": "string",
           "role": "scalar",
           "required": false,

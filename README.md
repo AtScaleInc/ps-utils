@@ -40,6 +40,7 @@ flowchart LR
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
     TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
+    SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
@@ -157,6 +158,7 @@ flowchart LR
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
+    - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
@@ -630,6 +632,45 @@ This is a **Pass 1** structural migration: every fact, dimension, and relationsh
     use_case.md                        (derived from the source model's own measures/hierarchies)
     build.yaml                         (effective build parameters, incl. detected role-play families)
 ```
+
+---
+
+### `generate-sml-from-ssas-multidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SSAS Multidimensional (classic OLAP cube) XMLA export and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the XMLA model definition, using each cube's DataSourceView to recover physical table/column names. Internally this operation converts the XMLA to an AtScale project XML first, then reuses `generate-sml-from-xml`'s own converter to produce the SML — the intermediate XML is written to `context/generated-project.xml` for traceability.
+
+This is a **Pass 1** structural migration: regular fact-to-dimension relationships, role-played dimensions (multiple cube-dimension usages sharing one underlying dimension — the naming prefix for each role is recovered from the distinguishing part of its name, e.g. "Order"/"Ship" from "Order Date"/"Ship Date"), degenerate dimensions (attributes hosted directly on the fact table, detected by physical table identity rather than assumed from SSAS's own type label), synthesized hierarchies (when a dimension declares none, one is built from its Key attribute and `AttributeRelationships`), and simple measures (Sum/Count/DistinctCount/Min/Max/Average) all convert. Many-to-many measure-group dimensions, reference (snowflaked/chained) dimensions, and parent-child dimensions are detected and reported — not converted — matching or improving on the conservative behavior of the reference SSAS-to-AtScale converter for these same cases.
+
+`--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-tabular`.
+
+**Getting the XMLA export:** this operation does not connect to SSAS itself — you supply the export file. In SQL Server Management Studio (SSMS), connect to the Analysis Services **Multidimensional** instance (Object Explorer → Connect → Analysis Services), right-click the target database (not the server) → **Script Database as** → **Create To** → **File...**, and save it. For a Multidimensional database this is genuine XML containing the full `<Create><ObjectDefinition><Database>` script this operation expects — pass that file straight to `--xmla-file`.
+
+```bash
+./atscale-utils generate-sml-from-ssas-multidimensional \
+  --xmla-file "./Cube.xml" \
+  --output-dir "./sml-output"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--xmla-file` | Yes | | Path to the SSAS Multidimensional XMLA export (`Create`/`ObjectDefinition`/`Database` script) |
+| `--output-dir` | Yes | | Directory to write SML files |
+| `--catalog-name` | No | Derived from the XMLA file | Override the catalog label |
+| `--connection-type` | No | | Database dialect written to the connection file (e.g. `snowflake`, `postgresql`) |
+| `--connection-db` | No | | Database name written into the connection file |
+| `--connection-schema` | No | | Schema name written into the connection file |
+| `--model-mode` | No | Collision-time decision | `new` permits deterministic renaming of all colliding query names; `existing` preserves established names and reports a blocking compatibility conflict |
+
+**Output layout:** same as `generate-sml-from-xml`, plus `context/generated-project.xml` (the intermediate AtScale project XML this was derived from) and an "SSAS Multidimensional Import Notes" section appended to `README.md` listing every many-to-many/reference/parent-child relationship that was detected but not converted.
+
+**What to expect:** a Pass 1 structural migration, not a deploy-ready model. After it runs:
+
+1. Read the generated `README.md` — the "SSAS Multidimensional Import Notes" section lists every issue found, sorted by severity (`error` > `action_needed` > `warning` > `info`): `error` means something was dropped and likely needs a fix, `action_needed` means it's usable but a human should confirm something (e.g. a many-to-many or reference dimension that needs a manual relationship, or a table whose physical source couldn't be confirmed).
+2. Any **many-to-many**, **reference (snowflaked/chained)**, or **parent-child** dimension is deliberately not converted — the notes list each one so a human can design the relationship manually. This matches (or improves on) the reference converter's own conservative behavior for these cases, not a shortcut unique to this operation.
+3. Inspect `context/generated-project.xml` (the intermediate AtScale project XML) if you need to trace exactly how a specific SSAS construct was translated before it reached SML.
+4. Run the result through `atscale-list-model-errors` (or your normal SML validation step) before deploying, the same as any other generated SML.
 
 ---
 
