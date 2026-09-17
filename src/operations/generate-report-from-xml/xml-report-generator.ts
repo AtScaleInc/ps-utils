@@ -730,9 +730,14 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       return homeDatasets.some((home) => home !== b.dataset && !dsRefSet.has(home));
     }
     const joinRows: string[][] = [];
-    // Schema-level dimensions this cube actually joins to via a key-ref binding (as opposed
+    // Schema-level dimensions this cube actually uses via a key-ref binding (as opposed
     // to an explicit <dimension-ref>) — tracked here so "Dimensions used" below can include
-    // them too, instead of only the dimensions the cube lists by name.
+    // them too, instead of only the dimensions the cube lists by name. This is broader than
+    // isRealJoin: a degenerate dimension (its authoritative key-ref lives directly on one of
+    // this cube's own fact datasets, with no separate lookup table) never produces a real
+    // cross-table join, but the cube still genuinely depends on it whenever the cube's own
+    // data-set-ref declares a binding for that key at all — same "any cube-tagged binding
+    // counts as usage" rule the "used across cubes" tally above applies per-dataset.
     const schemaJoinedDimNames = new Set<string>();
     for (const [dimName, dimEl] of schemaDims) {
       for (const hier of arr(dimEl.hierarchy)) {
@@ -742,9 +747,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           if (!def?.keyUuid) continue;
           const allBindings = keyMap.get(def.keyUuid) ?? [];
           for (const b of allBindings) {
-            if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
-            joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
+            if (b.cube !== cubeName) continue;
             schemaJoinedDimNames.add(dimName);
+            if (!isRealJoin(b, allBindings)) continue;
+            joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
           }
         }
       }
