@@ -2439,9 +2439,10 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const connEl = first(arr(physSec.connection)) as Record<string, unknown> | undefined;
   const connectionName = connEl ? a(connEl, "id") : undefined;
 
-  // Immutable flag from <immutable>true</immutable>
+  // Immutable flag from <immutable>true|false</immutable> — preserve an explicit `false`
+  // rather than collapsing it into "tag absent" (both used to become `undefined`).
   const immutableStr = s(first(arr(physSec.immutable)));
-  const immutable = immutableStr === "true" ? true : undefined;
+  const immutable = immutableStr === "true" ? true : immutableStr === "false" ? false : undefined;
 
   // Aggregate-eligibility flags from the sibling <properties> element:
   //   <properties>
@@ -2633,7 +2634,7 @@ function buildDatasetYaml(
     connection_id: connectionId,
   };
 
-  if (phys.immutable) obj.immutable = true;
+  if (phys.immutable !== undefined) obj.immutable = phys.immutable;
 
   if (phys.sql) {
     obj.sql = phys.sql;
