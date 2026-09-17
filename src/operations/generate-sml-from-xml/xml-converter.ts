@@ -2051,6 +2051,14 @@ function toTitleCase(s: string): string {
 /** Convert a name to a safe filesystem/unique_name slug (no special chars). */
 function safeName(s: string): string {
   return s
+    // Spell out comparison operators before the generic strip below turns them into an
+    // indistinguishable "_" — otherwise "X > 1M" and "X < 1M" collapse toward the same
+    // unique_name and the direction of the comparison is lost from the identifier entirely
+    // (the human-readable label still has it, but unique_name is what's used for lookups).
+    .replace(/<=/g, "_le_")
+    .replace(/>=/g, "_ge_")
+    .replace(/</g, "_lt_")
+    .replace(/>/g, "_gt_")
     .replace(/[^a-zA-Z0-9_\-]/g, "_")
     .replace(/_{2,}/g, "_")
     .replace(/^_|_$/g, "");
