@@ -215,22 +215,19 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   const datasetIdToName = new Map<string, string>();
   const datasets: DatasetDef[] = [];
-  // Populated alongside `datasets` in Phase 1 so Phase 5 (cube-scoped data-set-ref
-  // key-refs/attribute-refs) can add its counts onto the same DatasetDef instance
-  // instead of only feeding keyMap/attrMap — see the Phase 5 comment below.
+  // Populated alongside `datasets` in Phase 1 so a measure/attribute with no real
+  // binding can look up its guessed dataset's own columns (see the "inferred" guess
+  // below) without a second pass over `datasets`.
   const datasetByName = new Map<string, DatasetDef>();
   const keyMap = new Map<string, KeyBinding[]>();
   const attrMap = new Map<string, AttrBinding[]>();
   const connectionIds = new Set<string>();
 
-  function ingestLogical(logicalEl: El, datasetName: string, cube?: string): { keyRefs: number; attrRefs: number } {
-    let keyRefs = 0;
-    let attrRefs = 0;
+  function ingestLogical(logicalEl: El, datasetName: string, cube?: string): void {
     for (const kr of arr(logicalEl["key-ref"])) {
       const id = a(kr, "id");
       const cols = columnNames(kr.column);
       if (!id || cols.length === 0) continue;
-      keyRefs++;
       const list = keyMap.get(id) ?? [];
       list.push({ dataset: datasetName, columns: cols, complete: a(kr, "complete") ?? "true", unique: a(kr, "unique") === "true", cube });
       keyMap.set(id, list);
@@ -239,12 +236,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       const id = a(ar, "id");
       const cols = columnNames(ar.column);
       if (!id || cols.length === 0) continue;
-      attrRefs++;
       const list = attrMap.get(id) ?? [];
       list.push({ dataset: datasetName, column: cols[0], cube });
       attrMap.set(id, list);
     }
-    return { keyRefs, attrRefs };
   }
 
   for (const dsSec of arr(schemaEl["data-sets"])) {
@@ -277,15 +272,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             .filter((c) => c.name)
         : [];
 
-      let keyRefCount = 0;
-      let attrRefCount = 0;
-      for (const logSec of arr(ds.logical)) {
-        const { keyRefs, attrRefs } = ingestLogical(logSec, name);
-        keyRefCount += keyRefs;
-        attrRefCount += attrRefs;
-      }
+      // keyRefCount/attrRefCount are filled in later, once Phase 5 has run — see the
+      // "used across cubes" tally below. ingestLogical still runs here so keyMap/attrMap
+      // are populated for join resolution, but its return value is intentionally unused:
+      // a dataset's own top-level <logical> block is every key-ref/attribute-ref it
+      // declares about its own columns, whether or not any cube ever joins to it (e.g. a
+      // fully-defined but otherwise orphaned dimension table), so it cannot answer "is
+      // this dataset actually used" on its own.
+      for (const logSec of arr(ds.logical)) ingestLogical(logSec, name);
 
-      const datasetDef = { name, id, allowAggregates, connectionId, table, sql, immutable, columns, keyRefCount, attrRefCount };
+      const datasetDef = { name, id, allowAggregates, connectionId, table, sql, immutable, columns, keyRefCount: 0, attrRefCount: 0 };
       datasets.push(datasetDef);
       datasetByName.set(name, datasetDef);
     }
@@ -384,11 +380,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   // ── Phase 5: cubes — need each cube's OWN data-set-ref key-refs/attribute-refs
   //    ingested into keyMap/attrMap (tagged with the cube name) so joins and
-  //    measure/dimension dataset bindings resolve per cube, same as datasets.
-  //    A dataset's own top-level <logical> block (Phase 1) can be empty even when
-  //    the dataset is fully bound — the bindings live only under the referencing
-  //    cube's <data-set-ref><logical>, so these counts must ALSO be added onto the
-  //    dataset's own keyRefCount/attrRefCount, or the report undercounts usage. ──
+  //    measure/dimension dataset bindings resolve per cube, same as datasets. ──
 
   const cubeEls = arr(schemaEl.cubes).flatMap((c) => arr(c.cube));
   for (const cube of cubeEls) {
@@ -399,14 +391,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(dsRef, "id");
         const dsName = refId ? datasetIdToName.get(refId) ?? refId : undefined;
         if (!dsName) continue;
-        const targetDs = datasetByName.get(dsName);
-        for (const logSec of arr(dsRef.logical)) {
-          const { keyRefs, attrRefs } = ingestLogical(logSec, dsName, cubeName);
-          if (targetDs) {
-            targetDs.keyRefCount += keyRefs;
-            targetDs.attrRefCount += attrRefs;
-          }
-        }
+        for (const logSec of arr(dsRef.logical)) ingestLogical(logSec, dsName, cubeName);
       }
     }
     for (const dimsSec of arr(cube.dimensions)) {
@@ -417,6 +402,34 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     }
   }
   dimEntries.sort((x, y) => x.name.localeCompare(y.name));
+
+  // ── "Used across cubes" tally — now that every cube's data-set-ref logical section
+  //    has been ingested (Phase 5), keyMap/attrMap hold every key-ref/attribute-ref
+  //    binding, each tagged with the cube it came from (or untagged, for a binding
+  //    declared only in a dataset's own schema-level <logical> block). A key/attribute
+  //    id is genuinely tied to a cube if ANY binding for that id — on this dataset, or on
+  //    another one, e.g. the fact table whose FK binding shares the same id as this
+  //    dataset's own authoritative definition — is cube-tagged. That is the same
+  //    "real join" shape isRealJoin (below) checks per-cube; this just answers it once,
+  //    across all cubes, per dataset. Only bindings for ids that clear that bar are
+  //    counted, so a fully-populated but never-joined dataset (declares plenty of
+  //    key-refs/attribute-refs about its own columns, but no cube's data-set-ref ever
+  //    touches the same ids) correctly reports zero usage instead of its raw declaration
+  //    count.
+  function tallyUsageByDataset(bindingsById: Map<string, { dataset: string; cube?: string }[]>): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const bindings of bindingsById.values()) {
+      if (!bindings.some((b) => b.cube !== undefined)) continue;
+      for (const b of bindings) counts.set(b.dataset, (counts.get(b.dataset) ?? 0) + 1);
+    }
+    return counts;
+  }
+  const keyRefUsage = tallyUsageByDataset(keyMap);
+  const attrRefUsage = tallyUsageByDataset(attrMap);
+  for (const ds of datasets) {
+    ds.keyRefCount = keyRefUsage.get(ds.name) ?? 0;
+    ds.attrRefCount = attrRefUsage.get(ds.name) ?? 0;
+  }
 
   // ============================================================
   // Rendering
