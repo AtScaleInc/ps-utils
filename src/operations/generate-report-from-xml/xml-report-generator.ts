@@ -137,6 +137,9 @@ interface KeyBinding {
   unique: boolean;
   /** cube name this binding came from, undefined for a schema-level physical key-ref */
   cube?: string;
+  /** `<ref-path><new-ref><ref-naming>` template (e.g. "Ship Date - {0}") when this
+   *  key-ref is a role-played binding to the target dimension, undefined otherwise. */
+  rolePlay?: string;
 }
 
 interface AttrBinding {
@@ -228,8 +231,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       const id = a(kr, "id");
       const cols = columnNames(kr.column);
       if (!id || cols.length === 0) continue;
+      const refPathEl = first(arr(kr["ref-path"])) as El | undefined;
+      const newRefEl = refPathEl ? (first(arr(refPathEl["new-ref"])) as El | undefined) : undefined;
+      const rolePlay = newRefEl ? s(first(arr(newRefEl["ref-naming"]))) : undefined;
       const list = keyMap.get(id) ?? [];
-      list.push({ dataset: datasetName, columns: cols, complete: a(kr, "complete") ?? "true", unique: a(kr, "unique") === "true", cube });
+      list.push({ dataset: datasetName, columns: cols, complete: a(kr, "complete") ?? "true", unique: a(kr, "unique") === "true", cube, rolePlay });
       keyMap.set(id, list);
     }
     for (const ar of arr(logicalEl["attribute-ref"])) {
@@ -714,20 +720,22 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     //
     // A degenerate attribute (its value is a plain column on the fact table itself, no
     // separate physical dimension table involved at all) has exactly one key-ref entry
-    // total, declared complete="true" directly in the fact dataset's own <logical>
-    // section. A genuine cross-table join instead has TWO entries for the same key: the
-    // dimension's own authoritative definition (complete="true", on its own separate
-    // table) plus the fact table's FK reference to it (typically complete="false"/
-    // "partial", on the fact dataset). A binding only counts as a real join when some
-    // OTHER complete="true" entry for the same key exists on a dataset that is (a)
-    // different from this binding's own dataset AND (b) not itself one of this cube's own
-    // fact datasets — otherwise the "other" dataset is just a second fact table the same
-    // degenerate value happens to also live on (shared_degenerate_columns), not a lookup
-    // table this cube is actually joining to.
-    const dsRefSet = new Set(dsRefs);
+    // total for that key, declared complete="true" directly in the fact dataset's own
+    // <logical> section — with nothing else bound to the same key, there is no "other side"
+    // to join to, so it produces no join row. A genuine cross-table lookup instead has TWO
+    // (or more) entries for the same key on DIFFERENT datasets: whichever one owns the
+    // authoritative definition (complete="true") plus one or more FK references to it
+    // (typically complete="false"/"partial") — every dataset in that group gets its own join
+    // row, including the authoritative one itself, because a fact whose own column IS the
+    // dimension's key still needs a row describing which column it joins on. That holds even
+    // when the authoritative dataset is itself one of this cube's own fact tables (a
+    // degenerate dimension whose values live on fact A, looked up via FK from fact B, is a
+    // real relationship, not a coincidence). The one case NOT a real join is two datasets that
+    // each independently declare complete="true" for the same key — both already own the
+    // value outright, so neither is joining to the other, they just happen to carry the same
+    // degenerate value (shared_degenerate_columns).
     function isRealJoin(b: KeyBinding, allBindings: KeyBinding[]): boolean {
-      const homeDatasets = allBindings.filter((e) => e.complete === "true").map((e) => e.dataset);
-      return homeDatasets.some((home) => home !== b.dataset && !dsRefSet.has(home));
+      return allBindings.some((other) => other.dataset !== b.dataset && !(b.complete === "true" && other.complete === "true"));
     }
     const joinRows: string[][] = [];
     // Schema-level dimensions this cube actually uses via a key-ref binding (as opposed
@@ -750,7 +758,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             if (b.cube !== cubeName) continue;
             schemaJoinedDimNames.add(dimName);
             if (!isRealJoin(b, allBindings)) continue;
-            joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
+            joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), cell(b.rolePlay), b.unique ? "yes" : ""]);
           }
         }
       }
@@ -767,7 +775,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const allBindings = keyMap.get(def.keyUuid) ?? [];
             for (const b of allBindings) {
               if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
-              joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
+              joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), cell(b.rolePlay), b.unique ? "yes" : ""]);
             }
           }
         }
@@ -775,7 +783,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     }
     if (joinRows.length) {
       o.push("**Joins (fact dataset → dimension level)**", "");
-      o.push(...table(["From dataset", "Join column(s)", "To dimension", "To level", "Unique"], joinRows));
+      o.push(...table(["From dataset", "Join column(s)", "To dimension", "To level", "Role play", "Unique"], joinRows));
     }
 
     // Dimensions used (inline + refs).
