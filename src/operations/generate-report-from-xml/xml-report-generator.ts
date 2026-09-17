@@ -717,6 +717,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       return homeDatasets.some((home) => home !== b.dataset && !dsRefSet.has(home));
     }
     const joinRows: string[][] = [];
+    // Schema-level dimensions this cube actually joins to via a key-ref binding (as opposed
+    // to an explicit <dimension-ref>) — tracked here so "Dimensions used" below can include
+    // them too, instead of only the dimensions the cube lists by name.
+    const schemaJoinedDimNames = new Set<string>();
     for (const [dimName, dimEl] of schemaDims) {
       for (const hier of arr(dimEl.hierarchy)) {
         for (const level of arr(hier.level)) {
@@ -727,6 +731,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           for (const b of allBindings) {
             if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
             joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
+            schemaJoinedDimNames.add(dimName);
           }
         }
       }
@@ -756,13 +761,29 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
     // Dimensions used (inline + refs).
     const dimNames: string[] = [];
+    const namedDimNames = new Set<string>();
     for (const dimsSec of arr(cube.dimensions)) {
-      for (const dim of arr(dimsSec.dimension)) dimNames.push(`${a(dim, "name") ?? "?"} (cube-local)`);
+      for (const dim of arr(dimsSec.dimension)) {
+        const dName = a(dim, "name") ?? "?";
+        dimNames.push(`${dName} (cube-local)`);
+        namedDimNames.add(dName);
+      }
       for (const dimRef of arr(dimsSec["dimension-ref"])) {
         const refId = a(dimRef, "id");
         const found = [...schemaDims.entries()].find(([, d]) => a(d, "id") === refId);
-        dimNames.push(found ? found[0] : refId ?? "?");
+        const dName = found ? found[0] : refId ?? "?";
+        dimNames.push(dName);
+        namedDimNames.add(dName);
       }
+    }
+    // A schema-level dimension can be joined into a cube purely through a keyed-attribute
+    // key-ref (visible in the Joins table above) with no <dimension-ref> ever naming it —
+    // without this, such dimensions silently vanish from "Dimensions used" even though the
+    // cube genuinely depends on them.
+    for (const dimName of schemaJoinedDimNames) {
+      if (namedDimNames.has(dimName)) continue;
+      dimNames.push(`${dimName} (schema-level)`);
+      namedDimNames.add(dimName);
     }
     if (dimNames.length) o.push(`**Dimensions used:** ${dimNames.map((d) => `\`${d}\``).join(", ")}`, "");
 
