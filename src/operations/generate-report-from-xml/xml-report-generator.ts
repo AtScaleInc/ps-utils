@@ -655,6 +655,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           code(bindingLabel(bindings)),
           cell(levelType),
           flag(!visible) ? "hidden" : "",
+          cell(def?.folder),
           def?.allowedCalcTypes.join(", ") ?? "",
         ]);
 
@@ -671,17 +672,18 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             cell(kaDef?.caption),
             role ? cell(role) : refId ? "embedded ref" : "secondary",
             code(bindingLabel(kaBindings)),
+            cell(kaDef?.folder),
             kaDef?.allowedCalcTypes.join(", ") ?? "",
           ]);
         }
       }
 
       if (levelRows.length) {
-        o.push(...table(["Level (primary attribute)", "Caption", "Bound to (dataset.column)", "Level type", "Hidden", "Allowed DMA calcs"], levelRows));
+        o.push(...table(["Level (primary attribute)", "Caption", "Bound to (dataset.column)", "Level type", "Hidden", "Folder", "Allowed DMA calcs"], levelRows));
       }
       if (secondaryRows.length) {
         o.push("Level attributes (name/sort overrides and secondary attributes):", "");
-        o.push(...table(["Level", "Attribute", "Caption", "Role", "Bound to (dataset.column)", "Allowed DMA calcs"], secondaryRows));
+        o.push(...table(["Level", "Attribute", "Caption", "Role", "Bound to (dataset.column)", "Folder", "Allowed DMA calcs"], secondaryRows));
       }
     }
     o.push("");
