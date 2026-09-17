@@ -124,12 +124,28 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   const factDatasets = new Set<string>();
   const dimDatasets = new Set<string>();
   const datasetRelCount = new Map<string, number>();
+  // Fact-side join bindings for a dimension's level, keyed by `${dimension}::${level}` —
+  // the XML report's level binding merges the dimension table's own key column with the
+  // fact table's foreign-key column used by each cube's join; a model's `relationships[]`
+  // is where SML records that same fact-side column, so cross-reference it here rather
+  // than rendering it only in the separate Relationships table.
+  const factBindingsByDimLevel = new Map<string, string[]>();
   for (const m of c.models) {
     for (const rel of asArray<Raw>(m.raw.relationships)) {
       const ds = normDataset(rel?.from?.dataset);
       if (!ds) continue;
       factDatasets.add(ds);
       datasetRelCount.set(ds, (datasetRelCount.get(ds) ?? 0) + 1);
+      const toDim = rel?.to?.dimension;
+      const toLevel = rel?.to?.level;
+      if (!toDim || !toLevel) continue;
+      const cols = asArray(rel?.from?.join_columns).join("+");
+      if (!cols) continue;
+      const modelLabel = m.raw.label ?? m.raw.unique_name;
+      const key = `${toDim}::${toLevel}`;
+      const list = factBindingsByDimLevel.get(key) ?? [];
+      list.push(`${ds}.${cols}${modelLabel ? ` (${modelLabel})` : ""}`);
+      factBindingsByDimLevel.set(key, list);
     }
   }
   // A metric binds straight to a dataset column (`dataset:`/`column:`) rather than
@@ -391,15 +407,16 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
       o.push("**Level attributes**", "");
       o.push(
         ...table(
-          ["Attribute", "Label", "Bound to (dataset.column)", "Sort", "Time unit", "Unique key", "Hidden"],
+          ["Attribute", "Label", "Bound to (dataset.column)", "Sort", "Time unit", "Unique key", "Hidden", "Allowed DMA calcs"],
           attrs.map((a) => [
             code(a?.unique_name),
             cell(a?.label),
-            code(bindingLabel(a)),
+            code(levelBindingLabel(raw?.unique_name, a)),
             code(a?.sort_column),
             code(a?.time_unit),
             flag(a?.is_unique_key),
             flag(a?.is_hidden),
+            asArray(a?.allowed_calcs_for_dma).join(", "),
           ]),
         ),
       );
@@ -416,13 +433,14 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
       o.push("**Secondary attributes**", "");
       o.push(
         ...table(
-          ["Level", "Attribute", "Label", "Bound to (dataset.column)", "Folder"],
+          ["Level", "Attribute", "Label", "Bound to (dataset.column)", "Folder", "Allowed DMA calcs"],
           secondaries.map((a) => [
             code(a.level),
             code(a?.unique_name),
             cell(a?.label),
             code(bindingLabel(a)),
             cell(a?.folder),
+            asArray(a?.allowed_calcs_for_dma).join(", "),
           ]),
         ),
       );
@@ -461,6 +479,18 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (!ds) return "";
     const cols = asArray(a?.key_columns).length ? asArray(a.key_columns).join("+") : a?.name_column ?? "";
     return cols ? `${ds}.${cols}` : ds;
+  }
+
+  /**
+   * A level attribute's binding plus every fact table foreign-key column joined to it via
+   * a model's `relationships[]` (see factBindingsByDimLevel above) — matches the XML
+   * report's merged "dimension-column, fact-column (cube)" cell instead of showing only
+   * the dimension-side half of the join.
+   */
+  function levelBindingLabel(dimUniqueName: unknown, a: Raw): string {
+    const own = bindingLabel(a);
+    const factBindings = factBindingsByDimLevel.get(`${dimUniqueName}::${a?.unique_name}`) ?? [];
+    return [own, ...factBindings].filter(Boolean).join(", ");
   }
 
   /** Every physical dataset a dimension's level attributes bind to, across single- and shared/multi-dataset bindings. */
