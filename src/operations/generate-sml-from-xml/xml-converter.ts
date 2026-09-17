@@ -3712,11 +3712,15 @@ function findCubeMatchingLevels(
       // semi_additive.degenerate_dimensions[].level, and the shared-degenerate-bindings
       // lookup key all agree with what the dimension file itself uses; otherwise a level
       // with a name over 63 chars silently fails every one of those lookups.
+      // These two checks are independent, not either/or: the source XML commonly declares
+      // BOTH a plain key-ref and one or more role-played key-refs sharing the same outer
+      // <key-ref id> for one dimension level (e.g. a role-played FK alongside the plain/
+      // canonical FK to the same lookup table). Checking only the role-play match and
+      // stopping there would silently drop the plain relationship for that level.
       if (cubeKeyRoles.has(pa)) {
         matches.push({ matchId: pa, toLevel: levelUniqueNameFor(def?.name ?? pa), dimKeyUuid: def?.keyUuid });
-        continue;
       }
-      if (def?.keyUuid && cubeKeyRoles.has(def.keyUuid)) {
+      if (def?.keyUuid && def.keyUuid !== pa && cubeKeyRoles.has(def.keyUuid)) {
         matches.push({ matchId: def.keyUuid, toLevel: levelUniqueNameFor(def.name), dimKeyUuid: def.keyUuid });
       }
     }
