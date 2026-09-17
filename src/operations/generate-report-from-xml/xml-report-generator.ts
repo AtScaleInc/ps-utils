@@ -215,6 +215,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   const datasetIdToName = new Map<string, string>();
   const datasets: DatasetDef[] = [];
+  // Populated alongside `datasets` in Phase 1 so Phase 5 (cube-scoped data-set-ref
+  // key-refs/attribute-refs) can add its counts onto the same DatasetDef instance
+  // instead of only feeding keyMap/attrMap — see the Phase 5 comment below.
+  const datasetByName = new Map<string, DatasetDef>();
   const keyMap = new Map<string, KeyBinding[]>();
   const attrMap = new Map<string, AttrBinding[]>();
   const connectionIds = new Set<string>();
@@ -281,13 +285,25 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         attrRefCount += attrRefs;
       }
 
-      datasets.push({ name, id, allowAggregates, connectionId, table, sql, immutable, columns, keyRefCount, attrRefCount });
+      const datasetDef = { name, id, allowAggregates, connectionId, table, sql, immutable, columns, keyRefCount, attrRefCount };
+      datasets.push(datasetDef);
+      datasetByName.set(name, datasetDef);
     }
   }
 
   // ── Phase 2: schema-level attribute library ────────────────────────────────
 
   const attrDef = new Map<string, AttrDef>();
+  // id → name for every plain <attribute> (measures and other non-keyed attributes)
+  // alongside every <keyed-attribute>, spanning schema- and cube-level scopes.
+  // attrDef itself stays keyed-attribute-only — it backs the Attribute Library
+  // section and its count, which should not include measures — but anything that
+  // resolves an attribute-ref id to a display name (e.g. a User Defined
+  // Aggregate's attribute list, which can point at a measure's plain <attribute>
+  // or — via calcMemberDef, checked as a further fallback where this map is used —
+  // a calculated member) needs the full id space, or the ref renders as a raw
+  // internal UUID instead of a name.
+  const attrNameById = new Map<string, string>();
   function ingestKeyedAttrs(container: El): void {
     for (const ka of arr(container["keyed-attribute"])) {
       const id = a(ka, "id");
@@ -307,6 +323,12 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         format: fmtEl ? (s(first(arr(fmtEl["format-string"]))) ?? s(first(arr(fmtEl["named-format"])))) : undefined,
         allowedCalcTypes: allowedEl ? arr(allowedEl["calculation-type"]).map((c) => s(c) ?? "").filter(Boolean) : [],
       });
+      attrNameById.set(id, name);
+    }
+    for (const attrEl of arr(container.attribute)) {
+      const id = a(attrEl, "id");
+      const name = a(attrEl, "name");
+      if (id && name) attrNameById.set(id, name);
     }
   }
   for (const attrsSec of arr(schemaEl.attributes)) ingestKeyedAttrs(attrsSec);
@@ -362,7 +384,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   // ── Phase 5: cubes — need each cube's OWN data-set-ref key-refs/attribute-refs
   //    ingested into keyMap/attrMap (tagged with the cube name) so joins and
-  //    measure/dimension dataset bindings resolve per cube, same as datasets. ──
+  //    measure/dimension dataset bindings resolve per cube, same as datasets.
+  //    A dataset's own top-level <logical> block (Phase 1) can be empty even when
+  //    the dataset is fully bound — the bindings live only under the referencing
+  //    cube's <data-set-ref><logical>, so these counts must ALSO be added onto the
+  //    dataset's own keyRefCount/attrRefCount, or the report undercounts usage. ──
 
   const cubeEls = arr(schemaEl.cubes).flatMap((c) => arr(c.cube));
   for (const cube of cubeEls) {
@@ -373,7 +399,14 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(dsRef, "id");
         const dsName = refId ? datasetIdToName.get(refId) ?? refId : undefined;
         if (!dsName) continue;
-        for (const logSec of arr(dsRef.logical)) ingestLogical(logSec, dsName, cubeName);
+        const targetDs = datasetByName.get(dsName);
+        for (const logSec of arr(dsRef.logical)) {
+          const { keyRefs, attrRefs } = ingestLogical(logSec, dsName, cubeName);
+          if (targetDs) {
+            targetDs.keyRefCount += keyRefs;
+            targetDs.attrRefCount += attrRefs;
+          }
+        }
       }
     }
     for (const dimsSec of arr(cube.dimensions)) {
@@ -665,6 +698,24 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     // Joins: this cube's own key-ref bindings, resolved against every dimension's
     // keyed-attribute to show which fact dataset joins to which dimension level
     // on which column(s) — the actual join graph, independent of SML shaping.
+    //
+    // A degenerate attribute (its value is a plain column on the fact table itself, no
+    // separate physical dimension table involved at all) has exactly one key-ref entry
+    // total, declared complete="true" directly in the fact dataset's own <logical>
+    // section. A genuine cross-table join instead has TWO entries for the same key: the
+    // dimension's own authoritative definition (complete="true", on its own separate
+    // table) plus the fact table's FK reference to it (typically complete="false"/
+    // "partial", on the fact dataset). A binding only counts as a real join when some
+    // OTHER complete="true" entry for the same key exists on a dataset that is (a)
+    // different from this binding's own dataset AND (b) not itself one of this cube's own
+    // fact datasets — otherwise the "other" dataset is just a second fact table the same
+    // degenerate value happens to also live on (shared_degenerate_columns), not a lookup
+    // table this cube is actually joining to.
+    const dsRefSet = new Set(dsRefs);
+    function isRealJoin(b: KeyBinding, allBindings: KeyBinding[]): boolean {
+      const homeDatasets = allBindings.filter((e) => e.complete === "true").map((e) => e.dataset);
+      return homeDatasets.some((home) => home !== b.dataset && !dsRefSet.has(home));
+    }
     const joinRows: string[][] = [];
     for (const [dimName, dimEl] of schemaDims) {
       for (const hier of arr(dimEl.hierarchy)) {
@@ -672,8 +723,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           const primaryId = a(level, "primary-attribute");
           const def = primaryId ? attrDef.get(primaryId) : undefined;
           if (!def?.keyUuid) continue;
-          for (const b of keyMap.get(def.keyUuid) ?? []) {
-            if (b.cube !== cubeName) continue;
+          const allBindings = keyMap.get(def.keyUuid) ?? [];
+          for (const b of allBindings) {
+            if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
             joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
           }
         }
@@ -688,8 +740,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const primaryId = a(level, "primary-attribute");
             const def = primaryId ? attrDef.get(primaryId) : undefined;
             if (!def?.keyUuid) continue;
-            for (const b of keyMap.get(def.keyUuid) ?? []) {
-              if (b.cube !== cubeName) continue;
+            const allBindings = keyMap.get(def.keyUuid) ?? [];
+            for (const b of allBindings) {
+              if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
               joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), b.unique ? "yes" : ""]);
             }
           }
@@ -766,9 +819,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             semiAdditive = fn ?? "";
           }
         } else if (countDistEl) {
-          kind = "count-distinct";
+          // "count distinct" (spaced) is the canonical SML aggregation-type wording,
+          // not the raw XML element/tag name — matches generate-sml-from-xml's mapping.
+          kind = "count distinct";
         } else if (countNonNullEl) {
-          kind = "count-nonnull";
+          kind = "count non-null";
         } else if (quantileInstanceEl) {
           kind = "percentile";
           const quantileVal = s(first(arr(quantileInstanceEl["quantile-val"])));
@@ -853,7 +908,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           for (const attrRef of arr(attrsWrap["attribute-ref"])) {
             const refId = a(attrRef, "id");
             const def = refId ? attrDef.get(refId) : undefined;
-            attrIds.push(def?.name ?? refId ?? "?");
+            const resolvedName =
+              def?.name ?? (refId ? attrNameById.get(refId) ?? calcMemberDef.get(refId)?.name : undefined);
+            attrIds.push(resolvedName ?? refId ?? "?");
           }
         }
         aggRows.push([code(aggName), code(targetConn), String(attrIds.length), attrIds.map((n) => `\`${n}\``).join(", ")]);

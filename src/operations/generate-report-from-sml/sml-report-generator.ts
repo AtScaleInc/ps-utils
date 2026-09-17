@@ -151,6 +151,8 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   for (const m of c.metrics) if (m.raw.unique_name) metricByName.set(String(m.raw.unique_name), m);
   const calcByName = new Map<string, SmlObject>();
   for (const cc of c.calculations) if (cc.raw.unique_name) calcByName.set(String(cc.raw.unique_name), cc);
+  const dimByName = new Map<string, SmlObject>();
+  for (const d of c.dimensions) if (d.raw.unique_name) dimByName.set(String(d.raw.unique_name), d);
 
   // ── Header ──────────────────────────────────────────────────────────────────
 
@@ -365,17 +367,23 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
           ]),
         ),
       );
+    }
 
-      const secondaries = attrs.flatMap((a) => asArray<Raw>(a?.secondary_attributes));
-      if (secondaries.length) {
-        o.push("**Secondary attributes**", "");
-        o.push(
-          ...table(
-            ["Attribute", "Label", "Bound to (dataset.column)"],
-            secondaries.map((a) => [code(a?.unique_name), cell(a?.label), code(bindingLabel(a))]),
-          ),
-        );
-      }
+    // Secondary attributes live on the hierarchy level that owns them
+    // (hierarchies[].levels[].secondary_attributes), not on level_attributes.
+    const secondaries: Raw[] = hierarchies.flatMap((h) =>
+      asArray<Raw>(h?.levels).flatMap((lvl) =>
+        asArray<Raw>(lvl?.secondary_attributes).map((sa): Raw => ({ ...sa, level: lvl?.unique_name })),
+      ),
+    );
+    if (secondaries.length) {
+      o.push("**Secondary attributes**", "");
+      o.push(
+        ...table(
+          ["Level", "Attribute", "Label", "Bound to (dataset.column)"],
+          secondaries.map((a) => [code(a.level), code(a?.unique_name), cell(a?.label), code(bindingLabel(a))]),
+        ),
+      );
     }
 
     const rels = asArray<Raw>(raw.relationships);
@@ -397,22 +405,47 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     o.push(`_Source: \`${d.file}\`_`, "", "---", "");
   }
 
-  /** A level/secondary attribute's own `dataset` + key/name column(s), rendered like the XML report's dataset.column bindings. */
+  /**
+   * A level/secondary attribute's own `dataset` + key/name column(s), rendered like the
+   * XML report's dataset.column bindings. A level bound to more than one physical dataset
+   * (e.g. a degenerate time level shared across several fact tables) carries the binding
+   * under `shared_degenerate_columns` instead of top-level `dataset`/`key_columns` —
+   * render one `dataset.column` per entry.
+   */
   function bindingLabel(a: Raw): string {
+    const shared = asArray<Raw>(a?.shared_degenerate_columns);
+    if (shared.length) return shared.map((s) => bindingLabel(s)).filter(Boolean).join(", ");
     const ds = normDataset(a?.dataset);
     if (!ds) return "";
     const cols = asArray(a?.key_columns).length ? asArray(a.key_columns).join("+") : a?.name_column ?? "";
     return cols ? `${ds}.${cols}` : ds;
   }
 
+  /** Every physical dataset a dimension's level attributes bind to, across single- and shared/multi-dataset bindings. */
+  function datasetsForDimension(raw: Raw | undefined): string[] {
+    if (!raw) return [];
+    return asArray<Raw>(raw.level_attributes).flatMap((a) => {
+      const shared = asArray<Raw>(a?.shared_degenerate_columns);
+      if (shared.length) return shared.map((s) => normDataset(s?.dataset));
+      return [normDataset(a?.dataset)];
+    });
+  }
+
   function renderModel(o: string[], m: SmlObject): void {
     const raw = m.raw;
-    o.push(`### ${label(m)}`, "");
+    const hiddenMarker = raw.visible === false ? "  `hidden`" : "";
+    o.push(`### ${label(m)}${hiddenMarker}`, "");
     if (raw.unique_name && raw.unique_name !== label(m)) o.push(`\`${raw.unique_name}\``, "");
     if (raw.description) o.push(cell(raw.description), "");
 
     const rels = asArray<Raw>(raw.relationships);
-    const dsRefs = [...new Set(rels.map((rel) => normDataset(rel?.from?.dataset)).filter(Boolean))];
+    const degen = asArray<Raw>(raw.dimensions).map((x) => String(x?.unique_name ?? x?.name ?? x));
+    // A degenerate dimension brings its own datasets into the model even though it has
+    // no entry in `relationships` (it's bound straight to fact columns, not joined).
+    const degenDatasets = degen.flatMap((name) => datasetsForDimension(dimByName.get(name)?.raw));
+    const dsRefs = [
+      ...new Set([...rels.map((rel) => normDataset(rel?.from?.dataset)), ...degenDatasets].filter(Boolean)),
+    ];
     if (dsRefs.length) o.push(`**Datasets:** ${dsRefs.map((d) => `\`${d}\``).join(", ")}`, "");
 
     if (rels.length) {
@@ -433,7 +466,6 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     }
 
     const dimNames = [...new Set(rels.map((rel) => String(rel?.to?.dimension ?? "")).filter(Boolean))];
-    const degen = asArray<Raw>(raw.dimensions).map((x) => String(x?.unique_name ?? x?.name ?? x));
     if (dimNames.length || degen.length) {
       o.push(
         `**Dimensions used:** ${[...dimNames, ...degen.map((d) => `${d} (degenerate)`)].map((d) => `\`${d}\``).join(", ")}`,
@@ -490,7 +522,21 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (aggregates.length || raw.allow_aggregates !== undefined) {
       o.push("**Aggregates**", "");
       if (raw.allow_aggregates !== undefined) o.push(`- Allow aggregates: ${flag(raw.allow_aggregates) || "no"}`);
-      if (aggregates.length) o.push(`- ${aggregates.length} aggregate definition(s)`);
+      if (aggregates.length) {
+        const aggRows = aggregates.map((ag) => {
+          const attrNames = asArray<Raw>(ag?.attributes).map((at) => String(at?.name ?? at?.dimension ?? "?"));
+          const metricNames = asArray(ag?.metrics).map((m) => String(m));
+          return [
+            code(ag?.unique_name ?? ag?.label),
+            cell(ag?.label),
+            String(attrNames.length),
+            attrNames.map((n) => `\`${n}\``).join(", "),
+            String(metricNames.length),
+            metricNames.map((n) => `\`${n}\``).join(", "),
+          ];
+        });
+        o.push(...table(["Name", "Label", "# attributes", "Attributes", "# metrics", "Metrics"], aggRows));
+      }
       o.push("");
     }
 
