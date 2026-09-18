@@ -86,6 +86,25 @@ export const REMEDIATION_HINTS: Readonly<Record<string, string>> = {
 export const remediationHint = (name: string): string =>
   REMEDIATION_HINTS[name.toUpperCase()] ?? "";
 
+/**
+ * Functions the translator handles on its own.
+ *
+ * These appear as "blockers" because they are off AtScale's server-side DAX
+ * whitelist, but none of them blocks a measure by itself -- BLANK() is the
+ * common case, present in 64 deferred BILLING measures and the actual cause of
+ * none. Ranking a work list by raw blocker frequency therefore puts the least
+ * actionable function at the top, so callers use this to separate incidental
+ * blockers from the ones a modeller has to do something about.
+ */
+const TRANSLATABLE_ALONE: ReadonlySet<string> = new Set([
+  "BLANK", "ISBLANK", "IF", "AND", "OR", "NOT", "SWITCH", "COALESCE", "INT",
+  "CALCULATE", "TOTALYTD", "TOTALQTD", "TOTALMTD",
+  ...Object.keys(IDENTITY),
+]);
+
+export const isIncidentalBlocker = (name: string): boolean =>
+  TRANSLATABLE_ALONE.has(name.toUpperCase());
+
 const CONFIDENCE_ORDER: Record<Confidence, number> = { high: 0, medium: 1, low: 2 };
 
 export class MdxTranslator {

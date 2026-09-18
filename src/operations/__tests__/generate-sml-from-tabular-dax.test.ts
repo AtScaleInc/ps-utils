@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   MeasureClassifier, MdxTranslator, Untranslatable, blockingFunctions,
-  buildResolver, defaultMetricName, parseDax, printDax, supportsDax, tokenize,
+  buildResolver, defaultMetricName, isIncidentalBlocker, parseDax, printDax, supportsDax,
+  tokenize,
   type ColumnLookup, type NameResolver,
 } from "../generate-sml-from-tabular/dax/index.js";
 
@@ -416,5 +417,22 @@ describe("dax printer", () => {
 
   it("preserves string escaping", () => {
     expect(printDax(parseDax('IF([a] = "x""y", 1, 0)'))).toBe('IF(([a] = "x""y"), 1, 0)');
+  });
+});
+
+describe("report quality", () => {
+  it("does not repeat the same remediation hint twice", () => {
+    const result = classifier.classify("Fact", "m", "IFERROR([a]/[b], BLANK())");
+    expect(result.verdict).toBe("unsupported");
+    const texts = result.notes.map((n) => n.replace(/^[A-Z.]+: /, ""));
+    expect(new Set(texts).size).toBe(texts.length);
+  });
+
+  it("marks functions the translator handles alone as incidental", () => {
+    // BLANK is the common case: off the whitelist, but never the real blocker.
+    expect(isIncidentalBlocker("BLANK")).toBe(true);
+    expect(isIncidentalBlocker("DIVIDE")).toBe(true);
+    expect(isIncidentalBlocker("GROUPBY")).toBe(false);
+    expect(isIncidentalBlocker("FIRSTDATE")).toBe(false);
   });
 });

@@ -55,7 +55,7 @@
  */
 import { dump } from "js-yaml";
 import {
-  MeasureClassifier, buildResolver, defaultMetricName,
+  MeasureClassifier, buildResolver, defaultMetricName, isIncidentalBlocker,
   type ColumnLookup, type MeasureAssessment, type MetricProvider,
 } from "./dax/index.js";
 
@@ -1671,7 +1671,16 @@ export function convertTabularToSml(
       const a = assessments.find((x) => x.name === name && x.table === ft);
       if (a) {
         const blocked = [...new Set(a.blockers.map((b) => b.fn))].sort();
-        if (blocked.length) dl.push(`- Blocked by: ${blocked.map((f) => `\`${f}\``).join(", ")}`);
+        // Split incidental blockers (ones the translator handles on its own)
+        // from the ones that actually need a decision, so this reads as a work
+        // list rather than a frequency table.
+        const real = blocked.filter((f) => !isIncidentalBlocker(f));
+        const incidental = blocked.filter((f) => isIncidentalBlocker(f));
+        if (real.length) dl.push(`- Blocked by: ${real.map((f) => `\`${f}\``).join(", ")}`);
+        if (incidental.length) {
+          dl.push(`- Also present (translatable on their own): ${
+            incidental.map((f) => `\`${f}\``).join(", ")}`);
+        }
         if (a.error) dl.push(`- Reason: ${a.error}`);
         for (const note of a.notes) dl.push(`- ${note}`);
       }

@@ -197,11 +197,18 @@ export class MeasureClassifier {
         confidence: result.confidence, notes: result.notes };
     } catch (err) {
       if (err instanceof Untranslatable) {
-        const notes = err.hint ? [err.hint] : [];
-        for (const blocker of blockers) {
-          const line = `${blocker.fn}: ${blocker.hint}`;
-          if (blocker.hint && !notes.includes(line)) notes.push(line);
-        }
+        // Hints are deduplicated by their text, not by the "FN: text" form the
+        // per-blocker line would produce -- otherwise the same advice appears
+        // twice, once unattributed from the throw site and once attributed.
+        const seen = new Set<string>();
+        const notes: string[] = [];
+        const addNote = (text: string, prefix = ""): void => {
+          if (!text || seen.has(text)) return;
+          seen.add(text);
+          notes.push(prefix ? `${prefix}: ${text}` : text);
+        };
+        if (err.hint) addNote(err.hint);
+        for (const blocker of blockers) addNote(blocker.hint, blocker.fn);
         return { ...assessment, verdict: "unsupported", error: err.reason, notes };
       }
       // Defensive: one bad measure must not abort a whole-model run.

@@ -5,7 +5,7 @@ export { BASE_AGGREGATION_METHODS, CAPABILITIES_CAPTURED, SUPPORTED_DAX_FUNCTION
 export { MeasureClassifier, blockingFunctions, isConvertible,
   type Blocker, type ColumnLookup, type MeasureAssessment, type Verdict } from "./classifier.js";
 export { DaxSyntaxError, tokenize, type Token } from "./lexer.js";
-export { MdxTranslator, Untranslatable, remediationHint,
+export { MdxTranslator, Untranslatable, isIncidentalBlocker, remediationHint,
   type Confidence, type TranslationResult } from "./mdx.js";
 export { parseDax, type Node } from "./parser.js";
 export { printDax } from "./printer.js";
