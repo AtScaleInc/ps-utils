@@ -54,6 +54,10 @@
  *     bridging, no parent-child hierarchy detection.
  */
 import { dump } from "js-yaml";
+import {
+  MeasureClassifier, buildResolver,
+  type ColumnLookup, type MeasureAssessment,
+} from "./dax/index.js";
 
 // ============================================================
 // TMSL input types (loose -- only the fields this converter reads)
@@ -157,6 +161,17 @@ function toYaml(obj: unknown): string {
     quotingType: '"',
     forceQuotes: false,
   });
+}
+
+/**
+ * A measure name becomes a file name, and SSAS measure names routinely contain
+ * "/" ("ALE/Minutes", "Cases/PAL"). Left alone those silently create nested
+ * directories in the SML output, so the object lands at a path no loader
+ * expects. Only the file name is sanitized -- `unique_name` keeps the original
+ * so BI references are unchanged.
+ */
+function fileSafe(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
 }
 
 function cleanDesc(s: string | undefined): string {
@@ -856,6 +871,27 @@ export function convertTabularToSml(
   const dimBaseLevel = new Map<string, string>();
   const familyDatasetName = new Map<string, string>();
 
+  // --- DAX->MDX resolver registry -------------------------------------------
+  // MDX needs qualified [Dimension].[Hierarchy].[Level] paths. Hierarchy naming
+  // is NOT uniform here -- a standalone dimension gets "<t> Hierarchy" while a
+  // consolidated role-play family's hierarchy is just "<label>" -- so each
+  // dimension records its real names as it is built rather than the DAX module
+  // guessing them later.
+  const dimHierarchy = new Map<string, string>();
+  const dimLevels = new Map<string, Set<string>>();
+  const dimTimeTypes = new Set<string>();
+  const dimYearLevel = new Map<string, string>();
+
+  function registerDimension(
+    dimension: string, hierarchy: string, levels: Iterable<string>,
+    opts: { isTime?: boolean; yearLevel?: string } = {},
+  ): void {
+    dimHierarchy.set(dimension, hierarchy);
+    dimLevels.set(dimension, new Set(levels));
+    if (opts.isTime) dimTimeTypes.add(dimension);
+    if (opts.yearLevel) dimYearLevel.set(dimension, opts.yearLevel);
+  }
+
   function datasetColumnsFor(t: string): Array<Record<string, unknown>> {
     const cmap = colPhysMap(t);
     return tables.get(t)!.columns.map((c) =>
@@ -989,6 +1025,7 @@ export function convertTabularToSml(
         ),
       );
       dimBaseLevel.set(label, dl);
+      registerDimension(label, label, [yl, ql, ml, dl], { isTime: true, yearLevel: yl });
       convertedDims.push({
         name: label,
         kind: "role_play_family",
@@ -1022,6 +1059,7 @@ export function convertTabularToSml(
         ),
       );
       dimBaseLevel.set(label, label);
+      registerDimension(label, label, [label]);
       convertedDims.push({
         name: label,
         kind: "role_play_family",
@@ -1089,6 +1127,7 @@ export function convertTabularToSml(
       ),
     );
     dimBaseLevel.set(t, dayL);
+    registerDimension(t, `${t} Hierarchy`, [yearL, qtrL, mnthL, dayL], { isTime: true, yearLevel: yearL });
     const confirmed = physicalSource[t].kind === "query";
     convertedDims.push({
       name: t, kind: "standalone", dimType: "time",
@@ -1140,6 +1179,9 @@ export function convertTabularToSml(
     );
     const sortedLevels = [...tmslHiers[0].levels].sort((a, b) => a.ordinal - b.ordinal);
     dimBaseLevel.set(t, sortedLevels[sortedLevels.length - 1].column);
+    // A natural-hierarchy dimension can expose several hierarchies; the first
+    // is the one a bare level reference resolves against.
+    registerDimension(t, String(hierarchiesOut[0].unique_name), allCols);
     const confirmed = physicalSource[t].kind === "query";
     convertedDims.push({
       name: t, kind: "standalone", dimType: "natural_hierarchy",
@@ -1171,6 +1213,7 @@ export function convertTabularToSml(
       ),
     );
     dimBaseLevel.set(t, levelName);
+    registerDimension(t, `${t} Hierarchy`, [levelName, keyCol]);
     const confirmed = physicalSource[t].kind === "query";
     convertedDims.push({
       name: t, kind: "standalone", dimType: "simple",
@@ -1198,7 +1241,7 @@ export function convertTabularToSml(
       const isCurrency = /amt|amount|charge|payment|cost|writeoff|refund|adjustment/i.test(col ?? rowKey);
       const fmt = isCurrency ? "$#,##0.00" : "general number";
       sml.set(
-        `metrics/${m.name}.yml`,
+        `metrics/${fileSafe(m.name)}.yml`,
         toYaml(
           od({
             unique_name: m.name, object_type: "metric", label: m.name,
@@ -1214,15 +1257,97 @@ export function convertTabularToSml(
     }
   }
 
+  // --- DAX measures that are not a bare aggregation ---------------------------
+  // Previously every one of these was deferred untranslated. Now each is routed
+  // to the conversion path AtScale will actually accept: verbatim server-side
+  // DAX when every function is on the whitelist, generated MDX when the whole
+  // expression has a faithful equivalent, and deferral only when neither holds.
+  const tableToDimension = new Map<string, string>();
+  for (const [member, fromObject] of familyOfMember) {
+    const label = familyDatasetName.get(fromObject);
+    if (label) tableToDimension.set(member, label);
+  }
+  for (const dim of dimHierarchy.keys()) {
+    if (!tableToDimension.has(dim)) tableToDimension.set(dim, dim);
+  }
+
+  const sourceMeasureNames = new Set<string>();
+  for (const t of usedTables) {
+    for (const m of tables.get(t)?.measures ?? []) sourceMeasureNames.add(m.name);
+  }
+
+  const daxResolver = buildResolver({
+    measures: sourceMeasureNames,
+    dimensionOf: tableToDimension,
+    levelsOf: dimLevels,
+    hierarchyOf: dimHierarchy,
+    timeDimensions: dimTimeTypes,
+    defaultLevelOf: dimBaseLevel,
+    yearLevelOf: dimYearLevel,
+  });
+
+  const columnLookup: ColumnLookup = {
+    isColumn: (t, n) => (tables.get(t)?.columns ?? []).some((c) => c.name === n),
+    isMeasure: (t, n) => (tables.get(t)?.measures ?? []).some((mm) => mm.name === n),
+    knowsTable: (t) => tables.has(t),
+  };
+
+  const daxClassifier = new MeasureClassifier(daxResolver, columnLookup);
+  const assessments: MeasureAssessment[] = [];
   const factDeferred = new Map<string, Array<[string, string]>>();
+  const convertedCalcs: Array<{ name: string; fact: string; engine: string; confidence: string }> = [];
+
   for (const ft of factTables) {
     for (const m of tables.get(ft)!.measures ?? []) {
-      if (!classifyMeasure(m)) {
-        if (!factDeferred.has(ft)) factDeferred.set(ft, []);
-        factDeferred.get(ft)!.push([m.name, exprText(m)]);
+      if (classifyMeasure(m)) continue; // already emitted as a base metric
+      const a = daxClassifier.classify(ft, m.name, exprText(m));
+      assessments.push(a);
+
+      if (a.verdict === "daxNative" || a.verdict === "mdxTranslated") {
+        const engine = a.verdict === "daxNative" ? "dax" : "mdx";
+        const expression = a.verdict === "daxNative" ? a.expression : a.mdx!;
+        const review = a.notes.length ? ` Review: ${a.notes.join("; ")}` : "";
+        const provenance = a.verdict === "mdxTranslated"
+          ? ` Translated from DAX by ps-utils (source DAX: ${exprText(m).slice(0, 160)}).`
+          : ` Migrated verbatim as AtScale server-side DAX.`;
+        sml.set(
+          `calculations/${fileSafe(m.name)}.yml`,
+          toYaml(
+            od({
+              unique_name: m.name,
+              object_type: "metric_calc",
+              label: m.name,
+              description: cleanDesc(
+                `Migrated from SSAS Tabular measure "${m.name}" on "${ft}".${provenance}${review}`,
+              ),
+              expression,
+            }),
+          ),
+        );
+        allMetricNames.push(m.name);
+        metricFolder.set(m.name, ft);
+        convertedCalcs.push({ name: m.name, fact: ft, engine, confidence: a.confidence });
+        continue;
       }
+
+      if (!factDeferred.has(ft)) factDeferred.set(ft, []);
+      factDeferred.get(ft)!.push([m.name, exprText(m)]);
     }
   }
+
+  // A converted calculation that references a measure which did NOT convert
+  // would publish and then fail to resolve at query time, so flag it here.
+  const convertedNames = new Set(allMetricNames);
+  for (const a of assessments) {
+    if (a.verdict !== "daxNative" && a.verdict !== "mdxTranslated") continue;
+    const missing = a.referencedMeasures.filter((r) => !convertedNames.has(r));
+    if (missing.length) {
+      logIssue("warning", "calculation_references_deferred_measure", a.name,
+        `References ${missing.map((x) => `"${x}"`).join(", ")}, which did not convert. ` +
+          "The calculation will publish but not resolve until those are modeled.");
+    }
+  }
+
   const totalDeferred = [...factDeferred.values()].reduce((n, v) => n + v.length, 0);
 
   function targetDatasetAndLevel(toTable: string): [string, string | undefined] {
@@ -1445,8 +1570,9 @@ export function convertTabularToSml(
 
   const dl: string[] = [
     "# Deferred measures -- follow-up pass", "",
-    "Complex DAX measures not mechanically translatable to SML metrics. Each needs individual, " +
-      "grounded design rather than blind translation.", "",
+    "Measures that convert neither as AtScale server-side DAX nor as MDX. Each one lists the " +
+      "functions that blocked it and where the logic belongs instead, so this is a work list " +
+      "rather than a pile of untranslated DAX.", "",
     `**Total deferred: ${totalDeferred}**`, "",
   ];
   for (const ft of factTables) {
@@ -1454,7 +1580,15 @@ export function convertTabularToSml(
     if (!deferred || deferred.length === 0) continue;
     dl.push(`## ${ft} (${deferred.length} deferred)\n`);
     for (const [name, dax] of deferred) {
-      dl.push(`**${name}**`, "```dax", dax, "```", "");
+      dl.push(`**${name}**`, "```dax", dax, "```");
+      const a = assessments.find((x) => x.name === name && x.table === ft);
+      if (a) {
+        const blocked = [...new Set(a.blockers.map((b) => b.fn))].sort();
+        if (blocked.length) dl.push(`- Blocked by: ${blocked.map((f) => `\`${f}\``).join(", ")}`);
+        if (a.error) dl.push(`- Reason: ${a.error}`);
+        for (const note of a.notes) dl.push(`- ${note}`);
+      }
+      dl.push("");
     }
   }
   dl.push("## Excluded-measure tables (modeled as dimensions only)\n");
@@ -1590,6 +1724,7 @@ model (the conversion is deterministic).
     `| &nbsp;&nbsp;-- standalone dimensions | ${standaloneDims.length} |`,
     `| &nbsp;&nbsp;&nbsp;&nbsp;-- of which, physical source UNCONFIRMED (guessed) | ${unconfirmedStandalone.length} |`,
     `| Metrics converted | ${convertedMetrics.length} |`,
+    `| Calculations converted | ${convertedCalcs.length} (${convertedCalcs.filter((c) => c.engine === "dax").length} as server-side DAX, ${convertedCalcs.filter((c) => c.engine === "mdx").length} translated to MDX) |`,
     `| Measures NOT converted (deferred, complex DAX) | ${totalDeferred} |`,
     `| Model relationships created | ${finalRels.length} |`,
     `| Orphan tables excluded | ${orphanTables.length} |`,
@@ -1693,6 +1828,10 @@ model (the conversion is deterministic).
       standaloneDimensions: standaloneDims.length,
       standaloneDimensionsUnconfirmedSource: unconfirmedStandalone.length,
       metricsConverted: convertedMetrics.length,
+      calculationsConverted: convertedCalcs.length,
+      calculationsAsDax: convertedCalcs.filter((c) => c.engine === "dax").length,
+      calculationsAsMdx: convertedCalcs.filter((c) => c.engine === "mdx").length,
+      calculationsNeedingReview: convertedCalcs.filter((c) => c.confidence !== "high").length,
       measuresDeferred: totalDeferred,
       modelRelationships: finalRels.length,
       orphanTablesExcluded: orphanTables.length,
@@ -1703,6 +1842,7 @@ model (the conversion is deterministic).
     },
     convertedDimensions: convertedDims,
     convertedMetrics,
+    convertedCalcs,
     deferredMeasuresByFact: Object.fromEntries([...factDeferred].filter(([, v]) => v.length).map(([k, v]) => [k, v.length])),
     excludedMeasureTables,
     unresolvedPhysicalSources: unresolvedTables,

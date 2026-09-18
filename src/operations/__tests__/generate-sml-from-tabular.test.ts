@@ -11,7 +11,10 @@ import { convertTabularToSml, type TmslDocument } from "../generate-sml-from-tab
  *     relationships ("Order {0}" / "Ship {0}") recovered from each table's
  *     own column-alias prefix.
  *   - a simple measure (SalesAmount = SUM([Amount])) that converts to a metric.
- *   - a complex DAX measure (GrowthPct = DIVIDE(...)) that must be deferred.
+ *   - a whitelisted DAX measure (GrowthPct = DIVIDE(...)) that now converts
+ *     verbatim as an AtScale server-side DAX calculation.
+ *   - a measure with no cube-side equivalent (LastServiceDate = FIRSTDATE(...))
+ *     that must still be deferred.
  *   - a table with a measure but no outgoing relationship ("Lookup") --
  *     modeled as a dimension only, its measure excluded/deferred.
  *   - an orphan table ("Staging") with no relationships at all -- excluded.
@@ -79,6 +82,8 @@ const fixture: TmslDocument = {
             measures: [
               { name: "SalesAmount", expression: "SUM([Amount])" },
               { name: "GrowthPct", expression: "DIVIDE([SalesAmount],[PriorSalesAmount])" },
+              { name: "LastServiceDate", expression: "FIRSTDATE('Order Date'[Order Dte])" },
+              { name: "Sales/Unit", expression: "DIVIDE([SalesAmount],[Units])" },
             ],
             partitions: [{
               source: {
@@ -140,15 +145,35 @@ describe("generate-sml-from-tabular converter", () => {
     expect(toLookup.role_play).toBeUndefined();
   });
 
-  it("converts a simple measure and defers a complex DAX measure", () => {
+  it("converts a simple measure to a base metric", () => {
     const { sml } = convert();
     const metric = load(sml.get("metrics/SalesAmount.yml")!) as any;
     expect(metric.calculation_method).toBe("sum");
     expect(metric.column).toBe("AMOUNT");
+  });
 
+  it("converts a whitelisted DAX measure to a verbatim calculation", () => {
+    const { sml } = convert();
     expect(sml.has("metrics/GrowthPct.yml")).toBe(false);
-    expect(sml.get("DEFERRED_MEASURES.md")).toContain("GrowthPct");
-    expect(sml.get("DEFERRED_MEASURES.md")).toContain("DIVIDE");
+
+    const calc = load(sml.get("calculations/GrowthPct.yml")!) as any;
+    expect(calc.object_type).toBe("metric_calc");
+    expect(calc.expression).toBe("DIVIDE([SalesAmount],[PriorSalesAmount])");
+    expect(sml.get("DEFERRED_MEASURES.md")).not.toContain("GrowthPct");
+  });
+
+  it("does not let a slash in a measure name create a nested directory", () => {
+    const { sml } = convert();
+    // "Sales/Unit" must not land at calculations/Sales/Unit.yml.
+    expect([...sml.keys()].every((k) => k.split("/").length <= 2)).toBe(true);
+    const calc = load(sml.get("calculations/Sales-Unit.yml")!) as any;
+    expect(calc.unique_name).toBe("Sales/Unit");
+  });
+
+  it("still defers a measure with no cube-side equivalent", () => {
+    const { sml } = convert();
+    expect(sml.has("calculations/LastServiceDate.yml")).toBe(false);
+    expect(sml.get("DEFERRED_MEASURES.md")).toContain("LastServiceDate");
     expect(sml.get("DEFERRED_MEASURES.md")).toContain("LookupCount");
   });
 
@@ -163,5 +188,6 @@ describe("generate-sml-from-tabular converter", () => {
     expect(report.summary.rolePlaySourceTablesCollapsed).toBe(2);
     expect(report.summary.measuresDeferred).toBe(1);
     expect(report.summary.metricsConverted).toBe(1);
+    expect(report.summary.calculationsConverted).toBe(2);
   });
 });
