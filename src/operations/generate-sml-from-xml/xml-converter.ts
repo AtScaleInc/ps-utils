@@ -88,19 +88,13 @@ export async function convertXmlToSml(
   const rptOmissions: OmissionRecord[] = [];
   const rptUnboundByCube: CubeBindingRecord[] = [];
 
-  // Structural omissions: check for XML features the converter doesn't handle.
+  // Structural omissions: check for XML features the converter doesn't handle. Perspectives
+  // ARE converted (see Phase 7d, per-cube, below) — individual objects a perspective
+  // couldn't resolve are still reported, but as item-level "Perspective" omissions, not a
+  // blanket "not converted at all" structural one.
   const hasRoles        = arr(schemaEl.roles).length > 0 || arr((schemaEl as Record<string, unknown>)["role"]).length > 0;
-  const hasPerspectives = arr(schemaEl.perspectives).length > 0 || arr((schemaEl as Record<string, unknown>).perspective).length > 0;
   const hasTranslations = arr(schemaEl.translations).length > 0 || arr((schemaEl as Record<string, unknown>).translation).length > 0;
 
-  if (hasPerspectives) {
-    rptOmissions.push({
-      category: "Structural",
-      item: "Perspectives",
-      reason: "Perspective definitions are not converted — no equivalent in SML.",
-      recommendation: "Recreate perspectives using row-level security or BI-tool-level views in the consuming application.",
-    });
-  }
   if (hasRoles) {
     rptOmissions.push({
       category: "Structural",
@@ -372,6 +366,20 @@ export async function convertXmlToSml(
     }
   }
 
+  // Schema-level <perspectives><perspective cube-ref="..."> — grouped by the cube they
+  // apply to, so each cube's own conversion phase (below) can resolve just its own
+  // perspectives against maps (attrIdToMetricUniqueName etc.) that only exist per-cube.
+  const perspectivesByCubeId = new Map<string, Record<string, unknown>[]>();
+  for (const perspectivesSec of arr(schemaEl.perspectives)) {
+    for (const perspectiveEl of arr(perspectivesSec.perspective)) {
+      const cubeRef = a(perspectiveEl, "cube-ref");
+      if (!cubeRef) continue;
+      const list = perspectivesByCubeId.get(cubeRef) ?? [];
+      list.push(perspectiveEl as Record<string, unknown>);
+      perspectivesByCubeId.set(cubeRef, list);
+    }
+  }
+
   // Cube-level attributes and data-set-refs
   // Datasets no cube ever references are dead schema artifacts (common in migrated/legacy
   // projects) and should not be emitted — tracked here so Phase 2 can skip them.
@@ -475,10 +483,12 @@ export async function convertXmlToSml(
     }
   }
 
-  // User Defined Aggregates reference dimension attributes by id, with an optional
-  // ref-path for attributes reached through a snowflake/embedded relationship rather than
-  // hosted natively — resolve both mappings once, up front, for all dimensions.
-  const { attrIdToDimName, refIdToHostDimName } = collectAttributeDimensionOwnership(allDims);
+  // User Defined Aggregates (and perspectives, below) reference dimension attributes by
+  // id, with an optional ref-path for attributes reached through a snowflake/embedded
+  // relationship rather than hosted natively — resolve all these mappings once, up front,
+  // for all dimensions.
+  const { attrIdToDimName, refIdToHostDimName, hierarchyIdToRef, primaryAttrIdToLevelRef } =
+    collectAttributeDimensionOwnership(allDims, attrDef);
 
   // A composite key's default name_column (below) needs to know which of its columns are
   // themselves the sole key of some OTHER level elsewhere in the schema — see
@@ -612,6 +622,7 @@ export async function convertXmlToSml(
     cubeDimNames: string[];
     metricNames: Array<{ uniqueName: string; folder?: string }>;
     aggregates: AggregateDef[];
+    perspectives: PerspectiveDef[];
     cubeVisible: boolean;
     includeDefaultDrillthrough: boolean;
     cubeBoundDatasets: string[];
@@ -619,6 +630,7 @@ export async function convertXmlToSml(
 
   for (const cube of cubeEls) {
     const cubeName = a(cube, "name") ?? schemaName;
+    const cubeId = a(cube, "id");
 
     // Classify all dataset refs for this cube as bound or unbound
     const cubeBoundDatasets: string[] = [];
@@ -862,11 +874,14 @@ export async function convertXmlToSml(
           const dedupKey = uniqueName.toLowerCase();
           const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
           // Dedup is project-wide (see metricDefSignature above): a measure with the exact
-          // same definition (dataset|column|calculation_method) already emitted — by this
-          // cube or an earlier one — just gets referenced again, matching the reference
-          // converter's existsExactlyInProject check; only a genuinely different definition
-          // sharing the same name needs to be told apart.
-          const sig = `${measureDatasetName}|${column}|${aggregation}`;
+          // same definition (dataset|column|calculation_method|visibility) already emitted
+          // — by this cube or an earlier one — just gets referenced again, matching the
+          // reference converter's existsExactlyInProject check; only a genuinely different
+          // definition sharing the same name needs to be told apart. Visibility is part of
+          // the signature so two same-named, same-bound measures that differ only in
+          // visible/hidden don't silently collapse into one, discarding whichever's
+          // is_hidden the second occurrence declared.
+          const sig = `${measureDatasetName}|${column}|${aggregation}|${visible}`;
           if (seenMetricNames.has(dedupKey)) {
             if (metricDefSignature.get(dedupKey) === sig) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
@@ -971,10 +986,11 @@ export async function convertXmlToSml(
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
           const dedupKey = uniqueName.toLowerCase();
-          // Same project-wide dedup pattern as regular measures above: a percentile metric
-          // with the exact same definition already emitted just gets referenced again; a
-          // different definition under the same name gets its own distinct unique_name.
-          const sig = `${measureDatasetName}|${column}|percentile`;
+          // Same project-wide dedup pattern as regular measures above (visibility included,
+          // see the comment there): a percentile metric with the exact same definition
+          // already emitted just gets referenced again; a different definition (including a
+          // different visibility) under the same name gets its own distinct unique_name.
+          const sig = `${measureDatasetName}|${column}|percentile|${visible}`;
           if (seenMetricNames.has(dedupKey)) {
             if (metricDefSignature.get(dedupKey) === sig) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
@@ -1125,6 +1141,147 @@ export async function convertXmlToSml(
         metricNames.push({ uniqueName, folder: def.folder || undefined });
         rptMetrics.push({ name: uniqueName, label, file: `calculations/${fname}.yml`, metricType: "calculated_member", folder: def.folder || undefined, isHidden: !def.visible });
       }
+    }
+
+    // Phase 7d: Perspectives — schema-level <perspectives><perspective cube-ref="..."> whose
+    // cube-ref names this cube.
+    //
+    // Each perspective is a "hide list": a <flat-attributes> section listing individual
+    // secondary attributes/levels/measures to hide (by attribute id, resolved the same way
+    // Phase 8's aggregates resolve one below), a <calculated-members> section listing
+    // calculated members to hide (by id, via attrIdToMetricUniqueName), and a nested
+    // <flat-dimensions><flat-dimension-ref>/<flat-hierarchy-ref>/<flat-level-ref> tree that
+    // hides a whole dimension, a whole hierarchy, or a level (and everything below it) —
+    // matching SML's own dimensions[].hierarchies[].level hide semantics closely enough that
+    // the three nesting depths translate directly. Every <properties><visible> defaults to
+    // true (not hidden) when absent, same convention used for cube/dimension visibility
+    // elsewhere in this file.
+    const perspectives: PerspectiveDef[] = [];
+    for (const perspectiveEl of cubeId ? perspectivesByCubeId.get(cubeId) ?? [] : []) {
+      const perspectiveName = a(perspectiveEl, "name");
+      if (!perspectiveName) continue;
+      const uniqueName = truncateUniqueName(safeName(perspectiveName));
+      const hiddenMetrics: string[] = [];
+      const hiddenDimensions = new Map<string, PerspectiveDimensionDef>();
+
+      const getDimEntry = (dimName: string): PerspectiveDimensionDef => {
+        let entry = hiddenDimensions.get(dimName);
+        if (!entry) {
+          entry = { wholeDimensionHidden: false, hiddenHierarchies: new Map(), hiddenSecondaryAttributes: new Set() };
+          hiddenDimensions.set(dimName, entry);
+        }
+        return entry;
+      };
+
+      // <flat-dimensions><flat-dimension-ref id>[<flat-hierarchy-ref id>[<flat-level-ref
+      // primary-attribute>]]> — a nesting depth of dimension → hierarchy → level, each with
+      // its own visible flag; only the deepest explicitly-hidden node in a branch matters.
+      for (const fdSec of arr(perspectiveEl["flat-dimensions"])) {
+        for (const fdRef of arr((fdSec as Record<string, unknown>)["flat-dimension-ref"])) {
+          const dimId = a(fdRef, "id");
+          const dimName = dimId ? dimIdToName.get(dimId) : undefined;
+          if (!dimName) {
+            rptOmissions.push({
+              category: "Perspective",
+              item: `Dimension ${dimId ?? "?"} in perspective "${perspectiveName}"`,
+              reason: "Could not resolve this flat-dimension-ref id to a known dimension.",
+              recommendation: "Verify the perspective manually and hide the equivalent dimension in the converted model.",
+            });
+            continue;
+          }
+          if (isExplicitlyHidden(fdRef)) {
+            getDimEntry(dimName).wholeDimensionHidden = true;
+            continue;
+          }
+          for (const fhRef of arr((fdRef as Record<string, unknown>)["flat-hierarchy-ref"])) {
+            const hierId = a(fhRef, "id");
+            const hierRef = hierId ? hierarchyIdToRef.get(hierId) : undefined;
+            if (!hierRef) {
+              rptOmissions.push({
+                category: "Perspective",
+                item: `Hierarchy ${hierId ?? "?"} in perspective "${perspectiveName}"`,
+                reason: "Could not resolve this flat-hierarchy-ref id to a known hierarchy.",
+                recommendation: "Verify the perspective manually and hide the equivalent hierarchy in the converted model.",
+              });
+              continue;
+            }
+            if (isExplicitlyHidden(fhRef)) {
+              getDimEntry(dimName).hiddenHierarchies.set(hierRef.hierUniqueName, undefined);
+              continue;
+            }
+            for (const flRef of arr((fhRef as Record<string, unknown>)["flat-level-ref"])) {
+              const primaryAttrId = a(flRef, "primary-attribute");
+              const levelRef = primaryAttrId ? primaryAttrIdToLevelRef.get(primaryAttrId) : undefined;
+              if (!levelRef) {
+                rptOmissions.push({
+                  category: "Perspective",
+                  item: `Level ${primaryAttrId ?? "?"} in perspective "${perspectiveName}"`,
+                  reason: "Could not resolve this flat-level-ref id to a known level.",
+                  recommendation: "Verify the perspective manually and hide the equivalent level in the converted model.",
+                });
+                continue;
+              }
+              if (isExplicitlyHidden(flRef)) {
+                getDimEntry(dimName).hiddenHierarchies.set(levelRef.hierUniqueName, levelRef.levelUniqueName);
+              }
+            }
+          }
+        }
+      }
+
+      // <flat-attributes><flat-attribute-ref id> — hides one measure, level, or secondary
+      // attribute by attribute id, resolved the same way Phase 8's aggregate attributes are.
+      for (const faSec of arr(perspectiveEl["flat-attributes"])) {
+        for (const faRef of arr((faSec as Record<string, unknown>)["flat-attribute-ref"])) {
+          const attrId = a(faRef, "id");
+          if (!attrId || !isExplicitlyHidden(faRef)) continue;
+
+          const metricName = attrIdToMetricUniqueName.get(attrId);
+          if (metricName) {
+            hiddenMetrics.push(metricName);
+            continue;
+          }
+          const levelRef = primaryAttrIdToLevelRef.get(attrId);
+          if (levelRef) {
+            getDimEntry(levelRef.dimName).hiddenHierarchies.set(levelRef.hierUniqueName, levelRef.levelUniqueName);
+            continue;
+          }
+          const kaDef = attrDef.get(attrId);
+          const secondaryDimName = attrIdToDimName.get(attrId);
+          if (kaDef && secondaryDimName) {
+            getDimEntry(secondaryDimName).hiddenSecondaryAttributes.add(truncateUniqueName(safeName(kaDef.name)));
+            continue;
+          }
+          rptOmissions.push({
+            category: "Perspective",
+            item: `Attribute ${attrId} in perspective "${perspectiveName}"`,
+            reason: "Could not resolve this flat-attribute-ref id to a known measure, level, or secondary attribute.",
+            recommendation: "Verify the perspective manually and hide the equivalent object in the converted model.",
+          });
+        }
+      }
+
+      // <calculated-members><calculated-member-ref id> — same hide-list shape as
+      // flat-attribute-ref, but always resolves through attrIdToMetricUniqueName.
+      for (const cmSec of arr(perspectiveEl["calculated-members"])) {
+        for (const cmRef of arr((cmSec as Record<string, unknown>)["calculated-member-ref"])) {
+          const refId = a(cmRef, "id");
+          if (!refId || !isExplicitlyHidden(cmRef)) continue;
+          const metricName = attrIdToMetricUniqueName.get(refId);
+          if (metricName) {
+            hiddenMetrics.push(metricName);
+          } else {
+            rptOmissions.push({
+              category: "Perspective",
+              item: `Calculated member ${refId} in perspective "${perspectiveName}"`,
+              reason: "Could not resolve this calculated-member-ref id to a known calculated member.",
+              recommendation: "Verify the perspective manually and hide the equivalent calculation in the converted model.",
+            });
+          }
+        }
+      }
+
+      perspectives.push({ uniqueName, label: perspectiveName, hiddenMetrics, hiddenDimensions });
     }
 
     // Phase 8: User Defined Aggregates (hinted aggregate tables)
@@ -1354,6 +1511,7 @@ export async function convertXmlToSml(
       cubeDimNames,
       metricNames,
       aggregates,
+      perspectives,
       cubeVisible,
       includeDefaultDrillthrough,
       cubeBoundDatasets,
@@ -1435,7 +1593,7 @@ export async function convertXmlToSml(
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
     const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId, hierarchyIdToRef);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1544,7 +1702,22 @@ export async function convertXmlToSml(
       }
     }
 
-    const modelYaml = buildModelYaml(pm.cubeName, pm.relationships, pm.cubeDimNames, pm.metricNames, pm.aggregates, !pm.cubeVisible, pm.includeDefaultDrillthrough);
+    // Same reasoning as the aggregate-attribute filter above: a perspective can only hide a
+    // dimension this cube's model can actually reach.
+    for (const perspective of pm.perspectives) {
+      for (const dimName of [...perspective.hiddenDimensions.keys()]) {
+        if (cubeReferencedDimNames.has(dimName)) continue;
+        rptOmissions.push({
+          category: "Perspective",
+          item: `${perspective.label} → ${dimName}`,
+          reason: `References dimension "${dimName}", which has no relationship, degenerate, or snowflake binding to this cube.`,
+          recommendation: "Verify the perspective manually and hide the equivalent dimension in the converted model.",
+        });
+        perspective.hiddenDimensions.delete(dimName);
+      }
+    }
+
+    const modelYaml = buildModelYaml(pm.cubeName, pm.relationships, pm.cubeDimNames, pm.metricNames, pm.aggregates, pm.perspectives, !pm.cubeVisible, pm.includeDefaultDrillthrough);
     const fname = safeFilename(pm.cubeName);
     output.set(`models/${fname}.yml`, modelYaml);
     logger.log(`  → models/${fname}.yml`);
@@ -1641,6 +1814,12 @@ export async function convertXmlToSml(
     }
   }
 
+  // Aggregate-eligibility flags (from each <data-set>'s <properties>) keyed by the emitted
+  // dataset's unique_name — these have no home on the dataset object itself (see
+  // parseDatasetPhysical), so they're collected here and written onto catalog.yml's
+  // repository-wide `dataset_properties` map instead.
+  const datasetAggPropsByUniqueName = new Map<string, Record<string, boolean>>();
+
   for (const dsSec of arr(schemaEl["data-sets"])) {
     for (const ds of arr(dsSec["data-set"])) {
       const dsName = a(ds, "name");
@@ -1667,6 +1846,14 @@ export async function convertXmlToSml(
       const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
       const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
       for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
+
+      const aggProps: Record<string, boolean> = {};
+      if (physRpt?.allowAggregates !== undefined) aggProps.allow_aggregates = physRpt.allowAggregates;
+      if (physRpt?.allowLocalAggs !== undefined) aggProps.allow_local_aggs = physRpt.allowLocalAggs;
+      if (physRpt?.allowPeerAggs !== undefined) aggProps.allow_peer_aggs = physRpt.allowPeerAggs;
+      if (physRpt?.allowPreferredAggs !== undefined) aggProps.allow_preferred_aggs = physRpt.allowPreferredAggs;
+      if (Object.keys(aggProps).length) datasetAggPropsByUniqueName.set(`${dsName}.dataset`, aggProps);
+
       rptDatasets.push({
         name: dsName,
         file: `datasets/${fname}.yml`,
@@ -1682,7 +1869,7 @@ export async function convertXmlToSml(
   // Phase 6: Catalog and connection
   // ---------------------------------------------------------------
 
-  output.set("catalog.yml", buildCatalogYaml(catalogName));
+  output.set("catalog.yml", buildCatalogYaml(catalogName, datasetAggPropsByUniqueName));
 
   // Always emit the default connection, plus one per extra db/schema pair discovered
   // above (all variants of the same underlying AtScale-registered connection).
@@ -1822,6 +2009,16 @@ interface DatasetPhysical {
     parentColumn?: string;
   }>;
   immutable?: boolean;
+  /**
+   * Aggregate-eligibility flags from the dataset's sibling `<properties>` element (a peer
+   * of `<physical>`, not nested inside it). SML has no equivalent property on the dataset
+   * object itself — these are repository-wide overrides that belong on catalog.yml's
+   * `dataset_properties`, keyed by the dataset's unique_name (see buildCatalogYaml).
+   */
+  allowAggregates?: boolean;
+  allowLocalAggs?: boolean;
+  allowPeerAggs?: boolean;
+  allowPreferredAggs?: boolean;
 }
 
 // ============================================================
@@ -1888,6 +2085,21 @@ interface AggregateDef {
   attributes: Array<{ name: string; dimension: string; relationshipsPath?: string[] }>;
   metrics: string[];
   caching?: string;
+}
+
+/** A single dimension's hidden hierarchies/levels/secondary attributes within a perspective. */
+interface PerspectiveDimensionDef {
+  wholeDimensionHidden: boolean;
+  /** hierarchy unique_name -> level unique_name to hide from (undefined = hide the whole hierarchy). */
+  hiddenHierarchies: Map<string, string | undefined>;
+  hiddenSecondaryAttributes: Set<string>;
+}
+
+interface PerspectiveDef {
+  uniqueName: string;
+  label: string;
+  hiddenMetrics: string[];
+  hiddenDimensions: Map<string, PerspectiveDimensionDef>;
 }
 
 interface OmissionRecord {
@@ -1989,6 +2201,12 @@ function a(el: unknown, name: string): string | undefined {
   return attrs?.[name];
 }
 
+/** Whether an element's own <properties><visible> is explicitly "false" (absent = visible). */
+function isExplicitlyHidden(el: Record<string, unknown>): boolean {
+  const props = first(arr(el.properties)) as Record<string, unknown> | undefined;
+  return (props ? s(first(arr(props.visible))) : undefined) === "false";
+}
+
 /** Extract column name from a <column> element (plain text OR structured form). */
 function extractColumnName(col: unknown): string | undefined {
   if (typeof col === "string") return col || undefined;
@@ -2027,6 +2245,14 @@ function toTitleCase(s: string): string {
 /** Convert a name to a safe filesystem/unique_name slug (no special chars). */
 function safeName(s: string): string {
   return s
+    // Spell out comparison operators before the generic strip below turns them into an
+    // indistinguishable "_" — otherwise "X > 1M" and "X < 1M" collapse toward the same
+    // unique_name and the direction of the comparison is lost from the identifier entirely
+    // (the human-readable label still has it, but unique_name is what's used for lookups).
+    .replace(/<=/g, "_le_")
+    .replace(/>=/g, "_ge_")
+    .replace(/</g, "_lt_")
+    .replace(/>/g, "_gt_")
     .replace(/[^a-zA-Z0-9_\-]/g, "_")
     .replace(/_{2,}/g, "_")
     .replace(/^_|_$/g, "");
@@ -2415,9 +2641,27 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const connEl = first(arr(physSec.connection)) as Record<string, unknown> | undefined;
   const connectionName = connEl ? a(connEl, "id") : undefined;
 
-  // Immutable flag from <immutable>true</immutable>
+  // Immutable flag from <immutable>true|false</immutable> — preserve an explicit `false`
+  // rather than collapsing it into "tag absent" (both used to become `undefined`).
   const immutableStr = s(first(arr(physSec.immutable)));
-  const immutable = immutableStr === "true" ? true : undefined;
+  const immutable = immutableStr === "true" ? true : immutableStr === "false" ? false : undefined;
+
+  // Aggregate-eligibility flags from the sibling <properties> element:
+  //   <properties>
+  //     <allow-aggregates>true</allow-aggregates>
+  //     <aggregate-destinations>
+  //       <allow-local>true</allow-local><allow-peer>true</allow-peer><allow-preferred>true</allow-preferred>
+  //     </aggregate-destinations>
+  //   </properties>
+  // `<properties>` is a peer of `<physical>` on the <data-set> element (dsEl), not nested
+  // inside it.
+  const boolFrom = (v: string | undefined): boolean | undefined => (v === "true" ? true : v === "false" ? false : undefined);
+  const propsSec = first(arr(dsEl.properties)) as Record<string, unknown> | undefined;
+  const allowAggregates = boolFrom(s(first(arr(propsSec?.["allow-aggregates"]))));
+  const aggDestEl = first(arr(propsSec?.["aggregate-destinations"])) as Record<string, unknown> | undefined;
+  const allowLocalAggs = boolFrom(s(first(arr(aggDestEl?.["allow-local"]))));
+  const allowPeerAggs = boolFrom(s(first(arr(aggDestEl?.["allow-peer"]))));
+  const allowPreferredAggs = boolFrom(s(first(arr(aggDestEl?.["allow-preferred"]))));
 
   // Column definitions from <column><name>...</name><type>...</type></column>, optionally
   // <sql>...</sql> for a computed column (an expression aliased under this column name,
@@ -2515,6 +2759,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
 
   const columns = columnOrder.map((name) => columnsByName.get(name)!);
   const colsResult = columns.length ? columns : undefined;
+  const aggFlags = { allowAggregates, allowLocalAggs, allowPeerAggs, allowPreferredAggs };
 
   const tableEl = first(arr(physSec.table)) as Record<string, unknown> | undefined;
   // A dataset can declare multiple <query> elements: the base query (no "alternate"
@@ -2528,7 +2773,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     const db = s(first(arr(tableEl.database)));
     const schema = s(first(arr(tableEl.schema)));
     const tableName = s(first(arr(tableEl.name)));
-    return { db, schema, tableName, connectionName, columns: colsResult, immutable };
+    return { db, schema, tableName, connectionName, columns: colsResult, immutable, ...aggFlags };
   }
 
   if (queryEl) {
@@ -2550,11 +2795,12 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
         connectionName,
         columns: colsResult,
         immutable,
+        ...aggFlags,
       };
     }
   }
 
-  return { connectionName, columns: colsResult, immutable };
+  return { connectionName, columns: colsResult, immutable, ...aggFlags };
 }
 
 /** Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants. */
@@ -2590,7 +2836,7 @@ function buildDatasetYaml(
     connection_id: connectionId,
   };
 
-  if (phys.immutable) obj.immutable = true;
+  if (phys.immutable !== undefined) obj.immutable = phys.immutable;
 
   if (phys.sql) {
     obj.sql = phys.sql;
@@ -2602,15 +2848,32 @@ function buildDatasetYaml(
     obj.table = phys.tableName ?? dsName;
   }
 
+  // A binary column can also be kept alive purely because some OTHER column's own <sql>
+  // computed expression references it by name (e.g. a CASE/derived column built from the
+  // raw binary value) — that sibling column is emitted regardless of the binary filter
+  // below, so dropping the binary column it depends on would leave the generated SQL
+  // referencing a column that no longer exists in SML.
+  const sqlReferencedColumnNames = new Set<string>();
+  for (const col of phys.columns ?? []) {
+    if (!col.sql) continue;
+    for (const other of phys.columns ?? []) {
+      if (other.name === col.name) continue;
+      if (new RegExp(`\\b${other.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(col.sql)) {
+        sqlReferencedColumnNames.add(other.name);
+      }
+    }
+  }
+
   const columns: Array<Record<string, unknown>> =
     (phys.columns ?? [])
       // A column whose XML type has no SML equivalent (e.g. Snowflake BINARY) is only
-      // safe to keep if something actually references it (a key/relationship column);
-      // otherwise it's dead physical metadata that fails catalog validation outright —
-      // drop it, matching the reference converter's own "unused, will be removed"
-      // behavior for these columns. A map column has no data_type at all (SML only
-      // requires one unless the column is a map), so it's never subject to this filter.
-      .filter((c) => !c.dataType?.startsWith("binary") || referencedColumns?.has(c.name))
+      // safe to keep if something actually references it (a key/relationship column, or
+      // a sibling calculated column's own SQL expression); otherwise it's dead physical
+      // metadata that fails catalog validation outright — drop it, matching the reference
+      // converter's own "unused, will be removed" behavior for these columns. A map
+      // column has no data_type at all (SML only requires one unless the column is a
+      // map), so it's never subject to this filter.
+      .filter((c) => !c.dataType?.startsWith("binary") || referencedColumns?.has(c.name) || sqlReferencedColumnNames.has(c.name))
       .map((c) => ({
         name: c.name,
         ...(c.dataType ? { data_type: c.dataType } : {}),
@@ -2633,7 +2896,9 @@ function buildDatasetYaml(
 }
 
 /**
- * Resolves which dimension "owns" each attribute id, for User Defined Aggregate parsing.
+ * Resolves which dimension "owns" each attribute id, for User Defined Aggregate parsing —
+ * plus, for perspective parsing, which hierarchy each hierarchy id names and which
+ * dimension/hierarchy/level each level's primary-attribute id names.
  *
  * An attribute is hosted natively by whichever dimension references it via a plain
  * `<keyed-attribute-ref attribute-id="X">` with no `ref-id` (the same distinction
@@ -2646,16 +2911,56 @@ function buildDatasetYaml(
  */
 function collectAttributeDimensionOwnership(
   allDims: Map<string, Record<string, unknown>>,
-): { attrIdToDimName: Map<string, string>; refIdToHostDimName: Map<string, string> } {
+  attrDef: Map<string, AttrDefEntry>,
+): {
+  attrIdToDimName: Map<string, string>;
+  refIdToHostDimName: Map<string, string>;
+  hierarchyIdToRef: Map<string, { dimName: string; hierUniqueName: string }>;
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>;
+} {
   const attrIdToDimName = new Map<string, string>();
   const refIdToHostDimName = new Map<string, string>();
+  const hierarchyIdToRef = new Map<string, { dimName: string; hierUniqueName: string }>();
+  const primaryAttrIdToLevelRef = new Map<
+    string,
+    { dimName: string; hierUniqueName: string; levelUniqueName: string }
+  >();
 
   for (const [dimName, dimEl] of allDims) {
+    // Two distinct hierarchies (e.g. "Region" and "Region.") can
+    // sanitize to the identical safeName() output once punctuation-only differences are
+    // stripped — disambiguate with the same "_2"/"_3" suffix convention used elsewhere in
+    // this file, scoped per dimension so it agrees with buildDimensionYaml's own
+    // (identically-scoped, identically-ordered) hierarchy disambiguation for this
+    // dimension's actual emitted YAML.
+    const usedHierUniqueNamesInDim = new Set<string>();
     for (const hierEl of arr(dimEl.hierarchy)) {
+      const hierId = a(hierEl, "id");
+      const rawHierUniqueName = truncateUniqueName(safeName(a(hierEl, "name") ?? "Hierarchy"));
+      let hierUniqueName = rawHierUniqueName;
+      if (usedHierUniqueNamesInDim.has(hierUniqueName)) {
+        let n = 2;
+        while (usedHierUniqueNamesInDim.has(`${rawHierUniqueName}_${n}`)) n++;
+        hierUniqueName = `${rawHierUniqueName}_${n}`;
+      }
+      usedHierUniqueNamesInDim.add(hierUniqueName);
+      if (hierId && !hierarchyIdToRef.has(hierId)) {
+        hierarchyIdToRef.set(hierId, { dimName, hierUniqueName });
+      }
       for (const levelEl of arr(hierEl.level)) {
         const primaryAttrUuid = a(levelEl, "primary-attribute");
         if (primaryAttrUuid && !attrIdToDimName.has(primaryAttrUuid)) {
           attrIdToDimName.set(primaryAttrUuid, dimName);
+        }
+        if (primaryAttrUuid && !primaryAttrIdToLevelRef.has(primaryAttrUuid)) {
+          const primaryDef = attrDef.get(primaryAttrUuid);
+          if (primaryDef) {
+            primaryAttrIdToLevelRef.set(primaryAttrUuid, {
+              dimName,
+              hierUniqueName,
+              levelUniqueName: levelUniqueNameFor(primaryDef.name),
+            });
+          }
         }
         for (const kref of arr(levelEl["keyed-attribute-ref"])) {
           const attrId = a(kref, "attribute-id");
@@ -2671,7 +2976,7 @@ function collectAttributeDimensionOwnership(
     }
   }
 
-  return { attrIdToDimName, refIdToHostDimName };
+  return { attrIdToDimName, refIdToHostDimName, hierarchyIdToRef, primaryAttrIdToLevelRef };
 }
 
 /**
@@ -2889,6 +3194,11 @@ function buildDimensionYaml(
   /** ref-path id -> the key-ref id that completes it — see its own declaration for why this
    *  indirection exists. */
   refPathIdToKeyRefId: Map<string, string>,
+  /** Every hierarchy id's dimension + already-disambiguated unique_name, computed once by
+   *  collectAttributeDimensionOwnership — reused here instead of re-deriving locally so a
+   *  punctuation-only hierarchy-name collision (e.g. "Region" vs "Region.") gets the
+   *  exact same "_2" suffix perspectives/aggregates resolve against. */
+  hierarchyIdToRef: Map<string, { dimName: string; hierUniqueName: string }>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -3272,8 +3582,15 @@ function buildDimensionYaml(
       const orderedLevels = isTime
         ? [...hierLevels].sort((a, b) => (TIME_UNIT_RANK[a.timeUnit ?? ""] ?? 99) - (TIME_UNIT_RANK[b.timeUnit ?? ""] ?? 99))
         : hierLevels;
+      // Reuse collectAttributeDimensionOwnership's already-disambiguated unique_name for
+      // this hierarchy id (see that function for why two hierarchies can otherwise
+      // collide, e.g. "Region" vs "Region.") instead of re-deriving it
+      // here, so this file and every perspective/aggregate that references this hierarchy
+      // by id always agree on the same "_2"-suffixed name.
+      const hierId = a(hierEl, "id");
+      const hierUniqueName = (hierId && hierarchyIdToRef.get(hierId)?.hierUniqueName) || truncateUniqueName(safeName(hierName));
       hierarchies.push({
-        uniqueName: truncateUniqueName(safeName(hierName)),
+        uniqueName: hierUniqueName,
         label: hierCaption ?? hierName,
         filterEmpty,
         folder: hierFolder,
@@ -3371,7 +3688,12 @@ function buildDimensionYaml(
               key_columns: sa.keyColumns,
               name_column: sa.nameColumn,
             };
-            if (sa.sortColumn && sa.sortColumn !== sa.nameColumn) saObj.sort_column = sa.sortColumn;
+            // Emit whenever the XML declared an explicit sort key (resolveSortColumn only
+            // ever returns a value for one), even if it happens to equal name_column — the
+            // SML spec requires sort_column be set on every dataset of a shared-degenerate-
+            // columns level once it's set on any one of them, so suppressing a coincidental
+            // match here can leave a sibling dataset's real override without a required peer.
+            if (sa.sortColumn) saObj.sort_column = sa.sortColumn;
             if (sa.format) saObj.format = sa.format;
             if (sa.folder) saObj.folder = sa.folder;
             if (sa.description) saObj.description = sa.description;
@@ -3428,7 +3750,9 @@ function buildDimensionYaml(
         laObj.key_columns = la.keyColumns;
       }
       if (la.description) laObj.description = la.description;
-      if (la.sortColumn && la.sortColumn !== la.nameColumn) laObj.sort_column = la.sortColumn;
+      // See the matching comment on the secondary-attribute sort_column above — always
+      // emit an explicit XML sort key, even if it coincidentally equals name_column.
+      if (la.sortColumn) laObj.sort_column = la.sortColumn;
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
@@ -3660,11 +3984,15 @@ function findCubeMatchingLevels(
       // semi_additive.degenerate_dimensions[].level, and the shared-degenerate-bindings
       // lookup key all agree with what the dimension file itself uses; otherwise a level
       // with a name over 63 chars silently fails every one of those lookups.
+      // These two checks are independent, not either/or: the source XML commonly declares
+      // BOTH a plain key-ref and one or more role-played key-refs sharing the same outer
+      // <key-ref id> for one dimension level (e.g. a role-played FK alongside the plain/
+      // canonical FK to the same lookup table). Checking only the role-play match and
+      // stopping there would silently drop the plain relationship for that level.
       if (cubeKeyRoles.has(pa)) {
         matches.push({ matchId: pa, toLevel: levelUniqueNameFor(def?.name ?? pa), dimKeyUuid: def?.keyUuid });
-        continue;
       }
-      if (def?.keyUuid && cubeKeyRoles.has(def.keyUuid)) {
+      if (def?.keyUuid && def.keyUuid !== pa && cubeKeyRoles.has(def.keyUuid)) {
         matches.push({ matchId: def.keyUuid, toLevel: levelUniqueNameFor(def.name), dimKeyUuid: def.keyUuid });
       }
     }
@@ -3997,15 +4325,24 @@ function inferRelationships(
 // Phase 6: Catalog, connection, model YAML
 // ============================================================
 
-function buildCatalogYaml(catalogName: string): string {
-  return toYaml({
+function buildCatalogYaml(
+  catalogName: string,
+  /** Per-dataset aggregate-eligibility overrides (unique_name → flags), from each XML
+   * <data-set>'s <properties> — see the `dataset_properties` property in the SML reference. */
+  datasetProperties?: Map<string, Record<string, boolean>>,
+): string {
+  const obj: Record<string, unknown> = {
     unique_name: `${catalogName}.catalog`,
     object_type: "catalog",
     label: catalogName,
     version: 1.5,
     aggressive_agg_promotion: false,
     build_speculative_aggs: false,
-  });
+  };
+  if (datasetProperties?.size) {
+    obj.dataset_properties = Object.fromEntries(datasetProperties);
+  }
+  return toYaml(obj);
 }
 
 function buildConnectionYaml(
@@ -4034,6 +4371,7 @@ function buildModelYaml(
   dimNames: string[],
   metricNames: Array<{ uniqueName: string; folder?: string }>,
   aggregates: AggregateDef[] = [],
+  perspectives: PerspectiveDef[] = [],
   isHidden = false,
   includeDefaultDrillthrough = false,
 ): string {
@@ -4094,6 +4432,34 @@ function buildModelYaml(
       return aggObj;
     });
   }
+
+  const perspectiveObjs = perspectives
+    .map((p) => {
+      const pObj: Record<string, unknown> = { unique_name: p.uniqueName, label: p.label };
+      if (p.hiddenMetrics.length > 0) pObj.metrics = p.hiddenMetrics;
+      const dimensionObjs = [...p.hiddenDimensions.entries()].map(([dimName, hidden]) => {
+        const dimObj: Record<string, unknown> = { name: dimName };
+        if (hidden.wholeDimensionHidden) return dimObj;
+        if (hidden.hiddenHierarchies.size > 0) {
+          dimObj.hierarchies = [...hidden.hiddenHierarchies.entries()].map(([hierName, level]) => {
+            const hierObj: Record<string, unknown> = { name: hierName };
+            if (level) hierObj.level = level;
+            return hierObj;
+          });
+        }
+        if (hidden.hiddenSecondaryAttributes.size > 0) {
+          dimObj.secondary_attributes = [...hidden.hiddenSecondaryAttributes];
+        }
+        return dimObj;
+      });
+      if (dimensionObjs.length > 0) pObj.dimensions = dimensionObjs;
+      return pObj;
+    })
+    // A perspective that resolved to nothing hideable (every referenced object was
+    // unresolvable — see the "Perspective" omissions logged where this is built) has
+    // nothing left to say and would just be a no-op unique_name in the model file.
+    .filter((pObj) => pObj.metrics || pObj.dimensions);
+  if (perspectiveObjs.length > 0) obj.perspectives = perspectiveObjs;
 
   return toYaml(obj);
 }
