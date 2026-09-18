@@ -39,8 +39,14 @@ export type NameResolver = {
 };
 
 export type ResolverInput = {
-  /** Measure names known to the target model. */
-  measures: Iterable<string>;
+  /**
+   * Measure names known to the target model.
+   *
+   * Held by reference, not copied: aggregation extraction mints new base
+   * metrics while classification is running, and MDX emitted afterwards has to
+   * be able to resolve them.
+   */
+  measures: ReadonlySet<string>;
   /**
    * Tabular table name -> the SML dimension `unique_name` it became. The
    * converter collapses role-play families, so this is not always identity.
@@ -66,7 +72,7 @@ export type ResolverInput = {
 };
 
 export function buildResolver(input: ResolverInput): NameResolver {
-  const measures = new Set(input.measures);
+  const measures = input.measures;
   const yearLevels = input.yearLevelOf ?? new Map<string, string>();
 
   const dimensionFor = (table: string): string | undefined => input.dimensionOf.get(table);

@@ -55,8 +55,8 @@
  */
 import { dump } from "js-yaml";
 import {
-  MeasureClassifier, buildResolver,
-  type ColumnLookup, type MeasureAssessment,
+  MeasureClassifier, buildResolver, defaultMetricName, isIncidentalBlocker,
+  type ColumnLookup, type MeasureAssessment, type MetricProvider,
 } from "./dax/index.js";
 
 // ============================================================
@@ -1292,7 +1292,87 @@ export function convertTabularToSml(
     knowsTable: (t) => tables.has(t),
   };
 
-  const daxClassifier = new MeasureClassifier(daxResolver, columnLookup);
+  // Index the base metrics already emitted, so a lifted SUM('F'[charge]) reuses
+  // the model's existing "Gross Charge" instead of minting a duplicate.
+  const metricByAggregation = new Map<string, string>();
+  const aggKey = (dataset: string, column: string, method: string): string =>
+    `${dataset}\u0000${column}\u0000${method}`;
+  for (const m of convertedMetrics) {
+    const ds = datasetFor.get(m.fact) ?? m.fact;
+    metricByAggregation.set(aggKey(ds, m.column, m.calculationMethod), m.name);
+  }
+
+  const liftedMetrics: Array<{ name: string; dataset: string; column: string; method: string }> = [];
+
+  // Minting is staged, not immediate: a lifted aggregation is only worth a new
+  // base metric if the rewrite actually unblocks the measure. Without this a
+  // measure that still fails after extraction leaves orphan hidden metrics
+  // behind, referenced by nothing.
+  type PendingMetric = {
+    key: string; name: string; dataset: string; physCol: string; method: string; table: string;
+  };
+  let pendingMetrics: PendingMetric[] = [];
+
+  function commitPendingMetrics(): void {
+    for (const pm of pendingMetrics) {
+      sml.set(
+        `metrics/${fileSafe(pm.name)}.yml`,
+        toYaml(
+          od({
+            unique_name: pm.name,
+            object_type: "metric",
+            label: pm.name,
+            description: cleanDesc(
+              `Base metric created by ps-utils so inline ${pm.method.toUpperCase()} aggregations ` +
+                `over "${pm.physCol}" could be lifted out of DAX calculations. AtScale models ` +
+                "plain aggregations as metrics, not calculations.",
+            ),
+            calculation_method: pm.method,
+            dataset: pm.dataset,
+            column: pm.physCol,
+            is_hidden: true,
+            unrelated_dimensions_handling: "repeat",
+          }),
+        ),
+      );
+      allMetricNames.push(pm.name);
+      sourceMeasureNames.add(pm.name); // so MDX can resolve the lifted metric
+      metricFolder.set(pm.name, pm.table);
+      metricByAggregation.set(pm.key, pm.name);
+      convertedMetrics.push({
+        name: pm.name, fact: pm.table, calculationMethod: pm.method, column: pm.physCol,
+      });
+      liftedMetrics.push({
+        name: pm.name, dataset: pm.dataset, column: pm.physCol, method: pm.method,
+      });
+    }
+    pendingMetrics = [];
+  }
+
+  const metricProvider: MetricProvider = ({ method, table, column }) => {
+    const dataset = datasetFor.get(table);
+    if (!dataset || !tables.has(table)) return undefined;
+    const physCol = colPhysMap(table).get(column);
+    if (!physCol) return undefined;
+
+    const key = aggKey(dataset, physCol, method);
+    const existing = metricByAggregation.get(key);
+    if (existing) return { metric: existing, created: false };
+
+    const staged = pendingMetrics.find((pm) => pm.key === key);
+    if (staged) return { metric: staged.name, created: true };
+
+    let name = defaultMetricName(method, column);
+    const taken = (n: string): boolean =>
+      allMetricNames.includes(n) || pendingMetrics.some((pm) => pm.name === n);
+    if (taken(name)) name = `${name} (${table})`;
+    if (taken(name)) return undefined;
+
+    pendingMetrics.push({ key, name, dataset, physCol, method, table });
+    return { metric: name, created: true };
+  };
+
+  const daxClassifier = new MeasureClassifier(daxResolver, columnLookup, metricProvider);
   const assessments: MeasureAssessment[] = [];
   const factDeferred = new Map<string, Array<[string, string]>>();
   const convertedCalcs: Array<{ name: string; fact: string; engine: string; confidence: string }> = [];
@@ -1300,16 +1380,23 @@ export function convertTabularToSml(
   for (const ft of factTables) {
     for (const m of tables.get(ft)!.measures ?? []) {
       if (classifyMeasure(m)) continue; // already emitted as a base metric
+      pendingMetrics = [];
       const a = daxClassifier.classify(ft, m.name, exprText(m));
+      if (a.verdict === "daxNative" || a.verdict === "mdxTranslated") commitPendingMetrics();
+      else pendingMetrics = [];
       assessments.push(a);
 
       if (a.verdict === "daxNative" || a.verdict === "mdxTranslated") {
         const engine = a.verdict === "daxNative" ? "dax" : "mdx";
-        const expression = a.verdict === "daxNative" ? a.expression : a.mdx!;
+        const expression = a.verdict === "daxNative"
+          ? (a.rewrittenExpression ?? a.expression)
+          : a.mdx!;
         const review = a.notes.length ? ` Review: ${a.notes.join("; ")}` : "";
         const provenance = a.verdict === "mdxTranslated"
           ? ` Translated from DAX by ps-utils (source DAX: ${exprText(m).slice(0, 160)}).`
-          : ` Migrated verbatim as AtScale server-side DAX.`;
+          : a.rewrittenExpression
+            ? ` Inline aggregations lifted into base metrics by ps-utils (source DAX: ${exprText(m).slice(0, 160)}).`
+            : ` Migrated verbatim as AtScale server-side DAX.`;
         sml.set(
           `calculations/${fileSafe(m.name)}.yml`,
           toYaml(
@@ -1584,7 +1671,16 @@ export function convertTabularToSml(
       const a = assessments.find((x) => x.name === name && x.table === ft);
       if (a) {
         const blocked = [...new Set(a.blockers.map((b) => b.fn))].sort();
-        if (blocked.length) dl.push(`- Blocked by: ${blocked.map((f) => `\`${f}\``).join(", ")}`);
+        // Split incidental blockers (ones the translator handles on its own)
+        // from the ones that actually need a decision, so this reads as a work
+        // list rather than a frequency table.
+        const real = blocked.filter((f) => !isIncidentalBlocker(f));
+        const incidental = blocked.filter((f) => isIncidentalBlocker(f));
+        if (real.length) dl.push(`- Blocked by: ${real.map((f) => `\`${f}\``).join(", ")}`);
+        if (incidental.length) {
+          dl.push(`- Also present (translatable on their own): ${
+            incidental.map((f) => `\`${f}\``).join(", ")}`);
+        }
         if (a.error) dl.push(`- Reason: ${a.error}`);
         for (const note of a.notes) dl.push(`- ${note}`);
       }
@@ -1832,6 +1928,7 @@ model (the conversion is deterministic).
       calculationsAsDax: convertedCalcs.filter((c) => c.engine === "dax").length,
       calculationsAsMdx: convertedCalcs.filter((c) => c.engine === "mdx").length,
       calculationsNeedingReview: convertedCalcs.filter((c) => c.confidence !== "high").length,
+      baseMetricsLiftedFromCalculations: liftedMetrics.length,
       measuresDeferred: totalDeferred,
       modelRelationships: finalRels.length,
       orphanTablesExcluded: orphanTables.length,
