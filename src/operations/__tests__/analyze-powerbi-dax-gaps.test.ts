@@ -164,12 +164,39 @@ describe("gap analysis", () => {
     expect(gap.clientNotes.join(" ")).toMatch(/VALUES:/);
   });
 
-  it("records caveats for supported functions with documented limits", () => {
-    const gap = analyzeMeasure(measure({
+  it("flags DATEADD only when the interval is not DAY", () => {
+    const bad = analyzeMeasure(measure({
       expression: "CALCULATE([a], DATEADD('D'[d], -1, YEAR))",
     }));
-    expect(gap.clientVerdict).toBe("supported");
-    expect(gap.caveats.join(" ")).toMatch(/DAY interval/);
+    expect(bad.clientVerdict).toBe("supported");
+    expect(bad.caveats.join(" ")).toMatch(/DAY interval/);
+
+    const fine = analyzeMeasure(measure({
+      expression: "CALCULATE([a], DATEADD('D'[d], -1, DAY))",
+    }));
+    expect(fine.caveats).toEqual([]);
+  });
+
+  it("flags IF only when it actually compares a column to a measure", () => {
+    // Attaching this to every IF fired on 45 of 182 measures in the validation
+    // corpus, none of which did the thing being warned about.
+    const flagged = analyzeMeasure(measure({
+      expression: "IF('T'[Region] = [Total Sales], 1, 0)",
+    }));
+    expect(flagged.caveats.join(" ")).toMatch(/dimension to a measure/);
+
+    const plain = analyzeMeasure(measure({ expression: "IF([a] > 0, [a], 0)" }));
+    expect(plain.caveats).toEqual([]);
+
+    const literal = analyzeMeasure(measure({ expression: 'IF(\'T\'[Region] = "East", 1, 0)' }));
+    expect(literal.caveats).toEqual([]);
+  });
+
+  it("detects the column-to-measure comparison in either operand order", () => {
+    const reversed = analyzeMeasure(measure({
+      expression: "SWITCH(TRUE(), [Total Sales] = 'T'[Region], 1, 0)",
+    }));
+    expect(reversed.caveats.join(" ")).toMatch(/dimension to a measure/);
   });
 
   it("parses IN with a table constructor", () => {

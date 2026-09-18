@@ -81,8 +81,10 @@ export const CLIENT_DAX_CAVEATS: Readonly<Record<string, string>> = {
   DATEADD:
     "on the DAX Tabular dialect DATEADD only works with the DAY interval; " +
     "MONTH, QUARTER and YEAR intervals return an error",
-  IF: "comparing a dimension to a measure inside IF is not supported",
-  SWITCH: "comparing a dimension to a measure inside SWITCH is not supported",
+  // These two are attached only when the expression actually compares a column
+  // to a metric -- see detectCaveats() in gap-analyzer.ts.
+  IF: "this IF compares a dimension to a measure, which is not supported",
+  SWITCH: "this SWITCH compares a dimension to a measure, which is not supported",
 };
 
 /** Suggested remediation for the client-side functions AtScale does not accept. */
@@ -105,6 +107,9 @@ export const CLIENT_REMEDIATION: Readonly<Record<string, string>> = {
   COUNTROWS:
     "COUNT/COUNTX are supported; count a specific column, or model the row " +
     "count as a metric",
+  SELECTCOLUMNS:
+    "projection over a table has no client-side equivalent; compute the columns " +
+    "in the AtScale model, or restructure against levels the model exposes",
   EARLIER:
     "row-context nesting has no client-side equivalent; restructure the " +
     "calculation or push it into the model",
