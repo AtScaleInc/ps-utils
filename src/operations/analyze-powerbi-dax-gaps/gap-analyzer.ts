@@ -17,12 +17,63 @@
  */
 
 import {
-  MeasureClassifier, DaxSyntaxError, parseDax, callsWithDepth,
-  EMPTY_RESOLVER, type MeasureAssessment,
+  MeasureClassifier, DaxSyntaxError, parseDax, callsWithDepth, walk,
+  EMPTY_RESOLVER, type MeasureAssessment, type Node,
 } from "../generate-sml-from-tabular/dax/index.js";
 import {
   clientCaveat, clientRemediation, supportsClientDax,
 } from "./client-dax-capabilities.js";
+
+/**
+ * Caveats are detected from the expression, not from the function name alone.
+ *
+ * Attaching "IF cannot compare a dimension to a measure" to every IF fires on
+ * essentially every report -- 45 of 182 measures in the validation corpus, none
+ * of which actually did the thing being warned about. A caveat that always
+ * fires is noise, and noise trains people to skip the caveats section, which is
+ * where the genuinely dangerous cases live.
+ */
+function detectCaveats(tree: Node): string[] {
+  const out: string[] = [];
+  const add = (fn: string): void => {
+    const text = clientCaveat(fn);
+    const line = `${fn}: ${text}`;
+    if (text && !out.includes(line)) out.push(line);
+  };
+
+  /** A comparison with a column on one side and a metric on the other. */
+  const comparesColumnToMeasure = (node: Node): boolean =>
+    walk(node).some((n) =>
+      n.type === "binary"
+      && ["=", "==", "<>", "<", "<=", ">", ">="].includes(n.op)
+      && ((n.left.type === "columnRef" && n.right.type === "measureRef")
+        || (n.left.type === "measureRef" && n.right.type === "columnRef")));
+
+  for (const [call] of callsWithDepth(tree)) {
+    if (call.name === "DATEADD") {
+      // Only non-DAY intervals are a problem on the DAX Tabular dialect.
+      const grain = call.args[2];
+      const name = grain && (grain.type === "identifier" || grain.type === "tableRef")
+        ? grain.name.toUpperCase()
+        : undefined;
+      if (name !== "DAY") add("DATEADD");
+      continue;
+    }
+    if (call.name === "IF" || call.name === "SWITCH") {
+      // IF puts its condition first. SWITCH is written both as
+      // SWITCH(expr, value, result, ...) and the SWITCH(TRUE(), cond, result,
+      // ...) idiom, so the comparison sits at the odd argument positions, not
+      // at arg 0 -- checking only arg 0 misses the common idiom entirely.
+      const candidates = call.name === "IF"
+        ? call.args.slice(0, 1)
+        : call.args.filter((_, i) => i === 0 || i % 2 === 1);
+      if (candidates.some(comparesColumnToMeasure)) add(call.name);
+      continue;
+    }
+    add(call.name);
+  }
+  return out;
+}
 import type { PbixMeasure, PbixReport } from "./pbix-reader.js";
 
 export type ClientVerdict = "supported" | "unsupported" | "parseError";
@@ -93,8 +144,10 @@ export function analyzeMeasure(measure: PbixMeasure): MeasureGap {
   };
 
   let functions: string[];
+  let tree: Node;
   try {
-    functions = [...new Set(callsWithDepth(parseDax(measure.expression)).map(([c]) => c.name))].sort();
+    tree = parseDax(measure.expression);
+    functions = [...new Set(callsWithDepth(tree).map(([c]) => c.name))].sort();
   } catch (err) {
     const message = err instanceof DaxSyntaxError
       ? `${err.message} (position ${err.position})`
@@ -112,9 +165,7 @@ export function analyzeMeasure(measure: PbixMeasure): MeasureGap {
   const clientNotes = clientBlockers
     .map((f) => { const r = clientRemediation(f); return r ? `${f}: ${r}` : ""; })
     .filter(Boolean);
-  const caveats = functions
-    .map((f) => { const c = clientCaveat(f); return c ? `${f}: ${c}` : ""; })
-    .filter(Boolean);
+  const caveats = detectCaveats(tree);
 
   // Server-side judgement. EMPTY_RESOLVER means no dimension paths resolve, so
   // MDX translation that depends on the model is conservatively refused -- this
