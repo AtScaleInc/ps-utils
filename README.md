@@ -687,7 +687,22 @@ Three hand-transcribed whitelists drive every DAX verdict ps-utils produces. The
 | MDX | same file | [MDX Reference](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/mdx-reference) |
 | Client-side DAX | `src/operations/analyze-powerbi-dax-gaps/client-dax-capabilities.ts` | [Supported Client-Side DAX Language Elements](https://documentation.atscale.com/container/connect-integrate/connect-with-bi-tools/microsoft-power-bi/using-dax-tabular/supported-dax-language-elements) |
 
-To refresh: edit the function set, bump `captured`, update the count assertion in the matching parity test, and run `npm test`.
+To check whether AtScale has changed them, run:
+
+```bash
+npm run build                    # the script runs from dist/
+npm run check:capabilities       # report drift, exits 1 if any
+npm run check:capabilities -- --write   # rewrite the lists in place
+npm run check:capabilities -- --json    # machine-readable drift report
+```
+
+It fetches the container pages, parses the function lists, and diffs them against the sets encoded in the two capability files. With `--write` it rewrites the `// <generated:...>` regions; everything outside those markers is left alone. After a `--write`, bump `captured` in each file, update the count assertion in the matching parity test, add remediation hints for any new function, and run `npm test`.
+
+This is a manual check, deliberately — it is not wired into `npm run build` or CI. It needs outbound access to `documentation.atscale.com`; behind an egress allowlist or proxy, that host has to be permitted or the script exits 2 with an explanation.
+
+If the page structure changes, the script fails loudly rather than reporting a huge fake drift or emptying a whitelist under `--write`: each source declares sentinel functions that must be found, and a parse that misses them is treated as a script bug to fix in `parseFunctionList()`.
+
+**Expanding a whitelist is not the same as expanding conversion.** Adding a function makes ps-utils *accept* it — the gap analysis and the server-side passthrough classification follow immediately, with no code change. But translating a structurally new function from DAX to MDX still needs a rule in `dax/mdx.ts`: the whitelist says "allowed", the translator has to know *how*. Simple one-to-one mappings are a single entry in that file's `IDENTITY` map; anything that changes shape (as `CALCULATE`, `DATEADD` and `ALL` do) is real work.
 
 **Always refresh from the `container` docs.** AtScale publishes an `installer` copy of the same pages, and they are not interchangeable — the installer copy of the client-side page omits `SELECTEDVALUE`, `ALLSELECTED`, `AVERAGEX`, `HASONEVALUE`, `ISINSCOPE`, `DATEADD`, `DISTINCT` and `EXCEPT`. Transcribing it reported 16% of a real customer report as supported instead of 62%, and would have recommended pushing logic into the model that never needed to move.
 
