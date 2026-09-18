@@ -2259,6 +2259,54 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `analyzePowerbiDaxGaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports
+
+**CLI name:** `analyze-powerbi-dax-gaps`  |  **REST:** `POST /rest/analyze-powerbi-dax-gaps`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `pbixFile` | `String` | Yes\* | Path to the Power BI .pbix file to analyse |
+| `pbixFileUpload` | `Upload` | No | Multipart upload — alternative to `pbixFile` |
+| `pbixFileContent` | `String` | No | Raw string content — alternative to `pbixFile` |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  analyzePowerbiDaxGaps(input: {
+    pbixFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{analyzePowerbiDaxGaps(input:{pbixFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){analyzePowerbiDaxGaps(input:{pbixFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
 ### `generateSmlFromSsasMultidimensional`
 
 [↑ Table of Contents](#table-of-contents)
@@ -3008,6 +3056,18 @@ input GenerateSmlFromTabularInput {
   description: String
   """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
   modelMode: String
+}
+
+"""Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports"""
+input AnalyzePowerbiDaxGapsInput {
+  """Path to the Power BI .pbix file to analyse"""
+  pbixFile: String
+  """Uploaded file — alternative to pbixFile"""
+  pbixFileUpload: Upload
+  """Raw file content as a string — alternative to pbixFile"""
+  pbixFileContent: String
+  """Directory where the gap report will be written"""
+  outputDir: String
 }
 
 """Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
@@ -3872,6 +3932,8 @@ type Mutation {
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
   """Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
   generateSmlFromTabular(input: GenerateSmlFromTabularInput): OperationResult!
+  """Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports"""
+  analyzePowerbiDaxGaps(input: AnalyzePowerbiDaxGapsInput): OperationResult!
   """Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
   generateSmlFromSsasMultidimensional(input: GenerateSmlFromSsasMultidimensionalInput): OperationResult!
   """Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""

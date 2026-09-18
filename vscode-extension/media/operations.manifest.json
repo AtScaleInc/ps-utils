@@ -27,6 +27,7 @@
         "generate-sml-from-xml",
         "generate-sml-from-tabular",
         "generate-sml-from-ssas-multidimensional",
+        "analyze-powerbi-dax-gaps",
         "generate-report-from-xml",
         "generate-report-from-sml",
         "apply-style-to-sml",
@@ -824,6 +825,36 @@
           "type": "string",
           "role": "scalar",
           "required": false,
+          "default": null
+        }
+      ]
+    },
+    "analyze-powerbi-dax-gaps": {
+      "description": "Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "pbix-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "pbix-file",
+          "description": "Path to the Power BI .pbix file to analyse",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where the gap report will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
           "default": null
         }
       ]

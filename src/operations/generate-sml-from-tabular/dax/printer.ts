@@ -36,6 +36,8 @@ export function printDax(node: Node): string {
       return node.op === "NOT" ? `NOT ${printDax(node.operand)}` : `${node.op}${printDax(node.operand)}`;
     case "binary":
       return `(${printDax(node.left)} ${node.op} ${printDax(node.right)})`;
+    case "tableConstructor":
+      return `{${node.items.map(printDax).join(", ")}}`;
     case "varExpr": {
       const bindings = node.bindings
         .map(([name, expr]) => `VAR ${name} = ${printDax(expr)}`)
