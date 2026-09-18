@@ -81,7 +81,7 @@ describe("capability page parser", () => {
 
 describe("generated region round-trip", () => {
   const file = `
-// <generated:server-dax> -- npm run check:capabilities -- --write
+// <generated:server-dax> -- npm run check:atscale-capabilities -- --write
 export const SUPPORTED_DAX_FUNCTIONS: ReadonlySet<string> = new Set([
   "ABS", "CALCULATE",
 ]);

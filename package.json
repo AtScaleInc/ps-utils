@@ -44,7 +44,7 @@
     "generate:extension-contributes": "node dist/scripts/generate-extension-contributes.js",
     "generate:sml-schema": "node dist/scripts/generate-sml-schema.js",
     "bundle:cli": "node dist/scripts/bundle-cli.js",
-    "check:capabilities": "node dist/scripts/check-atscale-capabilities.js"
+    "check:atscale-capabilities": "node dist/scripts/check-atscale-capabilities.js"
   },
   "dependencies": {
     "@types/node": "^25.3.0",

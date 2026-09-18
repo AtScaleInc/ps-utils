@@ -32,7 +32,7 @@
 
 export const CLIENT_DAX_CAPTURED = "2026-09-18";
 
-// <generated:client-dax> -- npm run check:capabilities -- --write
+// <generated:client-dax> -- npm run check:atscale-capabilities -- --write
 export const SUPPORTED_CLIENT_DAX: ReadonlySet<string> = new Set([
   // Aggregation
   "AVERAGE", "AVERAGEX", "COUNT", "COUNTX", "DISTINCTCOUNT", "MAX", "MAXX",

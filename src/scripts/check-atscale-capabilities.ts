@@ -2,9 +2,9 @@
  * Checks (and optionally rewrites) the AtScale capability whitelists against
  * the live documentation.
  *
- *   npm run check:capabilities            # report drift, exit 1 if any
- *   npm run check:capabilities -- --write # rewrite the generated regions
- *   npm run check:capabilities -- --json  # machine-readable drift report
+ *   npm run check:atscale-capabilities            # report drift, exit 1 if any
+ *   npm run check:atscale-capabilities -- --write # rewrite the generated regions
+ *   npm run check:atscale-capabilities -- --json  # machine-readable drift report
  *
  * Why this exists: three hand-transcribed lists drive every DAX verdict
  * ps-utils produces. They are snapshots, so they go stale silently as AtScale
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
       html = await response.text();
     } catch (err) {
       console.error(
-        `[check:capabilities] Could not fetch ${source.label} (${source.url}): ${
+        `[check:atscale-capabilities] Could not fetch ${source.label} (${source.url}): ${
           err instanceof Error ? err.message : String(err)
         }\n` +
         "  This check needs outbound access to documentation.atscale.com. If you " +
@@ -193,7 +193,7 @@ async function main(): Promise<void> {
     const missing = source.sentinels.filter((s) => !live.includes(s));
     if (live.length === 0 || missing.length > 0) {
       console.error(
-        `[check:capabilities] Parse of ${source.label} looks wrong: found ` +
+        `[check:atscale-capabilities] Parse of ${source.label} looks wrong: found ` +
         `${live.length} function(s)` +
         (missing.length ? `, missing expected ${missing.join(", ")}` : "") +
         ".\n  The page structure has probably changed. Refusing to report or " +
