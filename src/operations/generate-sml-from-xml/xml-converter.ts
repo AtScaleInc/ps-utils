@@ -874,11 +874,14 @@ export async function convertXmlToSml(
           const dedupKey = uniqueName.toLowerCase();
           const isKnownColumn = datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column) ?? false;
           // Dedup is project-wide (see metricDefSignature above): a measure with the exact
-          // same definition (dataset|column|calculation_method) already emitted — by this
-          // cube or an earlier one — just gets referenced again, matching the reference
-          // converter's existsExactlyInProject check; only a genuinely different definition
-          // sharing the same name needs to be told apart.
-          const sig = `${measureDatasetName}|${column}|${aggregation}`;
+          // same definition (dataset|column|calculation_method|visibility) already emitted
+          // — by this cube or an earlier one — just gets referenced again, matching the
+          // reference converter's existsExactlyInProject check; only a genuinely different
+          // definition sharing the same name needs to be told apart. Visibility is part of
+          // the signature so two same-named, same-bound measures that differ only in
+          // visible/hidden don't silently collapse into one, discarding whichever's
+          // is_hidden the second occurrence declared.
+          const sig = `${measureDatasetName}|${column}|${aggregation}|${visible}`;
           if (seenMetricNames.has(dedupKey)) {
             if (metricDefSignature.get(dedupKey) === sig) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
@@ -983,10 +986,11 @@ export async function convertXmlToSml(
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
           const dedupKey = uniqueName.toLowerCase();
-          // Same project-wide dedup pattern as regular measures above: a percentile metric
-          // with the exact same definition already emitted just gets referenced again; a
-          // different definition under the same name gets its own distinct unique_name.
-          const sig = `${measureDatasetName}|${column}|percentile`;
+          // Same project-wide dedup pattern as regular measures above (visibility included,
+          // see the comment there): a percentile metric with the exact same definition
+          // already emitted just gets referenced again; a different definition (including a
+          // different visibility) under the same name gets its own distinct unique_name.
+          const sig = `${measureDatasetName}|${column}|percentile|${visible}`;
           if (seenMetricNames.has(dedupKey)) {
             if (metricDefSignature.get(dedupKey) === sig) {
               attrIdToMetricUniqueName.set(attrId, uniqueName);
@@ -1589,7 +1593,7 @@ export async function convertXmlToSml(
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
     const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId, hierarchyIdToRef);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -2844,15 +2848,32 @@ function buildDatasetYaml(
     obj.table = phys.tableName ?? dsName;
   }
 
+  // A binary column can also be kept alive purely because some OTHER column's own <sql>
+  // computed expression references it by name (e.g. a CASE/derived column built from the
+  // raw binary value) — that sibling column is emitted regardless of the binary filter
+  // below, so dropping the binary column it depends on would leave the generated SQL
+  // referencing a column that no longer exists in SML.
+  const sqlReferencedColumnNames = new Set<string>();
+  for (const col of phys.columns ?? []) {
+    if (!col.sql) continue;
+    for (const other of phys.columns ?? []) {
+      if (other.name === col.name) continue;
+      if (new RegExp(`\\b${other.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(col.sql)) {
+        sqlReferencedColumnNames.add(other.name);
+      }
+    }
+  }
+
   const columns: Array<Record<string, unknown>> =
     (phys.columns ?? [])
       // A column whose XML type has no SML equivalent (e.g. Snowflake BINARY) is only
-      // safe to keep if something actually references it (a key/relationship column);
-      // otherwise it's dead physical metadata that fails catalog validation outright —
-      // drop it, matching the reference converter's own "unused, will be removed"
-      // behavior for these columns. A map column has no data_type at all (SML only
-      // requires one unless the column is a map), so it's never subject to this filter.
-      .filter((c) => !c.dataType?.startsWith("binary") || referencedColumns?.has(c.name))
+      // safe to keep if something actually references it (a key/relationship column, or
+      // a sibling calculated column's own SQL expression); otherwise it's dead physical
+      // metadata that fails catalog validation outright — drop it, matching the reference
+      // converter's own "unused, will be removed" behavior for these columns. A map
+      // column has no data_type at all (SML only requires one unless the column is a
+      // map), so it's never subject to this filter.
+      .filter((c) => !c.dataType?.startsWith("binary") || referencedColumns?.has(c.name) || sqlReferencedColumnNames.has(c.name))
       .map((c) => ({
         name: c.name,
         ...(c.dataType ? { data_type: c.dataType } : {}),
@@ -2906,9 +2927,23 @@ function collectAttributeDimensionOwnership(
   >();
 
   for (const [dimName, dimEl] of allDims) {
+    // Two distinct hierarchies (e.g. "Region" and "Region.") can
+    // sanitize to the identical safeName() output once punctuation-only differences are
+    // stripped — disambiguate with the same "_2"/"_3" suffix convention used elsewhere in
+    // this file, scoped per dimension so it agrees with buildDimensionYaml's own
+    // (identically-scoped, identically-ordered) hierarchy disambiguation for this
+    // dimension's actual emitted YAML.
+    const usedHierUniqueNamesInDim = new Set<string>();
     for (const hierEl of arr(dimEl.hierarchy)) {
       const hierId = a(hierEl, "id");
-      const hierUniqueName = truncateUniqueName(safeName(a(hierEl, "name") ?? "Hierarchy"));
+      const rawHierUniqueName = truncateUniqueName(safeName(a(hierEl, "name") ?? "Hierarchy"));
+      let hierUniqueName = rawHierUniqueName;
+      if (usedHierUniqueNamesInDim.has(hierUniqueName)) {
+        let n = 2;
+        while (usedHierUniqueNamesInDim.has(`${rawHierUniqueName}_${n}`)) n++;
+        hierUniqueName = `${rawHierUniqueName}_${n}`;
+      }
+      usedHierUniqueNamesInDim.add(hierUniqueName);
       if (hierId && !hierarchyIdToRef.has(hierId)) {
         hierarchyIdToRef.set(hierId, { dimName, hierUniqueName });
       }
@@ -3159,6 +3194,11 @@ function buildDimensionYaml(
   /** ref-path id -> the key-ref id that completes it — see its own declaration for why this
    *  indirection exists. */
   refPathIdToKeyRefId: Map<string, string>,
+  /** Every hierarchy id's dimension + already-disambiguated unique_name, computed once by
+   *  collectAttributeDimensionOwnership — reused here instead of re-deriving locally so a
+   *  punctuation-only hierarchy-name collision (e.g. "Region" vs "Region.") gets the
+   *  exact same "_2" suffix perspectives/aggregates resolve against. */
+  hierarchyIdToRef: Map<string, { dimName: string; hierUniqueName: string }>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -3542,8 +3582,15 @@ function buildDimensionYaml(
       const orderedLevels = isTime
         ? [...hierLevels].sort((a, b) => (TIME_UNIT_RANK[a.timeUnit ?? ""] ?? 99) - (TIME_UNIT_RANK[b.timeUnit ?? ""] ?? 99))
         : hierLevels;
+      // Reuse collectAttributeDimensionOwnership's already-disambiguated unique_name for
+      // this hierarchy id (see that function for why two hierarchies can otherwise
+      // collide, e.g. "Region" vs "Region.") instead of re-deriving it
+      // here, so this file and every perspective/aggregate that references this hierarchy
+      // by id always agree on the same "_2"-suffixed name.
+      const hierId = a(hierEl, "id");
+      const hierUniqueName = (hierId && hierarchyIdToRef.get(hierId)?.hierUniqueName) || truncateUniqueName(safeName(hierName));
       hierarchies.push({
-        uniqueName: truncateUniqueName(safeName(hierName)),
+        uniqueName: hierUniqueName,
         label: hierCaption ?? hierName,
         filterEmpty,
         folder: hierFolder,
@@ -3641,7 +3688,12 @@ function buildDimensionYaml(
               key_columns: sa.keyColumns,
               name_column: sa.nameColumn,
             };
-            if (sa.sortColumn && sa.sortColumn !== sa.nameColumn) saObj.sort_column = sa.sortColumn;
+            // Emit whenever the XML declared an explicit sort key (resolveSortColumn only
+            // ever returns a value for one), even if it happens to equal name_column — the
+            // SML spec requires sort_column be set on every dataset of a shared-degenerate-
+            // columns level once it's set on any one of them, so suppressing a coincidental
+            // match here can leave a sibling dataset's real override without a required peer.
+            if (sa.sortColumn) saObj.sort_column = sa.sortColumn;
             if (sa.format) saObj.format = sa.format;
             if (sa.folder) saObj.folder = sa.folder;
             if (sa.description) saObj.description = sa.description;
@@ -3698,7 +3750,9 @@ function buildDimensionYaml(
         laObj.key_columns = la.keyColumns;
       }
       if (la.description) laObj.description = la.description;
-      if (la.sortColumn && la.sortColumn !== la.nameColumn) laObj.sort_column = la.sortColumn;
+      // See the matching comment on the secondary-attribute sort_column above — always
+      // emit an explicit XML sort key, even if it coincidentally equals name_column.
+      if (la.sortColumn) laObj.sort_column = la.sortColumn;
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
