@@ -677,6 +677,22 @@ Alternatives: [Tabular Editor](https://tabulareditor.com/) can produce the same 
 
 ---
 
+#### Keeping the AtScale capability lists current
+
+Three hand-transcribed whitelists drive every DAX verdict ps-utils produces. They are snapshots of AtScale documentation, so they go stale when AtScale adds or removes support:
+
+| What | File | Source page |
+| --- | --- | --- |
+| Server-side DAX | `src/operations/generate-sml-from-tabular/dax/capabilities.ts` | [Server-Side DAX Reference](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/server-side-dax) |
+| MDX | same file | [MDX Reference](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/mdx-reference) |
+| Client-side DAX | `src/operations/analyze-powerbi-dax-gaps/client-dax-capabilities.ts` | [Supported Client-Side DAX Language Elements](https://documentation.atscale.com/container/connect-integrate/connect-with-bi-tools/microsoft-power-bi/using-dax-tabular/supported-dax-language-elements) |
+
+To refresh: edit the function set, bump `captured`, update the count assertion in the matching parity test, and run `npm test`.
+
+**Always refresh from the `container` docs.** AtScale publishes an `installer` copy of the same pages, and they are not interchangeable — the installer copy of the client-side page omits `SELECTEDVALUE`, `ALLSELECTED`, `AVERAGEX`, `HASONEVALUE`, `ISINSCOPE`, `DATEADD`, `DISTINCT` and `EXCEPT`. Transcribing it reported 16% of a real customer report as supported instead of 62%, and would have recommended pushing logic into the model that never needed to move.
+
+The parity tests pin each list's size and a sample of entries, so an accidental partial edit fails loudly rather than silently changing every verdict.
+
 ### `analyze-powerbi-dax-gaps`
 
 Analyse a Power BI `.pbix` and report which of its report-scoped DAX measures AtScale can evaluate. No connection is required — everything is read from the file.

@@ -5,7 +5,9 @@ import { analyzeMeasure, analyzeReport } from "../analyze-powerbi-dax-gaps/gap-a
 import {
   renderGapCsv, renderGapJson, renderGapMarkdown,
 } from "../analyze-powerbi-dax-gaps/gap-report.js";
-import { supportsClientDax } from "../analyze-powerbi-dax-gaps/client-dax-capabilities.js";
+import {
+  SUPPORTED_CLIENT_DAX, supportsClientDax,
+} from "../analyze-powerbi-dax-gaps/client-dax-capabilities.js";
 import type { PbixMeasure } from "../analyze-powerbi-dax-gaps/pbix-reader.js";
 
 /** Build a .pbix in memory: UTF-16LE Report/Layout with nested JSON config. */
@@ -102,6 +104,18 @@ describe("pbix reader", () => {
 });
 
 describe("client-side DAX capability registry", () => {
+  it("has exactly the documented number of functions", () => {
+    // If this fails, refresh SUPPORTED_CLIENT_DAX in
+    // client-dax-capabilities.ts from the CONTAINER docs, bump `captured`,
+    // and update this count. Do not just change the number.
+    expect(
+      SUPPORTED_CLIENT_DAX.size,
+      "client-side DAX function count changed -- refresh " +
+        "client-dax-capabilities.ts from the container docs, do not just " +
+        "update this number",
+    ).toBe(109);
+  });
+
   it("matches the container docs, not the narrower installer page", () => {
     // These four are absent from the installer version of the page; using it
     // overstates the gap badly.
