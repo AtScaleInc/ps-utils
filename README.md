@@ -677,6 +677,44 @@ Alternatives: [Tabular Editor](https://tabulareditor.com/) can produce the same 
 
 ---
 
+### `analyze-powerbi-dax-gaps`
+
+Analyse a Power BI `.pbix` and report which of its report-scoped DAX measures AtScale can evaluate. No connection is required — everything is read from the file.
+
+```bash
+atscale-utils analyze-powerbi-dax-gaps \
+  --pbix-file "./Average Daily Anesthetizing Locations.pbix" \
+  --output-dir ./gap-report
+```
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `--pbix-file` | Yes | Path to the `.pbix` to analyse |
+| `--output-dir` | Yes | Directory for the gap report |
+
+Writes `PBIX_GAP_REPORT.md` (for people), `.json` and `.csv` (for tooling).
+
+**Two surfaces, judged separately.** A measure can be valid in one and broken in the other, so every measure gets both verdicts:
+
+- **Client-side DAX** — the measure stays in the report and Power BI sends it to AtScale over XMLA, judged against AtScale's [supported client-side DAX elements](https://documentation.atscale.com/container/connect-integrate/connect-with-bi-tools/microsoft-power-bi/using-dax-tabular/supported-dax-language-elements).
+- **Server-side DAX** — the measure is pushed down into the AtScale model as a calculation, judged against the [server-side DAX whitelist](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/server-side-dax).
+
+Pairing them turns the report into a work list rather than a pass/fail:
+
+| Recommendation | Meaning |
+| --- | --- |
+| Keep in the report | Supported client-side; no change needed |
+| Move into the AtScale model | Unsupported client-side, but converts as a model calculation |
+| Needs redesign | Supported by neither surface |
+| Could not parse | Malformed DAX in the source report |
+
+The report also lists **caveats** — measures that pass the whitelist but hit a documented limitation a function check alone would miss. The clearest example is `DATEADD`: it is on the client-side list, but on the DAX Tabular dialect it only works with the `DAY` interval, so `MONTH`/`QUARTER`/`YEAR` error out at query time.
+
+**What can and cannot be read.** A `.pbix` is a zip, but what is inside depends on how the report connects:
+
+- **Live connection** reports (pointing at SSAS or AtScale) have no embedded model. Their report-scoped measures sit in `Report/Layout` in plain text, and those are exactly what this operation analyses.
+- **Import / composite** reports carry a `DataModel` part, which is an XPress9-compressed Analysis Services backup and cannot be read without Microsoft's tooling. The operation says so rather than pretending to parse it, and analyses only the report-scoped measures. For the model side, extract it with `pbi-tools` and run `generate-sml-from-tabular` on the result.
+
 ### `generate-sml-from-ssas-multidimensional`
 
 [↑ Table of Contents](#table-of-contents)

@@ -7,7 +7,7 @@ export { MeasureClassifier, blockingFunctions, isConvertible,
 export { DaxSyntaxError, tokenize, type Token } from "./lexer.js";
 export { MdxTranslator, Untranslatable, isIncidentalBlocker, remediationHint,
   type Confidence, type TranslationResult } from "./mdx.js";
-export { parseDax, type Node } from "./parser.js";
+export { callsWithDepth, parseDax, walk, type CallNode, type Node } from "./parser.js";
 export { printDax } from "./printer.js";
 export { defaultMetricName, extractAggregations,
   type ExtractedAggregation, type MetricProvider } from "./extract.js";

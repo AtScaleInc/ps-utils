@@ -18,7 +18,8 @@ export type Node =
   | { type: "call"; name: string; rawName: string; args: Node[] }
   | { type: "binary"; op: string; left: Node; right: Node }
   | { type: "unary"; op: string; operand: Node }
-  | { type: "varExpr"; bindings: Array<[string, Node]>; body: Node };
+  | { type: "varExpr"; bindings: Array<[string, Node]>; body: Node }
+  | { type: "tableConstructor"; items: Node[] };
 
 export type CallNode = Extract<Node, { type: "call" }>;
 
@@ -38,6 +39,7 @@ export function childrenOf(node: Node): Node[] {
     case "binary": return [node.left, node.right];
     case "unary": return [node.operand];
     case "varExpr": return [...node.bindings.map(([, e]) => e), node.body];
+    case "tableConstructor": return node.items;
     default: return [];
   }
 }
@@ -134,21 +136,43 @@ class Parser {
   }
 
   private and(): Node {
-    let node = this.comparison();
+    let node = this.notExpr();
     while (this.atOp("&&") || this.atKeyword("AND")) {
       this.advance();
-      node = { type: "binary", op: "&&", left: node, right: this.comparison() };
+      node = { type: "binary", op: "&&", left: node, right: this.notExpr() };
     }
     return node;
   }
 
+  /**
+   * NOT binds looser than comparison in DAX, so `NOT [c] IN {...}` means
+   * `NOT ([c] IN {...})`. Handling it at the unary level would bind it to the
+   * column alone and silently invert the wrong thing.
+   */
+  private notExpr(): Node {
+    if (this.atKeyword("NOT")) {
+      this.advance();
+      return { type: "unary", op: "NOT", operand: this.notExpr() };
+    }
+    return this.comparison();
+  }
+
   private comparison(): Node {
     let node = this.concat();
-    while (this.cur.kind === "OP" && COMPARISON.has(this.cur.value)) {
-      const op = this.advance().value;
-      node = { type: "binary", op, left: node, right: this.concat() };
+    for (;;) {
+      if (this.cur.kind === "OP" && COMPARISON.has(this.cur.value)) {
+        const op = this.advance().value;
+        node = { type: "binary", op, left: node, right: this.concat() };
+        continue;
+      }
+      // `<expr> IN {a, b}` / `<expr> IN <table>` -- IN is a supported operator.
+      if (this.atKeyword("IN")) {
+        this.advance();
+        node = { type: "binary", op: "IN", left: node, right: this.concat() };
+        continue;
+      }
+      return node;
     }
-    return node;
   }
 
   private concat(): Node {
@@ -213,6 +237,18 @@ class Parser {
     }
 
     if (tok.kind === "BRACKET") { this.advance(); return { type: "measureRef", name: tok.value }; }
+
+    // Table constructor: { "a", "b" } or {(1, 2), (3, 4)}
+    if (tok.kind === "{") {
+      this.advance();
+      const items: Node[] = [];
+      if (this.cur.kind !== "}") {
+        items.push(this.expression());
+        while (this.cur.kind === ",") { this.advance(); items.push(this.expression()); }
+      }
+      this.expect("}");
+      return { type: "tableConstructor", items };
+    }
 
     if (tok.kind === "TABLE") {
       this.advance();
