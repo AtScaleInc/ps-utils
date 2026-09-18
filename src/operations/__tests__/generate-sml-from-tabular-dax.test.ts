@@ -446,7 +446,15 @@ describe("server-side capability registry parity", () => {
    * the converter produces.
    */
   it("has exactly the documented number of functions", () => {
-    expect(SUPPORTED_DAX_FUNCTIONS.size).toBe(79);
+    // If this fails, AtScale has changed the server-side DAX page. Refresh
+    // SUPPORTED_DAX_FUNCTIONS in dax/capabilities.ts from the CONTAINER docs
+    // (not the installer copy -- they disagree), bump `captured`, and update
+    // this count. Do not just change the number.
+    expect(
+      SUPPORTED_DAX_FUNCTIONS.size,
+      "server-side DAX function count changed -- refresh capabilities.ts from " +
+        "the container docs, do not just update this number",
+    ).toBe(79);
   });
 
   it("includes the functions unique to the container list", () => {
