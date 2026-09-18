@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MeasureClassifier, MdxTranslator, Untranslatable, blockingFunctions,
-  buildResolver, parseDax, supportsDax, tokenize,
+  buildResolver, defaultMetricName, parseDax, printDax, supportsDax, tokenize,
   type ColumnLookup, type NameResolver,
 } from "../generate-sml-from-tabular/dax/index.js";
 
@@ -9,8 +9,9 @@ import {
  * A resolver matching the converter's naming: dimension unique_name is the
  * table name, hierarchy is "<dimension> Hierarchy".
  */
+const knownMeasures = new Set(["Rev", "a", "b", "Total", "Total Cases"]);
 const resolver: NameResolver = buildResolver({
-  measures: ["Rev", "a", "b", "Total", "Total Cases"],
+  measures: knownMeasures,
   dimensionOf: new Map([
     ["Payer", "Payer"],
     ["Date Of Service", "Date Of Service"],
@@ -328,5 +329,92 @@ describe("unqualified column references", () => {
     const result = classifier.classify("Fact", "Ratio", "DIVIDE([Total],[Total],0)");
     expect(result.verdict).toBe("daxNative");
     expect(result.referencedMeasures).toEqual(["Total"]);
+  });
+});
+
+describe("inline aggregation extraction", () => {
+  const provider = (existing: Record<string, string> = {}) => {
+    const created: string[] = [];
+    const fn = ({ method, column }: { method: string; table: string; column: string }) => {
+      const reuse = existing[`${method}:${column}`];
+      if (reuse) return { metric: reuse, created: false };
+      const name = defaultMetricName(method, column);
+      created.push(name);
+      knownMeasures.add(name); // mirrors the converter registering a lifted metric
+      return { metric: name, created: true };
+    };
+    return { fn, created };
+  };
+
+  it("lifts inline aggregations so the expression becomes native DAX", () => {
+    const p = provider();
+    const c = new MeasureClassifier(resolver, columns, p.fn);
+    const result = c.classify("Fact", "Net", "SUM('Fact'[amt]) - SUM('Fact'[qty])");
+
+    expect(result.verdict).toBe("daxNative");
+    expect(result.rewrittenExpression).toBe("([Sum of amt] - [Sum of qty])");
+    expect(result.extracted.map((e) => e.metric)).toEqual(["Sum of amt", "Sum of qty"]);
+    expect(p.created).toEqual(["Sum of amt", "Sum of qty"]);
+  });
+
+  it("reuses an existing base metric rather than minting a duplicate", () => {
+    const p = provider({ "sum:amt": "Gross Charge" });
+    const c = new MeasureClassifier(resolver, columns, p.fn);
+    const result = c.classify("Fact", "Net", "DIVIDE(SUM('Fact'[amt]), 3600)");
+
+    expect(result.rewrittenExpression).toBe("DIVIDE([Gross Charge], 3600)");
+    expect(result.extracted[0]).toMatchObject({ metric: "Gross Charge", created: false });
+    expect(p.created).toEqual([]);
+  });
+
+  it("lifts an unqualified column against the measure's own table", () => {
+    const p = provider();
+    const c = new MeasureClassifier(resolver, columns, p.fn);
+    const result = c.classify("Fact", "Hrs", "DIVIDE(SUM([amt]),3600)");
+    expect(result.extracted[0]).toMatchObject({ table: "Fact", column: "amt" });
+  });
+
+  it("lowers confidence, because a lifted expression deserves a look", () => {
+    const c = new MeasureClassifier(resolver, columns, provider().fn);
+    const result = c.classify("Fact", "Net", "SUM('Fact'[amt]) - SUM('Fact'[qty])");
+    expect(result.confidence).toBe("medium");
+    expect(result.notes.join(" ")).toMatch(/lifted into base metrics/);
+  });
+
+  it("leaves aggregations over non-column arguments alone", () => {
+    // Lifting SUMX(FILTER(...)) would relocate evaluation context, not just the
+    // aggregation, so it must not be extracted.
+    const p = provider();
+    const c = new MeasureClassifier(resolver, columns, p.fn);
+    c.classify("Fact", "m", "SUMX(FILTER('Fact', [a] > 0), [b])");
+    expect(p.created).toEqual([]);
+  });
+
+  it("does not extract when no provider is supplied", () => {
+    const result = classifier.classify("Fact", "Net", "SUM('Fact'[amt]) - SUM('Fact'[qty])");
+    expect(result.extracted).toEqual([]);
+    expect(result.verdict).not.toBe("daxNative");
+  });
+
+  it("still translates to MDX when extraction alone is not enough", () => {
+    const c = new MeasureClassifier(resolver, columns, provider().fn);
+    const result = c.classify("Fact", "m", "IF(ISBLANK(SUM('Fact'[amt])), BLANK(), SUM('Fact'[amt]))");
+    expect(result.verdict).toBe("mdxTranslated");
+    expect(result.mdx).toContain("[Measures].[Sum of amt]");
+  });
+});
+
+describe("dax printer", () => {
+  it("round-trips an expression through parse and print", () => {
+    expect(printDax(parseDax("DIVIDE([a],[b],0)"))).toBe("DIVIDE([a], [b], 0)");
+  });
+
+  it("quotes table names only when required", () => {
+    expect(printDax(parseDax("SUM(Fact[amt])"))).toBe("SUM(Fact[amt])");
+    expect(printDax(parseDax("SUM('My Fact'[amt])"))).toBe("SUM('My Fact'[amt])");
+  });
+
+  it("preserves string escaping", () => {
+    expect(printDax(parseDax('IF([a] = "x""y", 1, 0)'))).toBe('IF(([a] = "x""y"), 1, 0)');
   });
 });

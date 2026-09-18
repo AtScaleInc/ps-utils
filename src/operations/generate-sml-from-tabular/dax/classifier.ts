@@ -20,6 +20,8 @@
  */
 
 import { baseAggregationMethod, supportsDax } from "./capabilities.js";
+import { extractAggregations, type ExtractedAggregation, type MetricProvider } from "./extract.js";
+import { printDax } from "./printer.js";
 import { DaxSyntaxError } from "./lexer.js";
 import { MdxTranslator, Untranslatable, remediationHint } from "./mdx.js";
 import { callsWithDepth, parseDax, walk, type Node } from "./parser.js";
@@ -50,6 +52,12 @@ export type MeasureAssessment = {
   sourceColumn?: string;
   /** mdxTranslated only. */
   mdx?: string;
+  /**
+   * Base metrics lifted out of the expression before classification, and the
+   * expression as rewritten against them. Empty when nothing was extracted.
+   */
+  extracted: ExtractedAggregation[];
+  rewrittenExpression?: string;
   confidence: "high" | "medium" | "low";
   notes: string[];
   blockers: Blocker[];
@@ -105,6 +113,11 @@ export class MeasureClassifier {
   constructor(
     resolver: NameResolver,
     private readonly columns?: ColumnLookup,
+    /**
+     * When supplied, an expression blocked only by inline aggregations is
+     * retried with those aggregations lifted into base metrics.
+     */
+    private readonly metricProvider?: MetricProvider,
   ) {
     this.translator = new MdxTranslator(resolver);
   }
@@ -118,6 +131,7 @@ export class MeasureClassifier {
       blockers: [],
       functionsUsed: [],
       referencedMeasures: [],
+      extracted: [],
     };
 
     let tree: Node;
@@ -170,7 +184,13 @@ export class MeasureClassifier {
     }
     assessment.blockers = blockers;
 
-    // 3. MDX translation
+    // 3. lift inline aggregations, then retry
+    if (this.metricProvider && blockers.some((b) => baseAggregationMethod(b.fn))) {
+      const lifted = this.retryWithExtraction(assessment, tree, table);
+      if (lifted) return lifted;
+    }
+
+    // 4. MDX translation
     try {
       const result = this.translator.translate(tree);
       return { ...assessment, verdict: "mdxTranslated", mdx: result.mdx,
@@ -191,6 +211,56 @@ export class MeasureClassifier {
         error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
         notes: ["internal translator error -- please file this against ps-utils"],
       };
+    }
+  }
+
+  /**
+   * Re-classify with inline aggregations replaced by base-metric references.
+   * Returns undefined if extraction changed nothing or did not help, so the
+   * caller falls through to MDX translation unchanged.
+   */
+  private retryWithExtraction(
+    assessment: MeasureAssessment, tree: Node, table: string,
+  ): MeasureAssessment | undefined {
+    const { tree: rewritten, extracted } = extractAggregations(
+      tree, table, this.metricProvider!,
+    );
+    if (extracted.length === 0) return undefined;
+
+    const remaining = callsWithDepth(rewritten)
+      .filter(([call]) => !supportsDax(call.name))
+      .map(([call, depth]) => ({ fn: call.name, depth, hint: this.hintFor(call.name) }));
+
+    const expression = printDax(rewritten);
+    const created = extracted.filter((e) => e.created).map((e) => e.metric);
+    const notes = [
+      `inline aggregations lifted into base metrics: ${
+        extracted.map((e) => `${e.fn}(${e.column}) -> [${e.metric}]`).join(", ")
+      }`,
+    ];
+    if (created.length) {
+      notes.push(`new base metrics created: ${[...new Set(created)].join(", ")}`);
+    }
+
+    if (remaining.length === 0) {
+      return {
+        ...assessment, verdict: "daxNative", blockers: [], extracted,
+        rewrittenExpression: expression, notes: [...assessment.notes, ...notes],
+        confidence: "medium",
+      };
+    }
+
+    try {
+      const result = this.translator.translate(rewritten);
+      return {
+        ...assessment, verdict: "mdxTranslated", mdx: result.mdx, blockers: remaining,
+        extracted, rewrittenExpression: expression,
+        notes: [...assessment.notes, ...notes, ...result.notes],
+        confidence: result.confidence === "high" ? "medium" : result.confidence,
+      };
+    } catch {
+      // Extraction did not unblock it; fall back to the unrewritten path.
+      return undefined;
     }
   }
 

@@ -8,5 +8,8 @@ export { DaxSyntaxError, tokenize, type Token } from "./lexer.js";
 export { MdxTranslator, Untranslatable, remediationHint,
   type Confidence, type TranslationResult } from "./mdx.js";
 export { parseDax, type Node } from "./parser.js";
+export { printDax } from "./printer.js";
+export { defaultMetricName, extractAggregations,
+  type ExtractedAggregation, type MetricProvider } from "./extract.js";
 export { EMPTY_RESOLVER, buildResolver,
   type LevelPath, type NameResolver, type ResolverInput } from "./resolver.js";
