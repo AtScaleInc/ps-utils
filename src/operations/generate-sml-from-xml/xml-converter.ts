@@ -88,19 +88,13 @@ export async function convertXmlToSml(
   const rptOmissions: OmissionRecord[] = [];
   const rptUnboundByCube: CubeBindingRecord[] = [];
 
-  // Structural omissions: check for XML features the converter doesn't handle.
+  // Structural omissions: check for XML features the converter doesn't handle. Perspectives
+  // ARE converted (see Phase 7d, per-cube, below) — individual objects a perspective
+  // couldn't resolve are still reported, but as item-level "Perspective" omissions, not a
+  // blanket "not converted at all" structural one.
   const hasRoles        = arr(schemaEl.roles).length > 0 || arr((schemaEl as Record<string, unknown>)["role"]).length > 0;
-  const hasPerspectives = arr(schemaEl.perspectives).length > 0 || arr((schemaEl as Record<string, unknown>).perspective).length > 0;
   const hasTranslations = arr(schemaEl.translations).length > 0 || arr((schemaEl as Record<string, unknown>).translation).length > 0;
 
-  if (hasPerspectives) {
-    rptOmissions.push({
-      category: "Structural",
-      item: "Perspectives",
-      reason: "Perspective definitions are not converted — no equivalent in SML.",
-      recommendation: "Recreate perspectives using row-level security or BI-tool-level views in the consuming application.",
-    });
-  }
   if (hasRoles) {
     rptOmissions.push({
       category: "Structural",
@@ -372,6 +366,20 @@ export async function convertXmlToSml(
     }
   }
 
+  // Schema-level <perspectives><perspective cube-ref="..."> — grouped by the cube they
+  // apply to, so each cube's own conversion phase (below) can resolve just its own
+  // perspectives against maps (attrIdToMetricUniqueName etc.) that only exist per-cube.
+  const perspectivesByCubeId = new Map<string, Record<string, unknown>[]>();
+  for (const perspectivesSec of arr(schemaEl.perspectives)) {
+    for (const perspectiveEl of arr(perspectivesSec.perspective)) {
+      const cubeRef = a(perspectiveEl, "cube-ref");
+      if (!cubeRef) continue;
+      const list = perspectivesByCubeId.get(cubeRef) ?? [];
+      list.push(perspectiveEl as Record<string, unknown>);
+      perspectivesByCubeId.set(cubeRef, list);
+    }
+  }
+
   // Cube-level attributes and data-set-refs
   // Datasets no cube ever references are dead schema artifacts (common in migrated/legacy
   // projects) and should not be emitted — tracked here so Phase 2 can skip them.
@@ -475,10 +483,12 @@ export async function convertXmlToSml(
     }
   }
 
-  // User Defined Aggregates reference dimension attributes by id, with an optional
-  // ref-path for attributes reached through a snowflake/embedded relationship rather than
-  // hosted natively — resolve both mappings once, up front, for all dimensions.
-  const { attrIdToDimName, refIdToHostDimName } = collectAttributeDimensionOwnership(allDims);
+  // User Defined Aggregates (and perspectives, below) reference dimension attributes by
+  // id, with an optional ref-path for attributes reached through a snowflake/embedded
+  // relationship rather than hosted natively — resolve all these mappings once, up front,
+  // for all dimensions.
+  const { attrIdToDimName, refIdToHostDimName, hierarchyIdToRef, primaryAttrIdToLevelRef } =
+    collectAttributeDimensionOwnership(allDims, attrDef);
 
   // A composite key's default name_column (below) needs to know which of its columns are
   // themselves the sole key of some OTHER level elsewhere in the schema — see
@@ -612,6 +622,7 @@ export async function convertXmlToSml(
     cubeDimNames: string[];
     metricNames: Array<{ uniqueName: string; folder?: string }>;
     aggregates: AggregateDef[];
+    perspectives: PerspectiveDef[];
     cubeVisible: boolean;
     includeDefaultDrillthrough: boolean;
     cubeBoundDatasets: string[];
@@ -619,6 +630,7 @@ export async function convertXmlToSml(
 
   for (const cube of cubeEls) {
     const cubeName = a(cube, "name") ?? schemaName;
+    const cubeId = a(cube, "id");
 
     // Classify all dataset refs for this cube as bound or unbound
     const cubeBoundDatasets: string[] = [];
@@ -1127,6 +1139,147 @@ export async function convertXmlToSml(
       }
     }
 
+    // Phase 7d: Perspectives — schema-level <perspectives><perspective cube-ref="..."> whose
+    // cube-ref names this cube.
+    //
+    // Each perspective is a "hide list": a <flat-attributes> section listing individual
+    // secondary attributes/levels/measures to hide (by attribute id, resolved the same way
+    // Phase 8's aggregates resolve one below), a <calculated-members> section listing
+    // calculated members to hide (by id, via attrIdToMetricUniqueName), and a nested
+    // <flat-dimensions><flat-dimension-ref>/<flat-hierarchy-ref>/<flat-level-ref> tree that
+    // hides a whole dimension, a whole hierarchy, or a level (and everything below it) —
+    // matching SML's own dimensions[].hierarchies[].level hide semantics closely enough that
+    // the three nesting depths translate directly. Every <properties><visible> defaults to
+    // true (not hidden) when absent, same convention used for cube/dimension visibility
+    // elsewhere in this file.
+    const perspectives: PerspectiveDef[] = [];
+    for (const perspectiveEl of cubeId ? perspectivesByCubeId.get(cubeId) ?? [] : []) {
+      const perspectiveName = a(perspectiveEl, "name");
+      if (!perspectiveName) continue;
+      const uniqueName = truncateUniqueName(safeName(perspectiveName));
+      const hiddenMetrics: string[] = [];
+      const hiddenDimensions = new Map<string, PerspectiveDimensionDef>();
+
+      const getDimEntry = (dimName: string): PerspectiveDimensionDef => {
+        let entry = hiddenDimensions.get(dimName);
+        if (!entry) {
+          entry = { wholeDimensionHidden: false, hiddenHierarchies: new Map(), hiddenSecondaryAttributes: new Set() };
+          hiddenDimensions.set(dimName, entry);
+        }
+        return entry;
+      };
+
+      // <flat-dimensions><flat-dimension-ref id>[<flat-hierarchy-ref id>[<flat-level-ref
+      // primary-attribute>]]> — a nesting depth of dimension → hierarchy → level, each with
+      // its own visible flag; only the deepest explicitly-hidden node in a branch matters.
+      for (const fdSec of arr(perspectiveEl["flat-dimensions"])) {
+        for (const fdRef of arr((fdSec as Record<string, unknown>)["flat-dimension-ref"])) {
+          const dimId = a(fdRef, "id");
+          const dimName = dimId ? dimIdToName.get(dimId) : undefined;
+          if (!dimName) {
+            rptOmissions.push({
+              category: "Perspective",
+              item: `Dimension ${dimId ?? "?"} in perspective "${perspectiveName}"`,
+              reason: "Could not resolve this flat-dimension-ref id to a known dimension.",
+              recommendation: "Verify the perspective manually and hide the equivalent dimension in the converted model.",
+            });
+            continue;
+          }
+          if (isExplicitlyHidden(fdRef)) {
+            getDimEntry(dimName).wholeDimensionHidden = true;
+            continue;
+          }
+          for (const fhRef of arr((fdRef as Record<string, unknown>)["flat-hierarchy-ref"])) {
+            const hierId = a(fhRef, "id");
+            const hierRef = hierId ? hierarchyIdToRef.get(hierId) : undefined;
+            if (!hierRef) {
+              rptOmissions.push({
+                category: "Perspective",
+                item: `Hierarchy ${hierId ?? "?"} in perspective "${perspectiveName}"`,
+                reason: "Could not resolve this flat-hierarchy-ref id to a known hierarchy.",
+                recommendation: "Verify the perspective manually and hide the equivalent hierarchy in the converted model.",
+              });
+              continue;
+            }
+            if (isExplicitlyHidden(fhRef)) {
+              getDimEntry(dimName).hiddenHierarchies.set(hierRef.hierUniqueName, undefined);
+              continue;
+            }
+            for (const flRef of arr((fhRef as Record<string, unknown>)["flat-level-ref"])) {
+              const primaryAttrId = a(flRef, "primary-attribute");
+              const levelRef = primaryAttrId ? primaryAttrIdToLevelRef.get(primaryAttrId) : undefined;
+              if (!levelRef) {
+                rptOmissions.push({
+                  category: "Perspective",
+                  item: `Level ${primaryAttrId ?? "?"} in perspective "${perspectiveName}"`,
+                  reason: "Could not resolve this flat-level-ref id to a known level.",
+                  recommendation: "Verify the perspective manually and hide the equivalent level in the converted model.",
+                });
+                continue;
+              }
+              if (isExplicitlyHidden(flRef)) {
+                getDimEntry(dimName).hiddenHierarchies.set(levelRef.hierUniqueName, levelRef.levelUniqueName);
+              }
+            }
+          }
+        }
+      }
+
+      // <flat-attributes><flat-attribute-ref id> — hides one measure, level, or secondary
+      // attribute by attribute id, resolved the same way Phase 8's aggregate attributes are.
+      for (const faSec of arr(perspectiveEl["flat-attributes"])) {
+        for (const faRef of arr((faSec as Record<string, unknown>)["flat-attribute-ref"])) {
+          const attrId = a(faRef, "id");
+          if (!attrId || !isExplicitlyHidden(faRef)) continue;
+
+          const metricName = attrIdToMetricUniqueName.get(attrId);
+          if (metricName) {
+            hiddenMetrics.push(metricName);
+            continue;
+          }
+          const levelRef = primaryAttrIdToLevelRef.get(attrId);
+          if (levelRef) {
+            getDimEntry(levelRef.dimName).hiddenHierarchies.set(levelRef.hierUniqueName, levelRef.levelUniqueName);
+            continue;
+          }
+          const kaDef = attrDef.get(attrId);
+          const secondaryDimName = attrIdToDimName.get(attrId);
+          if (kaDef && secondaryDimName) {
+            getDimEntry(secondaryDimName).hiddenSecondaryAttributes.add(truncateUniqueName(safeName(kaDef.name)));
+            continue;
+          }
+          rptOmissions.push({
+            category: "Perspective",
+            item: `Attribute ${attrId} in perspective "${perspectiveName}"`,
+            reason: "Could not resolve this flat-attribute-ref id to a known measure, level, or secondary attribute.",
+            recommendation: "Verify the perspective manually and hide the equivalent object in the converted model.",
+          });
+        }
+      }
+
+      // <calculated-members><calculated-member-ref id> — same hide-list shape as
+      // flat-attribute-ref, but always resolves through attrIdToMetricUniqueName.
+      for (const cmSec of arr(perspectiveEl["calculated-members"])) {
+        for (const cmRef of arr((cmSec as Record<string, unknown>)["calculated-member-ref"])) {
+          const refId = a(cmRef, "id");
+          if (!refId || !isExplicitlyHidden(cmRef)) continue;
+          const metricName = attrIdToMetricUniqueName.get(refId);
+          if (metricName) {
+            hiddenMetrics.push(metricName);
+          } else {
+            rptOmissions.push({
+              category: "Perspective",
+              item: `Calculated member ${refId} in perspective "${perspectiveName}"`,
+              reason: "Could not resolve this calculated-member-ref id to a known calculated member.",
+              recommendation: "Verify the perspective manually and hide the equivalent calculation in the converted model.",
+            });
+          }
+        }
+      }
+
+      perspectives.push({ uniqueName, label: perspectiveName, hiddenMetrics, hiddenDimensions });
+    }
+
     // Phase 8: User Defined Aggregates (hinted aggregate tables)
     //
     // <cube><aggregates><aggregate id name><attributes><attribute-ref id>[<ref-path><ref id>]>
@@ -1354,6 +1507,7 @@ export async function convertXmlToSml(
       cubeDimNames,
       metricNames,
       aggregates,
+      perspectives,
       cubeVisible,
       includeDefaultDrillthrough,
       cubeBoundDatasets,
@@ -1544,7 +1698,22 @@ export async function convertXmlToSml(
       }
     }
 
-    const modelYaml = buildModelYaml(pm.cubeName, pm.relationships, pm.cubeDimNames, pm.metricNames, pm.aggregates, !pm.cubeVisible, pm.includeDefaultDrillthrough);
+    // Same reasoning as the aggregate-attribute filter above: a perspective can only hide a
+    // dimension this cube's model can actually reach.
+    for (const perspective of pm.perspectives) {
+      for (const dimName of [...perspective.hiddenDimensions.keys()]) {
+        if (cubeReferencedDimNames.has(dimName)) continue;
+        rptOmissions.push({
+          category: "Perspective",
+          item: `${perspective.label} → ${dimName}`,
+          reason: `References dimension "${dimName}", which has no relationship, degenerate, or snowflake binding to this cube.`,
+          recommendation: "Verify the perspective manually and hide the equivalent dimension in the converted model.",
+        });
+        perspective.hiddenDimensions.delete(dimName);
+      }
+    }
+
+    const modelYaml = buildModelYaml(pm.cubeName, pm.relationships, pm.cubeDimNames, pm.metricNames, pm.aggregates, pm.perspectives, !pm.cubeVisible, pm.includeDefaultDrillthrough);
     const fname = safeFilename(pm.cubeName);
     output.set(`models/${fname}.yml`, modelYaml);
     logger.log(`  → models/${fname}.yml`);
@@ -1914,6 +2083,21 @@ interface AggregateDef {
   caching?: string;
 }
 
+/** A single dimension's hidden hierarchies/levels/secondary attributes within a perspective. */
+interface PerspectiveDimensionDef {
+  wholeDimensionHidden: boolean;
+  /** hierarchy unique_name -> level unique_name to hide from (undefined = hide the whole hierarchy). */
+  hiddenHierarchies: Map<string, string | undefined>;
+  hiddenSecondaryAttributes: Set<string>;
+}
+
+interface PerspectiveDef {
+  uniqueName: string;
+  label: string;
+  hiddenMetrics: string[];
+  hiddenDimensions: Map<string, PerspectiveDimensionDef>;
+}
+
 interface OmissionRecord {
   category: string;
   item: string;
@@ -2011,6 +2195,12 @@ function a(el: unknown, name: string): string | undefined {
   const obj = el as Record<string, unknown>;
   const attrs = obj.$ as Record<string, string> | undefined;
   return attrs?.[name];
+}
+
+/** Whether an element's own <properties><visible> is explicitly "false" (absent = visible). */
+function isExplicitlyHidden(el: Record<string, unknown>): boolean {
+  const props = first(arr(el.properties)) as Record<string, unknown> | undefined;
+  return (props ? s(first(arr(props.visible))) : undefined) === "false";
 }
 
 /** Extract column name from a <column> element (plain text OR structured form). */
@@ -2685,7 +2875,9 @@ function buildDatasetYaml(
 }
 
 /**
- * Resolves which dimension "owns" each attribute id, for User Defined Aggregate parsing.
+ * Resolves which dimension "owns" each attribute id, for User Defined Aggregate parsing —
+ * plus, for perspective parsing, which hierarchy each hierarchy id names and which
+ * dimension/hierarchy/level each level's primary-attribute id names.
  *
  * An attribute is hosted natively by whichever dimension references it via a plain
  * `<keyed-attribute-ref attribute-id="X">` with no `ref-id` (the same distinction
@@ -2698,16 +2890,42 @@ function buildDatasetYaml(
  */
 function collectAttributeDimensionOwnership(
   allDims: Map<string, Record<string, unknown>>,
-): { attrIdToDimName: Map<string, string>; refIdToHostDimName: Map<string, string> } {
+  attrDef: Map<string, AttrDefEntry>,
+): {
+  attrIdToDimName: Map<string, string>;
+  refIdToHostDimName: Map<string, string>;
+  hierarchyIdToRef: Map<string, { dimName: string; hierUniqueName: string }>;
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>;
+} {
   const attrIdToDimName = new Map<string, string>();
   const refIdToHostDimName = new Map<string, string>();
+  const hierarchyIdToRef = new Map<string, { dimName: string; hierUniqueName: string }>();
+  const primaryAttrIdToLevelRef = new Map<
+    string,
+    { dimName: string; hierUniqueName: string; levelUniqueName: string }
+  >();
 
   for (const [dimName, dimEl] of allDims) {
     for (const hierEl of arr(dimEl.hierarchy)) {
+      const hierId = a(hierEl, "id");
+      const hierUniqueName = truncateUniqueName(safeName(a(hierEl, "name") ?? "Hierarchy"));
+      if (hierId && !hierarchyIdToRef.has(hierId)) {
+        hierarchyIdToRef.set(hierId, { dimName, hierUniqueName });
+      }
       for (const levelEl of arr(hierEl.level)) {
         const primaryAttrUuid = a(levelEl, "primary-attribute");
         if (primaryAttrUuid && !attrIdToDimName.has(primaryAttrUuid)) {
           attrIdToDimName.set(primaryAttrUuid, dimName);
+        }
+        if (primaryAttrUuid && !primaryAttrIdToLevelRef.has(primaryAttrUuid)) {
+          const primaryDef = attrDef.get(primaryAttrUuid);
+          if (primaryDef) {
+            primaryAttrIdToLevelRef.set(primaryAttrUuid, {
+              dimName,
+              hierUniqueName,
+              levelUniqueName: levelUniqueNameFor(primaryDef.name),
+            });
+          }
         }
         for (const kref of arr(levelEl["keyed-attribute-ref"])) {
           const attrId = a(kref, "attribute-id");
@@ -2723,7 +2941,7 @@ function collectAttributeDimensionOwnership(
     }
   }
 
-  return { attrIdToDimName, refIdToHostDimName };
+  return { attrIdToDimName, refIdToHostDimName, hierarchyIdToRef, primaryAttrIdToLevelRef };
 }
 
 /**
@@ -4099,6 +4317,7 @@ function buildModelYaml(
   dimNames: string[],
   metricNames: Array<{ uniqueName: string; folder?: string }>,
   aggregates: AggregateDef[] = [],
+  perspectives: PerspectiveDef[] = [],
   isHidden = false,
   includeDefaultDrillthrough = false,
 ): string {
@@ -4159,6 +4378,34 @@ function buildModelYaml(
       return aggObj;
     });
   }
+
+  const perspectiveObjs = perspectives
+    .map((p) => {
+      const pObj: Record<string, unknown> = { unique_name: p.uniqueName, label: p.label };
+      if (p.hiddenMetrics.length > 0) pObj.metrics = p.hiddenMetrics;
+      const dimensionObjs = [...p.hiddenDimensions.entries()].map(([dimName, hidden]) => {
+        const dimObj: Record<string, unknown> = { name: dimName };
+        if (hidden.wholeDimensionHidden) return dimObj;
+        if (hidden.hiddenHierarchies.size > 0) {
+          dimObj.hierarchies = [...hidden.hiddenHierarchies.entries()].map(([hierName, level]) => {
+            const hierObj: Record<string, unknown> = { name: hierName };
+            if (level) hierObj.level = level;
+            return hierObj;
+          });
+        }
+        if (hidden.hiddenSecondaryAttributes.size > 0) {
+          dimObj.secondary_attributes = [...hidden.hiddenSecondaryAttributes];
+        }
+        return dimObj;
+      });
+      if (dimensionObjs.length > 0) pObj.dimensions = dimensionObjs;
+      return pObj;
+    })
+    // A perspective that resolved to nothing hideable (every referenced object was
+    // unresolvable — see the "Perspective" omissions logged where this is built) has
+    // nothing left to say and would just be a no-op unique_name in the model file.
+    .filter((pObj) => pObj.metrics || pObj.dimensions);
+  if (perspectiveObjs.length > 0) obj.perspectives = perspectiveObjs;
 
   return toYaml(obj);
 }

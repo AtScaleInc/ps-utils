@@ -13,8 +13,8 @@
  *
  * This is a report, not a conversion: nothing here is renamed, deduplicated, or
  * reshaped for SML compatibility. Every object in the XML is listed, including
- * ones the converter deliberately skips (perspectives, roles, translations,
- * named sets, KPIs) so the report is a complete inventory of the source model.
+ * ones the converter deliberately skips (roles, translations, named sets, KPIs)
+ * so the report is a complete inventory of the source model.
  */
 
 import { Parser } from "xml2js";
