@@ -29,7 +29,7 @@ export const CAPABILITIES_CAPTURED = "2026-09-18";
  * models those as base metrics with a `calculation_method`, not as
  * calculations -- see BASE_AGGREGATION_METHODS.
  */
-// <generated:server-dax> -- npm run check:capabilities -- --write
+// <generated:server-dax> -- npm run check:atscale-capabilities -- --write
 export const SUPPORTED_DAX_FUNCTIONS: ReadonlySet<string> = new Set([
   // Aggregation
   "AVERAGEA", "AVERAGEX", "COUNTA", "COUNTAX", "COUNTBLANK", "COUNTROWS",
@@ -62,7 +62,7 @@ export const SUPPORTED_DAX_FUNCTIONS: ReadonlySet<string> = new Set([
 ]);
 // </generated:server-dax>
 
-// <generated:mdx> -- npm run check:capabilities -- --write
+// <generated:mdx> -- npm run check:atscale-capabilities -- --write
 export const SUPPORTED_MDX_FUNCTIONS: ReadonlySet<string> = new Set([
   "ABS", "AGGREGATE", "ALL", "ALLMEMBER", "ALLMEMBEREXCEPT", "ANCESTOR", "AVG",
   "BOTTOMCOUNT", "CASE", "CBOOL", "CDBL", "CDEC", "CEILING", "CHILDREN", "CINT",

@@ -687,22 +687,54 @@ Three hand-transcribed whitelists drive every DAX verdict ps-utils produces. The
 | MDX | same file | [MDX Reference](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/mdx-reference) |
 | Client-side DAX | `src/operations/analyze-powerbi-dax-gaps/client-dax-capabilities.ts` | [Supported Client-Side DAX Language Elements](https://documentation.atscale.com/container/connect-integrate/connect-with-bi-tools/microsoft-power-bi/using-dax-tabular/supported-dax-language-elements) |
 
-To check whether AtScale has changed them, run:
+##### Checking for drift
 
 ```bash
 npm run build                    # the script runs from dist/
-npm run check:capabilities       # report drift, exits 1 if any
-npm run check:capabilities -- --write   # rewrite the lists in place
-npm run check:capabilities -- --json    # machine-readable drift report
+npm run check:atscale-capabilities
 ```
 
-It fetches the container pages, parses the function lists, and diffs them against the sets encoded in the two capability files. With `--write` it rewrites the `// <generated:...>` regions; everything outside those markers is left alone. After a `--write`, bump `captured` in each file, update the count assertion in the matching parity test, add remediation hints for any new function, and run `npm test`.
+This only **reports**. It fetches the two container pages, parses their function lists, diffs them against the sets encoded in the capability files, and prints what changed:
 
-This is a manual check, deliberately — it is not wired into `npm run build` or CI. It needs outbound access to `documentation.atscale.com`; behind an egress allowlist or proxy, that host has to be permitted or the script exits 2 with an explanation.
+```
+Server-side DAX — up to date
 
-If the page structure changes, the script fails loudly rather than reporting a huge fake drift or emptying a whitelist under `--write`: each source declares sentinel functions that must be found, and a parse that misses them is treated as a script bug to fix in `parseFunctionList()`.
+Client-side DAX — DRIFT
+  + added upstream:   CONCATENATEX, VALUES
+  - removed upstream: ISSUBTOTAL
+```
 
-**Expanding a whitelist is not the same as expanding conversion.** Adding a function makes ps-utils *accept* it — the gap analysis and the server-side passthrough classification follow immediately, with no code change. But translating a structurally new function from DAX to MDX still needs a rule in `dax/mdx.ts`: the whitelist says "allowed", the translator has to know *how*. Simple one-to-one mappings are a single entry in that file's `IDENTITY` map; anything that changes shape (as `CALCULATE`, `DATEADD` and `ALL` do) is real work.
+Exit codes: `0` no drift, `1` drift found, `2` the check itself failed (no network, or the page could not be parsed).
+
+##### Applying an update
+
+```bash
+npm run check:atscale-capabilities -- --write
+```
+
+`--write` rewrites the function sets inside the `// <generated:...>` markers. Everything outside those markers — comments, remediation hints, exports — is left alone. It is not the whole job; four steps remain, and the script prints them:
+
+1. Bump `captured` in each file you changed.
+2. Update the count assertion in the matching parity test (`generate-sml-from-tabular-dax.test.ts` for server-side, `analyze-powerbi-dax-gaps.test.ts` for client-side).
+3. Add a `REMEDIATION_HINTS` / `CLIENT_REMEDIATION` entry for any newly *unsupported* function, or the gap report shows a blocker with an empty "what to do instead" cell.
+4. Run `npm test`.
+
+`--json` emits the same drift report as machine-readable output.
+
+##### When it refuses to run
+
+The check is manual on purpose — it is not part of `npm run build` or CI, so an AtScale docs outage or a page redesign can never break a build. Two ways it declines to act:
+
+- **No network.** It needs outbound access to `documentation.atscale.com`. Behind an egress allowlist or proxy that host must be permitted, otherwise it exits 2 with an explanation.
+- **Unrecognised page.** Each source declares sentinel functions that must be found. If a redesign breaks the parser, the alternative would be reporting every function as "removed upstream" and, under `--write`, emptying the whitelist. Instead it exits 2 and asks you to fix `parseFunctionList()` in `src/scripts/check-atscale-capabilities.ts`.
+
+> The parser is unit-tested against fixtures shaped like the Docusaurus pages, but has not yet been run against the live HTML. Give it one run on a networked machine before relying on it; if the selectors are wrong the sentinel check will say so rather than corrupting the lists.
+
+##### What expanding a whitelist does and does not do
+
+Adding a function makes ps-utils **accept** it. The gap analysis and the server-side passthrough classification follow immediately, with no code change — adding `VALUES` and `CONCATENATEX` to the client-side list moves 33 measures out of "needs redesign" on a real report.
+
+Translating a structurally new function from DAX to **MDX** is separate work. A one-to-one mapping is a single entry in the `IDENTITY` map in `dax/mdx.ts`; anything that changes shape — as `CALCULATE`, `DATEADD` and `ALL` do — needs a hand-written rule. The whitelist says "allowed"; the translator has to know *how*.
 
 **Always refresh from the `container` docs.** AtScale publishes an `installer` copy of the same pages, and they are not interchangeable — the installer copy of the client-side page omits `SELECTEDVALUE`, `ALLSELECTED`, `AVERAGEX`, `HASONEVALUE`, `ISINSCOPE`, `DATEADD`, `DISTINCT` and `EXCEPT`. Transcribing it reported 16% of a real customer report as supported instead of 62%, and would have recommended pushing logic into the model that never needed to move.
 
