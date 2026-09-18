@@ -175,6 +175,12 @@ export class MdxTranslator {
       }
       case "binary": return this.emitBinary(node);
       case "call": return this.emitCall(node);
+      case "tableConstructor":
+        throw new Untranslatable(
+          "inline table constructor { ... } used as a value",
+          "MDX has no table literal; express set membership with an Except() or " +
+            "a level filter, or model the list as a dimension attribute",
+        );
     }
   }
 
@@ -183,6 +189,12 @@ export class MdxTranslator {
     if (node.op === "&") {
       this.note("DAX text concatenation '&' emitted as MDX '+'; verify operand types");
       return `(${this.emit(node.left)} + ${this.emit(node.right)})`;
+    }
+    if (node.op === "IN") {
+      throw new Untranslatable(
+        "IN set membership has no direct MDX equivalent",
+        "pin the members with a tuple, or use Except() over the level's members",
+      );
     }
     const mapped = BINARY_OPS[node.op];
     if (!mapped) throw new Untranslatable(`operator '${node.op}' has no MDX equivalent`);

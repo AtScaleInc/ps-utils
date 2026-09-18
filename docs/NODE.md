@@ -89,6 +89,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
   - [`generateSMLFromTabular`](#generatesmlfromtabular)
+  - [`analyzePowerBIDaxGaps`](#analyzepowerbidaxgaps)
   - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
@@ -436,6 +437,35 @@ function generateSMLFromTabular(
 | `currency` | `string` | No | `"USD"` | Currency code used for currency-formatted metrics |
 | `description` | `string` | No | | Optional catalog/model description override |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `analyzePowerBIDaxGaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+Analyses a Power BI `.pbix` and reports which of its report-scoped DAX measures AtScale can evaluate, judging each against both the client-side and server-side DAX surfaces. No connection is required.
+
+```typescript
+import { analyzePowerBIDaxGaps } from "@atscale-ps/ps-utils";
+
+await analyzePowerBIDaxGaps({
+  pbixFile:  "./My Report.pbix",
+  outputDir: "./gap-report",
+});
+```
+
+```typescript
+function analyzePowerBIDaxGaps(
+  params: AnalyzePowerBIDaxGapsParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `pbixFile` | `FileInput` | Yes | | Path to the `.pbix` file, or a `Readable` of its contents |
+| `outputDir` | `DirOutput` | Yes | | Directory where the gap report will be written, or a `Writable` to receive a ZIP |
 
 ---
 

@@ -16,7 +16,7 @@ export class DaxSyntaxError extends Error {
 
 export type TokenKind =
   | "NUMBER" | "STRING" | "TABLE" | "BRACKET" | "IDENT" | "OP"
-  | "(" | ")" | "," | "EOF";
+  | "(" | ")" | "," | "{" | "}" | "EOF";
 
 export type Token = { kind: TokenKind; value: string; pos: number };
 
@@ -107,7 +107,7 @@ export function tokenize(source: string): Token[] {
       continue;
     }
 
-    if (ch === "(" || ch === ")" || ch === ",") {
+    if (ch === "(" || ch === ")" || ch === "," || ch === "{" || ch === "}") {
       tokens.push({ kind: ch, value: ch, pos: i });
       i += 1;
       continue;

@@ -668,6 +668,107 @@ Alternatives: [Tabular Editor](https://tabulareditor.com/) can produce the same 
 
 ---
 
+#### Keeping the AtScale capability lists current
+
+Three hand-transcribed whitelists drive every DAX verdict ps-utils produces. They are snapshots of AtScale documentation, so they go stale when AtScale adds or removes support:
+
+| What | File | Source page |
+| --- | --- | --- |
+| Server-side DAX | `src/operations/generate-sml-from-tabular/dax/capabilities.ts` | [Server-Side DAX Reference](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/server-side-dax) |
+| MDX | same file | [MDX Reference](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/mdx-reference) |
+| Client-side DAX | `src/operations/analyze-powerbi-dax-gaps/client-dax-capabilities.ts` | [Supported Client-Side DAX Language Elements](https://documentation.atscale.com/container/connect-integrate/connect-with-bi-tools/microsoft-power-bi/using-dax-tabular/supported-dax-language-elements) |
+
+##### Checking for drift
+
+```bash
+npm run build                    # the script runs from dist/
+npm run check:atscale-capabilities
+```
+
+This only **reports**. It fetches the two container pages, parses their function lists, diffs them against the sets encoded in the capability files, and prints what changed:
+
+```
+Server-side DAX — up to date
+
+Client-side DAX — DRIFT
+  + added upstream:   CONCATENATEX, VALUES
+  - removed upstream: ISSUBTOTAL
+```
+
+Exit codes: `0` no drift, `1` drift found, `2` the check itself failed (no network, or the page could not be parsed).
+
+##### Applying an update
+
+```bash
+npm run check:atscale-capabilities -- --write
+```
+
+`--write` rewrites the function sets inside the `// <generated:...>` markers. Everything outside those markers — comments, remediation hints, exports — is left alone. It is not the whole job; four steps remain, and the script prints them:
+
+1. Bump `captured` in each file you changed.
+2. Update the count assertion in the matching parity test (`generate-sml-from-tabular-dax.test.ts` for server-side, `analyze-powerbi-dax-gaps.test.ts` for client-side).
+3. Add a `REMEDIATION_HINTS` / `CLIENT_REMEDIATION` entry for any newly *unsupported* function, or the gap report shows a blocker with an empty "what to do instead" cell.
+4. Run `npm test`.
+
+`--json` emits the same drift report as machine-readable output.
+
+##### When it refuses to run
+
+The check is manual on purpose — it is not part of `npm run build` or CI, so an AtScale docs outage or a page redesign can never break a build. Two ways it declines to act:
+
+- **No network.** It needs outbound access to `documentation.atscale.com`. Behind an egress allowlist or proxy that host must be permitted, otherwise it exits 2 with an explanation.
+- **Unrecognised page.** Each source declares sentinel functions that must be found. If a redesign breaks the parser, the alternative would be reporting every function as "removed upstream" and, under `--write`, emptying the whitelist. Instead it exits 2 and asks you to fix `parseFunctionList()` in `src/scripts/check-atscale-capabilities.ts`.
+
+> The parser is unit-tested against fixtures shaped like the Docusaurus pages, but has not yet been run against the live HTML. Give it one run on a networked machine before relying on it; if the selectors are wrong the sentinel check will say so rather than corrupting the lists.
+
+##### What expanding a whitelist does and does not do
+
+Adding a function makes ps-utils **accept** it. The gap analysis and the server-side passthrough classification follow immediately, with no code change — adding `VALUES` and `CONCATENATEX` to the client-side list moves 33 measures out of "needs redesign" on a real report.
+
+Translating a structurally new function from DAX to **MDX** is separate work. A one-to-one mapping is a single entry in the `IDENTITY` map in `dax/mdx.ts`; anything that changes shape — as `CALCULATE`, `DATEADD` and `ALL` do — needs a hand-written rule. The whitelist says "allowed"; the translator has to know *how*.
+
+**Always refresh from the `container` docs.** AtScale publishes an `installer` copy of the same pages, and they are not interchangeable — the installer copy of the client-side page omits `SELECTEDVALUE`, `ALLSELECTED`, `AVERAGEX`, `HASONEVALUE`, `ISINSCOPE`, `DATEADD`, `DISTINCT` and `EXCEPT`. Transcribing it reported 16% of a real customer report as supported instead of 62%, and would have recommended pushing logic into the model that never needed to move.
+
+The parity tests pin each list's size and a sample of entries, so an accidental partial edit fails loudly rather than silently changing every verdict.
+
+### `analyze-powerbi-dax-gaps`
+
+Analyse a Power BI `.pbix` and report which of its report-scoped DAX measures AtScale can evaluate. No connection is required — everything is read from the file.
+
+```bash
+atscale-utils analyze-powerbi-dax-gaps \
+  --pbix-file "./Average Daily Anesthetizing Locations.pbix" \
+  --output-dir ./gap-report
+```
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `--pbix-file` | Yes | Path to the `.pbix` to analyse |
+| `--output-dir` | Yes | Directory for the gap report |
+
+Writes `PBIX_GAP_REPORT.md` (for people), `.json` and `.csv` (for tooling).
+
+**Two surfaces, judged separately.** A measure can be valid in one and broken in the other, so every measure gets both verdicts:
+
+- **Client-side DAX** — the measure stays in the report and Power BI sends it to AtScale over XMLA, judged against AtScale's [supported client-side DAX elements](https://documentation.atscale.com/container/connect-integrate/connect-with-bi-tools/microsoft-power-bi/using-dax-tabular/supported-dax-language-elements).
+- **Server-side DAX** — the measure is pushed down into the AtScale model as a calculation, judged against the [server-side DAX whitelist](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/server-side-dax).
+
+Pairing them turns the report into a work list rather than a pass/fail:
+
+| Recommendation | Meaning |
+| --- | --- |
+| Keep in the report | Supported client-side; no change needed |
+| Move into the AtScale model | Unsupported client-side, but converts as a model calculation |
+| Needs redesign | Supported by neither surface |
+| Could not parse | Malformed DAX in the source report |
+
+The report also lists **caveats** — measures that pass the whitelist but hit a documented limitation a function check alone would miss. The clearest example is `DATEADD`: it is on the client-side list, but on the DAX Tabular dialect it only works with the `DAY` interval, so `MONTH`/`QUARTER`/`YEAR` error out at query time.
+
+**What can and cannot be read.** A `.pbix` is a zip, but what is inside depends on how the report connects:
+
+- **Live connection** reports (pointing at SSAS or AtScale) have no embedded model. Their report-scoped measures sit in `Report/Layout` in plain text, and those are exactly what this operation analyses.
+- **Import / composite** reports carry a `DataModel` part, which is an XPress9-compressed Analysis Services backup and cannot be read without Microsoft's tooling. The operation says so rather than pretending to parse it, and analyses only the report-scoped measures. For the model side, extract it with `pbi-tools` and run `generate-sml-from-tabular` on the result.
+
 ### `generate-sml-from-ssas-multidimensional`
 
 [↑ Table of Contents](#table-of-contents)
