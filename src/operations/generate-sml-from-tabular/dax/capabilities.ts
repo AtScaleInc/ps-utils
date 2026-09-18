@@ -10,7 +10,11 @@
  * Values in BASE_AGGREGATION_METHODS are checked against the vendored SML
  * specification (resources/sml-reference/metric.md), not inferred.
  *
- * Sources (captured 2026-09-18):
+ * Sources (captured 2026-09-18) -- the CONTAINER docs. AtScale publishes an
+ * installer-docs copy of these pages too, and for the equivalent CLIENT-side
+ * page the two disagree substantially (the installer copy omits SELECTEDVALUE,
+ * ALLSELECTED, AVERAGEX and five others). The container docs are the current
+ * ones: refresh from them, and re-run the parity tests below after any refresh.
  *   server-side DAX: https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/server-side-dax
  *   MDX:             https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/mdx-reference
  */
