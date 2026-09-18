@@ -32,6 +32,7 @@
 
 export const CLIENT_DAX_CAPTURED = "2026-09-18";
 
+// <generated:client-dax> -- npm run check:capabilities -- --write
 export const SUPPORTED_CLIENT_DAX: ReadonlySet<string> = new Set([
   // Aggregation
   "AVERAGE", "AVERAGEX", "COUNT", "COUNTX", "DISTINCTCOUNT", "MAX", "MAXX",
@@ -62,6 +63,7 @@ export const SUPPORTED_CLIENT_DAX: ReadonlySet<string> = new Set([
   "CONCATENATE", "EXACT", "FORMAT", "LEFT", "LEN", "LOWER", "MID", "RIGHT",
   "SEARCH", "SUBSTITUTE", "TRIM", "UPPER", "VALUE",
 ]);
+// </generated:client-dax>
 
 export const SUPPORTED_CLIENT_STATEMENTS: ReadonlySet<string> = new Set([
   "DEFINE", "EVALUATE", "MEASURE", "ORDER BY", "VAR",
