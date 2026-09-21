@@ -334,6 +334,16 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.atscale-export-aggregates",
+        "title": "atscale-export-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-import-aggregates",
+        "title": "atscale-import-aggregates",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-ddl-from-atscale",
         "title": "generate-ddl-from-atscale",
         "category": "PS-Utils"
@@ -517,8 +527,7 @@
         },
         {
           "submenu": "psUtils.group.aggregate-management",
-          "group": "1_groups@7",
-          "when": "explorerResourceIsFolder"
+          "group": "1_groups@7"
         },
         {
           "submenu": "psUtils.group.general",
@@ -752,6 +761,16 @@
           "command": "psUtils.op.atscale-list-aggregates",
           "group": "1_ops@1",
           "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.atscale-export-aggregates",
+          "group": "1_ops@2",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.atscale-import-aggregates",
+          "group": "1_ops@3",
+          "when": "!explorerResourceIsFolder"
         }
       ],
       "psUtils.group.general": [

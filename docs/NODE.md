@@ -133,6 +133,8 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`atScaleListAggregates`](#atscalelistaggregates)
   - [`atScaleRebuildAggregates`](#atscalerebuildaggregates)
   - [`atScaleListAggregateBuildHistory`](#atscalelistaggregatebuildhistory)
+  - [`atScaleExportAggregates`](#atscaleexportaggregates)
+  - [`atScaleImportAggregates`](#atscaleimportaggregates)
 - [Web Services](#web-services)
   - [`executeWebServices`](#executewebservices)
 - [Utilities](#utilities)
@@ -1690,8 +1692,8 @@ function atScaleListAggregates(
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `atscaleConnectionName` | `string` | Yes | | AtScale connection entry |
-| `catalogId` | `string` | Yes | | Catalog (project) UUID, from `atScaleListDeployments` |
-| `modelId` | `string` | Yes | | Model (cube) UUID, from `atScaleListDeployments` |
+| `catalogId` | `string` | No | | Catalog (project) UUID, from `atScaleListDeployments`. When omitted (with `modelId`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `modelId` | `string` | No | | Model (cube) UUID, from `atScaleListDeployments`. See `catalogId` for behavior when omitted |
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
 | `limit` | `number` | No | `200` | Maximum number of aggregates to fetch |
 | `outputFile` | `FileOutput` | No | | When provided, also write a CSV export of the aggregates |
@@ -1725,8 +1727,8 @@ function atScaleRebuildAggregates(
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `atscaleConnectionName` | `string` | Yes | | AtScale connection entry |
-| `catalogId` | `string` | Yes | | Catalog (project) UUID, from `atScaleListDeployments` |
-| `modelId` | `string` | Yes | | Model (cube) UUID, from `atScaleListDeployments` |
+| `catalogId` | `string` | No | | Catalog (project) UUID, from `atScaleListDeployments`. When omitted (with `modelId`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `modelId` | `string` | No | | Model (cube) UUID, from `atScaleListDeployments`. See `catalogId` for behavior when omitted |
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
 | `fullBuild` | `boolean` | No | `true` | Trigger a full build when `true`, or an incremental build when `false` |
 | `insecure` | `boolean` | No | | Skip TLS certificate verification |
@@ -1759,10 +1761,84 @@ function atScaleListAggregateBuildHistory(
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `atscaleConnectionName` | `string` | Yes | | AtScale connection entry |
-| `catalogId` | `string` | Yes | | Catalog (project) UUID, from `atScaleListDeployments` |
-| `modelId` | `string` | Yes | | Model (cube) UUID, from `atScaleListDeployments` |
+| `catalogId` | `string` | No | | Catalog (project) UUID, from `atScaleListDeployments`. When omitted (with `modelId`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `modelId` | `string` | No | | Model (cube) UUID, from `atScaleListDeployments`. See `catalogId` for behavior when omitted |
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
 | `limit` | `number` | No | `20` | Maximum number of build batches to fetch |
+| `insecure` | `boolean` | No | | Skip TLS certificate verification |
+
+---
+
+### `atScaleExportAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Exports a catalog/model's System-Defined aggregate definitions to a JSON file, via AtScale's Container API export endpoint. First half of the manual cross-environment aggregate promotion workflow (export from dev, hand-edit, then `atScaleImportAggregates` against prod). User-Defined Aggregates (UDAs) are not included — an AtScale API limitation.
+
+```typescript
+import { atScaleExportAggregates } from "@atscale-ps/ps-utils";
+
+await atScaleExportAggregates({
+  atscaleConnectionName: "ats_dev",
+  catalogId: "39e90725-98d4-5a17-aedd-02568e197062",
+  modelId:   "e20faf8b-9939-5fb2-96ee-07cfec79dc35",
+  outputFile: "aggregates-export.json",
+});
+```
+
+```typescript
+function atScaleExportAggregates(
+  params: AtScaleExportAggregatesParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `atscaleConnectionName` | `string` | Yes | | AtScale connection entry for the source instance |
+| `catalogId` | `string` | No | | Catalog (project) UUID to export from, from `atScaleListDeployments`. When omitted (with `modelId`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `modelId` | `string` | No | | Model (cube) UUID to export from, from `atScaleListDeployments`. See `catalogId` for behavior when omitted |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `outputFile` | `FileOutput` | No | `aggregates-export-<catalog-id>-<model-id>.json` | Path to write the export JSON to, or a `Writable` |
+| `insecure` | `boolean` | No | | Skip TLS certificate verification |
+
+---
+
+### `atScaleImportAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+Imports aggregate definitions (typically produced by `atScaleExportAggregates`, then possibly hand-edited) into a target catalog/model, via AtScale's Container API import endpoint. The identical model must already exist in the target system.
+
+```typescript
+import { atScaleImportAggregates } from "@atscale-ps/ps-utils";
+
+await atScaleImportAggregates({
+  atscaleConnectionName: "ats_prod",
+  inputFile: "aggregates-export.json",
+  catalogId: "8f2a1c3d-98d4-5a17-aedd-02568e197062",
+  modelId:   "1b4e2f7a-9939-5fb2-96ee-07cfec79dc35",
+});
+```
+
+```typescript
+function atScaleImportAggregates(
+  params: AtScaleImportAggregatesParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `atscaleConnectionName` | `string` | Yes | | AtScale connection entry for the target instance |
+| `inputFile` | `FileInput` | Yes | | Path to the export JSON file to import, or a `Readable` of its contents |
+| `catalogId` | `string` | No | | Target catalog (project) UUID to import into, from `atScaleListDeployments`. When omitted (with `modelId`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
+| `modelId` | `string` | No | | Target model (cube) UUID to import into, from `atScaleListDeployments`. See `catalogId` for behavior when omitted |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `connectionRemap` | `string` | No | | Comma-separated list of `originalConnId:newConnId` pairs to remap connections referenced by the imported aggregates |
+| `importDistributionKey` | `boolean` | No | `true` | Import distribution-key hints |
+| `importPartitionKeys` | `boolean` | No | `true` | Import partition-key hints |
+| `importReplication` | `boolean` | No | `true` | Import replication hints |
 | `insecure` | `boolean` | No | | Skip TLS certificate verification |
 
 ---

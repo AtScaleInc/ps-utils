@@ -16,6 +16,7 @@ import {
   type AggregateBuildBatch,
 } from "../../services/AtScaleRestClientService.js";
 import { resolveAtScaleEnv } from "../atscale-env.js";
+import { resolveCatalogAndModel } from "../atscale-aggregate-shared.js";
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -34,13 +35,13 @@ class AtScaleListAggregateBuildHistoryParamsSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "catalog-id";
-      description = "Catalog (project) UUID, from atscale-list-deployments";
-      required    = true;
+      description = "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.";
+      required    = false;
     })(),
     new (class extends StringParameter {
       name        = "model-id";
-      description = "Model (cube) UUID, from atscale-list-deployments";
-      required    = true;
+      description = "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.";
+      required    = false;
     })(),
     new (class extends NumberParameter {
       name         = "limit";
@@ -59,8 +60,8 @@ class AtScaleListAggregateBuildHistoryParamsSet extends ParameterSet {
 type Params = {
   "connection-file": string;
   "atscale-connection-name": string;
-  "catalog-id": string;
-  "model-id": string;
+  "catalog-id"?: string;
+  "model-id"?: string;
   "limit": number;
   "insecure"?: boolean;
 };
@@ -150,20 +151,21 @@ export class AtScaleListAggregateBuildHistoryOperation extends Operation<Params>
     const config = yaml.readFromFile<Record<string, any>>(params["connection-file"]);
     const env    = resolveAtScaleEnv(config, params["atscale-connection-name"], params["insecure"]);
 
-    this.logger.verbose(`[AtScaleListAggregateBuildHistory] Fetching build history for catalog=${params["catalog-id"]} model=${params["model-id"]}`);
+    const { catalogId, modelId } = await resolveCatalogAndModel(atScaleSvc, env, params, this.logger);
+    this.logger.verbose(`[AtScaleListAggregateBuildHistory] Fetching build history for catalog=${catalogId} model=${modelId}`);
 
     const result = await atScaleSvc.getAggregateBuildHistory(env, {
-      catalogId: params["catalog-id"],
-      modelId:   params["model-id"],
-      limit:     params["limit"],
+      catalogId,
+      modelId,
+      limit: params["limit"],
     });
 
     const batches = result.data.map(enrichBatch);
     const summary = buildSummary(batches);
 
     process.stdout.write(JSON.stringify({
-      catalogId: params["catalog-id"],
-      modelId:   params["model-id"],
+      catalogId,
+      modelId,
       total:     result.total,
       batches,
       summary,

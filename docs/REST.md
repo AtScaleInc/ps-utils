@@ -2011,8 +2011,8 @@ curl -X POST http://localhost:4000/rest/clean-unused-sml-objects \
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
 | `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
-| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
-| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `catalogId` | `String` | No | Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
 | `limit` | `Int` | No | Maximum number of aggregates to fetch |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
 
@@ -2023,9 +2023,7 @@ curl -X POST http://localhost:4000/rest/atscale-list-aggregates \
   -H "Content-Type: application/json" \
   -d '{
       "connectionFileContent": "--- # inline YAML/file content",
-      "atscaleConnectionName": "value",
-      "catalogId": "value",
-      "modelId": "value"
+      "atscaleConnectionName": "value"
   }'
 ```
 
@@ -2033,9 +2031,7 @@ curl -X POST http://localhost:4000/rest/atscale-list-aggregates \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/atscale-list-aggregates \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "atscaleConnectionName=value" \
-  -F "catalogId=value" \
-  -F "modelId=value"
+  -F "atscaleConnectionName=value"
 ```
 
 ---
@@ -2054,8 +2050,8 @@ curl -X POST http://localhost:4000/rest/atscale-list-aggregates \
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
 | `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
-| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
-| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `catalogId` | `String` | No | Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
 | `fullBuild` | `Boolean` | No | Trigger a full build when true, or an incremental build when false. Defaults to true. |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
 
@@ -2066,9 +2062,7 @@ curl -X POST http://localhost:4000/rest/atscale-rebuild-aggregates \
   -H "Content-Type: application/json" \
   -d '{
       "connectionFileContent": "--- # inline YAML/file content",
-      "atscaleConnectionName": "value",
-      "catalogId": "value",
-      "modelId": "value"
+      "atscaleConnectionName": "value"
   }'
 ```
 
@@ -2076,9 +2070,7 @@ curl -X POST http://localhost:4000/rest/atscale-rebuild-aggregates \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/atscale-rebuild-aggregates \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "atscaleConnectionName=value" \
-  -F "catalogId=value" \
-  -F "modelId=value"
+  -F "atscaleConnectionName=value"
 ```
 
 ---
@@ -2097,8 +2089,8 @@ curl -X POST http://localhost:4000/rest/atscale-rebuild-aggregates \
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
 | `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
-| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
-| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `catalogId` | `String` | No | Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
 | `limit` | `Int` | No | Maximum number of build batches to fetch |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
 
@@ -2109,9 +2101,7 @@ curl -X POST http://localhost:4000/rest/atscale-list-aggregate-build-history \
   -H "Content-Type: application/json" \
   -d '{
       "connectionFileContent": "--- # inline YAML/file content",
-      "atscaleConnectionName": "value",
-      "catalogId": "value",
-      "modelId": "value"
+      "atscaleConnectionName": "value"
   }'
 ```
 
@@ -2119,9 +2109,94 @@ curl -X POST http://localhost:4000/rest/atscale-list-aggregate-build-history \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/atscale-list-aggregate-build-history \
   -F "connectionFileUpload=@/path/to/file" \
-  -F "atscaleConnectionName=value" \
-  -F "catalogId=value" \
-  -F "modelId=value"
+  -F "atscaleConnectionName=value"
+```
+
+---
+
+### `atscale-export-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Export a catalog/model's aggregate definitions to a JSON file
+
+**Endpoint:** `POST /rest/atscale-export-aggregates`  |  **GraphQL:** `atscaleExportAggregates`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry (the source instance/environment to export from) in the connections file |
+| `catalogId` | `String` | No | Catalog (project) UUID to export from, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID to export from, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/atscale-export-aggregates \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "atscaleConnectionName": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/atscale-export-aggregates \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "atscaleConnectionName=value"
+```
+
+---
+
+### `atscale-import-aggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Import aggregate definitions from an export file into a catalog/model
+
+**Endpoint:** `POST /rest/atscale-import-aggregates`  |  **GraphQL:** `atscaleImportAggregates`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry (the target instance/environment to import into) in the connections file |
+| `inputFile` | `String` | Yes\* | Path to the export JSON file to import (from atscale-export-aggregates, optionally hand-edited) |
+| `inputFileContent` | `String` | No | Raw string content — alternative to `inputFile` |
+| `inputFileUpload` | file field | No | Multipart upload — alternative to `inputFile` |
+| `catalogId` | `String` | No | Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
+| `connectionRemap` | `String` | No | Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates |
+| `importDistributionKey` | `Boolean` | No | Import distribution-key hints. Defaults to true. |
+| `importPartitionKeys` | `Boolean` | No | Import partition-key hints. Defaults to true. |
+| `importReplication` | `Boolean` | No | Import replication hints. Defaults to true. |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/atscale-import-aggregates \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "atscaleConnectionName": "value",
+      "inputFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/atscale-import-aggregates \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "inputFileUpload=@/path/to/file" \
+  -F "atscaleConnectionName=value"
 ```
 
 ---

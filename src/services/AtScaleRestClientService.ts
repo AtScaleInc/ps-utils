@@ -1094,6 +1094,93 @@ class GetAggregateBuildHistoryRequest extends RestRequest<GetAggregateBuildHisto
   }
 }
 
+// ── 13. Export aggregate definitions ──────────────────────────────────────────
+
+export type ExportAggregatesArgs = {
+  catalogId: string;
+  modelId:   string;
+};
+
+/**
+ * Raw export payload — passed straight through, unparsed, since the user is
+ * expected to hand-edit this JSON (e.g. to point at a different target model)
+ * before feeding it back into `importAggregates`. Only System-Defined
+ * aggregates are included; User-Defined Aggregates are not exported.
+ */
+export type ExportAggregatesResult = Record<string, unknown>;
+
+class ExportAggregatesRequest extends RestRequest<ExportAggregatesArgs, ExportAggregatesResult> {
+  readonly method = "GET" as const;
+
+  path(args: ExportAggregatesArgs): string {
+    return `/v1/aggregates/export/catalogs/${encodeURIComponent(args.catalogId)}/models/${encodeURIComponent(args.modelId)}`;
+  }
+
+  parse(data: unknown): ExportAggregatesResult {
+    return (data ?? {}) as ExportAggregatesResult;
+  }
+}
+
+// ── 14. Import aggregate definitions ──────────────────────────────────────────
+
+export type ImportAggregatesArgs = {
+  catalogId: string;
+  modelId:   string;
+  /** The (possibly hand-edited) export payload produced by `exportAggregates`. */
+  body: Record<string, unknown>;
+  /** Defaults to true. */
+  importDistributionKey?: boolean;
+  /** Defaults to true. */
+  importPartitionKeys?: boolean;
+  /** Defaults to true. */
+  importReplication?: boolean;
+  /** Each entry remaps one connection: `originalConnId:newConnId`. */
+  connectionRemap?: string[];
+};
+
+export type ImportAggregatesResult = {
+  atScaleExportVersion?: string;
+  exportCatalogId?: string;
+  importCatalogId?: string;
+  modelId?: string;
+  numberOfDefinitionsImported?: number;
+  numberOfDefinitionsIgnored?: number;
+  aggregates?: {
+    count?: number;
+    values?: Array<{ id: string; newId?: string; imported: boolean; reason?: string }>;
+  };
+  [key: string]: unknown;
+};
+
+class ImportAggregatesRequest extends RestRequest<ImportAggregatesArgs, ImportAggregatesResult> {
+  readonly method = "POST" as const;
+
+  path(args: ImportAggregatesArgs): string {
+    return `/v1/aggregates/import/catalogs/${encodeURIComponent(args.catalogId)}/models/${encodeURIComponent(args.modelId)}`;
+  }
+
+  query(args: ImportAggregatesArgs): Record<string, string> {
+    const q: Record<string, string> = {
+      importDistributionKey: String(args.importDistributionKey ?? true),
+      importPartitionKeys:   String(args.importPartitionKeys ?? true),
+      importReplication:     String(args.importReplication ?? true),
+    };
+    // axios serializes array query values as repeated params (connectionRemap=a&connectionRemap=b).
+    if (args.connectionRemap?.length) {
+      (q as Record<string, unknown>).connectionRemap = args.connectionRemap;
+    }
+    return q;
+  }
+
+  body(args: ImportAggregatesArgs): unknown {
+    return args.body;
+  }
+
+  parse(data: unknown): ImportAggregatesResult {
+    return (data ?? {}) as ImportAggregatesResult;
+  }
+}
+
 // ── AtScaleRestClientService ───────────────────────────────────────────────────
 
 /**
@@ -1116,6 +1203,8 @@ export class AtScaleRestClientService extends ServiceProvider {
   private readonly getAggregatesByCubeRequest       = new GetAggregatesByCubeRequest();
   private readonly rebuildAggregatesRequest         = new RebuildAggregatesRequest();
   private readonly getAggregateBuildHistoryRequest  = new GetAggregateBuildHistoryRequest();
+  private readonly exportAggregatesRequest          = new ExportAggregatesRequest();
+  private readonly importAggregatesRequest          = new ImportAggregatesRequest();
 
   constructor(private readonly restClient: RestClientService) {
     super();
@@ -1252,5 +1341,28 @@ export class AtScaleRestClientService extends ServiceProvider {
     args: GetAggregateBuildHistoryArgs,
   ): Promise<GetAggregateBuildHistoryResult> {
     return this.restClient.execute(this.getAggregateBuildHistoryRequest, args, env);
+  }
+
+  /**
+   * Export a catalog/model's System-Defined aggregate definitions.
+   * Maps to: GET /v1/aggregates/export/catalogs/{catalogId}/models/{modelId}
+   */
+  async exportAggregates(
+    env: AtScaleEnvironment,
+    args: ExportAggregatesArgs,
+  ): Promise<ExportAggregatesResult> {
+    return this.restClient.execute(this.exportAggregatesRequest, args, env);
+  }
+
+  /**
+   * Import aggregate definitions (typically from `exportAggregates`, possibly
+   * hand-edited to target a different catalog/model/connection) into a catalog/model.
+   * Maps to: POST /v1/aggregates/import/catalogs/{catalogId}/models/{modelId}
+   */
+  async importAggregates(
+    env: AtScaleEnvironment,
+    args: ImportAggregatesArgs,
+  ): Promise<ImportAggregatesResult> {
+    return this.restClient.execute(this.importAggregatesRequest, args, env);
   }
 }

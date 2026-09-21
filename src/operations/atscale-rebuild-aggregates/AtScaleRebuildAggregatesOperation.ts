@@ -12,6 +12,7 @@ import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
 import { AtScaleRestClientService } from "../../services/AtScaleRestClientService.js";
 import { resolveAtScaleEnv } from "../atscale-env.js";
+import { resolveCatalogAndModel } from "../atscale-aggregate-shared.js";
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -30,13 +31,13 @@ class AtScaleRebuildAggregatesParamsSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "catalog-id";
-      description = "Catalog (project) UUID, from atscale-list-deployments";
-      required    = true;
+      description = "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.";
+      required    = false;
     })(),
     new (class extends StringParameter {
       name        = "model-id";
-      description = "Model (cube) UUID, from atscale-list-deployments";
-      required    = true;
+      description = "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.";
+      required    = false;
     })(),
     new (class extends BooleanParameter {
       name         = "full-build";
@@ -55,8 +56,8 @@ class AtScaleRebuildAggregatesParamsSet extends ParameterSet {
 type Params = {
   "connection-file": string;
   "atscale-connection-name": string;
-  "catalog-id": string;
-  "model-id": string;
+  "catalog-id"?: string;
+  "model-id"?: string;
   "full-build": boolean;
   "insecure"?: boolean;
 };
@@ -80,18 +81,19 @@ export class AtScaleRebuildAggregatesOperation extends Operation<Params> {
     const config = yaml.readFromFile<Record<string, any>>(params["connection-file"]);
     const env    = resolveAtScaleEnv(config, params["atscale-connection-name"], params["insecure"]);
 
+    const { catalogId, modelId } = await resolveCatalogAndModel(atScaleSvc, env, params, this.logger);
     this.logger.verbose(
       `[AtScaleRebuildAggregates] Triggering ${params["full-build"] ? "full" : "incremental"} rebuild ` +
-      `for catalog=${params["catalog-id"]} model=${params["model-id"]}`,
+      `for catalog=${catalogId} model=${modelId}`,
     );
 
     const result = await atScaleSvc.rebuildAggregates(env, {
-      catalogId:   params["catalog-id"],
-      modelId:     params["model-id"],
+      catalogId,
+      modelId,
       isFullBuild: params["full-build"],
     });
 
-    this.logger.log(`Rebuild triggered for catalog=${params["catalog-id"]} model=${params["model-id"]}`);
+    this.logger.log(`Rebuild triggered for catalog=${catalogId} model=${modelId}`);
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   }
 }

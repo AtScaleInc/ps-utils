@@ -2536,8 +2536,8 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
-| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
-| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `catalogId` | `String` | No | Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
 | `limit` | `Int` | No | Maximum number of aggregates to fetch |
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
@@ -2549,7 +2549,6 @@ mutation {
   atscaleListAggregates(input: {
     connectionFileContent: "--- # file content"
     atscaleConnectionName: "value"
-    catalogId: "value"
   }) {
     success output error
     file { filename content mimeType }
@@ -2562,13 +2561,13 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{atscaleListAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", catalogId: \"value\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{atscaleListAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){atscaleListAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\",catalogId:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleListAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
@@ -2589,8 +2588,8 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
-| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
-| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `catalogId` | `String` | No | Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
 | `fullBuild` | `Boolean` | No | Trigger a full build when true, or an incremental build when false. Defaults to true. |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
 
@@ -2601,7 +2600,6 @@ mutation {
   atscaleRebuildAggregates(input: {
     connectionFileContent: "--- # file content"
     atscaleConnectionName: "value"
-    catalogId: "value"
   }) {
     success output error
     file { filename content mimeType }
@@ -2614,13 +2612,13 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{atscaleRebuildAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", catalogId: \"value\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{atscaleRebuildAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){atscaleRebuildAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\",catalogId:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleRebuildAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
@@ -2641,8 +2639,8 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry in the connections file |
-| `catalogId` | `String` | Yes | Catalog (project) UUID, from atscale-list-deployments |
-| `modelId` | `String` | Yes | Model (cube) UUID, from atscale-list-deployments |
+| `catalogId` | `String` | No | Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
 | `limit` | `Int` | No | Maximum number of build batches to fetch |
 | `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
 
@@ -2653,7 +2651,6 @@ mutation {
   atscaleListAggregateBuildHistory(input: {
     connectionFileContent: "--- # file content"
     atscaleConnectionName: "value"
-    catalogId: "value"
   }) {
     success output error
     file { filename content mimeType }
@@ -2666,13 +2663,124 @@ mutation {
 ```bash
 curl -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"mutation{atscaleListAggregateBuildHistory(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", catalogId: \"value\"}){success output error file{filename content mimeType}}}"}'
+  -d '{"query":"mutation{atscaleListAggregateBuildHistory(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ```bash
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){atscaleListAggregateBuildHistory(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\",catalogId:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleListAggregateBuildHistory(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `atscaleExportAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Export a catalog/model's aggregate definitions to a JSON file
+
+**CLI name:** `atscale-export-aggregates`  |  **REST:** `POST /rest/atscale-export-aggregates`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry (the source instance/environment to export from) in the connections file |
+| `catalogId` | `String` | No | Catalog (project) UUID to export from, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Model (cube) UUID to export from, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  atscaleExportAggregates(input: {
+    connectionFileContent: "--- # file content"
+    atscaleConnectionName: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{atscaleExportAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleExportAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `atscaleImportAggregates`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Import aggregate definitions from an export file into a catalog/model
+
+**CLI name:** `atscale-import-aggregates`  |  **REST:** `POST /rest/atscale-import-aggregates`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | Path to the connections YAML file |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `atscaleConnectionName` | `String` | Yes | Name of the AtScale connection entry (the target instance/environment to import into) in the connections file |
+| `inputFile` | `String` | Yes\* | Path to the export JSON file to import (from atscale-export-aggregates, optionally hand-edited) |
+| `inputFileUpload` | `Upload` | No | Multipart upload — alternative to `inputFile` |
+| `inputFileContent` | `String` | No | Raw string content — alternative to `inputFile` |
+| `catalogId` | `String` | No | Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
+| `modelId` | `String` | No | Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
+| `connectionRemap` | `String` | No | Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates |
+| `importDistributionKey` | `Boolean` | No | Import distribution-key hints. Defaults to true. |
+| `importPartitionKeys` | `Boolean` | No | Import partition-key hints. Defaults to true. |
+| `importReplication` | `Boolean` | No | Import replication hints. Defaults to true. |
+| `insecure` | `Boolean` | No | Skip TLS certificate verification (overrides the connections file value). Defaults to true. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  atscaleImportAggregates(input: {
+    connectionFileContent: "--- # file content"
+    atscaleConnectionName: "value"
+    inputFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{atscaleImportAggregates(input:{connectionFileContent: \"--- # file content\", atscaleConnectionName: \"value\", inputFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){atscaleImportAggregates(input:{connectionFileUpload:$f,atscaleConnectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
@@ -3570,10 +3678,10 @@ input AtscaleListAggregatesInput {
   connectionFileContent: String
   """Name of the AtScale connection entry in the connections file"""
   atscaleConnectionName: String!
-  """Catalog (project) UUID, from atscale-list-deployments"""
-  catalogId: String!
-  """Model (cube) UUID, from atscale-list-deployments"""
-  modelId: String!
+  """Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options."""
+  catalogId: String
+  """Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted."""
+  modelId: String
   """Maximum number of aggregates to fetch"""
   limit: Int
   """When provided, also write a CSV export of the aggregates to this path"""
@@ -3592,10 +3700,10 @@ input AtscaleRebuildAggregatesInput {
   connectionFileContent: String
   """Name of the AtScale connection entry in the connections file"""
   atscaleConnectionName: String!
-  """Catalog (project) UUID, from atscale-list-deployments"""
-  catalogId: String!
-  """Model (cube) UUID, from atscale-list-deployments"""
-  modelId: String!
+  """Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options."""
+  catalogId: String
+  """Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted."""
+  modelId: String
   """Trigger a full build when true, or an incremental build when false. Defaults to true."""
   fullBuild: Boolean
   """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
@@ -3612,12 +3720,64 @@ input AtscaleListAggregateBuildHistoryInput {
   connectionFileContent: String
   """Name of the AtScale connection entry in the connections file"""
   atscaleConnectionName: String!
-  """Catalog (project) UUID, from atscale-list-deployments"""
-  catalogId: String!
-  """Model (cube) UUID, from atscale-list-deployments"""
-  modelId: String!
+  """Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options."""
+  catalogId: String
+  """Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted."""
+  modelId: String
   """Maximum number of build batches to fetch"""
   limit: Int
+  """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
+  insecure: Boolean
+}
+
+"""Export a catalog/model's aggregate definitions to a JSON file"""
+input AtscaleExportAggregatesInput {
+  """Path to the connections YAML file"""
+  connectionFile: String
+  """Uploaded file — alternative to connectionFile"""
+  connectionFileUpload: Upload
+  """Raw file content as a string — alternative to connectionFile"""
+  connectionFileContent: String
+  """Name of the AtScale connection entry (the source instance/environment to export from) in the connections file"""
+  atscaleConnectionName: String!
+  """Catalog (project) UUID to export from, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options."""
+  catalogId: String
+  """Model (cube) UUID to export from, from atscale-list-deployments. See --catalog-id for behavior when omitted."""
+  modelId: String
+  """Path to write the export JSON to. Defaults to aggregates-export-<catalog-id>-<model-id>.json in the current directory."""
+  outputFile: String
+  """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
+  insecure: Boolean
+}
+
+"""Import aggregate definitions from an export file into a catalog/model"""
+input AtscaleImportAggregatesInput {
+  """Path to the connections YAML file"""
+  connectionFile: String
+  """Uploaded file — alternative to connectionFile"""
+  connectionFileUpload: Upload
+  """Raw file content as a string — alternative to connectionFile"""
+  connectionFileContent: String
+  """Name of the AtScale connection entry (the target instance/environment to import into) in the connections file"""
+  atscaleConnectionName: String!
+  """Path to the export JSON file to import (from atscale-export-aggregates, optionally hand-edited)"""
+  inputFile: String
+  """Uploaded file — alternative to inputFile"""
+  inputFileUpload: Upload
+  """Raw file content as a string — alternative to inputFile"""
+  inputFileContent: String
+  """Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options."""
+  catalogId: String
+  """Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted."""
+  modelId: String
+  """Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates"""
+  connectionRemap: String
+  """Import distribution-key hints. Defaults to true."""
+  importDistributionKey: Boolean
+  """Import partition-key hints. Defaults to true."""
+  importPartitionKeys: Boolean
+  """Import replication hints. Defaults to true."""
+  importReplication: Boolean
   """Skip TLS certificate verification (overrides the connections file value). Defaults to true."""
   insecure: Boolean
 }
@@ -3930,6 +4090,10 @@ type Mutation {
   atscaleRebuildAggregates(input: AtscaleRebuildAggregatesInput): OperationResult!
   """List aggregate build history for a catalog/model with a computed summary"""
   atscaleListAggregateBuildHistory(input: AtscaleListAggregateBuildHistoryInput): OperationResult!
+  """Export a catalog/model's aggregate definitions to a JSON file"""
+  atscaleExportAggregates(input: AtscaleExportAggregatesInput): OperationResult!
+  """Import aggregate definitions from an export file into a catalog/model"""
+  atscaleImportAggregates(input: AtscaleImportAggregatesInput): OperationResult!
   """Generate DDL from an AtScale data source by reading table metadata via the REST API"""
   generateDdlFromAtscale(input: GenerateDdlFromAtscaleInput): OperationResult!
   """Connect to a database and extract a statistical fingerprint of the SML model data shape"""
