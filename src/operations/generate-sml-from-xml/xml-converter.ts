@@ -4433,32 +4433,33 @@ function buildModelYaml(
     });
   }
 
-  const perspectiveObjs = perspectives
-    .map((p) => {
-      const pObj: Record<string, unknown> = { unique_name: p.uniqueName, label: p.label };
-      if (p.hiddenMetrics.length > 0) pObj.metrics = p.hiddenMetrics;
-      const dimensionObjs = [...p.hiddenDimensions.entries()].map(([dimName, hidden]) => {
-        const dimObj: Record<string, unknown> = { name: dimName };
-        if (hidden.wholeDimensionHidden) return dimObj;
-        if (hidden.hiddenHierarchies.size > 0) {
-          dimObj.hierarchies = [...hidden.hiddenHierarchies.entries()].map(([hierName, level]) => {
-            const hierObj: Record<string, unknown> = { name: hierName };
-            if (level) hierObj.level = level;
-            return hierObj;
-          });
-        }
-        if (hidden.hiddenSecondaryAttributes.size > 0) {
-          dimObj.secondary_attributes = [...hidden.hiddenSecondaryAttributes];
-        }
-        return dimObj;
-      });
-      if (dimensionObjs.length > 0) pObj.dimensions = dimensionObjs;
-      return pObj;
-    })
-    // A perspective that resolved to nothing hideable (every referenced object was
-    // unresolvable — see the "Perspective" omissions logged where this is built) has
-    // nothing left to say and would just be a no-op unique_name in the model file.
-    .filter((pObj) => pObj.metrics || pObj.dimensions);
+  // Every perspective the schema declared for this cube is emitted, even one whose
+  // hide-list ends up empty — either because it was genuinely defined empty (nothing to
+  // hide is a legitimate perspective, not an error) or because every referenced object
+  // was unresolvable (already reported as its own "Perspective" omission where this is
+  // built). Either way the perspective itself still exists and must keep its identity in
+  // the model file rather than vanishing without a trace.
+  const perspectiveObjs = perspectives.map((p) => {
+    const pObj: Record<string, unknown> = { unique_name: p.uniqueName, label: p.label };
+    if (p.hiddenMetrics.length > 0) pObj.metrics = p.hiddenMetrics;
+    const dimensionObjs = [...p.hiddenDimensions.entries()].map(([dimName, hidden]) => {
+      const dimObj: Record<string, unknown> = { name: dimName };
+      if (hidden.wholeDimensionHidden) return dimObj;
+      if (hidden.hiddenHierarchies.size > 0) {
+        dimObj.hierarchies = [...hidden.hiddenHierarchies.entries()].map(([hierName, level]) => {
+          const hierObj: Record<string, unknown> = { name: hierName };
+          if (level) hierObj.level = level;
+          return hierObj;
+        });
+      }
+      if (hidden.hiddenSecondaryAttributes.size > 0) {
+        dimObj.secondary_attributes = [...hidden.hiddenSecondaryAttributes];
+      }
+      return dimObj;
+    });
+    if (dimensionObjs.length > 0) pObj.dimensions = dimensionObjs;
+    return pObj;
+  });
   if (perspectiveObjs.length > 0) obj.perspectives = perspectiveObjs;
 
   return toYaml(obj);
