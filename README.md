@@ -593,7 +593,20 @@ With optional overrides:
 
 Reads an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) and converts it to AtScale SML YAML files. No database connection is required — the conversion runs entirely from the TMSL model definition, though every table's partition query is parsed to recover its real physical table/column names where possible.
 
-This is a **Pass 1** structural migration: every fact, dimension, and relationship is built, along with metrics for mechanically-unambiguous measures (bare `SUM`/`AVERAGE`/`MIN`/`MAX`/`DISTINCTCOUNT`/`COUNT`/`COUNTROWS`). Complex DAX (`DIVIDE`, `CALCULATE`, `FILTER`, nested measure references, ...) is deliberately left untranslated in `DEFERRED_MEASURES.md` for a follow-up pass — arbitrary DAX-to-MDX translation needs per-measure human judgment.
+This is a **Pass 1** structural migration: every fact, dimension, and relationship is built, along with metrics for mechanically-unambiguous measures (bare `SUM`/`AVERAGE`/`MIN`/`MAX`/`DISTINCTCOUNT`/`COUNT`/`COUNTROWS`).
+
+Measures that are not a bare aggregation are routed to whichever AtScale calculation path will actually publish:
+
+| Outcome | When | Output |
+| --- | --- | --- |
+| Base metric | a bare aggregation over one column | `metrics/` with a `calculation_method` |
+| Server-side DAX, verbatim | every function is on AtScale's [server-side DAX whitelist](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/server-side-dax) | `calculations/` |
+| Translated to MDX | at least one function is off the whitelist, but the whole expression has a faithful [MDX](https://documentation.atscale.com/container/creating-and-sharing-cubes/creating-cubes/modeling-cube-measures/add-calculated-measures/mdx-reference) equivalent | `calculations/` |
+| Deferred | neither | `DEFERRED_MEASURES.md`, with the blocking functions and a remediation hint |
+
+Note that `SUM`, `MIN`, `MAX`, `AVERAGE`, `COUNT` and `DISTINCTCOUNT` are **absent** from AtScale's server-side DAX whitelist — AtScale models those as base metrics with a `calculation_method`, so emitting them inside a calculation parses locally and then fails at publish. The base-metric check therefore runs first.
+
+Translation is deliberately conservative: where a DAX construct has no faithful MDX equivalent the measure is deferred with an explanation rather than converted to something approximate. For example a whole-year `DATEADD` becomes `ParallelPeriod`, but a month-grain `DATEADD` is deferred, because `ParallelPeriod` shifts whole ancestor periods and would be silently wrong.
 
 **Role-play family detection** is the core value-add: SSAS Tabular cannot role-play a dimension, so when the same real-world dimension is needed multiple times under different names (Order Date vs Ship Date), Tabular fakes it by importing the same source object once per role. This operation reads each table's partition query, resolves what object it actually reads from, and groups dimension tables that share the same source object into one consolidated SML dimension, wired to facts via SML `role_play` (when a fact has genuinely multiple distinct FK columns into the group) or an ordinary relationship (a single FK). Each role's original alias-prefix wording (e.g. "Serv", "AHP", "Refer Prov") is recovered by diffing member column aliases, so `role_play` labels reproduce historical naming.
 
@@ -640,7 +653,8 @@ Alternatives: [Tabular Editor](https://tabulareditor.com/) can produce the same 
   metrics/<metric-name>.yml            (one per SIMPLE measure)
   models/<model-name>.yml
   README.md                            (build params, assumptions, generation summary)
-  DEFERRED_MEASURES.md                 (complex DAX left for manual follow-up)
+  calculations/                        (server-side DAX kept verbatim, plus DAX translated to MDX)
+  DEFERRED_MEASURES.md                 (measures with no cube-side equivalent, for manual follow-up)
   CONVERSION_REPORT.md / .json         (complete account of what converted vs. what needs follow-up)
   context/
     <source file>                      (verbatim copy of the TMSL/XMLA export)
@@ -653,7 +667,8 @@ Alternatives: [Tabular Editor](https://tabulareditor.com/) can produce the same 
 **What to expect:** this is a Pass 1 structural migration, not a finished, deploy-ready model — treat the output as a strong first draft, not the final word. After it runs:
 
 1. Read the generated `README.md` first — it documents every assumption the conversion made (role-play families detected, any table whose physical source couldn't be confirmed and had to be guessed from its Tabular display name, cross-database connections it created automatically) and a summary of what got built.
-2. Check `DEFERRED_MEASURES.md` — every DAX measure that wasn't a bare `SUM`/`AVERAGE`/`MIN`/`MAX`/`DISTINCTCOUNT`/`COUNT`/`COUNTROWS` is listed here with its original DAX, untranslated. These need a human to design the equivalent SML metric (`calculations/`) — arbitrary DAX-to-MDX translation isn't something this operation attempts.
+2. Check `DEFERRED_MEASURES.md` — the measures that could be converted neither as server-side DAX nor as MDX are listed here with their original DAX, the functions that blocked them, and where the logic belongs instead (dataset SQL, a `semi_additive` block, a dimension level, ...). These need a human to design the equivalent SML object.
+3. Review `calculations/` — measures translated to MDX record their source DAX in the object's `description`, so a reviewer can check the translation without going back to the TMSL.
 3. Check `CONVERSION_REPORT.md`/`.json` for the full list of issues by severity — `error` means something was dropped and likely needs a fix, `action_needed` means it's usable but a human should confirm something (e.g. a guessed physical table name) before trusting it in production.
 4. Verify any table/column marked "GUESSED" (rather than "CONFIRMED") in `context/ddl.sql` against real DDL or a data profile before deploying — a guess is a naming-convention fallback, not a confirmed physical source.
 5. Run the result through `atscale-list-model-errors` (or your normal SML validation step) before deploying, the same as any other generated SML.
