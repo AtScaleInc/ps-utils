@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   MeasureClassifier, MdxTranslator, Untranslatable, blockingFunctions,
-  buildResolver, defaultMetricName, isIncidentalBlocker, parseDax, printDax, supportsDax,
+  SUPPORTED_DAX_FUNCTIONS, baseAggregationMethod, buildResolver, defaultMetricName,
+  isIncidentalBlocker, parseDax, printDax, supportsDax,
   tokenize,
   type ColumnLookup, type NameResolver,
 } from "../generate-sml-from-tabular/dax/index.js";
@@ -434,5 +435,44 @@ describe("report quality", () => {
     expect(isIncidentalBlocker("DIVIDE")).toBe(true);
     expect(isIncidentalBlocker("GROUPBY")).toBe(false);
     expect(isIncidentalBlocker("FIRSTDATE")).toBe(false);
+  });
+});
+
+describe("server-side capability registry parity", () => {
+  /**
+   * Pins the shape of the transcribed list against the container docs. These
+   * exist because the installer and container copies of AtScale's DAX pages
+   * disagree, and silently transcribing the wrong one changes every verdict
+   * the converter produces.
+   */
+  it("has exactly the documented number of functions", () => {
+    // If this fails, AtScale has changed the server-side DAX page. Refresh
+    // SUPPORTED_DAX_FUNCTIONS in dax/capabilities.ts from the CONTAINER docs
+    // (not the installer copy -- they disagree), bump `captured`, and update
+    // this count. Do not just change the number.
+    expect(
+      SUPPORTED_DAX_FUNCTIONS.size,
+      "server-side DAX function count changed -- refresh capabilities.ts from " +
+        "the container docs, do not just update this number",
+    ).toBe(79);
+  });
+
+  it("includes the functions unique to the container list", () => {
+    for (const fn of ["ALLSELECTED", "SELECTEDVALUE", "AVERAGEX", "ISFILTERED", "ERROR"]) {
+      expect(supportsDax(fn)).toBe(true);
+    }
+  });
+
+  it("excludes the plain aggregations AtScale models as base metrics", () => {
+    for (const fn of ["SUM", "MIN", "MAX", "AVERAGE", "COUNT", "DISTINCTCOUNT"]) {
+      expect(supportsDax(fn)).toBe(false);
+      expect(baseAggregationMethod(fn)).toBeTruthy();
+    }
+  });
+
+  it("excludes functions on neither the server list nor a base aggregation", () => {
+    for (const fn of ["VALUES", "GROUPBY", "FIRSTDATE", "DATESBETWEEN", "IFERROR"]) {
+      expect(supportsDax(fn)).toBe(false);
+    }
   });
 });

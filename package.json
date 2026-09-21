@@ -1,7 +1,7 @@
 {
   "name": "@atscale-ps/ps-utils",
   "version": "3.0.0",
-  "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
+  "description": "AtScale PS utilities \u2014 CLI and library for SML generation, deployment, and analysis",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -43,7 +43,8 @@
     "generate:extension-manifest": "node dist/scripts/generate-extension-manifest.js",
     "generate:extension-contributes": "node dist/scripts/generate-extension-contributes.js",
     "generate:sml-schema": "node dist/scripts/generate-sml-schema.js",
-    "bundle:cli": "node dist/scripts/bundle-cli.js"
+    "bundle:cli": "node dist/scripts/bundle-cli.js",
+    "check:atscale-capabilities": "node dist/scripts/check-atscale-capabilities.js"
   },
   "dependencies": {
     "@types/node": "^25.3.0",

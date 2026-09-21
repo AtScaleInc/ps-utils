@@ -248,6 +248,22 @@ export async function generateSMLFromTabular(p: GenerateSMLFromTabularParams, o:
   } finally { cleanup(); }
 }
 
+export type AnalyzePowerBIDaxGapsParams = {
+  pbixFile: FileInput;
+  outputDir: DirOutput;
+};
+
+export async function analyzePowerBIDaxGaps(p: AnalyzePowerBIDaxGapsParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["pbixFile"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("analyze-powerbi-dax-gaps", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLFromSsasMultidimensionalParams = {
   xmlaFile: FileInput;
   outputDir: DirOutput;

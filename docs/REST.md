@@ -1810,6 +1810,40 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
 
 ---
 
+### `analyze-powerbi-dax-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports
+
+**Endpoint:** `POST /rest/analyze-powerbi-dax-gaps`  |  **GraphQL:** `analyzePowerbiDaxGaps`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `pbixFile` | `String` | Yes\* | Path to the Power BI .pbix file to analyse |
+| `pbixFileContent` | `String` | No | Raw string content — alternative to `pbixFile` |
+| `pbixFileUpload` | file field | No | Multipart upload — alternative to `pbixFile` |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
+  -H "Content-Type: application/json" \
+  -d '{
+      "pbixFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
+  -F "pbixFileUpload=@/path/to/file"
+```
+
+---
+
 ### `generate-sml-from-ssas-multidimensional`
 
 [↑ Table of Contents](#table-of-contents)
