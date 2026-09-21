@@ -954,12 +954,19 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(cmRef, "id");
         const def = refId ? calcMemberDef.get(refId) : undefined;
         if (!def) continue;
-        calcRows.push([code(def.name), cell(def.caption), code(def.expression), cell(def.folder), flag(!def.visible) ? "hidden" : ""]);
+        calcRows.push([
+          code(def.name),
+          cell(def.caption),
+          code(def.expression),
+          cell(def.folder),
+          cell(def.format),
+          flag(!def.visible) ? "hidden" : "",
+        ]);
       }
     }
     if (calcRows.length) {
       o.push("**Calculated members used**", "");
-      o.push(...table(["Name", "Caption", "Formula", "Folder", "Hidden"], calcRows));
+      o.push(...table(["Name", "Caption", "Formula", "Folder", "Format", "Hidden"], calcRows));
     }
 
     // User Defined Aggregates.
