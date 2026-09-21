@@ -209,6 +209,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     0,
   );
   const perspectives = c.models.flatMap((m) => asArray<Raw>(m.raw.perspectives));
+  const aggregateCount = c.models.reduce((n, m) => n + asArray<Raw>(m.raw.aggregates).length, 0);
 
   out.push("## Summary", "");
   out.push(
@@ -223,6 +224,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
         ["Levels", String(levelCount)],
         ["Metrics", String(c.metrics.length)],
         ["Calculations", String(c.calculations.length)],
+        ["User Defined Aggregates", String(aggregateCount)],
         ["Perspectives", String(perspectives.length)],
         ["Other objects", String(c.other.length)],
       ].filter((r) => r[1] !== "0"),
