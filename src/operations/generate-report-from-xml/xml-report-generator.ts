@@ -741,6 +741,12 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       return allBindings.some((other) => other.dataset !== b.dataset && !(b.complete === "true" && other.complete === "true"));
     }
     const joinRows: string[][] = [];
+    // A dimension can expose the same physical key binding through more than one hierarchy
+    // (e.g. three hierarchies that each bottom out at a shared "code"-style level attribute) —
+    // the level loops below visit that binding once per hierarchy, so this tracks
+    // (dataset, columns, dimension, level) combinations already emitted to keep one real join
+    // relationship from producing byte-identical duplicate rows.
+    const seenJoinRowKeys = new Set<string>();
     // Schema-level dimensions this cube actually uses via a key-ref binding (as opposed
     // to an explicit <dimension-ref>) — tracked here so "Dimensions used" below can include
     // them too, instead of only the dimensions the cube lists by name. This is broader than
@@ -761,6 +767,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             if (b.cube !== cubeName) continue;
             schemaJoinedDimNames.add(dimName);
             if (!isRealJoin(b, allBindings)) continue;
+            const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
+            if (seenJoinRowKeys.has(joinRowKey)) continue;
+            seenJoinRowKeys.add(joinRowKey);
             joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), cell(b.rolePlay), b.unique ? "yes" : ""]);
           }
         }
@@ -778,6 +787,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const allBindings = keyMap.get(def.keyUuid) ?? [];
             for (const b of allBindings) {
               if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
+              const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
+              if (seenJoinRowKeys.has(joinRowKey)) continue;
+              seenJoinRowKeys.add(joinRowKey);
               joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), cell(b.rolePlay), b.unique ? "yes" : ""]);
             }
           }
