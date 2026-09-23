@@ -530,8 +530,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   );
   if (attrDef.size) {
     const rows = [...attrDef.values()].map((def) => {
-      const bindings = def.keyUuid ? keyMap.get(def.keyUuid) ?? [] : [];
-      const boundTo = bindings.map((b) => `${b.dataset}.${b.columns.join("+")}`).join(", ");
+      const boundTo = bindingLabel(resolveAttrBindings(def.keyUuid));
       return [
         code(def.name),
         cell(def.caption),
@@ -623,8 +622,52 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     return keyUuid ? keyMap.get(keyUuid) ?? [] : [];
   }
 
+  /**
+   * Pick the single authoritative binding out of a group already known to share one dataset
+   * — a key-ref id redeclared more than once on the SAME dataset (e.g. once in its base
+   * <logical> section, once as a cube-scoped override) is alternative/context-specific
+   * registrations of the same key, not a composite one, so joining their columns together
+   * would fabricate a binding that doesn't exist. Same rule as `pickAuthEntry` in
+   * generate-sml-from-xml's xml-converter.ts: prefer the entry marked complete="true", else
+   * one whose columns verify against its own dataset's known physical columns, else the
+   * first entry.
+   */
+  function pickAuthBinding(bindings: KeyBinding[]): KeyBinding | undefined {
+    const complete = bindings.find((b) => b.complete === "true");
+    if (complete) return complete;
+    const valid = bindings.find((b) => {
+      const knownColumns = datasetByName.get(b.dataset)?.columns;
+      return !!knownColumns?.length && b.columns.every((col) => knownColumns.some((c) => c.name === col));
+    });
+    return valid ?? bindings[0];
+  }
+
+  /**
+   * A key-ref id can legitimately be registered more than once and still deserve every
+   * registration shown, not collapsed to one:
+   *  - under more than one DIFFERENT dataset (e.g. a shared/conformed attribute present in
+   *    both a Claims fact and a Policy fact) — independent, complementary bindings.
+   *  - under the SAME dataset but with different role-played naming (e.g. "{0} - Beginning"
+   *    vs plain, or "Sending {0}" vs "Receiving {0}") — genuinely distinct roles the same
+   *    FK column pattern plays, the same distinction the cube join-table preserves.
+   * Only redeclarations that share BOTH the same dataset AND the same role (including "no
+   * role" on both) are the alternative/override case pickAuthBinding resolves — e.g. one
+   * entry from a dataset's own authoritative <logical> section and a stale/incomplete
+   * cube-scoped override of the same key.
+   */
   function bindingLabel(bindings: KeyBinding[]): string {
-    return bindings.map((b) => `${b.dataset}.${b.columns.join("+")}${b.cube ? ` (${b.cube})` : ""}`).join(", ");
+    const byDatasetAndRole = new Map<string, KeyBinding[]>();
+    for (const b of bindings) {
+      const groupKey = `${b.dataset} ${b.rolePlay ?? ""}`;
+      const group = byDatasetAndRole.get(groupKey) ?? [];
+      group.push(b);
+      byDatasetAndRole.set(groupKey, group);
+    }
+    return [...byDatasetAndRole.values()]
+      .map(pickAuthBinding)
+      .filter((b): b is KeyBinding => !!b)
+      .map((b) => `${b.dataset}.${b.columns.join("+")}${b.cube ? ` (${b.cube})` : ""}`)
+      .join(", ");
   }
 
   function renderDimension(o: string[], name: string, scope: string, dimEl: El): void {
