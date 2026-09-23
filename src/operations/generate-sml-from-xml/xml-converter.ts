@@ -562,7 +562,7 @@ export async function convertXmlToSml(
   // the same physical type) can only be verified with the full picture. See
   // computeEligibleDegenerateDimensions for what disqualifies a dimension.
   const { eligible: eligibleDegenerateDimNames, rejected: rejectedDegenerateDims } =
-    computeEligibleDegenerateDimensions(cubeEls, schemaDims, keyMap, attrDef, datasetIdToName, datasetNameToPhysical, dimIdToName);
+    computeEligibleDegenerateDimensions(cubeEls, schemaDims, keyMap, attrDef, datasetIdToName, datasetNameToPhysical, dimIdToName, primaryAttrIdToLevelRef);
   for (const r of rejectedDegenerateDims) {
     rptOmissions.push({
       category: "Dimension",
@@ -1342,7 +1342,10 @@ export async function convertXmlToSml(
             // referencing it here with the raw spaced name ("Foo Bar") points at an object
             // that doesn't exist, even though the dimension itself legitimately keeps spaces
             // in its own name.
-            const attrOut: AggregateDef["attributes"][number] = { name: levelUniqueNameFor(kaDef.name), dimension: targetDimName };
+            const attrOut: AggregateDef["attributes"][number] = {
+              name: primaryAttrIdToLevelRef.get(refAttrId)?.levelUniqueName ?? levelUniqueNameFor(kaDef.name),
+              dimension: targetDimName,
+            };
 
             const refPathEl = first(arr((attrRef as Record<string, unknown>)["ref-path"])) as
               | Record<string, unknown>
@@ -1392,7 +1395,7 @@ export async function convertXmlToSml(
     const relevantDims = buildRelevantDims(cube, schemaDims, dimIdToName);
 
     // Phase 5: Infer relationships
-    const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName, eligibleDegenerateDimNames);
+    const { relationships, degenerateDimNames, degenerateBindings } = inferRelationships(cube, factDatasetName, keyMap, attrDef, relevantDims, datasetIdToName, eligibleDegenerateDimNames, primaryAttrIdToLevelRef);
 
     // Resolve semi-additive measures deferred from Phase 4: each attribute-ref names a
     // dimension level (via attrDef), which is matched against this cube's own relationships
@@ -1413,7 +1416,7 @@ export async function convertXmlToSml(
         // specific role a semi-additive <attribute-ref>'s <ref-path> names (it's an id-path
         // through existing keyed-attribute-refs, not the ref-naming string relationships are
         // keyed by), so a genuine ambiguity is reported instead of guessed.
-        const levelUniqueName = levelDef ? levelUniqueNameFor(levelDef.name) : undefined;
+        const levelUniqueName = primaryAttrIdToLevelRef.get(refId)?.levelUniqueName ?? (levelDef ? levelUniqueNameFor(levelDef.name) : undefined);
         const matches = levelUniqueName
           ? relationships.filter((r) => r.fromDataset === pm.measureDatasetName && r.toLevel === levelUniqueName)
           : [];
@@ -1593,7 +1596,7 @@ export async function convertXmlToSml(
     // in another.
     const isDegenerate = globalDegenerateDimNames.has(dimName) && !globalRelationshipDimNames.has(dimName);
     const degenerateBindingsForDim = globalDegenerateBindings.get(dimName);
-    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId, hierarchyIdToRef);
+    const { yaml: dimYaml, meta: dimMeta } = buildDimensionYaml(dimEl, dimName, attrDef, keyMap, attrMap, isDegenerate, soleKeyColumns, datasetNameToPhysical, metricalAttrDef, degenerateBindingsForDim, attrIdToDimName, refPathIdToKeyRefId, hierarchyIdToRef, primaryAttrIdToLevelRef);
     const fname = safeFilename(dimName);
     output.set(`dimensions/${fname}.yml`, dimYaml);
     logger.log(`  → dimensions/${fname}.yml`);
@@ -1889,12 +1892,42 @@ export async function convertXmlToSml(
   logger.log(`  → catalog.yml`);
 
   // ---------------------------------------------------------------
+  // Phase 7e: Truncated-identifier report — every source name long enough to need
+  // truncateUniqueName's interior-hash shortening, logged so the original name is always
+  // discoverable without decoding the hash (see truncateUniqueName's own docs for why the
+  // hash lives in the middle of the name rather than at the end).
+  // ---------------------------------------------------------------
+  const rptTruncatedNames: TruncatedNameRecord[] = [];
+  for (const def of attrDef.values()) {
+    const safe = safeName(def.name);
+    if (safe.length > MAX_UNIQUE_NAME_LENGTH) {
+      rptTruncatedNames.push({ category: "Attribute", original: def.name, truncated: truncateUniqueName(safe) });
+    }
+  }
+  for (const def of calcMemberDefs.values()) {
+    const safe = safeName(def.name);
+    if (safe.length > MAX_UNIQUE_NAME_LENGTH) {
+      rptTruncatedNames.push({ category: "Calculated Member", original: def.name, truncated: truncateUniqueName(safe) });
+    }
+  }
+  for (const dimEl of allDims.values()) {
+    for (const hierEl of arr(dimEl.hierarchy)) {
+      const hierName = a(hierEl, "name");
+      const safe = hierName ? safeName(hierName) : "";
+      if (hierName && safe.length > MAX_UNIQUE_NAME_LENGTH) {
+        rptTruncatedNames.push({ category: "Hierarchy", original: hierName, truncated: truncateUniqueName(safe) });
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------
   // Phase 8: Generate README.md conversion report
   // ---------------------------------------------------------------
 
   const readme = buildReadme(
     catalogName, connName, opts.xmlFileName,
     rptDatasets, rptDimensions, rptMetrics, rptModels, rptOmissions, rptUnboundByCube,
+    rptTruncatedNames,
   );
   output.set("README.md", readme);
   logger.log(`  → README.md`);
@@ -2109,6 +2142,14 @@ interface OmissionRecord {
   recommendation: string;
 }
 
+/** An identifier long enough to need truncateUniqueName's interior-hash shortening — logged
+ *  so the original name is always discoverable from the report without decoding the hash. */
+interface TruncatedNameRecord {
+  category: string;
+  original: string;
+  truncated: string;
+}
+
 /** Metadata extracted alongside YAML during dimension conversion. */
 interface DimMeta {
   type: "time" | "standard" | "degenerate";
@@ -2261,12 +2302,22 @@ function safeName(s: string): string {
 /** SML unique_name values must not exceed this length. */
 const MAX_UNIQUE_NAME_LENGTH = 63;
 
-/** Deterministically shorten a unique_name to fit SML's 63-character limit. */
+/**
+ * Deterministically shorten a unique_name to fit SML's 63-character limit, keeping both a
+ * head and a tail fragment around an interior hash rather than cutting the name off after a
+ * fixed prefix. Two long names that only differ near the end (e.g. "...ASSETS_ANY_IND" vs
+ * "...ASSETS_ONLY_IND") previously collapsed to an identical head-only prefix, leaving the
+ * hash suffix as the only (unreadable) distinguishing feature. Splitting the surviving budget
+ * between head and tail keeps the distinguishing text legible in the common case where the
+ * difference between two colliding names is near the front, the back, or both.
+ */
 function truncateUniqueName(name: string): string {
   if (name.length <= MAX_UNIQUE_NAME_LENGTH) return name;
   const hash = createHash("sha1").update(name).digest("hex").slice(0, 8);
-  const keep = MAX_UNIQUE_NAME_LENGTH - hash.length - 1;
-  return `${name.slice(0, keep)}_${hash}`;
+  const budget = MAX_UNIQUE_NAME_LENGTH - hash.length - 2; // 2 underscore separators
+  const headLen = Math.ceil(budget * 0.55);
+  const tailLen = budget - headLen;
+  return `${name.slice(0, headLen)}_${hash}_${name.slice(name.length - tailLen)}`;
 }
 
 /**
@@ -2934,6 +2985,14 @@ function collectAttributeDimensionOwnership(
     // (identically-scoped, identically-ordered) hierarchy disambiguation for this
     // dimension's actual emitted YAML.
     const usedHierUniqueNamesInDim = new Set<string>();
+    // Same idea, for levels: two distinct keyed-attributes in different hierarchies of the
+    // same dimension (e.g. "AF LOB Group" and "AF LOB Group.") can also collide once
+    // punctuation is stripped. Disambiguated here, once per attribute id, so buildDimensionYaml
+    // and findCubeMatchingLevels (which both need to agree on this level's name) look it up
+    // from primaryAttrIdToLevelRef instead of re-deriving it — otherwise the second
+    // colliding attribute's own metadata (format, folder, allowed_calcs_for_dma, ...) has
+    // nowhere of its own to live and gets silently merged into the first's.
+    const usedLevelUniqueNamesInDim = new Set<string>();
     for (const hierEl of arr(dimEl.hierarchy)) {
       const hierId = a(hierEl, "id");
       const rawHierUniqueName = truncateUniqueName(safeName(a(hierEl, "name") ?? "Hierarchy"));
@@ -2955,10 +3014,18 @@ function collectAttributeDimensionOwnership(
         if (primaryAttrUuid && !primaryAttrIdToLevelRef.has(primaryAttrUuid)) {
           const primaryDef = attrDef.get(primaryAttrUuid);
           if (primaryDef) {
+            const rawLevelUniqueName = levelUniqueNameFor(primaryDef.name);
+            let levelUniqueName = rawLevelUniqueName;
+            if (usedLevelUniqueNamesInDim.has(levelUniqueName)) {
+              let n = 2;
+              while (usedLevelUniqueNamesInDim.has(`${rawLevelUniqueName}_${n}`)) n++;
+              levelUniqueName = `${rawLevelUniqueName}_${n}`;
+            }
+            usedLevelUniqueNamesInDim.add(levelUniqueName);
             primaryAttrIdToLevelRef.set(primaryAttrUuid, {
               dimName,
               hierUniqueName,
-              levelUniqueName: levelUniqueNameFor(primaryDef.name),
+              levelUniqueName,
             });
           }
         }
@@ -3199,6 +3266,13 @@ function buildDimensionYaml(
    *  punctuation-only hierarchy-name collision (e.g. "Region" vs "Region.") gets the
    *  exact same "_2" suffix perspectives/aggregates resolve against. */
   hierarchyIdToRef: Map<string, { dimName: string; hierUniqueName: string }>,
+  /** Every keyed-attribute id's dimension + already-disambiguated hierarchy/level unique_name,
+   *  computed once by collectAttributeDimensionOwnership — reused here (and by
+   *  findCubeMatchingLevels / the semi-additive resolution loop) instead of re-deriving the
+   *  level name locally, so a punctuation-only collision between two DIFFERENT keyed-attributes
+   *  (e.g. "AF LOB Group" vs "AF LOB Group.") gets its own distinct name and its own metadata,
+   *  rather than the second one silently merging into the first's level_attributes entry. */
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): { yaml: string; meta: DimMeta } {
   const props = first(arr(dimEl.properties)) as Record<string, unknown> | undefined;
   const dimTypeRaw = props ? s(first(arr(props["dimension-type"]))) : undefined;
@@ -3353,10 +3427,12 @@ function buildDimensionYaml(
       if (!def) continue;
 
       const levelName = def.caption ?? def.name;
-      // Same 63-char SML unique_name constraint applied to secondary attributes (see
-      // truncateUniqueName) — the level's own primary attribute is the most common case
-      // for a long name, since every level has exactly one, and was previously missed.
-      const levelUniqueName = levelUniqueNameFor(def.name);
+      // Reuse collectAttributeDimensionOwnership's already-disambiguated unique_name for this
+      // attribute id (see primaryAttrIdToLevelRef's own declaration for why two different
+      // keyed-attributes can otherwise collide, e.g. "AF LOB Group" vs "AF LOB Group.")
+      // instead of re-deriving it here, so this file and every relationship/semi-additive
+      // block that references this level by id always agree on the same "_2"-suffixed name.
+      const levelUniqueName = primaryAttrIdToLevelRef.get(primaryAttrUuid)?.levelUniqueName ?? levelUniqueNameFor(def.name);
 
       // Resolve key columns for the primary level attribute
       const keyEntries = keyMap.get(def.keyUuid) ?? [];
@@ -3629,7 +3705,7 @@ function buildDimensionYaml(
         }
         if (canonical === signature) continue;
 
-        const dedupeKey = `${originalName} ${signature}`;
+        const dedupeKey = `${originalName} ${signature}`;
         let renamed = renamedNameForSignature.get(dedupeKey);
         if (!renamed) {
           const suffix = (nextSuffix.get(originalName) ?? 1) + 1;
@@ -3972,6 +4048,10 @@ function findCubeMatchingLevels(
   dimEl: Record<string, unknown>,
   attrDef: Map<string, AttrDefEntry>,
   cubeKeyRoles: Map<string, CubeKeyRole[]>,
+  /** Every keyed-attribute id's already-disambiguated level unique_name, computed once by
+   *  collectAttributeDimensionOwnership — see buildDimensionYaml's own parameter of the same
+   *  name for why this must be looked up rather than re-derived with levelUniqueNameFor. */
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): CubeLevelMatch[] {
   const matches: CubeLevelMatch[] = [];
   for (const hierEl of arr(dimEl.hierarchy)) {
@@ -3984,16 +4064,17 @@ function findCubeMatchingLevels(
       // semi_additive.degenerate_dimensions[].level, and the shared-degenerate-bindings
       // lookup key all agree with what the dimension file itself uses; otherwise a level
       // with a name over 63 chars silently fails every one of those lookups.
+      const toLevel = primaryAttrIdToLevelRef.get(pa)?.levelUniqueName ?? levelUniqueNameFor(def?.name ?? pa);
       // These two checks are independent, not either/or: the source XML commonly declares
       // BOTH a plain key-ref and one or more role-played key-refs sharing the same outer
       // <key-ref id> for one dimension level (e.g. a role-played FK alongside the plain/
       // canonical FK to the same lookup table). Checking only the role-play match and
       // stopping there would silently drop the plain relationship for that level.
       if (cubeKeyRoles.has(pa)) {
-        matches.push({ matchId: pa, toLevel: levelUniqueNameFor(def?.name ?? pa), dimKeyUuid: def?.keyUuid });
+        matches.push({ matchId: pa, toLevel, dimKeyUuid: def?.keyUuid });
       }
       if (def?.keyUuid && def.keyUuid !== pa && cubeKeyRoles.has(def.keyUuid)) {
-        matches.push({ matchId: def.keyUuid, toLevel: levelUniqueNameFor(def.name), dimKeyUuid: def.keyUuid });
+        matches.push({ matchId: def.keyUuid, toLevel, dimKeyUuid: def.keyUuid });
       }
     }
   }
@@ -4067,6 +4148,9 @@ function gatherDimensionBindings(
   attrDef: Map<string, AttrDefEntry>,
   relevantDims: Map<string, Record<string, unknown>>,
   datasetIdToName: Map<string, string>,
+  /** Passed straight through to findCubeMatchingLevels — see its own parameter of the same
+   *  name for why the level's unique_name must be looked up here, not re-derived. */
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): DimensionBinding[] {
   // Build the set of ids that appear in this cube's data-set-ref logical sections, mapped to
   // every distinct role that id represents. Role-played FKs (e.g. "Order Date" and "Ship
@@ -4123,7 +4207,7 @@ function gatherDimensionBindings(
     // key-refs — a dimension can have multiple hierarchies each needing their own
     // relationship to the same fact-table FK (e.g. a date dimension's Calendar/Reporting/
     // Custom hierarchies all role-played as both "Order Date" and "Ship Date").
-    const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles);
+    const matches = findCubeMatchingLevels(dimEl, attrDef, cubeKeyRoles, primaryAttrIdToLevelRef);
     if (matches.length === 0) continue; // Dimension not used by this cube
 
     for (const { matchId, toLevel, dimKeyUuid } of matches) {
@@ -4177,13 +4261,16 @@ function computeEligibleDegenerateDimensions(
   datasetIdToName: Map<string, string>,
   datasetNameToPhysical: Map<string, DatasetPhysical>,
   dimIdToName: Map<string, string>,
+  /** Passed straight through to gatherDimensionBindings — see its own parameter of the same
+   *  name for why the level's unique_name must be looked up here, not re-derived. */
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): { eligible: Set<string>; rejected: Array<{ dimName: string; reason: string }> } {
   const byDim = new Map<string, DimensionBinding[]>();
   for (const cube of cubeEls) {
     const factDatasetName = getFactDatasetName(cube, datasetIdToName);
     if (!factDatasetName) continue;
     const relevantDims = buildRelevantDims(cube, schemaDims, dimIdToName);
-    for (const b of gatherDimensionBindings(cube, keyMap, attrDef, relevantDims, datasetIdToName)) {
+    for (const b of gatherDimensionBindings(cube, keyMap, attrDef, relevantDims, datasetIdToName, primaryAttrIdToLevelRef)) {
       const list = byDim.get(b.dimName) ?? [];
       list.push(b);
       byDim.set(b.dimName, list);
@@ -4264,11 +4351,14 @@ function inferRelationships(
   relevantDims: Map<string, Record<string, unknown>>,
   datasetIdToName: Map<string, string>,
   eligibleDegenerateDimNames: Set<string>,
+  /** Passed straight through to gatherDimensionBindings — see its own parameter of the same
+   *  name for why the level's unique_name must be looked up here, not re-derived. */
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): { relationships: RelationshipDef[]; degenerateDimNames: string[]; degenerateBindings: DegenerateBinding[] } {
   if (!factDatasetName) return { relationships: [], degenerateDimNames: [], degenerateBindings: [] };
 
   const byDim = new Map<string, DimensionBinding[]>();
-  for (const b of gatherDimensionBindings(cubeEl, keyMap, attrDef, relevantDims, datasetIdToName)) {
+  for (const b of gatherDimensionBindings(cubeEl, keyMap, attrDef, relevantDims, datasetIdToName, primaryAttrIdToLevelRef)) {
     const list = byDim.get(b.dimName) ?? [];
     list.push(b);
     byDim.set(b.dimName, list);
@@ -4579,6 +4669,7 @@ function buildReadme(
   models: ModelRecord[],
   omissions: OmissionRecord[],
   unboundByCube: CubeBindingRecord[] = [],
+  truncatedNames: TruncatedNameRecord[] = [],
 ): string {
   const date = new Date().toISOString().split("T")[0];
   const measures      = metrics.filter((m) => m.metricType === "measure");
@@ -4616,9 +4707,10 @@ function buildReadme(
     lines.push("  - [Model Dataset Dependencies](#model-dataset-dependencies)");
   }
   lines.push("- [Omissions and Recommendations](#omissions-and-recommendations)");
-  if (unboundByCube.length > 0) lines.push("  - [Unbound Datasets](#unbound-datasets)");
-  if (structural.length > 0)    lines.push("  - [Structural Omissions](#structural-omissions)");
-  if (itemLevel.length > 0)     lines.push("  - [Item-Level Omissions](#item-level-omissions)");
+  if (unboundByCube.length > 0)   lines.push("  - [Unbound Datasets](#unbound-datasets)");
+  if (structural.length > 0)      lines.push("  - [Structural Omissions](#structural-omissions)");
+  if (itemLevel.length > 0)       lines.push("  - [Item-Level Omissions](#item-level-omissions)");
+  if (truncatedNames.length > 0)  lines.push("  - [Truncated Identifiers](#truncated-identifiers)");
   lines.push("", "---", "");
 
   // ── Summary ──
@@ -4636,6 +4728,7 @@ function buildReadme(
   const aggregateTotal = models.reduce((sum, m) => sum + m.aggregateCount, 0);
   if (aggregateTotal > 0) lines.push(`| User Defined Aggregates | ${aggregateTotal} |`);
   lines.push(`| Omissions | ${omissions.length} |`);
+  if (truncatedNames.length > 0) lines.push(`| Truncated Identifiers | ${truncatedNames.length} |`);
   lines.push("", "---", "");
 
   // ── Successful Conversions ──
@@ -4739,7 +4832,7 @@ function buildReadme(
   // ── Omissions ──
   lines.push("## Omissions and Recommendations", "");
 
-  if (omissions.length === 0 && unboundByCube.length === 0) {
+  if (omissions.length === 0 && unboundByCube.length === 0 && truncatedNames.length === 0) {
     lines.push("✅ No omissions detected.", "");
     lines.push("---");
     return lines.join("\n");
@@ -4779,6 +4872,21 @@ function buildReadme(
     lines.push("|----------|------|--------|----------------|");
     for (const o of itemLevel) {
       lines.push(`| ${o.category} | \`${o.item}\` | ${o.reason} | ${o.recommendation} |`);
+    }
+    lines.push("");
+  }
+
+  if (truncatedNames.length > 0) {
+    lines.push("### Truncated Identifiers", "");
+    lines.push(
+      "The following source names exceed SML's 63-character `unique_name` limit and were " +
+      "shortened with an interior hash fragment (kept in the middle of the name, not the end, " +
+      "so both the original head and tail stay legible). The original full name is recorded " +
+      "here so it never has to be recovered by decoding the hash.", "");
+    lines.push("| Category | Original Name | Emitted `unique_name` |");
+    lines.push("|----------|----------------|------------------------|");
+    for (const t of truncatedNames) {
+      lines.push(`| ${t.category} | \`${t.original}\` | \`${t.truncated}\` |`);
     }
     lines.push("");
   }
