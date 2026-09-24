@@ -151,6 +151,12 @@ interface AttrBinding {
 interface AttrDef {
   id: string;
   name: string;
+  /** Label to render in the report — `name` by default, but disambiguated (see the
+   *  pass after Phase 5 below) when two distinct attribute ids only differ by
+   *  whitespace that the `cell()`/`code()` Markdown helpers trim away. Table cells
+   *  must use this instead of `name` directly, or two genuinely different attributes
+   *  print as the identical label. */
+  displayName: string;
   caption?: string;
   keyUuid?: string;
   visible: boolean;
@@ -317,6 +323,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       attrDef.set(id, {
         id,
         name,
+        displayName: name, // recomputed once every keyed-attribute is known — see below
         caption: props ? s(first(arr(props.caption))) : undefined,
         keyUuid: a(ka, "key-ref"),
         visible: props ? s(first(arr(props.visible))) !== "false" : true,
@@ -408,6 +415,31 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     }
   }
   dimEntries.sort((x, y) => x.name.localeCompare(y.name));
+
+  // Disambiguate keyed-attribute display names that collide only because the report's
+  // cell()/code() Markdown helpers trim leading/trailing whitespace. A source schema can
+  // define two distinct <keyed-attribute> ids with names like "Foo" and "Foo " (e.g. to
+  // give a second, otherwise identically-captioned attribute a unique raw name) — left
+  // untrimmed they're already distinguishable, but every table in this report renders
+  // through cell()/code(), so both would print as the exact same label, making two real,
+  // separately-bound levels/joins look like accidental duplicates. Only collisions where
+  // the raw names actually differ get a suffix; two ids that legitimately share one exact
+  // name (e.g. same-named attribute reused verbatim) keep the identical, correct label.
+  {
+    const byRenderedName = new Map<string, AttrDef[]>();
+    for (const def of attrDef.values()) {
+      def.displayName = cell(def.name);
+      const group = byRenderedName.get(def.displayName) ?? [];
+      group.push(def);
+      byRenderedName.set(def.displayName, group);
+    }
+    for (const group of byRenderedName.values()) {
+      if (group.length <= 1 || new Set(group.map((d) => d.name)).size <= 1) continue;
+      group.forEach((def, i) => {
+        if (i > 0) def.displayName = `${def.displayName} (${i + 1})`;
+      });
+    }
+  }
 
   // ── "Used across cubes" tally — now that every cube's data-set-ref logical section
   //    has been ingested (Phase 5), keyMap/attrMap hold every key-ref/attribute-ref
@@ -532,7 +564,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     const rows = [...attrDef.values()].map((def) => {
       const boundTo = bindingLabel(resolveAttrBindings(def.keyUuid));
       return [
-        code(def.name),
+        code(def.displayName),
         cell(def.caption),
         code(boundTo),
         cell(def.folder),
@@ -693,7 +725,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const bindings = resolveAttrBindings(def?.keyUuid);
 
         levelRows.push([
-          code(def?.name ?? primaryId ?? "?"),
+          code(def?.displayName ?? primaryId ?? "?"),
           cell(def?.caption),
           code(bindingLabel(bindings)),
           cell(levelType),
@@ -710,8 +742,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           const kaDef = attrDef.get(attrId);
           const kaBindings = resolveAttrBindings(kaDef?.keyUuid);
           secondaryRows.push([
-            code(def?.name ?? primaryId ?? "?"),
-            code(kaDef?.name ?? attrId),
+            code(def?.displayName ?? primaryId ?? "?"),
+            code(kaDef?.displayName ?? attrId),
             cell(kaDef?.caption),
             role ? cell(role) : refId ? "embedded ref" : "secondary",
             code(bindingLabel(kaBindings)),
@@ -813,7 +845,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
             if (seenJoinRowKeys.has(joinRowKey)) continue;
             seenJoinRowKeys.add(joinRowKey);
-            joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), cell(b.rolePlay), b.unique ? "yes" : ""]);
+            joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.displayName), cell(b.rolePlay), b.unique ? "yes" : ""]);
           }
         }
       }
@@ -833,7 +865,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
               const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
               if (seenJoinRowKeys.has(joinRowKey)) continue;
               seenJoinRowKeys.add(joinRowKey);
-              joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.name), cell(b.rolePlay), b.unique ? "yes" : ""]);
+              joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.displayName), cell(b.rolePlay), b.unique ? "yes" : ""]);
             }
           }
         }
