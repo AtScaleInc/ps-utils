@@ -9,6 +9,8 @@ This collection gives Professional Services consultants, technical reviewers, an
 
 The paths begin with different inputs, then converge on the same governance, validation, deployment, testing, evidence, acceptance, and promotion gates. These runbooks define delivery controls; they do not claim that PS-Utils or AtScale enforces every control automatically.
 
+These two workflows are a building block, not the committee's complete process map. They document one specific, concrete cycle each so a higher-level, cross-workflow view can reference something real rather than starting from a blank page.
+
 ## Workflow selection
 
 ```mermaid
@@ -127,7 +129,7 @@ These are improvement opportunities, not claims that a defect has been confirmed
 | Complete source-to-output reconciliation | **PS-Utils enhancement** | Source and SML report operations exist, and Tabular emits `CONVERSION_REPORT.md`/`.json`, but no common cross-format object-reconciliation manifest covers every converter. | Partially automated | Define a stable source-object manifest and object-level reconciliation schema shared by all converters. |
 | Explicit skipped-calculation reporting | **PS-Utils enhancement** | Tabular writes `DEFERRED_MEASURES.md`; AtScale XML and Multidimensional use different omission/notes reporting. | Partially automated | Standardize reason-coded calculation dispositions across converters. |
 | Calculation-reference and runtime-compatible expression validation | **PS-Utils enhancement** | Local validation checks structural references; converter-emitted expressions still require compilation and runtime testing. | Gap | Add static reference checks and version-aware expression diagnostics. |
-| Generated test-query coverage for calculated metrics | **PS-Utils enhancement** | `generate-queries-from-sml` creates metric-total and level-breakdown queries, but does not provide approved expected results. | Partially automated | Publish coverage metadata and support expected-result associations. |
+| Generated test-query coverage for calculated metrics | **PS-Utils enhancement** | `generate-queries-from-sml` reads only `models/`, `metrics/`, and `dimensions/` — it does not read `calculations/` at all, so SML calculated-metric objects get zero generated queries, not merely unapproved ones. | Gap | Extend query generation to cover `calculations/` objects, or state the exclusion explicitly in the operation's own scope. |
 | Consistent customer evidence-package generation | **PS-Utils enhancement** | Individual operations emit reports and CSV files; no operation assembles the common evidence contract. | Manual today | Define a versioned evidence manifest and package generator. |
 | Requirements-to-SML and metric-to-test traceability automation | **PS-Utils enhancement** | No registered operation manages either traceability matrix. | Manual today | Define machine-readable traceability records and validation rules. |
 | Synthetic-data generation without an existing model | **PS-Utils enhancement** | Data-shape extraction requires an SML directory or model file. | Not supported by the current workflow | Investigate a DDL- or contract-first fingerprint path. |
