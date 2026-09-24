@@ -652,6 +652,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     const meta: string[] = [];
     if (raw.mdx_aggregate_function) meta.push(`- MDX aggregate: \`${cell(raw.mdx_aggregate_function)}\``);
     if (raw.format) meta.push(`- Format: \`${cell(raw.format)}\``);
+    if (raw.folder) meta.push(`- Folder: \`${cell(raw.folder)}\``);
     if (raw.is_hidden) meta.push(`- Hidden`);
     if (meta.length) o.push(...meta, "");
     if (raw.expression) o.push("```", String(raw.expression).trim(), "```", "");
