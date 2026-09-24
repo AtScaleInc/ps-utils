@@ -209,6 +209,7 @@ Net-new development is complete only when:
 - The evidence package is complete.
 - Required review and customer/UAT acceptance occurred.
 - The approved revision is eligible for promotion.
+- A rollback path to the last accepted promoted revision is identified.
 
 Authored or generated YAML alone is not completion.
 
