@@ -1318,7 +1318,13 @@ export async function convertXmlToSml(
             const refAttrId = a(attrRef, "id");
             if (!refAttrId) continue;
 
-            const metricUniqueName = attrIdToMetricUniqueName.get(refAttrId);
+            // An aggregate can name a percentile measure's hidden <quantile-group> attribute
+            // directly (the base-column definition a <quantile-instance> pins a specific
+            // quantile of — see quantileGroupDefs above) rather than the visible metric it
+            // backs. The quantile-group attribute itself was never emitted as its own metric,
+            // so resolve through to its base attribute's metric before giving up.
+            const resolvedAttrId = quantileGroupDefs.get(refAttrId)?.baseAttrId ?? refAttrId;
+            const metricUniqueName = attrIdToMetricUniqueName.get(resolvedAttrId);
             if (metricUniqueName) {
               metrics.push(metricUniqueName);
               continue;
