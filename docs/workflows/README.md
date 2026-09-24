@@ -48,8 +48,9 @@ Choose Workflow 01 only when the source type is supported by a verified converte
 | Validate | Evaluate a revision at a named structural, semantic, compilation, runtime, BI, or acceptance gate. |
 | Deploy | Publish a selected revision into an AtScale environment. |
 | Promote | Advance an approved and identified revision to another controlled environment. |
+| Rollback | A human- or CI-triggered re-run of Deploy (and Promote, if the bad revision already reached a promoted environment) against the last accepted Git SHA, through the same reviewed gates — not an automatic reaction to a Git-side revert. |
 
-These terms are not interchangeable. In particular, a local commit is not proof of synchronization, static validation is not deployment, and deployment is not runtime or business acceptance.
+These terms are not interchangeable. In particular, a local commit is not proof of synchronization, static validation is not deployment, deployment is not runtime or business acceptance, and reverting a Git commit does not by itself change what AtScale has published.
 
 ## Shared governance controls
 
@@ -71,6 +72,8 @@ The following are recommended delivery controls. They are process requirements u
 Git branch protections, required reviews, deployment-environment protections, and customer environment policy may enforce some controls. Current PS-Utils operations can validate SML, publish a catalog, and produce test evidence, but the operations do not prove that a working tree was synchronized or bind every deployment automatically to an approved commit SHA. No evidence in this repository establishes that AtScale automatically synchronizes before every deployment.
 
 Do not infer a default or required behavior for `catalog.deployment.uncommitted.enabled` from these runbooks. If AtScale Source Control appears stale, inconsistent, or to contain phantom state, stop shared validation and promotion. Capture reproducible evidence, including branch, commit, working-tree status, AtScale repository state, timestamps, and logs, then request Product or Support review. Do not clear an index or internal database as a routine corrective step.
+
+The same boundary applies to rollback. `atscale-deploy-catalog` has no Git-awareness — it publishes whatever local directory it is pointed at, regardless of history — so a Git-side revert does not reconcile anything in AtScale by itself. Restoring a known-good published state requires a human or CI job to check out the accepted prior SHA and re-run the same reviewed Deploy (and Promote, if applicable) gates as any other change.
 
 ## Shared validation boundaries
 
@@ -132,6 +135,7 @@ These are improvement opportunities, not claims that a defect has been confirmed
 | Unique development deployment naming | **Best practice or workflow** | `atscale-deploy-catalog` accepts `--project-name`; collision policy is not automated. | Recommended control | Standardize an engagement-safe naming convention. |
 | Synchronization before shared validation | **Best practice or workflow** | Current operations do not verify local/remote Git synchronization. | Recommended control | Add a preflight checklist or non-mutating guard. |
 | Optional synchronization enforcement before deployment | **Product or feature request** | No repository evidence confirms automatic synchronization before every deployment. | Proposal requiring product review | Define desired policy, override model, and audit behavior. |
+| Automatic reconciliation of AtScale environment state after a Git-side rollback | **Product or feature request** | `atscale-deploy-catalog` has no Git-awareness and no drift detection; a revert in Git does not change what is published in AtScale. | Proposal requiring product review | Define whether/how a detected revert should trigger a reviewed re-deployment, and who approves it. |
 | Source Control integrity anomalies | **Product or feature request** | No reproducible case was established during this documentation review. | Potential product defect — reproduction and Product/Support confirmation required | Capture a minimal reproduction and diagnostic bundle; do not clear internal state routinely. |
 | Commit versus synchronize versus validate versus deploy versus promote training | **Training or enablement** | Existing guides use the terms across different procedures; the controls are not interchangeable. | Training opportunity | Build role-based enablement from the approved runbooks. |
 
