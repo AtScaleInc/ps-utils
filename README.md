@@ -259,6 +259,7 @@ The `docs/` directory contains extended reference material:
 | [docs/REST.md](docs/REST.md) | REST API reference for the web services server (auto-generated) |
 | [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
 | [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
+| [docs/workflows/README.md](docs/workflows/README.md) | Professional Services delivery workflows for existing-model conversion and net-new SML development |
 | [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
 | [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
 | [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu, plus SML schema validation and highlighting (install & usage) |
