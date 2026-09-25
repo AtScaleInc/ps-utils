@@ -3233,6 +3233,7 @@ interface LevelAttrDef {
   isUniqueKey?: boolean;
   folder?: string;
   description?: string;
+  format?: string;
   allowedCalcsForDma?: string[];
   /** Set instead of dataset/keyColumns/nameColumn when this level is degenerate on more
    *  than one fact dataset (e.g. a flag column present on both a cube's primary fact table
@@ -3629,6 +3630,7 @@ function buildDimensionYaml(
           isUniqueKey: isUniqueKey || undefined,
           folder: def.folder,
           description: def.description,
+          format: resolveFormat(def.formatString, def.namedFormat),
           allowedCalcsForDma: def.allowedCalcTypes,
           sharedDegenerateColumns,
         });
@@ -3847,6 +3849,7 @@ function buildDimensionYaml(
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
+      if (la.format) laObj.format = la.format;
       if (la.isHiddenFromUi) laObj.is_hidden = true;
       if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
