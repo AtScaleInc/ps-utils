@@ -4512,7 +4512,21 @@ function buildModelYaml(
   }
 
   if (metricNames.length > 0) {
-    obj.metrics = metricNames.map((m) => {
+    // A cube can declare the same measure/calculated-member twice with an identical dedup
+    // signature (e.g. two <attribute> elements that differ only in an inert property) — the
+    // "already emitted, just reference it again" branches above correctly reuse the single
+    // metrics/*.yml file but still append to this cube's own metricNames list once per
+    // declaration, not once per unique_name. Dedup here (case-insensitive, matching this
+    // file's own dedupKey convention) so the model's metrics: list can't contain the same
+    // unique_name twice.
+    const seenMetricUniqueNames = new Set<string>();
+    const dedupedMetricNames = metricNames.filter((m) => {
+      const key = m.uniqueName.toLowerCase();
+      if (seenMetricUniqueNames.has(key)) return false;
+      seenMetricUniqueNames.add(key);
+      return true;
+    });
+    obj.metrics = dedupedMetricNames.map((m) => {
       const mObj: Record<string, unknown> = { unique_name: m.uniqueName };
       if (m.folder) mObj.folder = m.folder;
       return mObj;
