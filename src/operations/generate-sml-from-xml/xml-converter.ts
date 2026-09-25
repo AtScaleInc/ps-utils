@@ -3233,6 +3233,7 @@ interface LevelAttrDef {
   isUniqueKey?: boolean;
   folder?: string;
   description?: string;
+  format?: string;
   allowedCalcsForDma?: string[];
   /** Set instead of dataset/keyColumns/nameColumn when this level is degenerate on more
    *  than one fact dataset (e.g. a flag column present on both a cube's primary fact table
@@ -3316,14 +3317,16 @@ function buildDimensionYaml(
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
   // A level shared across multiple hierarchies (e.g. a "Date" leaf common to a Calendar
-  // Hierarchy and a Fiscal Hierarchy) is the same physical level each time — the
-  // engine rejects it if its attached secondary_attributes/metrics differ between
-  // occurrences ("Level X is duplicated in hierarchies ... but levels below it differ").
-  // The source XML only declares the full keyed-attribute-ref list once, on whichever
-  // hierarchy's <level> element happens to carry it; every other hierarchy's <level> for
-  // the same primary-attribute has none. Emit the attached set once, on the level's first
-  // occurrence, and leave later occurrences bare rather than reproducing the mismatch.
-  const levelExtrasEmitted = new Set<string>();
+  // Hierarchy and a Fiscal Hierarchy) is the same physical level each time, but each
+  // hierarchy's own <level> element can carry its OWN, genuinely different
+  // <keyed-attribute-ref> list — e.g. a Performance Year hierarchy exposing
+  // performance-year-specific secondary attributes on the same shared date level a Calendar
+  // hierarchy exposes calendar-specific ones on. Tracking per exact secondary-attribute/
+  // metric unique_name (not per level as a whole) lets every hierarchy's distinct set through
+  // while still suppressing a literal re-declaration of the same attribute under the same
+  // level — which the engine does reject as a duplicate.
+  const levelSecondaryAttrsEmitted = new Set<string>();
+  const levelMetricsEmitted = new Set<string>();
 
   const hierarchies: Array<{
     uniqueName: string;
@@ -3627,21 +3630,30 @@ function buildDimensionYaml(
           isUniqueKey: isUniqueKey || undefined,
           folder: def.folder,
           description: def.description,
+          format: resolveFormat(def.formatString, def.namedFormat),
           allowedCalcsForDma: def.allowedCalcTypes,
           sharedDegenerateColumns,
         });
       }
 
-      const alreadyEmittedElsewhere = levelExtrasEmitted.has(levelUniqueName);
-      if ((secondaryAttrs.length || levelMetrics.length) && !alreadyEmittedElsewhere) {
-        levelExtrasEmitted.add(levelUniqueName);
-      }
+      const newSecondaryAttrs = secondaryAttrs.filter((sa) => {
+        const key = `${levelUniqueName}::${sa.uniqueName}`;
+        if (levelSecondaryAttrsEmitted.has(key)) return false;
+        levelSecondaryAttrsEmitted.add(key);
+        return true;
+      });
+      const newLevelMetrics = levelMetrics.filter((lm) => {
+        const key = `${levelUniqueName}::${lm.uniqueName}`;
+        if (levelMetricsEmitted.has(key)) return false;
+        levelMetricsEmitted.add(key);
+        return true;
+      });
 
       // The engine disallows secondary attributes entirely on a level that uses
       // shared_degenerate_columns (multi-dataset) — report the drop as an omission rather
       // than silently emitting an invalid combination.
-      if (sharedDegenerateColumns && !alreadyEmittedElsewhere) {
-        for (const sa of secondaryAttrs) {
+      if (sharedDegenerateColumns) {
+        for (const sa of newSecondaryAttrs) {
           metaDroppedSecondaryAttrsForSharedDegenerate.push({ level: levelUniqueName, secondaryAttrName: sa.uniqueName });
         }
       }
@@ -3650,9 +3662,8 @@ function buildDimensionYaml(
         uniqueName: levelUniqueName,
         timeUnit,
         isHidden: isHidden || undefined,
-        secondaryAttributes:
-          !alreadyEmittedElsewhere && !sharedDegenerateColumns && secondaryAttrs.length ? secondaryAttrs : undefined,
-        metrics: !alreadyEmittedElsewhere && levelMetrics.length ? levelMetrics : undefined,
+        secondaryAttributes: !sharedDegenerateColumns && newSecondaryAttrs.length ? newSecondaryAttrs : undefined,
+        metrics: newLevelMetrics.length ? newLevelMetrics : undefined,
       });
     }
 
@@ -3838,6 +3849,7 @@ function buildDimensionYaml(
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
+      if (la.format) laObj.format = la.format;
       if (la.isHiddenFromUi) laObj.is_hidden = true;
       if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
@@ -4503,7 +4515,21 @@ function buildModelYaml(
   }
 
   if (metricNames.length > 0) {
-    obj.metrics = metricNames.map((m) => {
+    // A cube can declare the same measure/calculated-member twice with an identical dedup
+    // signature (e.g. two <attribute> elements that differ only in an inert property) — the
+    // "already emitted, just reference it again" branches above correctly reuse the single
+    // metrics/*.yml file but still append to this cube's own metricNames list once per
+    // declaration, not once per unique_name. Dedup here (case-insensitive, matching this
+    // file's own dedupKey convention) so the model's metrics: list can't contain the same
+    // unique_name twice.
+    const seenMetricUniqueNames = new Set<string>();
+    const dedupedMetricNames = metricNames.filter((m) => {
+      const key = m.uniqueName.toLowerCase();
+      if (seenMetricUniqueNames.has(key)) return false;
+      seenMetricUniqueNames.add(key);
+      return true;
+    });
+    obj.metrics = dedupedMetricNames.map((m) => {
       const mObj: Record<string, unknown> = { unique_name: m.uniqueName };
       if (m.folder) mObj.folder = m.folder;
       return mObj;
