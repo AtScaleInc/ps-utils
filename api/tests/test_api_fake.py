@@ -86,7 +86,8 @@ def test_aggregate_duplicate_skipped_then_replaced(client):
 
     job = client.post("/api/promote/aggregates", json={
         "sourceHostId": "qa-main", "targetHostId": "prod-east", "aggregates": ["agg_sales_by_product_cat"]}).get_json()
-    assert wait(client, job)["result"]["promoted"] == ["agg_sales_by_product_cat"]
+    # AtScale keeps the existing (blocked) definition, so the target copy is reactivated.
+    assert wait(client, job)["result"]["promoted"] == ["agg_sales_by_product_cat (reactivated)"]
     aggs = client.get("/api/hosts/prod-east/aggregates?catalogId=sales_catalog&modelId=Internet%20Sales").get_json()["aggregates"]
     replaced = [a for a in aggs if a["name"] == "agg_sales_by_product_cat"]
     assert len(replaced) == 1 and replaced[0]["status"] == "Built" and replaced[0]["active"]

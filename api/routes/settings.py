@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
 
+import threading
+
 import cache
 from atscale import github
 from atscale.backend import now_iso
@@ -67,6 +69,9 @@ def test_host(host_id: str):
     except Exception as e:  # noqa: BLE001 - any failure means "failed"
         status, error = "failed", str(e)
     raw = registry.store().update_host(host_id, {"status": status, "lastChecked": now_iso()})
+    if status == "connected":
+        # Capture this host's ids (catalog/model, key names, aggregate instances) in the background.
+        threading.Thread(target=registry.capture_host, args=(host_id,), daemon=True).start()
     return jsonify({**public_host(raw), "error": error})
 
 

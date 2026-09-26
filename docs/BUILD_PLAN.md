@@ -51,17 +51,31 @@ rows, no total), hence the internal definition list above.
   branch). Deploy is branch-based, so the target gets that branch's *head*.
 - **Deploy/undeploy are per catalog** (AtScale has no per-model undeploy).
   Unlink = undeploy (drops aggregates) + detach repo; Undeploy keeps the link.
-- **Aggregate identity across hosts** = fingerprint of the export `planJson`
-  columns (key ids, attribute names, aggregation functions; aliases and model
-  ids ignored). Definitions not in the export (no active build) fall back to
-  the attribute signature and are not promotable ("Not built · can't export").
-  "Replaces inactive" deletes the blocked target copy, then imports.
+- **Ids never match across hosts** (agreed 2026-09-26). Each host that deploys
+  the same SML generates its own catalog / model / key / reference ids, so
+  everything is matched by *name*: models by deployed name (then the target's
+  ids are looked up), aggregates by a plan fingerprint whose key and reference
+  ids are first translated to names. The per-host id <-> name map comes from
+  `GET /v1/catalogs/{id}/export` (`promote/idmap.py`: keyed-attribute name,
+  sort-key attribute, dataset column, or `ref:<naming>:<attribute>` for
+  role-play/join refs) and is captured on Test connection and at start-up into
+  the working folder (`workspace/cache/host/<id>/ids/<catalog>.json`).
+- **Aggregate promotion rules (agreed 2026-09-26):** system-defined, `active`
+  and exportable on the source; the same model (by name) deployed on the
+  target; no active duplicate there. Before import the export is remapped
+  (`promote/remap.py`): catalog/model ids (incl. inside planJson) -> target's,
+  plan key/reference ids -> target ids with the same names (aggregate skipped,
+  names listed, if the target model lacks one), instance ids -> the target
+  counterpart's instance (none for new ones),
+  connectionId -> the target model's connection (`/wapi/p/catalog/{id}`
+  connection_ids; skipped if ambiguous). An inactive target copy that AtScale
+  keeps on import is reactivated (unblock) - nothing is deleted.
+- **Promoting to Prod is always confirmed** (no setting to turn it off).
 - Invalid aggregates show AtScale's reason (e.g. connection removed).
 
 ## Open items
 
 1. Run the write paths once on a dev host: block/unblock, build, deploy,
    undeploy, import (needs a second host for promotion).
-2. Import needs the identical model id on the target; ids are UUIDv5 from SML,
-   so the same catalog deployed from Git matches. A differently-named catalog
-   is skipped with a reason.
+2. Only one real host exists so far (dev-docker and qa-host-2 are the same
+   server); verify remap + import across two real hosts once available.

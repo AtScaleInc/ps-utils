@@ -22,6 +22,7 @@ REASON = {
     "dup": "Deactivate on target",
     "uda": "System aggs only",
     "noexp": "Build it first",
+    "srcoff": "Reactivate on source",
 }
 
 
@@ -56,6 +57,9 @@ def _same_agg(a: dict[str, Any], b: dict[str, Any]) -> bool:
 def agg_state(src: dict[str, Any], targets: list[dict[str, Any]], target_models: set[str]) -> dict[str, Any]:
     if src.get("type") == "USER":
         return {"state": "uda", "label": "User-defined · not promotable"}
+    # Promotion rules: system-defined, active on the source, and exportable.
+    if src.get("active") is False:
+        return {"state": "srcoff", "label": "Inactive on source"}
     if src.get("exportable") is False:
         # Export carries only definitions with a built instance.
         return {"state": "noexp", "label": "Not built · can't export"}

@@ -19,6 +19,8 @@ from typing import Any, Protocol
 
 from envs.store import Store, profile_to_connection
 
+from promote.idmap import id_names, translate_plan
+
 from . import github
 from .client import AtScaleApiError, AtScaleClient, AtScaleEnvironment
 
@@ -40,11 +42,13 @@ class Backend(Protocol):
     def compare(self, src: dict[str, Any], tgt: dict[str, Any]) -> str | None: ...
     def agg_models(self) -> list[dict[str, Any]]: ...
     def list_aggregates(self, catalog_id: str, model_id: str) -> list[dict[str, Any]]: ...
+    def catalog_ids(self, catalog_id: str) -> dict[str, str]: ...
     def set_active(self, catalog_id: str, model_id: str, agg_ids: list[str], active: bool) -> list[dict[str, Any]]: ...
     def build(self, catalog_id: str, model_id: str, full: bool) -> dict[str, Any]: ...
     def build_history(self, catalog_id: str, model_id: str) -> list[dict[str, Any]]: ...
     def export_aggregates(self, catalog_id: str, model_id: str, agg_ids: list[str]) -> Any: ...
-    def import_aggregates(self, catalog_id: str, model_id: str, payload: Any, replace_ids: list[str]) -> dict[str, Any]: ...
+    def import_aggregates(self, catalog_id: str, model_id: str, payload: Any) -> dict[str, Any]: ...
+    def model_connections(self, catalog_id: str, model_id: str) -> list[str]: ...
 
 
 def now_iso() -> str:
@@ -81,15 +85,18 @@ def _strip(o: Any) -> Any:
     return o
 
 
-def plan_fingerprint(plan: Any) -> str | None:
-    """Identity of an aggregate = the objects its logical plan selects (keys by
-    id, attributes/measures by name, each with its aggregation function), from
-    the export payload's `planJson`. Order-insensitive."""
+def plan_fingerprint(plan: Any, names: dict[str, str] | None = None) -> str | None:
+    """Identity of an aggregate = the objects its logical plan selects, each with
+    its aggregation function, from the export payload's `planJson`. Ids differ
+    per host, so key / reference ids are first replaced by their names
+    (`names`, from promote/idmap.id_names). Order-insensitive."""
     if isinstance(plan, str):
         try:
             plan = json.loads(plan)
         except ValueError:
             return None
+    if names:
+        plan = translate_plan(plan, names)
     columns = ((plan or {}).get("selection") or {}).get("columns")
     if not columns:
         return None
@@ -399,11 +406,18 @@ class RealBackend:
             exported = self.api.export_aggregates(catalog_id, model_id)
         except AtScaleApiError:
             exported = {}
-        keys = {v.get("id"): plan_fingerprint(v.get("planJson")) for v in (exported.get("aggregates") or {}).get("values", [])}
+        names = self.catalog_ids(catalog_id)
+        keys = {v.get("id"): plan_fingerprint(v.get("planJson"), names) for v in (exported.get("aggregates") or {}).get("values", [])}
         for r in rows:
             r["planKey"] = keys.get(r["id"])
             r["exportable"] = r["planKey"] is not None
         return rows
+
+    def catalog_ids(self, catalog_id: str) -> dict[str, str]:
+        """This host's id -> name map for the catalog's keys and references
+        (GET /v1/catalogs/{id}/export, Container API "export-catalog-representation")."""
+        rep = self.api._dispatch("GET", f"/v1/catalogs/{catalog_id}/export", headers={"Accept": "application/json"}, timeout=60).json()
+        return id_names(rep)
 
     def set_active(self, catalog_id: str, model_id: str, agg_ids: list[str], active: bool) -> list[dict[str, Any]]:
         results = []
@@ -428,17 +442,14 @@ class RealBackend:
         values = [v for v in (payload.get("aggregates") or {}).get("values", []) if v.get("id") in set(agg_ids)]
         return {**payload, "aggregates": {"count": len(values), "values": values}}
 
-    def import_aggregates(self, catalog_id: str, model_id: str, payload: Any, replace_ids: list[str]) -> dict[str, Any]:
-        if payload.get("exportModelId") != model_id:
-            # Import requires the identical model id on the target (Container API docs).
-            raise ValueError(
-                f"Target model id {model_id} differs from the source ({payload.get('exportModelId')}); "
-                "deploy the same catalog from Git on the target first"
-            )
-        for agg_id in replace_ids:
-            # "Replaces inactive": drop the blocked target copy so the import lands fresh.
-            self.api.delete_aggregate(agg_id)
+    def import_aggregates(self, catalog_id: str, model_id: str, payload: Any) -> dict[str, Any]:
+        """`payload` must already be remapped to this host's ids (promote/remap.py)."""
         return self.api.import_aggregates(catalog_id, model_id, payload)
+
+    def model_connections(self, catalog_id: str, model_id: str) -> list[str]:
+        cat = self.api.get_catalog(catalog_id)
+        m = next((m for m in cat.get("models") or [] if m.get("id") == model_id), {})
+        return list(m.get("connection_ids") or m.get("connectionIds") or [])
 
 
 def _linked_row(repo: dict[str, Any], model: str | None, branch: str | None) -> dict[str, Any]:

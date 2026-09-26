@@ -273,6 +273,11 @@ class AtScaleClient:
             body["gitUsername"] = git_username
         return self._dispatch("POST", "/v1/catalogs/deploy", json=body, timeout=300).json()
 
+    def get_catalog(self, catalog_id: str) -> dict[str, Any]:
+        """GET /wapi/p/catalog/{id} -> {id, name, version, models[{id, connection_ids}], publishedAt}
+        (SML-develop api-sdk CatalogApi.ts :: catalogControllerGetOne)."""
+        return self._dispatch("GET", f"/wapi/p/catalog/{catalog_id}", timeout=30).json()
+
     def undeploy_catalog(self, catalog_id: str) -> Any:
         """DELETE /wapi/p/catalog/{catalogId} - what Design Center's "Undeploy"
         calls (SML-develop api-sdk CatalogApi.ts :: catalogControllerUndeploy,

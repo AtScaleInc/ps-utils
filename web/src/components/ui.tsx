@@ -17,7 +17,7 @@ const STAT: Record<string, [string, string]> = {
 const DIFF: Record<DiffState, [string, string]> = {
   new: ['#2AA5C7', '#FFFFFF'], upd: ['#F07B29', '#FFFFFF'], same: ['rgba(255,255,255,.08)', 'rgba(255,255,255,.56)'],
   older: ['#F5A623', '#161616'], diverged: ['#F5A623', '#161616'], unknown: ['#333333', '#CFCFCF'], uda: ['#333333', '#CFCFCF'],
-  noexp: ['#333333', '#CFCFCF'],
+  noexp: ['#333333', '#CFCFCF'], srcoff: ['#333333', '#CFCFCF'],
   miss: ['#FF3B35', '#FFFFFF'], dup: ['#FF3B35', '#FFFFFF'], repl: ['#F5A623', '#161616'],
 }
 export const CONN: Record<ConnStatus, [string, string]> = {

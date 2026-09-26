@@ -252,12 +252,23 @@ class FakeBackend:
         values = [dict(a) for a in _inv(self.id)["aggs"] if a["model"] == model_id and a["id"] in agg_ids]
         return {"exportModelId": model_id, "aggregates": {"count": len(values), "values": values}}
 
-    def import_aggregates(self, catalog_id: str, model_id: str, payload: Any, replace_ids: list[str]) -> dict[str, Any]:
+    def import_aggregates(self, catalog_id: str, model_id: str, payload: Any) -> dict[str, Any]:
+        """Like AtScale: a definition that already exists on the target is ignored."""
         values = payload["aggregates"]["values"]
+        out = []
         with _lock:
             inv = _inv(self.id)
-            inv["aggs"] = [a for a in inv["aggs"] if a["id"] not in replace_ids]
             for a in values:
+                if any(x["id"] == a["id"] and x["model"] == model_id for x in inv["aggs"]):
+                    out.append({"id": a["id"], "imported": False, "reason": "Definition already exists"})
+                    continue
                 inv["aggs"].append({**a, "model": model_id, "status": "Built", "active": True, "lastBuild": now_iso()})
-        return {"numberOfDefinitionsImported": len(values), "numberOfDefinitionsIgnored": 0,
-                "aggregates": {"values": [{"id": a["id"], "imported": True} for a in values]}}
+                out.append({"id": a["id"], "newId": a["id"], "imported": True})
+        return {"numberOfDefinitionsImported": sum(o["imported"] for o in out),
+                "numberOfDefinitionsIgnored": sum(not o["imported"] for o in out), "aggregates": {"values": out}}
+
+    def model_connections(self, catalog_id: str, model_id: str) -> list[str]:
+        return []
+
+    def catalog_ids(self, catalog_id: str) -> dict[str, str]:
+        return {}

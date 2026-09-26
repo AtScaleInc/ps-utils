@@ -8,6 +8,7 @@ import jobs
 from envs import registry
 from atscale import github
 from promote import diff as D
+from promote.remap import remap_export
 from routes.objects import host_errors
 
 promote_bp = Blueprint("promote", __name__)
@@ -131,8 +132,11 @@ def promote_models():
 @host_errors
 def promote_aggregates():
     """Body: {sourceHostId, targetHostId, aggregates: [source definition ids]}.
-    Export (system-defined only) from the source model -> re-check rules ->
-    import into the same-named model on the target."""
+
+    Rules: system-defined, active + exportable on the source, same model (by
+    name) deployed on the target, no active duplicate there. Export from the
+    source -> re-check rules -> remap catalog/model/instance/connection ids to
+    the target's -> import. An inactive target copy is reactivated instead."""
     b = _body()
     src_id, tgt_id = _hosts(b)
     ids = b.get("aggregates") or []
@@ -153,27 +157,49 @@ def promote_aggregates():
         by_model: dict[str, list[dict]] = {}
         for a in promote:
             by_model.setdefault(a["model"], []).append(a)
+        tgt_by_id = {t["id"]: t for t in tgt_aggs}
         for model_name, aggs in by_model.items():
             sm = next(m for m in src_models if m["name"] == model_name)
-            tm = tgt_models[model_name]  # matched by model name (§5 rule 1)
+            tm = tgt_models[model_name]  # the same model, matched by name (§5 rule 1)
             payload = src.export_aggregates(sm["catalogId"], sm["modelId"], [a["id"] for a in aggs])
             exported = {v["id"] for v in payload["aggregates"]["values"]}
             for a in aggs:
                 if a["id"] not in exported:
                     skipped.append({"id": a["id"], "name": a["name"], "reason": "Not in export (inactive or not system-defined)"})
-            replace = [t for a in aggs if a["diff"]["state"] == "repl" and a["id"] in exported for t in a["diff"]["targetIds"]]
-            try:
-                result = tgt.import_aggregates(tm["catalogId"], tm["modelId"], payload, replace)
-            except ValueError as e:
-                skipped.extend({"id": a["id"], "name": a["name"], "reason": str(e)} for a in aggs if a["id"] in exported)
-                continue
+            # Target counterpart (inactive copy) -> its instance id; new aggregates get none.
+            counterpart = {a["id"]: (a["diff"].get("targetIds") or [None])[0] for a in aggs}
+            instances = {sid: (tgt_by_id.get(tid) or {}).get("instanceId") for sid, tid in counterpart.items()}
+            # Ids differ per host: translate the plan's key / reference ids by name.
+            src_names = src.catalog_ids(sm["catalogId"])
+            tgt_names = tgt.catalog_ids(tm["catalogId"])
+            tgt_by_name: dict[str, str] = {}
+            for tid, n in tgt_names.items():
+                tgt_by_name[n] = tid if n not in tgt_by_name else ""  # ambiguous -> unusable
+            body, problems = remap_export(
+                payload, target_catalog_id=tm["catalogId"], target_model_id=tm["modelId"],
+                target_instances=instances, target_connections=tgt.model_connections(tm["catalogId"], tm["modelId"]),
+                source_names=src_names if src_names else None,
+                target_ids_by_name={n: i for n, i in tgt_by_name.items() if i} if src_names else None,
+            )
             by_id = {a["id"]: a for a in aggs}
+            skipped.extend({"id": p["id"], "name": by_id.get(p["id"], {}).get("name", p["id"]), "reason": p["reason"]} for p in problems)
+            if not body["aggregates"]["values"]:
+                continue
+            result = tgt.import_aggregates(tm["catalogId"], tm["modelId"], body)
             for v in (result.get("aggregates") or {}).get("values", []):
                 a = by_id.get(v.get("id"))
                 if not a:
                     continue
                 if v.get("imported"):
                     promoted.append(a["name"])
+                elif counterpart.get(a["id"]):
+                    # "Replaces inactive": AtScale kept the existing (blocked) copy -
+                    # reactivate it so the target ends up active / Built.
+                    r = tgt.set_active(tm["catalogId"], tm["modelId"], [counterpart[a["id"]]], True)
+                    if r and r[0].get("ok"):
+                        promoted.append(f"{a['name']} (reactivated)")
+                    else:
+                        skipped.append({"id": a["id"], "name": a["name"], "reason": (r[0].get("error") if r else None) or v.get("reason") or "Ignored"})
                 else:
                     skipped.append({"id": a["id"], "name": a["name"], "reason": v.get("reason") or "Ignored by AtScale"})
         return {"promoted": promoted, "skipped": skipped}

@@ -64,7 +64,7 @@ export interface AggRow {
   exportable?: boolean
 }
 
-export type DiffState = 'new' | 'upd' | 'same' | 'older' | 'diverged' | 'unknown' | 'uda' | 'miss' | 'dup' | 'repl' | 'noexp'
+export type DiffState = 'new' | 'upd' | 'same' | 'older' | 'diverged' | 'unknown' | 'uda' | 'miss' | 'dup' | 'repl' | 'noexp' | 'srcoff'
 export interface Diff {
   state: DiffState
   label: string

@@ -108,6 +108,17 @@ def git_ready() -> bool:
     return bool(g.get("token")) and g.get("status") != "failed"
 
 
+def capture_host(host_id: str) -> None:
+    """Load and store (working folder) everything host-specific: deployed
+    models with their catalog/model ids, the id <-> name map per catalog, and
+    aggregates with their instance ids."""
+    b = backend(host_id, refresh=True)
+    b.list_models()
+    for m in b.agg_models():
+        b.catalog_ids(m["catalogId"])
+        b.list_aggregates(m["catalogId"], m["modelId"])
+
+
 def warm_cache(log=print) -> None:
     """Refresh-on-start: load every host's models and aggregates into the cache
     so the first switch in the UI is instant. Hosts whose last test failed are
@@ -116,10 +127,7 @@ def warm_cache(log=print) -> None:
         if raw.get("status") == "failed" or not raw.get("atscale", {}).get("url"):
             continue
         try:
-            b = backend(raw["id"], refresh=True)
-            b.list_models()
-            for m in b.agg_models():
-                b.list_aggregates(m["catalogId"], m["modelId"])
+            capture_host(raw["id"])
             log(f"cache warmed: {raw['id']}", flush=True)
         except Exception as e:  # noqa: BLE001 - a dead host must not block startup
             log(f"cache warm failed for {raw['id']}: {e}", flush=True)

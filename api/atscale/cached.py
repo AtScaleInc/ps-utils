@@ -62,6 +62,14 @@ class CachedBackend:
     def export_aggregates(self, catalog_id: str, model_id: str, agg_ids: list[str]) -> Any:
         return self.inner.export_aggregates(catalog_id, model_id, agg_ids)
 
+    def catalog_ids(self, catalog_id: str) -> dict[str, str]:
+        """Per-host id -> name map (stored in the working folder as
+        host/<id>/ids/<catalog>.json); captured on Test connection and at start."""
+        return self._get(("host", self.host_id, "ids", catalog_id), lambda: self.inner.catalog_ids(catalog_id))
+
+    def model_connections(self, catalog_id: str, model_id: str) -> list[str]:
+        return self.inner.model_connections(catalog_id, model_id)
+
     def test(self) -> None:
         self.inner.test()
         self._drop()
