@@ -465,7 +465,13 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     const counts = new Map<string, number>();
     for (const bindings of bindingsById.values()) {
       if (!bindings.some((b) => b.cube !== undefined)) continue;
-      for (const b of bindings) counts.set(b.dataset, (counts.get(b.dataset) ?? 0) + 1);
+      // Count this id once per dataset it touches, not once per binding — an id can be
+      // declared twice for the SAME dataset (once untagged in that dataset's own
+      // schema-level <logical> block, once tagged in a cube's data-set-ref <logical>
+      // block that simply restates it), and that must still land as a single "used by
+      // this id" credit, not two.
+      const datasetsForId = new Set(bindings.map((b) => b.dataset));
+      for (const dataset of datasetsForId) counts.set(dataset, (counts.get(dataset) ?? 0) + 1);
     }
     return counts;
   }
