@@ -584,6 +584,13 @@ export async function convertXmlToSml(
   // same name gets its own distinct unique_name. Scoping this per-cube instead meant a
   // second cube reusing a common measure name silently overwrote the first cube's file.
   const seenMetricNames = new Set<string>();
+  // Cube-level measure attributes aren't kept in a project-wide map the way attrDef/
+  // calcMemberDefs are (each cube parses its own <attributes> section independently), so the
+  // Phase 7e truncated-identifier report can't just re-scan a map afterward — it has to be
+  // populated here, at the point each measure's unique_name is first computed. Keyed by
+  // original name so the same measure reused by another cube (see seenMetricNames above)
+  // isn't logged twice.
+  const rptTruncatedMeasureNames = new Map<string, string>();
   // Tracks, per emitted measure unique_name, whether its column actually resolved to a
   // declared physical column on its dataset — see the duplicate-measure handling below.
   const metricHasKnownColumn = new Map<string, boolean>();
@@ -867,6 +874,9 @@ export async function convertXmlToSml(
           // bind report fields to the exact unique_name string, so force-lowercasing here
           // silently breaks every existing report built against a prior deployment.
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (!rptTruncatedMeasureNames.has(attrNameRaw) && safeName(attrNameRaw).length > MAX_UNIQUE_NAME_LENGTH) {
+            rptTruncatedMeasureNames.set(attrNameRaw, uniqueName);
+          }
           // Dedup key is case-insensitive — matching the reference converter's own
           // CASE_INSENSITIVE_ORDER qnMap — so "Sales" and "sales" collide even though
           // their unique_name strings differ, but the emitted file/unique_name still uses
@@ -985,6 +995,9 @@ export async function convertXmlToSml(
 
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (!rptTruncatedMeasureNames.has(attrNameRaw) && safeName(attrNameRaw).length > MAX_UNIQUE_NAME_LENGTH) {
+            rptTruncatedMeasureNames.set(attrNameRaw, uniqueName);
+          }
           const dedupKey = uniqueName.toLowerCase();
           // Same project-wide dedup pattern as regular measures above (visibility included,
           // see the comment there): a percentile metric with the exact same definition
@@ -1036,6 +1049,9 @@ export async function convertXmlToSml(
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (!rptTruncatedMeasureNames.has(attrNameRaw) && safeName(attrNameRaw).length > MAX_UNIQUE_NAME_LENGTH) {
+            rptTruncatedMeasureNames.set(attrNameRaw, uniqueName);
+          }
           const dedupKey = uniqueName.toLowerCase();
           if (seenMetricNames.has(dedupKey)) {
             if (metricDefSignature.get(dedupKey) === attrId) {
@@ -1915,6 +1931,9 @@ export async function convertXmlToSml(
     if (safe.length > MAX_UNIQUE_NAME_LENGTH) {
       rptTruncatedNames.push({ category: "Calculated Member", original: def.name, truncated: truncateUniqueName(safe) });
     }
+  }
+  for (const [original, truncated] of rptTruncatedMeasureNames) {
+    rptTruncatedNames.push({ category: "Measure", original, truncated });
   }
   for (const dimEl of allDims.values()) {
     for (const hierEl of arr(dimEl.hierarchy)) {
