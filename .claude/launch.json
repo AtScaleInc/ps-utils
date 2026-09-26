@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd api && API_PORT=5050 exec ~/Development/venv/atscale-env-manager/bin/python app.py"],
+      "port": 5050
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd web && API_PORT=5050 exec npm run dev -- --port 5174"],
+      "port": 5174
+    },
+    {
+      "name": "api-fake",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd api && ENV_MANAGER_FAKE=1 API_PORT=5051 exec ~/Development/venv/atscale-env-manager/bin/python app.py"],
+      "port": 5051
+    },
+    {
+      "name": "web-fake",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd web && API_PORT=5051 exec npm run dev -- --port 5175"],
+      "port": 5175
+    }
+  ]
+}

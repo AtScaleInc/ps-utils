@@ -179,3 +179,14 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# ==========================================
+# AtScale Env Manager - secrets & runtime
+# ==========================================
+api/connections.yaml
+api/connections.fake.yaml
+# Working folder: on-disk mirror of the 2 h AtScale/GitHub cache
+workspace/
+api/*.yaml.tmp
+.logs/
+node_modules/
+*.tsbuildinfo
