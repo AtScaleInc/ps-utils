@@ -231,6 +231,13 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   const keyMap = new Map<string, KeyBinding[]>();
   const attrMap = new Map<string, AttrBinding[]>();
   const connectionIds = new Set<string>();
+  // A key-ref's <ref-path> can carry a plain <ref id="X"/> instead of a role-play <new-ref>
+  // — the "bridge" a cross-dimension embedded <keyed-attribute-ref ref-id="X"> uses to reach
+  // its target dimension's real key (see the Phase 6 snowflake-embed resolution below, and
+  // xml-converter.ts's own refPathIdToKeyRefId/resolveSnowflakeRelationship, which this
+  // mirrors). Maps that ref id to the key-ref's own id, so all of that id's bindings
+  // (already collected in keyMap) can be looked up.
+  const refPathIdToKeyRefId = new Map<string, string>();
 
   function ingestLogical(logicalEl: El, datasetName: string, cube?: string): void {
     for (const kr of arr(logicalEl["key-ref"])) {
@@ -240,6 +247,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       const refPathEl = first(arr(kr["ref-path"])) as El | undefined;
       const newRefEl = refPathEl ? (first(arr(refPathEl["new-ref"])) as El | undefined) : undefined;
       const rolePlay = newRefEl ? s(first(arr(newRefEl["ref-naming"]))) : undefined;
+      const plainRefEl = refPathEl ? (first(arr(refPathEl.ref)) as El | undefined) : undefined;
+      const bridgedRefId = plainRefEl ? a(plainRefEl, "id") : undefined;
+      if (bridgedRefId && !refPathIdToKeyRefId.has(bridgedRefId)) refPathIdToKeyRefId.set(bridgedRefId, id);
       const list = keyMap.get(id) ?? [];
       list.push({ dataset: datasetName, columns: cols, complete: a(kr, "complete") ?? "true", unique: a(kr, "unique") === "true", cube, rolePlay });
       keyMap.set(id, list);
@@ -506,28 +516,123 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       }
     }
   }
-  const usedDimEntries = dimEntries.filter((d) => usedDimNames.has(d.name));
-  // A keyed attribute is "used" iff it backs a level (primary or secondary) of a
-  // dimension that made it into usedDimEntries above — mirrors how a whole dimension,
-  // not individual attributes within it, is the unit xml-converter.ts excludes or keeps.
-  // Schema-level dimensions never appear in a cube's own data-set-ref list (they're pulled
-  // in via keyed-attribute key-refs instead, resolved through keyMap below), so a dataset
-  // that only backs a dimension level — never a cube's fact table — still counts as used;
-  // matches xml-converter.ts, which scans each emitted dimension's own YAML for the
-  // datasets it names, in addition to what cubes reference directly.
-  const usedAttrIds = new Set<string>();
-  for (const d of usedDimEntries) {
+
+  // A dimension's own attribute can be embedded into a DIFFERENT dimension's level as a
+  // cross-dimension secondary <keyed-attribute-ref ref-id="R" attribute-id="A"> (a
+  // snowflake/embedded reference — e.g. a "Client" dimension embedding a "Segment"
+  // dimension's own level attribute so a hierarchy can drill into it without a direct cube
+  // join). The owning dimension never gets a key-ref binding tagged with this cube — the
+  // cube only ever joins to the embedding dimension's own key — so
+  // computeCubeJoins/computeCubeDimNames above can't see it. xml-converter.ts resolves this
+  // via collectAttributeDimensionOwnership + resolveSnowflakeRelationship; mirror both here.
+  //
+  // attrIdToDimName resolves attribute A to the dimension that hosts it: a level's own
+  // primary-attribute wins (checked first, across every dimension), falling back to a plain
+  // (no ref-id) secondary <keyed-attribute-ref attribute-id="A"> only if no dimension already
+  // claims it as primary — same priority collectAttributeDimensionOwnership uses.
+  const attrIdToDimName = new Map<string, string>();
+  for (const d of dimEntries) {
     for (const hier of arr(d.el.hierarchy)) {
       for (const level of arr(hier.level)) {
         const primaryId = a(level, "primary-attribute");
-        if (primaryId) usedAttrIds.add(primaryId);
+        if (primaryId) attrIdToDimName.set(primaryId, d.name);
+      }
+    }
+  }
+  for (const d of dimEntries) {
+    for (const hier of arr(d.el.hierarchy)) {
+      for (const level of arr(hier.level)) {
         for (const kref of arr(level["keyed-attribute-ref"])) {
           const attrId = a(kref, "attribute-id");
-          if (attrId) usedAttrIds.add(attrId);
+          const refId = a(kref, "ref-id");
+          if (attrId && !refId && !attrIdToDimName.has(attrId)) attrIdToDimName.set(attrId, d.name);
         }
       }
     }
   }
+
+  /**
+   * Resolves a cross-dimension embed the same way xml-converter.ts's
+   * resolveSnowflakeRelationship does: ref-id bridges to the key-ref id that actually carries
+   * it (refPathIdToKeyRefId), which must resolve to EXACTLY one target binding (complete="true"
+   * and unique) plus one other (host) binding — anything else (no bridge, more/fewer than two
+   * bindings, no unique target, or the target resolving back to the host dimension itself) is
+   * not a real, resolvable relationship and must be left out, matching the converter exactly
+   * (e.g. a same-shaped embed whose "target" key-ref is complete but not unique is excluded).
+   */
+  function resolveEmbeddedDimName(refId: string, attrId: string, hostDimName: string): string | undefined {
+    const hostKeyRefId = refPathIdToKeyRefId.get(refId);
+    const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) ?? [] : [];
+    if (entries.length !== 2) return undefined;
+    const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
+    const hostEntry = entries.find((e) => e !== targetEntry);
+    if (!targetEntry || !hostEntry) return undefined;
+    const targetDimName = attrIdToDimName.get(attrId);
+    if (!targetDimName || targetDimName === hostDimName) return undefined;
+    return targetDimName;
+  }
+
+  // A keyed attribute is "used" iff it backs a level (primary or secondary) of a dimension
+  // that's currently marked used — mirrors how a whole dimension, not individual attributes
+  // within it, is the unit xml-converter.ts excludes or keeps.
+  const usedAttrIds = new Set<string>();
+  let usedDimEntries = dimEntries.filter((d) => usedDimNames.has(d.name));
+  /** Every cross-dimension embed (ref-id present) found on a currently-used dimension's own
+   *  level, collected alongside usedAttrIds so the fixed-point loop below can attempt to
+   *  resolve each one without re-walking every dimension's levels again. */
+  let pendingEmbeds: Array<{ refId: string; attrId: string; hostDimName: string }> = [];
+  function collectUsedAttrIds(): void {
+    usedAttrIds.clear();
+    pendingEmbeds = [];
+    for (const d of usedDimEntries) {
+      for (const hier of arr(d.el.hierarchy)) {
+        for (const level of arr(hier.level)) {
+          const primaryId = a(level, "primary-attribute");
+          if (primaryId) usedAttrIds.add(primaryId);
+          for (const kref of arr(level["keyed-attribute-ref"])) {
+            const attrId = a(kref, "attribute-id");
+            if (!attrId) continue;
+            const refId = a(kref, "ref-id");
+            if (refId) {
+              // A cross-dimension embed: attrId belongs to ANOTHER dimension, not this one, so
+              // it's only "used" if resolveEmbeddedDimName below actually resolves the
+              // relationship (matching xml-converter.ts, which drops an unresolved embed
+              // entirely — dimMeta.skippedCrossDimRefs — rather than treating it as a live
+              // secondary attribute).
+              pendingEmbeds.push({ refId, attrId, hostDimName: d.name });
+            } else {
+              usedAttrIds.add(attrId); // plain secondary attribute, hosted natively here
+            }
+          }
+        }
+      }
+    }
+  }
+  collectUsedAttrIds();
+  // Grow usedDimNames/usedAttrIds to a fixed point: resolving one embed can mark another
+  // dimension used, exposing more embeds of its own (a chain), so keep re-deriving until
+  // nothing new resolves.
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const { refId, attrId, hostDimName } of pendingEmbeds) {
+      const targetDimName = resolveEmbeddedDimName(refId, attrId, hostDimName);
+      if (targetDimName && !usedDimNames.has(targetDimName)) {
+        usedDimNames.add(targetDimName);
+        grew = true;
+      }
+    }
+    if (grew) {
+      usedDimEntries = dimEntries.filter((d) => usedDimNames.has(d.name));
+      collectUsedAttrIds();
+    }
+  }
+  // Schema-level dimensions never appear in a cube's own data-set-ref list (they're pulled
+  // in via keyed-attribute key-refs instead, resolved through keyMap below), so a dataset
+  // that only backs a dimension level — never a cube's fact table — still counts as used;
+  // matches xml-converter.ts, which scans each emitted dimension's own YAML for the
+  // datasets it names, in addition to what cubes reference directly, regardless of whether
+  // any individual binding happens to be cube-tagged.
   for (const attrId of usedAttrIds) {
     const keyUuid = attrDef.get(attrId)?.keyUuid;
     for (const b of keyUuid ? keyMap.get(keyUuid) ?? [] : []) usedDatasetNames.add(b.dataset);
