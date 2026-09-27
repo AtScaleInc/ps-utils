@@ -509,6 +509,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // with below, and the Summary reports both numbers side by side.
   const usedDimNames = new Set<string>();
   const usedCalcMemberIds = new Set<string>();
+  let usedMeasureCount = 0;
   for (const cube of cubeEls) {
     const { schemaJoinedDimNames } = computeCubeJoins(cube);
     const { usedNames } = computeCubeDimNames(cube, schemaJoinedDimNames);
@@ -517,6 +518,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       for (const cmRef of arr(cmSec["calculated-member-ref"])) {
         const refId = a(cmRef, "id");
         if (refId) usedCalcMemberIds.add(refId);
+      }
+    }
+    // A measure counts as "used by a cube" — the same bar generate-sml-from-xml applies when
+    // deciding whether to emit it as an SML metric — only once it resolves to a real (or
+    // verifiably inferred) dataset.column binding; see resolveMeasureBoundTo.
+    const quantileGroupDefs = buildQuantileGroupDefs(cube);
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr(attrsSec.attribute)) {
+        if (isQuantileGroupAttribute(attrEl)) continue;
+        if (resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs)) usedMeasureCount++;
       }
     }
   }
@@ -701,6 +712,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         ["Levels", String(totalLevels)],
         ["Levels used by a cube", String(usedLevels)],
         ["Measures", String(totalMeasures)],
+        ["Measures used by a cube", String(usedMeasureCount)],
         ["Calculated members", String(calcMemberDef.size)],
         ["Calculated members used by a cube", String(usedCalcMemberIds.size)],
         ["User Defined Aggregates", String(totalAggregates)],
@@ -1084,6 +1096,92 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     return { dimNames, usedNames: namedDimNames };
   }
 
+  /**
+   * Quantile-group definitions (the AtScale representation of a percentile measure's base
+   * attribute id + compression setting, referenced by id from one or more
+   * <quantile-instance> attributes) are hidden plumbing, not standalone measures — collected
+   * up front so a percentile measure's binding can be resolved to its real dataset/column
+   * instead of falling back to a naive, wrong guess. Shared by the Phase 6 rollup and the
+   * Cubes section's own Measures table so both agree on which measures are bound.
+   */
+  function buildQuantileGroupDefs(cube: El): Map<string, { baseAttrId?: string; compression?: string }> {
+    const quantileGroupDefs = new Map<string, { baseAttrId?: string; compression?: string }>();
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr(attrsSec.attribute)) {
+        const attrId = a(attrEl, "id");
+        if (!attrId) continue;
+        const props = first(arr(attrEl.properties)) as El | undefined;
+        const typeEl = props ? (first(arr(props.type)) as El | undefined) : undefined;
+        const qgEl = typeEl ? (first(arr(typeEl["quantile-group"])) as El | undefined) : undefined;
+        if (!qgEl) continue;
+        const baseRefEl = first(arr(qgEl["attribute-ref"])) as El | undefined;
+        quantileGroupDefs.set(attrId, {
+          baseAttrId: baseRefEl ? a(baseRefEl, "id") : undefined,
+          compression: s(first(arr(qgEl.compression))),
+        });
+      }
+    }
+    return quantileGroupDefs;
+  }
+
+  /**
+   * Resolves the fact-side dataset.column a cube's measure attribute is bound to: prefer an
+   * inline <key-ref> under the measure's own <measure>/<count-distinct>/<count-nonnull>
+   * element (resolved through keyMap, same as a dimension level attribute), then an
+   * <attribute-ref> registered for this attribute id in the cube's own data-set-ref, then —
+   * for a percentile measure — the binding of the base attribute its quantile-group points to
+   * by id. Only after all three come up empty does this fall back to a naming-convention
+   * guess (e.g. "m_FOO_sum" → column FOO on the cube's first fact dataset), clearly labeled as
+   * inferred rather than declared, since it is not a fact stated anywhere in the XML. Returns
+   * "" when no binding — declared or verifiably inferred — exists at all, which is also the
+   * "used by a cube" signal the Phase 6 rollup counts, since generate-sml-from-xml's
+   * xml-converter.ts likewise excludes a fully unbound measure from SML.
+   */
+  function resolveMeasureBoundTo(
+    cube: El,
+    attrEl: El,
+    quantileGroupDefs: Map<string, { baseAttrId?: string; compression?: string }>,
+  ): string {
+    const cubeName = a(cube, "name") ?? "?";
+    const name = a(attrEl, "name") ?? "?";
+    const attrId = a(attrEl, "id");
+    const mProps = first(arr(attrEl.properties)) as El | undefined;
+    const typeEl = mProps ? (first(arr(mProps.type)) as El | undefined) : undefined;
+    const measureEl = typeEl ? (first(arr(typeEl.measure)) as El | undefined) : undefined;
+    const countDistEl = typeEl ? (first(arr(typeEl["count-distinct"])) as El | undefined) : undefined;
+    const countNonNullEl = typeEl ? (first(arr(typeEl["count-nonnull"])) as El | undefined) : undefined;
+    const quantileInstanceEl = typeEl ? (first(arr(typeEl["quantile-instance"])) as El | undefined) : undefined;
+
+    const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+    const inlineKeyRefEl = measureTypeEl ? (first(arr(measureTypeEl["key-ref"])) as El | undefined) : undefined;
+    const inlineKeyRefId = inlineKeyRefEl ? a(inlineKeyRefEl, "id") : undefined;
+    const inlineBindings = inlineKeyRefId ? keyMap.get(inlineKeyRefId) ?? [] : [];
+    const attrBindings = attrId ? attrMap.get(attrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
+
+    const quantileGroupRefEl = quantileInstanceEl ? (first(arr(quantileInstanceEl["quantile-group-ref"])) as El | undefined) : undefined;
+    const quantileGroupRefId = quantileGroupRefEl ? a(quantileGroupRefEl, "id") : undefined;
+    const quantileBaseAttrId = quantileGroupRefId ? quantileGroupDefs.get(quantileGroupRefId)?.baseAttrId : undefined;
+    const quantileBindings = quantileBaseAttrId ? attrMap.get(quantileBaseAttrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
+
+    if (inlineBindings.length) return inlineBindings.map((b) => `${b.dataset}.${b.columns.join("+")}`).join(", ");
+    if (attrBindings.length) return attrBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
+    if (quantileBindings.length) return quantileBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
+
+    // No key-ref/attribute-ref binding exists anywhere for this attribute — a genuinely
+    // incomplete/orphaned definition left over in the source schema. Guessing a column from
+    // the attribute's own name (e.g. "m_FOO_sum" → FOO) is only worth reporting when the
+    // guess actually matches a column the target dataset declares; otherwise it fabricates a
+    // specific-looking binding for a column that does not exist, which is worse than
+    // reporting no binding at all. Matches the same guard in generate-sml-from-xml's
+    // xml-converter.ts, which excludes an unverifiable guess like this from SML entirely
+    // rather than emitting it.
+    const guessedDataset = getFactDatasetName(cube);
+    const guessedColumn = parseColumnFromAttrName(name);
+    const knownColumns = guessedDataset ? datasetByName.get(guessedDataset)?.columns : undefined;
+    const isUnverifiableGuess = !!knownColumns?.length && !knownColumns.some((c) => c.name === guessedColumn);
+    return guessedDataset && !isUnverifiableGuess ? `${guessedDataset}.${guessedColumn} (inferred)` : "";
+  }
+
   function renderCube(o: string[], cube: El): void {
     const cubeName = a(cube, "name") ?? "?";
     const props = first(arr(cube.properties)) as El | undefined;
@@ -1111,26 +1209,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     if (dimNames.length) o.push(`**Dimensions used:** ${dimNames.map((d) => `\`${d}\``).join(", ")}`, "");
 
     // Quantile-group definitions (the AtScale representation of a percentile measure's base
-    // attribute id + compression setting, referenced by id from one or more
-    // <quantile-instance> attributes) are hidden plumbing, not standalone measures — collected
-    // up front so the measures loop below can resolve each quantile-instance's real
-    // dataset/column and compression instead of falling back to a naive, wrong guess.
-    const quantileGroupDefs = new Map<string, { baseAttrId?: string; compression?: string }>();
-    for (const attrsSec of arr(cube.attributes)) {
-      for (const attrEl of arr(attrsSec.attribute)) {
-        const attrId = a(attrEl, "id");
-        if (!attrId) continue;
-        const props = first(arr(attrEl.properties)) as El | undefined;
-        const typeEl = props ? (first(arr(props.type)) as El | undefined) : undefined;
-        const qgEl = typeEl ? (first(arr(typeEl["quantile-group"])) as El | undefined) : undefined;
-        if (!qgEl) continue;
-        const baseRefEl = first(arr(qgEl["attribute-ref"])) as El | undefined;
-        quantileGroupDefs.set(attrId, {
-          baseAttrId: baseRefEl ? a(baseRefEl, "id") : undefined,
-          compression: s(first(arr(qgEl.compression))),
-        });
-      }
-    }
+    // attribute id + compression setting) — see buildQuantileGroupDefs.
+    const quantileGroupDefs = buildQuantileGroupDefs(cube);
 
     // Measures.
     const measureRows: string[][] = [];
@@ -1138,7 +1218,6 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       for (const attrEl of arr(attrsSec.attribute)) {
         if (isQuantileGroupAttribute(attrEl)) continue; // hidden plumbing — see quantileGroupDefs above
         const name = a(attrEl, "name") ?? "?";
-        const attrId = a(attrEl, "id");
         const mProps = first(arr(attrEl.properties)) as El | undefined;
         const caption = mProps ? s(first(arr(mProps.caption))) : undefined;
         const mVisible = mProps ? s(first(arr(mProps.visible))) !== "false" : true;
@@ -1180,47 +1259,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           kind = "unknown";
         }
 
-        // Resolve the fact-side column: prefer an inline <key-ref> under the measure's own
-        // <measure>/<count-distinct>/<count-nonnull> element (resolved through keyMap, same
-        // as a dimension level attribute), then an <attribute-ref> registered for this
-        // attribute id in the cube's own data-set-ref, then — for a percentile measure — the
-        // binding of the base attribute its quantile-group points to by id. Only after all
-        // three come up empty does this fall back to a naming-convention guess (e.g. "m_FOO_sum"
-        // → column FOO on the cube's first fact dataset), clearly labeled as inferred rather
-        // than declared, since it is not a fact stated anywhere in the XML.
-        const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
-        const inlineKeyRefEl = measureTypeEl ? (first(arr(measureTypeEl["key-ref"])) as El | undefined) : undefined;
-        const inlineKeyRefId = inlineKeyRefEl ? a(inlineKeyRefEl, "id") : undefined;
-        const inlineBindings = inlineKeyRefId ? keyMap.get(inlineKeyRefId) ?? [] : [];
-        const attrBindings = attrId ? attrMap.get(attrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
-
-        const quantileGroupRefEl = quantileInstanceEl ? (first(arr(quantileInstanceEl["quantile-group-ref"])) as El | undefined) : undefined;
-        const quantileGroupRefId = quantileGroupRefEl ? a(quantileGroupRefEl, "id") : undefined;
-        const quantileBaseAttrId = quantileGroupRefId ? quantileGroupDefs.get(quantileGroupRefId)?.baseAttrId : undefined;
-        const quantileBindings = quantileBaseAttrId ? attrMap.get(quantileBaseAttrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
-
-        let boundTo: string;
-        if (inlineBindings.length) {
-          boundTo = inlineBindings.map((b) => `${b.dataset}.${b.columns.join("+")}`).join(", ");
-        } else if (attrBindings.length) {
-          boundTo = attrBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
-        } else if (quantileBindings.length) {
-          boundTo = quantileBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
-        } else {
-          // No key-ref/attribute-ref binding exists anywhere for this attribute — a genuinely
-          // incomplete/orphaned definition left over in the source schema. Guessing a column
-          // from the attribute's own name (e.g. "m_FOO_sum" → FOO) is only worth reporting when
-          // the guess actually matches a column the target dataset declares; otherwise it
-          // fabricates a specific-looking binding for a column that does not exist, which is
-          // worse than reporting no binding at all. Matches the same guard in
-          // generate-sml-from-xml's xml-converter.ts, which excludes an unverifiable guess like
-          // this from SML entirely rather than emitting it.
-          const guessedDataset = getFactDatasetName(cube);
-          const guessedColumn = parseColumnFromAttrName(name);
-          const knownColumns = guessedDataset ? datasetByName.get(guessedDataset)?.columns : undefined;
-          const isUnverifiableGuess = !!knownColumns?.length && !knownColumns.some((c) => c.name === guessedColumn);
-          boundTo = guessedDataset && !isUnverifiableGuess ? `${guessedDataset}.${guessedColumn} (inferred)` : "";
-        }
+        // Resolve the fact-side column — see resolveMeasureBoundTo, shared with the Phase 6
+        // rollup so the Summary's "Measures used by a cube" count matches this column.
+        const boundTo = resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs);
 
         measureRows.push([
           code(name),
