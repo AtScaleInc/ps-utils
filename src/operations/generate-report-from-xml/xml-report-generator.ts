@@ -284,7 +284,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         ? { database: s(first(arr(tableEl.database))), schema: s(first(arr(tableEl.schema))), name: s(first(arr(tableEl.name))) }
         : undefined;
 
-      const queryEl = physEl ? (first(arr(physEl.query)) as El | undefined) : undefined;
+      // A dataset can declare multiple <query> elements: the base query (no "alternate"
+      // attribute) plus alternate query/table bindings (alternate="true") — alternates are
+      // preview-only, so picking whichever <query> comes first in document order can
+      // misreport an alternate binding as the dataset's real SQL backing.
+      const queryEl = physEl ? (arr(physEl.query).find((q) => !a(q, "alternate")) as El | undefined) : undefined;
       const sql = queryEl ? s(first(arr(queryEl.sql))) : undefined;
 
       const immutable = physEl ? s(first(arr(physEl.immutable))) === "true" : undefined;
