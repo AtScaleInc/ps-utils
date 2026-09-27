@@ -7,7 +7,11 @@ the payload is substituted with the target's before POSTing it to
   - exportCatalogId / exportModelId and each value's catalogId / modelId, plus
     every occurrence inside planJson -> target catalog / model id
   - activeInstanceId / latestInstanceId -> the target counterpart's instance
-    (same plan fingerprint), or None when the target has no copy yet
+    (same plan fingerprint); for a new aggregate the source ids are kept. The
+    engine's import (AggregateImportHelper) never reads them - it creates new
+    definitions - but the SML API's request schema (apps/api/src/public/
+    aggregate/models/import-aggregate.dto.ts) requires non-null strings, so
+    null is rejected with 400 "Expected string, received null".
   - key / role-play reference ids inside planJson -> the target's ids for the
     same *names* (promote/idmap.py); an object missing on the target skips
     that aggregate
@@ -21,6 +25,11 @@ import json
 from typing import Any
 
 from promote.idmap import plan_ids, translate_plan
+
+
+# z.string() (non-optional) fields of each value in the import request schema.
+REQUIRED_STRINGS = ("activeInstanceId", "latestInstanceId", "baseType", "catalogId", "connectionId",
+                    "createdAt", "id", "modelId", "subType", "triggeringQueryId")
 
 
 def _swap(o: Any, ids: dict[str, str]) -> Any:
@@ -92,9 +101,12 @@ def remap_export(
                 nv["planJson"] = plan
         if object_ids:
             nv["planJson"] = translate_plan(nv["planJson"], object_ids)
-        instance = target_instances.get(v.get("id"))
-        nv["activeInstanceId"] = instance
-        nv["latestInstanceId"] = instance
+        counterpart = target_instances.get(v.get("id"))
+        nv["activeInstanceId"] = counterpart or v.get("activeInstanceId") or v.get("latestInstanceId") or ""
+        nv["latestInstanceId"] = counterpart or v.get("latestInstanceId") or v.get("activeInstanceId") or ""
+        for field in REQUIRED_STRINGS:
+            if not isinstance(nv.get(field), str):
+                nv[field] = ""
         values.append(nv)
     out["exportCatalogId"] = target_catalog_id
     out["exportModelId"] = target_model_id

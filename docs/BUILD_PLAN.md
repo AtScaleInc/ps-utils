@@ -66,7 +66,8 @@ rows, no total), hence the internal definition list above.
   (`promote/remap.py`): catalog/model ids (incl. inside planJson) -> target's,
   plan key/reference ids -> target ids with the same names (aggregate skipped,
   names listed, if the target model lacks one), instance ids -> the target
-  counterpart's instance (none for new ones),
+  counterpart's instance (new ones keep the source's: the import schema
+  requires non-null strings, the engine ignores them),
   connectionId -> the target model's connection (`/wapi/p/catalog/{id}`
   connection_ids; skipped if ambiguous). An inactive target copy that AtScale
   keeps on import is reactivated (unblock) - nothing is deleted.

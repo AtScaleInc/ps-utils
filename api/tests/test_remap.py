@@ -31,10 +31,29 @@ def test_substitutes_catalog_model_and_instance_ids():
     assert body["exportCatalogId"] == TGT_CAT and body["exportModelId"] == TGT_MODEL
     a1, a2 = body["aggregates"]["values"]
     assert (a1["catalogId"], a1["modelId"], a1["activeInstanceId"], a1["latestInstanceId"]) == (TGT_CAT, TGT_MODEL, "tgt-i1", "tgt-i1")
-    assert a2["activeInstanceId"] is None
     text = json.dumps(body)
-    assert SRC_MODEL not in text and SRC_CAT not in text and "src-i" not in text
+    assert SRC_MODEL not in text and SRC_CAT not in text
     assert a1["planJson"]["selection"]["columns"][0]["value"]["key"]["id"] == "k1"  # object ids untouched
+
+
+def test_instance_ids_are_never_null():
+    # The import schema requires strings (400 "Expected string, received null");
+    # a new aggregate keeps the source ids, which the engine ignores on import.
+    body, _ = remap_export(payload(), target_catalog_id=TGT_CAT, target_model_id=TGT_MODEL,
+                           target_instances={"a1": None}, target_connections=[])
+    for v in body["aggregates"]["values"]:
+        assert isinstance(v["activeInstanceId"], str) and isinstance(v["latestInstanceId"], str)
+    a1, a2 = body["aggregates"]["values"]
+    assert a1["activeInstanceId"] == "src-i1" and a2["latestInstanceId"] == "src-i2"
+
+
+def test_missing_required_strings_are_filled():
+    p = payload()
+    for v in p["aggregates"]["values"]:
+        v.pop("activeInstanceId"); v.pop("latestInstanceId"); v["triggeringQueryId"] = None
+    body, _ = remap_export(p, target_catalog_id=TGT_CAT, target_model_id=TGT_MODEL, target_instances={}, target_connections=[])
+    for v in body["aggregates"]["values"]:
+        assert v["activeInstanceId"] == "" and v["latestInstanceId"] == "" and v["triggeringQueryId"] == ""
 
 
 def test_plan_json_string_is_remapped_too():
