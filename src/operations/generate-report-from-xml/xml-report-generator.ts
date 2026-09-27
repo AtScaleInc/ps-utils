@@ -1127,7 +1127,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             if (b.cube !== cubeName) continue;
             schemaJoinedDimNames.add(dimName);
             if (!isRealJoin(b, allBindings)) continue;
-            const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
+            // Keyed by def.id (the keyed-attribute's own id), not def.name/displayName: two
+            // distinct keyed-attribute objects can share an identical name/caption and binding
+            // (a coincidence in the source model), and deduping on the name would silently drop
+            // one of them as if it were the same object visited via another hierarchy.
+            const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.id} ${b.rolePlay ?? ""}`;
             if (seenJoinRowKeys.has(joinRowKey)) continue;
             seenJoinRowKeys.add(joinRowKey);
             joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.displayName), cell(b.rolePlay), b.unique ? "yes" : ""]);
@@ -1147,7 +1151,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const allBindings = keyMap.get(def.keyUuid) ?? [];
             for (const b of allBindings) {
               if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
-              const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
+              // See the matching comment above: dedup by def.id, not def.name/displayName.
+              const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.id} ${b.rolePlay ?? ""}`;
               if (seenJoinRowKeys.has(joinRowKey)) continue;
               seenJoinRowKeys.add(joinRowKey);
               joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.displayName), cell(b.rolePlay), b.unique ? "yes" : ""]);
