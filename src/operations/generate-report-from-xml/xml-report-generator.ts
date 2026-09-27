@@ -99,6 +99,13 @@ function isQuantileGroupAttribute(attrEl: El): boolean {
   return !!(typeEl && arr(typeEl["quantile-group"]).length > 0);
 }
 
+/** True only when `<properties><visible>` is explicitly `false` — matches xml-converter.ts's
+ *  isExplicitlyHidden, the same "absent means visible" convention used for perspective hide-lists. */
+function isExplicitlyHidden(el: El): boolean {
+  const props = first(arr(el.properties)) as El | undefined;
+  return (props ? s(first(arr(props.visible))) : undefined) === "false";
+}
+
 // ── small Markdown helpers (same conventions as generate-sml-docs) ─────────
 
 function cell(v: unknown): string {
@@ -510,6 +517,12 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   const usedDimNames = new Set<string>();
   const usedCalcMemberIds = new Set<string>();
   let usedMeasureCount = 0;
+  // Attribute ids of measures that actually resolve to a real bound-to column — the same
+  // subset generate-sml-from-xml emits as SML metrics. A perspective's flat-attribute-ref can
+  // name a measure id that never survives conversion at all (unresolvable binding), and that
+  // hide-list entry then hides nothing in the resulting SML rather than hiding a metric — see
+  // perspectiveHideSummary below, which needs this same subset to report a matching count.
+  const survivingMeasureIds = new Set<string>();
   for (const cube of cubeEls) {
     const { schemaJoinedDimNames } = computeCubeJoins(cube);
     const { usedNames } = computeCubeDimNames(cube, schemaJoinedDimNames);
@@ -527,7 +540,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     for (const attrsSec of arr(cube.attributes)) {
       for (const attrEl of arr(attrsSec.attribute)) {
         if (isQuantileGroupAttribute(attrEl)) continue;
-        if (resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs)) usedMeasureCount++;
+        if (resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs)) {
+          usedMeasureCount++;
+          const attrId = a(attrEl, "id");
+          if (attrId) survivingMeasureIds.add(attrId);
+        }
       }
     }
   }
@@ -564,6 +581,80 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         }
       }
     }
+  }
+
+  // dimIdToName resolves a <dimension id="..."> to its name — used only to resolve a
+  // perspective's <flat-dimensions><flat-dimension-ref id="..."> back to the dimension it
+  // hides (see perspectiveHideSummary below). Cube-level and schema-level dimension
+  // definitions can share a name but never an id, so last-write-wins here is fine.
+  const dimIdToName = new Map<string, string>();
+  for (const d of dimEntries) {
+    const id = a(d.el, "id");
+    if (id) dimIdToName.set(id, d.name);
+  }
+
+  /**
+   * Perspectives are a "hide list" (see xml-converter.ts's Phase 7d), not an inclusion list —
+   * an empty perspective hides nothing and leaves everything visible. Mirrors that same
+   * resolution (flat-attribute-ref → measure or dimension attribute, calculated-member-ref →
+   * calculated member, flat-dimension-ref/flat-hierarchy-ref/flat-level-ref → a whole
+   * dimension/hierarchy/level) closely enough to report the same counts the converted SML
+   * ends up with, without needing the converter's own unique-naming: only distinct hidden
+   * metric ids and distinct affected dimension names are counted here.
+   */
+  function perspectiveHideSummary(perspectiveEl: El): string {
+    const hiddenMetricIds = new Set<string>();
+    const hiddenDimNames = new Set<string>();
+
+    for (const faSec of arr(perspectiveEl["flat-attributes"])) {
+      for (const faRef of arr(faSec["flat-attribute-ref"])) {
+        const id = a(faRef, "id");
+        if (!id || !isExplicitlyHidden(faRef)) continue;
+        if (survivingMeasureIds.has(id)) {
+          hiddenMetricIds.add(id); // a measure that actually converted to an SML metric
+        } else {
+          // Only a dimension the converter actually kept (usedDimNames) can be hidden in the
+          // resulting SML — a hide-list entry pointing at an excluded, never-referenced
+          // dimension has nothing left to hide there (matching xml-converter.ts, which drops
+          // it as an unresolvable Perspective omission rather than emitting a hide).
+          const dimName = attrIdToDimName.get(id);
+          if (dimName && usedDimNames.has(dimName)) hiddenDimNames.add(dimName);
+        }
+      }
+    }
+
+    for (const cmSec of arr(perspectiveEl["calculated-members"])) {
+      for (const cmRef of arr(cmSec["calculated-member-ref"])) {
+        const id = a(cmRef, "id");
+        if (id && isExplicitlyHidden(cmRef) && calcMemberDef.has(id)) hiddenMetricIds.add(id);
+      }
+    }
+
+    for (const fdSec of arr(perspectiveEl["flat-dimensions"])) {
+      for (const fdRef of arr(fdSec["flat-dimension-ref"])) {
+        const dimId = a(fdRef, "id");
+        const dimName = dimId ? dimIdToName.get(dimId) : undefined;
+        if (!dimName || !usedDimNames.has(dimName)) continue;
+        if (isExplicitlyHidden(fdRef)) {
+          hiddenDimNames.add(dimName);
+          continue;
+        }
+        for (const fhRef of arr(fdRef["flat-hierarchy-ref"])) {
+          if (isExplicitlyHidden(fhRef)) {
+            hiddenDimNames.add(dimName);
+            continue;
+          }
+          for (const flRef of arr(fhRef["flat-level-ref"])) {
+            if (isExplicitlyHidden(flRef)) hiddenDimNames.add(dimName);
+          }
+        }
+      }
+    }
+
+    const nMetrics = hiddenMetricIds.size;
+    const nDims = hiddenDimNames.size;
+    if (nMetrics === 0 && nDims === 0) return "hides nothing — all metrics and dimensions visible";
+    return `hides ${nMetrics} metric(s), ${nDims} dimension(s)`;
   }
 
   /**
@@ -662,7 +753,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   const hasRoles = arr(schemaEl.roles).length > 0 || arr(schemaEl.role).length > 0;
   const hasPerspectives = arr(schemaEl.perspectives).length > 0 || arr(schemaEl.perspective).length > 0;
   const hasTranslations = arr(schemaEl.translations).length > 0 || arr(schemaEl.translation).length > 0;
-  const perspectiveNames = arr(schemaEl.perspectives).flatMap((p) => arr(p.perspective)).map((p) => a(p, "name") ?? "").filter(Boolean);
+  const perspectiveEls = arr(schemaEl.perspectives).flatMap((p) => arr(p.perspective)).filter((p) => a(p, "name"));
+  const perspectiveNames = perspectiveEls.map((p) => a(p, "name") ?? "");
 
   const totalHierarchies = dimEntries.reduce((n, d) => n + arr(d.el.hierarchy).length, 0);
   const totalLevels = dimEntries.reduce(
@@ -823,9 +915,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   // ── Perspectives ─────────────────────────────────────────────────────────────
 
-  if (perspectiveNames.length) {
+  if (perspectiveEls.length) {
     out.push("## Perspectives", "");
-    out.push(...perspectiveNames.map((n) => `- ${cell(n)}`), "");
+    out.push(...perspectiveEls.map((p) => `- **${cell(a(p, "name"))}** — ${perspectiveHideSummary(p)}`), "");
   }
 
   out.push("---", "", "_Generated by `atscale-utils generate-report-from-xml`._", "");
@@ -944,6 +1036,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           if (!attrId) continue;
           const kaDef = attrDef.get(attrId);
           const kaBindings = resolveAttrBindings(kaDef?.keyUuid);
+          const kaVisible = kaDef ? kaDef.visible : true;
           secondaryRows.push([
             code(def?.displayName ?? primaryId ?? "?"),
             code(kaDef?.displayName ?? attrId),
@@ -951,6 +1044,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             role ? cell(role) : refId ? "embedded ref" : "secondary",
             code(bindingLabel(kaBindings)),
             cell(kaDef?.folder),
+            flag(!kaVisible) ? "hidden" : "",
             kaDef?.allowedCalcTypes.join(", ") ?? "",
           ]);
         }
@@ -961,7 +1055,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       }
       if (secondaryRows.length) {
         o.push("Level attributes (name/sort overrides and secondary attributes):", "");
-        o.push(...table(["Level", "Attribute", "Caption", "Role", "Bound to (dataset.column)", "Folder", "Allowed DMA calcs"], secondaryRows));
+        o.push(...table(["Level", "Attribute", "Caption", "Role", "Bound to (dataset.column)", "Folder", "Hidden", "Allowed DMA calcs"], secondaryRows));
       }
     }
     o.push("");
