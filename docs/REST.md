@@ -2190,7 +2190,7 @@ curl -X POST http://localhost:4000/rest/atscale-export-aggregates \
 
 [↑ Table of Contents](#table-of-contents)
 
-> Import aggregate definitions from an export file into a catalog/model
+> Import aggregate definitions from an export file into a catalog/model, remapping ids for cross-host promotion
 
 **Endpoint:** `POST /rest/atscale-import-aggregates`  |  **GraphQL:** `atscaleImportAggregates`
 
@@ -2205,7 +2205,8 @@ curl -X POST http://localhost:4000/rest/atscale-export-aggregates \
 | `inputFileUpload` | file field | No | Multipart upload — alternative to `inputFile` |
 | `catalogId` | `String` | No | Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
 | `modelId` | `String` | No | Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
-| `connectionRemap` | `String` | No | Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates |
+| `sourceAtscaleConnectionName` | `String` | No | Name of the AtScale connection entry for the SOURCE instance the export came from, in the connections file. Only used when the input file doesn't already carry an embedded object-name map (files from an older atscale-export-aggregates, or hand-crafted per AtScale's own docs) — lets cross-host imports still translate key/role-play reference ids by name instead of only substituting catalog/model ids. |
+| `connectionRemap` | `String` | No | Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically to the target model's connection when it differs. |
 | `importDistributionKey` | `Boolean` | No | Import distribution-key hints. Defaults to true. |
 | `importPartitionKeys` | `Boolean` | No | Import partition-key hints. Defaults to true. |
 | `importReplication` | `Boolean` | No | Import replication hints. Defaults to true. |

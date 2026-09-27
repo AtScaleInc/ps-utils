@@ -2779,7 +2779,7 @@ curl -X POST http://localhost:4000/graphql \
 
 [↑ Table of Contents](#table-of-contents)
 
-> Import aggregate definitions from an export file into a catalog/model
+> Import aggregate definitions from an export file into a catalog/model, remapping ids for cross-host promotion
 
 **CLI name:** `atscale-import-aggregates`  |  **REST:** `POST /rest/atscale-import-aggregates`
 
@@ -2794,7 +2794,8 @@ curl -X POST http://localhost:4000/graphql \
 | `inputFileContent` | `String` | No | Raw string content — alternative to `inputFile` |
 | `catalogId` | `String` | No | Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options. |
 | `modelId` | `String` | No | Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted. |
-| `connectionRemap` | `String` | No | Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates |
+| `sourceAtscaleConnectionName` | `String` | No | Name of the AtScale connection entry for the SOURCE instance the export came from, in the connections file. Only used when the input file doesn't already carry an embedded object-name map (files from an older atscale-export-aggregates, or hand-crafted per AtScale's own docs) — lets cross-host imports still translate key/role-play reference ids by name instead of only substituting catalog/model ids. |
+| `connectionRemap` | `String` | No | Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically to the target model's connection when it differs. |
 | `importDistributionKey` | `Boolean` | No | Import distribution-key hints. Defaults to true. |
 | `importPartitionKeys` | `Boolean` | No | Import partition-key hints. Defaults to true. |
 | `importReplication` | `Boolean` | No | Import replication hints. Defaults to true. |
@@ -3810,7 +3811,7 @@ input AtscaleExportAggregatesInput {
   insecure: Boolean
 }
 
-"""Import aggregate definitions from an export file into a catalog/model"""
+"""Import aggregate definitions from an export file into a catalog/model, remapping ids for cross-host promotion"""
 input AtscaleImportAggregatesInput {
   """Path to the connections YAML file"""
   connectionFile: String
@@ -3830,7 +3831,9 @@ input AtscaleImportAggregatesInput {
   catalogId: String
   """Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted."""
   modelId: String
-  """Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates"""
+  """Name of the AtScale connection entry for the SOURCE instance the export came from, in the connections file. Only used when the input file doesn't already carry an embedded object-name map (files from an older atscale-export-aggregates, or hand-crafted per AtScale's own docs) — lets cross-host imports still translate key/role-play reference ids by name instead of only substituting catalog/model ids."""
+  sourceAtscaleConnectionName: String
+  """Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically to the target model's connection when it differs."""
   connectionRemap: String
   """Import distribution-key hints. Defaults to true."""
   importDistributionKey: Boolean
@@ -4154,7 +4157,7 @@ type Mutation {
   atscaleListAggregateBuildHistory(input: AtscaleListAggregateBuildHistoryInput): OperationResult!
   """Export a catalog/model's aggregate definitions to a JSON file"""
   atscaleExportAggregates(input: AtscaleExportAggregatesInput): OperationResult!
-  """Import aggregate definitions from an export file into a catalog/model"""
+  """Import aggregate definitions from an export file into a catalog/model, remapping ids for cross-host promotion"""
   atscaleImportAggregates(input: AtscaleImportAggregatesInput): OperationResult!
   """Generate DDL from an AtScale data source by reading table metadata via the REST API"""
   generateDdlFromAtscale(input: GenerateDdlFromAtscaleInput): OperationResult!

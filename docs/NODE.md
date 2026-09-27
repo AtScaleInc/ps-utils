@@ -1805,6 +1805,8 @@ function atScaleListAggregateBuildHistory(
 
 Exports a catalog/model's System-Defined aggregate definitions to a JSON file, via AtScale's Container API export endpoint. First half of the manual cross-environment aggregate promotion workflow (export from dev, hand-edit, then `atScaleImportAggregates` against prod). User-Defined Aggregates (UDAs) are not included — an AtScale API limitation.
 
+Alongside the raw AtScale export fields, the written file carries a `_psUtils.sourceObjectNames` map (this catalog's key/role-play reference ids resolved to logical names) that `atScaleImportAggregates` uses to translate ids by name when the target catalog/model differs.
+
 ```typescript
 import { atScaleExportAggregates } from "@atscale-ps/ps-utils";
 
@@ -1840,6 +1842,8 @@ function atScaleExportAggregates(
 
 Imports aggregate definitions (typically produced by `atScaleExportAggregates`, then possibly hand-edited) into a target catalog/model, via AtScale's Container API import endpoint. The identical model must already exist in the target system.
 
+Every id in an export is per-host, so importing into a different catalog/model than the file's `exportCatalogId`/`exportModelId` remaps catalog/model ids, key/role-play reference ids (by name — via the embedded `_psUtils.sourceObjectNames`, or `sourceAtscaleConnectionName` when that's absent), and connection ids, defaults null/missing required strings to `""`, and applies AtScale's promotion rules (skip an already-active duplicate on the target; reuse and reactivate a blocked counterpart's instance; never promote something blocked on the source). Duplicate/instance matching is best-effort and degrades gracefully if the target's catalog representation or aggregate list can't be read.
+
 ```typescript
 import { atScaleImportAggregates } from "@atscale-ps/ps-utils";
 
@@ -1864,12 +1868,15 @@ function atScaleImportAggregates(
 | `inputFile` | `FileInput` | Yes | | Path to the export JSON file to import, or a `Readable` of its contents |
 | `catalogId` | `string` | No | | Target catalog (project) UUID to import into, from `atScaleListDeployments`. When omitted (with `modelId`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
 | `modelId` | `string` | No | | Target model (cube) UUID to import into, from `atScaleListDeployments`. See `catalogId` for behavior when omitted |
+| `sourceAtscaleConnectionName` | `string` | No | | AtScale connection entry for the *source* instance the export came from. Only consulted when the input file has no embedded `_psUtils.sourceObjectNames` |
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
-| `connectionRemap` | `string` | No | | Comma-separated list of `originalConnId:newConnId` pairs to remap connections referenced by the imported aggregates |
+| `connectionRemap` | `string` | No | | Comma-separated list of `originalConnId:newConnId` pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically |
 | `importDistributionKey` | `boolean` | No | `true` | Import distribution-key hints |
 | `importPartitionKeys` | `boolean` | No | `true` | Import partition-key hints |
 | `importReplication` | `boolean` | No | `true` | Import replication hints |
 | `insecure` | `boolean` | No | | Skip TLS certificate verification |
+
+**Output:** the raw import response (`numberOfDefinitionsImported`, `numberOfDefinitionsIgnored`, `aggregates.values[]`), plus `reactivated` (target definition ids unblocked because they were found already present but blocked) and `skipped` (`{id, reason}` for aggregates not sent to AtScale at all).
 
 ---
 

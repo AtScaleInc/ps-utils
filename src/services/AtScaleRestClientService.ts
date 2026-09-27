@@ -1181,6 +1181,143 @@ class ImportAggregatesRequest extends RestRequest<ImportAggregatesArgs, ImportAg
   }
 }
 
+// ── 15. Catalog export representation (id/name maps for cross-host remap) ────
+
+export type GetCatalogExportRepresentationArgs = {
+  catalogId: string;
+};
+
+/**
+ * Raw catalog JSON representation — the same shape `atscale-aggregate-idmap.ts`
+ * walks to build id-to-name maps for aggregate key/reference translation.
+ */
+export type GetCatalogExportRepresentationResult = Record<string, unknown>;
+
+class GetCatalogExportRepresentationRequest extends RestRequest<GetCatalogExportRepresentationArgs, GetCatalogExportRepresentationResult> {
+  readonly method = "GET" as const;
+
+  path(args: GetCatalogExportRepresentationArgs): string {
+    return `/v1/catalogs/${encodeURIComponent(args.catalogId)}/export`;
+  }
+
+  headers(_args: GetCatalogExportRepresentationArgs): Record<string, string> {
+    return { Accept: "application/json" };
+  }
+
+  parse(data: unknown): GetCatalogExportRepresentationResult {
+    return (data ?? {}) as GetCatalogExportRepresentationResult;
+  }
+}
+
+// ── 16. Catalog details (model connection ids) ────────────────────────────────
+
+export type GetCatalogArgs = {
+  catalogId: string;
+};
+
+export type GetCatalogResult = {
+  id?:      string;
+  name?:    string;
+  models?:  Array<{ id?: string; connection_ids?: string[]; connectionIds?: string[]; [key: string]: unknown }>;
+  [key: string]: unknown;
+};
+
+class GetCatalogRequest extends RestRequest<GetCatalogArgs, GetCatalogResult> {
+  readonly method = "GET" as const;
+
+  path(args: GetCatalogArgs): string {
+    return `/wapi/p/catalog/${encodeURIComponent(args.catalogId)}`;
+  }
+
+  parse(data: unknown): GetCatalogResult {
+    return (data ?? {}) as GetCatalogResult;
+  }
+}
+
+// ── 17. List aggregate definitions (blocked state + instance ids) ────────────
+
+export type ListAggregateDefinitionsArgs = {
+  catalogId: string;
+  modelId:   string;
+  page:      number;
+  /** Page size. Defaults to 100. */
+  limit?:    number;
+};
+
+export type AggregateDefinitionInstance = {
+  id?:     string;
+  status?: string;
+  [key: string]: unknown;
+};
+
+export type AggregateDefinition = {
+  id:      string;
+  blocked: boolean;
+  type?:   string;
+  subType?: string;
+  activeInstance?: AggregateDefinitionInstance;
+  latestInstance?: AggregateDefinitionInstance;
+  [key: string]: unknown;
+};
+
+export type ListAggregateDefinitionsResult = {
+  data:  AggregateDefinition[];
+  total: number;
+};
+
+class ListAggregateDefinitionsRequest extends RestRequest<ListAggregateDefinitionsArgs, ListAggregateDefinitionsResult> {
+  readonly method = "GET" as const;
+
+  path(_args: ListAggregateDefinitionsArgs): string {
+    return "/wapi/p/aggregate/definition";
+  }
+
+  query(args: ListAggregateDefinitionsArgs): Record<string, string> {
+    return {
+      catalogId: args.catalogId,
+      modelId:   args.modelId,
+      page:      String(args.page),
+      limit:     String(args.limit ?? 100),
+    };
+  }
+
+  parse(data: unknown): ListAggregateDefinitionsResult {
+    const body = (data ?? {}) as Record<string, any>;
+    const rows = (body.data ?? []) as Array<Record<string, any>>;
+    const normalized: AggregateDefinition[] = rows.map((r) => ({
+      ...r,
+      id:             r.id,
+      blocked:        Boolean(r.blocked),
+      activeInstance: r.activeInstance ?? r.active_instance,
+      latestInstance: r.latestInstance ?? r.latest_instance,
+    }));
+    return { data: normalized, total: body.total ?? normalized.length };
+  }
+}
+
+// ── 18. Unblock an aggregate definition ───────────────────────────────────────
+
+export type UnblockAggregateDefinitionArgs = {
+  definitionId: string;
+};
+
+export type UnblockAggregateDefinitionResult = {
+  unblocked?: boolean;
+  [key: string]: unknown;
+};
+
+class UnblockAggregateDefinitionRequest extends RestRequest<UnblockAggregateDefinitionArgs, UnblockAggregateDefinitionResult> {
+  readonly method = "PUT" as const;
+
+  path(args: UnblockAggregateDefinitionArgs): string {
+    return `/v1/aggregates/definitions/${encodeURIComponent(args.definitionId)}/unblock`;
+  }
+
+  parse(data: unknown): UnblockAggregateDefinitionResult {
+    return (data ?? {}) as UnblockAggregateDefinitionResult;
+  }
+}
+
 // ── AtScaleRestClientService ───────────────────────────────────────────────────
 
 /**
@@ -1205,6 +1342,10 @@ export class AtScaleRestClientService extends ServiceProvider {
   private readonly getAggregateBuildHistoryRequest  = new GetAggregateBuildHistoryRequest();
   private readonly exportAggregatesRequest          = new ExportAggregatesRequest();
   private readonly importAggregatesRequest          = new ImportAggregatesRequest();
+  private readonly getCatalogExportRepresentationRequest = new GetCatalogExportRepresentationRequest();
+  private readonly getCatalogRequest                     = new GetCatalogRequest();
+  private readonly listAggregateDefinitionsRequest       = new ListAggregateDefinitionsRequest();
+  private readonly unblockAggregateDefinitionRequest     = new UnblockAggregateDefinitionRequest();
 
   constructor(private readonly restClient: RestClientService) {
     super();
@@ -1364,5 +1505,59 @@ export class AtScaleRestClientService extends ServiceProvider {
     args: ImportAggregatesArgs,
   ): Promise<ImportAggregatesResult> {
     return this.restClient.execute(this.importAggregatesRequest, args, env);
+  }
+
+  /**
+   * Get a catalog's JSON representation (keys, references, datasets, ...),
+   * used to build id-to-name maps for cross-host aggregate promotion.
+   * Maps to: GET /v1/catalogs/{catalogId}/export
+   */
+  async getCatalogExportRepresentation(
+    env: AtScaleEnvironment,
+    args: GetCatalogExportRepresentationArgs,
+  ): Promise<GetCatalogExportRepresentationResult> {
+    return this.restClient.execute(this.getCatalogExportRepresentationRequest, args, env);
+  }
+
+  /**
+   * Get a catalog's details, including each model's connection ids.
+   * Maps to: GET /wapi/p/catalog/{catalogId}
+   */
+  async getCatalog(
+    env: AtScaleEnvironment,
+    args: GetCatalogArgs,
+  ): Promise<GetCatalogResult> {
+    return this.restClient.execute(this.getCatalogRequest, args, env);
+  }
+
+  /**
+   * List all aggregate definitions (including blocked ones, with instance
+   * ids) for a catalog/model, paging through the full result set.
+   * Maps to: GET /wapi/p/aggregate/definition
+   */
+  async listAggregateDefinitions(
+    env: AtScaleEnvironment,
+    args: { catalogId: string; modelId: string },
+  ): Promise<AggregateDefinition[]> {
+    const out: AggregateDefinition[] = [];
+    const limit = 100;
+    for (let page = 1; ; page++) {
+      const result = await this.restClient.execute(this.listAggregateDefinitionsRequest, { ...args, page, limit }, env);
+      out.push(...result.data);
+      if (result.data.length === 0 || out.length >= result.total) {
+        return out;
+      }
+    }
+  }
+
+  /**
+   * Unblock (reactivate) an aggregate definition.
+   * Maps to: PUT /v1/aggregates/definitions/{id}/unblock
+   */
+  async unblockAggregateDefinition(
+    env: AtScaleEnvironment,
+    args: UnblockAggregateDefinitionArgs,
+  ): Promise<UnblockAggregateDefinitionResult> {
+    return this.restClient.execute(this.unblockAggregateDefinitionRequest, args, env);
   }
 }
