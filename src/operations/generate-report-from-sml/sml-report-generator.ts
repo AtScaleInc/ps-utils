@@ -69,6 +69,19 @@ function flag(v: unknown): string {
   return v === true || v === "true" || v === "yes" ? "yes" : "";
 }
 
+/**
+ * Per the SML spec, `perspectives[].metrics`/`perspectives[].dimensions` are hide-lists
+ * (the objects to hide in that perspective), not the perspective's visible content — an
+ * empty list means everything is visible, not that the perspective is empty. Summarize
+ * accordingly rather than reporting the list lengths as if they were inclusion counts.
+ */
+function perspectiveHideSummary(p: Raw | undefined): string {
+  const nMetrics = asArray(p?.metrics).length;
+  const nDims = asArray(p?.dimensions).length;
+  if (nMetrics === 0 && nDims === 0) return "hides nothing — all metrics and dimensions visible";
+  return `hides ${nMetrics} metric(s), ${nDims} dimension(s)`;
+}
+
 function anchor(title: string): string {
   return title.toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
 }
@@ -321,9 +334,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   if (perspectives.length) {
     out.push("## Perspectives", "");
     for (const p of perspectives) {
-      const nMetrics = asArray(p?.metrics).length;
-      const nDims = asArray(p?.dimensions).length;
-      out.push(`- **${cell(p?.label ?? p?.unique_name)}** — ${nMetrics} metric(s), ${nDims} dimension(s)`);
+      out.push(`- **${cell(p?.label ?? p?.unique_name)}** — ${perspectiveHideSummary(p)}`);
     }
     out.push("");
   }
@@ -435,13 +446,14 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
       o.push("**Secondary attributes**", "");
       o.push(
         ...table(
-          ["Level", "Attribute", "Label", "Bound to (dataset.column)", "Folder", "Allowed DMA calcs"],
+          ["Level", "Attribute", "Label", "Bound to (dataset.column)", "Folder", "Hidden", "Allowed DMA calcs"],
           secondaries.map((a) => [
             code(a.level),
             code(a?.unique_name),
             cell(a?.label),
             code(bindingLabel(a)),
             cell(a?.folder),
+            flag(a?.is_hidden),
             asArray(a?.allowed_calcs_for_dma).join(", "),
           ]),
         ),
@@ -600,9 +612,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (perspectives.length) {
       o.push("**Perspectives**", "");
       for (const p of perspectives) {
-        const nMetrics = asArray(p?.metrics).length;
-        const nDims = asArray(p?.dimensions).length;
-        o.push(`- **${cell(p?.label ?? p?.unique_name)}** — ${nMetrics} metric(s), ${nDims} dimension(s)`);
+        o.push(`- **${cell(p?.label ?? p?.unique_name)}** — ${perspectiveHideSummary(p)}`);
       }
       o.push("");
     }
