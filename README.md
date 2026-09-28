@@ -1639,6 +1639,8 @@ Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-mo
 
 Coverage is identical: one grand-total query per metric and one per-level breakdown query per hierarchy level across all dimensions.
 
+MDX resolves levels by name, not caption, so the level breakdowns put each level's `query_name` (`MDSCHEMA_LEVELS.LEVEL_NAME`) in the `[Dim].[Hierarchy].[Level]` brackets. The `caption` is used only in the query's display name (`Dim | Hierarchy | Caption`).
+
 ```bash
 # Generate queries from a model.yaml
 ./atscale-utils generate-queries-from-model \

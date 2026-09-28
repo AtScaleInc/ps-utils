@@ -140,21 +140,27 @@ export class GenerateQueriesFromModelOperation extends Operation<Params> {
     this.logger.info(`  Metrics: ${metrics.length}`);
 
     // ── Extract hierarchy levels from mdx.attributes ──────────────────────────
-    // Structure: attributes[dimLabel][hierLabel] = [{ query_name, caption, level_number }]
+    // Structure: attributes[dimName][hierName] = [{ query_name, caption, level_number }]
+    // The keys are parsed from HIERARCHY_UNIQUE_NAME, so they are MDX names.
+    // query_name is MDSCHEMA_LEVELS.LEVEL_NAME — what MDX resolves a level by —
+    // while caption is display-only and may differ.
     const levels: LevelEntry[] = [];
     const attributes: Record<string, Record<string, any[]>> = modelData.mdx?.attributes ?? {};
 
-    for (const dimLabel of Object.keys(attributes)) {
-      const hierarchies = attributes[dimLabel];
-      for (const hierLabel of Object.keys(hierarchies)) {
-        const levelArray: any[] = hierarchies[hierLabel] ?? [];
+    for (const dimName of Object.keys(attributes)) {
+      const hierarchies = attributes[dimName];
+      for (const hierName of Object.keys(hierarchies)) {
+        const levelArray: any[] = hierarchies[hierName] ?? [];
         // Sort by level_number so levels are added broadest → most granular
         const sorted = [...levelArray].sort((a, b) => (a.level_number ?? 0) - (b.level_number ?? 0));
         for (const lvl of sorted) {
           if (!lvl.query_name) continue;
           levels.push({
-            dimLabel,
-            hierLabel,
+            dimName,
+            hierName,
+            levelName:       lvl.query_name,
+            dimLabel:        dimName,
+            hierLabel:       hierName,
             levelLabel:      lvl.caption ?? lvl.query_name,
             levelNameColumn: lvl.query_name,
           });

@@ -21,10 +21,18 @@ export interface MetricEntry {
 
 /**
  * One hierarchy level reduced to what query generation needs.
- *   levelLabel      — the display caption used in MDX [Level] brackets
- *   levelNameColumn — the underlying column name used in SQL GROUP BY
+ *
+ * MDX resolves dimensions, hierarchies and levels by *name*
+ * (MDSCHEMA_LEVELS.LEVEL_NAME), never by caption, so the names and the
+ * display labels are carried separately:
+ *   dimName / hierName / levelName    — go in the MDX [Dim].[Hier].[Level] brackets
+ *   dimLabel / hierLabel / levelLabel — display only ("Dim | Hier | Level" query name)
+ *   levelNameColumn                   — the column name used in SQL GROUP BY
  */
 export interface LevelEntry {
+  dimName: string;
+  hierName: string;
+  levelName: string;
   dimLabel: string;
   hierLabel: string;
   levelLabel: string;
@@ -75,15 +83,15 @@ export function mdxMetricTotal(metricUniqueName: string, cubeName: string): stri
  */
 export function mdxLevelQuery(
   metricUniqueNames: string[],
-  dimLabel: string,
-  hierLabel: string,
-  levelLabel: string,
+  dimName: string,
+  hierName: string,
+  levelName: string,
   cubeName: string,
 ): string {
   const measures = metricUniqueNames.map((m) => `[Measures].[${m}]`).join(", ");
   return (
     `SELECT {${measures}} ON COLUMNS,\n` +
-    `  NON EMPTY [${dimLabel}].[${hierLabel}].[${levelLabel}].MEMBERS ON ROWS\n` +
+    `  NON EMPTY [${dimName}].[${hierName}].[${levelName}].MEMBERS ON ROWS\n` +
     `FROM [${cubeName}]`
   );
 }
@@ -138,7 +146,7 @@ export function buildQueryPairs(
     const name = `${lvl.dimLabel} | ${lvl.hierLabel} | ${lvl.levelLabel}`;
     xmlaQueries.push(makeQueryRecord(
       name, "analysis",
-      mdxLevelQuery(allMetricNames, lvl.dimLabel, lvl.hierLabel, lvl.levelLabel, cubeName),
+      mdxLevelQuery(allMetricNames, lvl.dimName, lvl.hierName, lvl.levelName, cubeName),
       cubeName,
     ));
     sqlQueries.push(makeQueryRecord(

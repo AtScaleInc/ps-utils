@@ -186,6 +186,9 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
           const la = laLookup.get(levelRef.unique_name);
           if (!la) continue;
           levels.push({
+            dimName:         dimLabel,
+            hierName:        hierLabel,
+            levelName:       la.label ?? la.name_column,
             dimLabel,
             hierLabel,
             levelLabel:      la.label ?? la.name_column,
