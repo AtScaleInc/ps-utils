@@ -188,9 +188,22 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
         dimDatasets.add(ds);
         datasetAttrCount.set(ds, (datasetAttrCount.get(ds) ?? 0) + 1);
       }
-      for (const sec of asArray<Raw>(la?.secondary_attributes)) {
-        const secDs = normDataset(sec?.dataset);
-        if (secDs) datasetAttrCount.set(secDs, (datasetAttrCount.get(secDs) ?? 0) + 1);
+    }
+    // Secondary attributes live on hierarchies[].levels[].secondary_attributes, not on
+    // level_attributes (see renderDimension's own "Secondary attributes" table and the
+    // Summary's attrCount rollup above, which already walk this nesting) — la?.secondary_attributes
+    // above is always empty, so this tally needs its own pass over the same shape.
+    for (const h of asArray<Raw>(d.raw.hierarchies)) {
+      for (const lvl of asArray<Raw>(h?.levels)) {
+        for (const sec of asArray<Raw>(lvl?.secondary_attributes)) {
+          const shared = asArray<Raw>(sec?.shared_degenerate_columns);
+          const secDatasets = shared.length ? shared.map((s) => normDataset(s?.dataset)) : [normDataset(sec?.dataset)];
+          for (const secDs of secDatasets) {
+            if (!secDs) continue;
+            dimDatasets.add(secDs);
+            datasetAttrCount.set(secDs, (datasetAttrCount.get(secDs) ?? 0) + 1);
+          }
+        }
       }
     }
     for (const rel of asArray<Raw>(d.raw.relationships)) {
