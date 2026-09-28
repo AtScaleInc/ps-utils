@@ -1481,6 +1481,7 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 - **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
 - **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). For XMLA this is a **cell** count (rows × measures), not a row count: a 1124-row breakdown selecting 3 metrics reads `3372` for XMLA and `1124` for SQL. `0` when no data is returned or on error.
 - **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the result itself — the `<Axes>` (tuples) and `<CellData>` sections — so per-request and per-response metadata (the SOAP `<Header>` session ID and the `LastDataUpdate` / `LastSchemaUpdate` timestamps in `OlapInfo`) does not affect it, and the same result gives the same checksum across runs and hosts. Empty when `row_count = 0` or when the query fails.
+- **`status`** for XMLA is `FAILED` on a non-200 HTTP status **or** when the response carries a SOAP `<Fault>` (even with HTTP 200); the fault's `faultstring` goes in `error`.
 
 ---
 

@@ -635,6 +635,18 @@ export function summarizeXmlaResponse(body: string): { rowCount: number; checksu
 }
 
 /**
+ * Return the error message of a SOAP fault carried in an XMLA response, or ""
+ * when there is none. Some engines return faults with HTTP 200, so the status
+ * code alone does not prove the query succeeded.
+ */
+export function xmlaFaultMessage(body: string): string {
+  const fault = body.match(/<(?:[A-Za-z0-9_]+:)?faultstring[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_]+:)?faultstring>/i);
+  if (fault) return fault[1].trim() || "SOAP fault";
+  if (/<(?:[A-Za-z0-9_]+:)?Fault[\s>]/.test(body)) return "SOAP fault";
+  return "";
+}
+
+/**
  * Execute one XMLA query and return timing/row-count/checksum result.
  * See summarizeXmlaResponse for how row count and checksum are derived.
  */
@@ -682,6 +694,11 @@ async function executeXmlaQuery(
         checksum: "",
         error: `HTTP ${response.status}: ${body.slice(0, 200)}`,
       };
+    }
+
+    const fault = xmlaFaultMessage(body);
+    if (fault) {
+      return { status: "FAILED", durationMs, rowCount: 0, checksum: "", error: fault };
     }
 
     const { rowCount, checksum } = summarizeXmlaResponse(body);

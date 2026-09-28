@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeXmlaResponse } from "../execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
+import { summarizeXmlaResponse, xmlaFaultMessage } from "../execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
 
 type Cell = { value: string; fmt?: string };
 
@@ -78,5 +78,20 @@ describe("summarizeXmlaResponse row count", () => {
   it("counts namespace-prefixed <Value> elements", () => {
     const body = response({ cells: [{ value: "1" }] }).replace(/<(\/?)Value/g, "<$1x:Value");
     expect(summarizeXmlaResponse(body).rowCount).toBe(1);
+  });
+});
+
+describe("xmlaFaultMessage", () => {
+  it("returns the faultstring of a SOAP fault", () => {
+    const body =
+      `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>` +
+      `<soap:Fault><faultcode>soap:Server</faultcode>` +
+      `<faultstring> Level \`[Product].[Product]\` not found </faultstring></soap:Fault>` +
+      `</soap:Body></soap:Envelope>`;
+    expect(xmlaFaultMessage(body)).toBe("Level `[Product].[Product]` not found");
+  });
+
+  it("returns empty for a normal result", () => {
+    expect(xmlaFaultMessage(response())).toBe("");
   });
 });
