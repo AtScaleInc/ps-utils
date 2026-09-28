@@ -1609,6 +1609,8 @@ ORDER BY "level_column"
 
 Names come from the SML `unique_name`s, which is how AtScale exposes objects: the dimension, hierarchy and level-attribute `unique_name`s go in the MDX brackets, and the level attribute's `unique_name` is its SQL column (never the dataset's physical `name_column`). Labels are used only in the query's display name (`Dim | Hierarchy | Level`).
 
+Role-played dimensions are expanded once per role: a relationship with `role_play: "Order {0}"` yields `[Order Date Dimension].[Order CustomPP445].[Order customyear]` in MDX and `"Order customyear"` in SQL, matching how AtScale exposes the role.
+
 ```bash
 # Generate queries from an SML directory
 ./atscale-utils generate-queries-from-sml \

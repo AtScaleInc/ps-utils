@@ -129,6 +129,70 @@ describe("GenerateQueriesFromSMLOperation", () => {
   });
 });
 
+describe("GenerateQueriesFromSMLOperation role-played dimensions", () => {
+  it("applies the role_play template to dimension, hierarchy and level names", async () => {
+    const dir = tempDir("generate-queries-from-sml-roleplay-");
+    for (const sub of ["models", "metrics", "dimensions"]) {
+      fs.mkdirSync(path.join(dir, sub), { recursive: true });
+    }
+    fs.writeFileSync(path.join(dir, "models", "sales.yml"), [
+      "unique_name: sales_model",
+      "object_type: model",
+      "label: Sales",
+      "metrics:",
+      "  - unique_name: salesamount",
+      "relationships:",
+      "  - unique_name: order_date",
+      "    from: { dataset: fact, join_columns: [orderdatekey] }",
+      "    to: { dimension: Date Dimension, level: customday }",
+      '    role_play: "Order {0}"',
+      "  - unique_name: ship_date",
+      "    from: { dataset: fact, join_columns: [shipdatekey] }",
+      "    to: { dimension: Date Dimension, level: customday }",
+      '    role_play: "Ship {0}"',
+      "  - unique_name: ship_date_again",
+      "    from: { dataset: fact2, join_columns: [shipdatekey] }",
+      "    to: { dimension: Date Dimension, level: customday }",
+      '    role_play: "Ship {0}"',
+      "",
+    ].join("\n"));
+    fs.writeFileSync(path.join(dir, "metrics", "salesamount.yml"),
+      "unique_name: salesamount\nobject_type: metric\nlabel: Sales Amount\n");
+    fs.writeFileSync(path.join(dir, "dimensions", "date.yml"), [
+      "unique_name: Date Dimension",
+      "object_type: dimension",
+      "label: Date Dimension",
+      "hierarchies:",
+      "  - unique_name: CustomPP445",
+      "    levels:",
+      "      - unique_name: customday",
+      "level_attributes:",
+      "  - unique_name: customday",
+      "    label: Custom Day",
+      "    dataset: date",
+      "    name_column: rpt_day",
+      "    key_columns: [datekey]",
+      "",
+    ].join("\n"));
+
+    const op = new GenerateQueriesFromSMLOperation(await buildServiceRegistry(), logger);
+    const xmlaPath = path.join(dir, "out", "xmla.json");
+    const sqlPath = path.join(dir, "out", "sql.json");
+    await op.run({ "sml-dir": dir, "xmla-output-file": xmlaPath, "sql-output-file": sqlPath });
+
+    const levels = readJson(xmlaPath).filter((q) => !q.queryName.endsWith("| Total"));
+    expect(levels.map((q) => q.queryName)).toEqual([
+      "Order Date Dimension | Order CustomPP445 | Order Custom Day",
+      "Ship Date Dimension | Ship CustomPP445 | Ship Custom Day",
+    ]);
+    expect(levels[0].originalText).toContain(
+      "[Order Date Dimension].[Order CustomPP445].[Order customday].MEMBERS",
+    );
+    const sql = readJson(sqlPath).find((q) => q.queryName.startsWith("Ship "));
+    expect(sql.originalText).toContain('GROUP BY "Ship customday"');
+  });
+});
+
 describe("buildQueryPairs metrics-per-level-query", () => {
   const metrics = [
     { uniqueName: "salesamount", label: "Sales Amount" },

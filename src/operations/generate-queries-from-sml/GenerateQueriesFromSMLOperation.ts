@@ -180,16 +180,32 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
     const dimensionsLookup = new Map<string, any>();
     for (const [, d] of dimensionsMap) dimensionsLookup.set(d.unique_name, d);
 
-    const relatedDimNames = new Set<string>(
-      (modelData.relationships ?? [])
-        .map((r: any) => r.to?.dimension)
-        .filter(Boolean),
-    );
-    const allDimNames = [...relatedDimNames, ...(modelData.dimensions ?? [])];
+    // A relationship with a role_play template (e.g. "Order {0}") exposes the
+    // dimension once per role, and AtScale applies the template to every
+    // dimension, hierarchy and level name and caption — "Order Date Dimension"
+    // / "Order CustomPP445" / "Order customyear". "{0}" is the un-role-played
+    // dimension (plain relationships and degenerate dimensions).
+    const rolesByDim = new Map<string, Set<string>>();
+    const addRole = (dimName: string, template: string) => {
+      if (!rolesByDim.has(dimName)) rolesByDim.set(dimName, new Set());
+      rolesByDim.get(dimName)!.add(template);
+    };
+    for (const r of (modelData.relationships ?? [])) {
+      const dimName = r.to?.dimension;
+      if (!dimName) continue;
+      const template = typeof r.role_play === "string" && r.role_play.includes("{0}")
+        ? r.role_play
+        : "{0}";
+      addRole(dimName, template);
+    }
+    for (const d of (modelData.dimensions ?? [])) {
+      const dimName = typeof d === "string" ? d : d?.unique_name;
+      if (dimName) addRole(dimName, "{0}");
+    }
 
     const levels: LevelEntry[] = [];
 
-    for (const dimUniqueName of allDimNames) {
+    for (const [dimUniqueName, roles] of rolesByDim) {
       const dim = dimensionsLookup.get(dimUniqueName);
       if (!dim) { this.logger.verbose(`Dimension not found: ${dimUniqueName}`); continue; }
 
@@ -203,21 +219,24 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
       const laLookup = new Map<string, any>();
       for (const la of (dim.level_attributes ?? [])) laLookup.set(la.unique_name, la);
 
-      for (const hier of (dim.hierarchies ?? [])) {
-        const hierName: string  = hier.unique_name;
-        const hierLabel: string = hier.label ?? hierName;
-        for (const levelRef of (hier.levels ?? [])) {
-          const la = laLookup.get(levelRef.unique_name);
-          if (!la) continue;
-          levels.push({
-            dimName,
-            hierName,
-            levelName:       la.unique_name,
-            dimLabel,
-            hierLabel,
-            levelLabel:      la.label ?? la.unique_name,
-            levelNameColumn: la.unique_name,
-          });
+      for (const template of roles) {
+        const role = (name: string) => template.split("{0}").join(name);
+        for (const hier of (dim.hierarchies ?? [])) {
+          const hierName: string  = hier.unique_name;
+          const hierLabel: string = hier.label ?? hierName;
+          for (const levelRef of (hier.levels ?? [])) {
+            const la = laLookup.get(levelRef.unique_name);
+            if (!la) continue;
+            levels.push({
+              dimName:         role(dimName),
+              hierName:        role(hierName),
+              levelName:       role(la.unique_name),
+              dimLabel:        role(dimLabel),
+              hierLabel:       role(hierLabel),
+              levelLabel:      role(la.label ?? la.unique_name),
+              levelNameColumn: role(la.unique_name),
+            });
+          }
         }
       }
     }
