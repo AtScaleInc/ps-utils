@@ -39,6 +39,28 @@ export interface LevelEntry {
   levelNameColumn: string;
 }
 
+/**
+ * How level breakdowns select metrics:
+ *   all  — one query per level selecting every metric (default)
+ *   each — one query per (level, metric)
+ *
+ * With `all`, a single metric not defined over a level's dimension (another
+ * fact or measure group) makes AtScale reject the whole query, so every other
+ * metric on that level goes untested. `each` isolates that failure to the one
+ * non-conformed metric.
+ */
+export type MetricsPerLevelQuery = "all" | "each";
+
+export const METRICS_PER_LEVEL_QUERY_VALUES: readonly MetricsPerLevelQuery[] = ["all", "each"];
+
+export function parseMetricsPerLevelQuery(value: string | undefined): MetricsPerLevelQuery {
+  const normalized = (value ?? "all").trim().toLowerCase() || "all";
+  if (normalized !== "all" && normalized !== "each") {
+    throw new Error('Parameter metrics-per-level-query must be either "all" or "each".');
+  }
+  return normalized;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 export function sha256hex(text: string): string {
@@ -78,7 +100,7 @@ export function mdxMetricTotal(metricUniqueName: string, cubeName: string): stri
 }
 
 /**
- * MDX with all model metrics on COLUMNS and one hierarchy level on ROWS.
+ * MDX with the given metrics on COLUMNS and one hierarchy level on ROWS.
  * NON EMPTY suppresses empty-cell rows for sparse dimensions.
  */
 export function mdxLevelQuery(
@@ -103,7 +125,7 @@ export function sqlMetricTotal(metricUniqueName: string, cubeName: string): stri
   return `SELECT "${metricUniqueName}"\nFROM "${cubeName}"`;
 }
 
-/** SQL that groups by one level column and selects all model metrics. */
+/** SQL that groups by one level column and selects the given metrics. */
 export function sqlLevelQuery(
   metricUniqueNames: string[],
   levelNameColumn: string,
@@ -125,12 +147,15 @@ export function sqlLevelQuery(
  *
  * Produces:
  *   Metric totals    — one grand-total query per metric (no dimensional breakdown)
- *   Level breakdowns — one query per hierarchy level; all metrics on COLUMNS/SELECT
+ *   Level breakdowns — with "all", one query per hierarchy level with all metrics
+ *                      on COLUMNS/SELECT ("Dim | Hier | Level"); with "each", one
+ *                      query per (level, metric) ("Dim | Hier | Level | Metric")
  */
 export function buildQueryPairs(
   metrics: MetricEntry[],
   levels: LevelEntry[],
   cubeName: string,
+  metricsPerLevelQuery: MetricsPerLevelQuery = "all",
 ): { xmlaQueries: QueryRecord[]; sqlQueries: QueryRecord[] } {
   const allMetricNames = metrics.map((m) => m.uniqueName);
   const xmlaQueries: QueryRecord[] = [];
@@ -143,17 +168,22 @@ export function buildQueryPairs(
   }
 
   for (const lvl of levels) {
-    const name = `${lvl.dimLabel} | ${lvl.hierLabel} | ${lvl.levelLabel}`;
-    xmlaQueries.push(makeQueryRecord(
-      name, "analysis",
-      mdxLevelQuery(allMetricNames, lvl.dimName, lvl.hierName, lvl.levelName, cubeName),
-      cubeName,
-    ));
-    sqlQueries.push(makeQueryRecord(
-      name, "sql",
-      sqlLevelQuery(allMetricNames, lvl.levelNameColumn, cubeName),
-      cubeName,
-    ));
+    const levelName = `${lvl.dimLabel} | ${lvl.hierLabel} | ${lvl.levelLabel}`;
+    const groups = metricsPerLevelQuery === "each"
+      ? metrics.map((m) => ({ name: `${levelName} | ${m.label}`, metricNames: [m.uniqueName] }))
+      : [{ name: levelName, metricNames: allMetricNames }];
+    for (const { name, metricNames } of groups) {
+      xmlaQueries.push(makeQueryRecord(
+        name, "analysis",
+        mdxLevelQuery(metricNames, lvl.dimName, lvl.hierName, lvl.levelName, cubeName),
+        cubeName,
+      ));
+      sqlQueries.push(makeQueryRecord(
+        name, "sql",
+        sqlLevelQuery(metricNames, lvl.levelNameColumn, cubeName),
+        cubeName,
+      ));
+    }
   }
 
   return { xmlaQueries, sqlQueries };

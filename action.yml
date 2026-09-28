@@ -672,6 +672,13 @@ inputs:
       Defaults to the model label from the SML model file.
       Used by: generate-queries-from-sml, generate-queries-from-model.
     required: false
+  metrics-per-level-query:
+    description: >
+      How level breakdowns select metrics: "all" (default; one query per level
+      selecting every metric) or "each" (one query per level and metric, so a
+      metric not defined over a dimension fails only its own query).
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
 
   # ── extract-ddl-from-connection ───────────────────────────────────────────
   tables:
@@ -1816,6 +1823,7 @@ runs:
         )
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        [[ -n "${{ inputs.metrics-per-level-query }}" ]] && ARGS+=(--metrics-per-level-query "${{ inputs.metrics-per-level-query }}")
         node "${{ github.action_path }}/dist/cli.js" generate-queries-from-sml "${ARGS[@]}"
       shell: bash
 
@@ -1831,6 +1839,7 @@ runs:
         )
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        [[ -n "${{ inputs.metrics-per-level-query }}" ]] && ARGS+=(--metrics-per-level-query "${{ inputs.metrics-per-level-query }}")
         node "${{ github.action_path }}/dist/cli.js" generate-queries-from-model "${ARGS[@]}"
       shell: bash
 

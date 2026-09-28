@@ -1021,6 +1021,7 @@ curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 
 **curl (JSON):**
 
@@ -1049,6 +1050,7 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
 | `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
 

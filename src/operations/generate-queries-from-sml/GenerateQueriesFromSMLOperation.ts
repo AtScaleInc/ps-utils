@@ -13,6 +13,9 @@
  *   Level breakdowns — one query per hierarchy level across every dimension,
  *     selecting all model metrics broken down by that level.
  *
+ * --metrics-per-level-query each splits every level breakdown into one query
+ * per metric, so a non-conformed metric fails only its own query.
+ *
  * Query generation is delegated to generate-queries-shared.ts.
  */
 import { Operation } from "../Operation.js";
@@ -24,6 +27,7 @@ import {
   type MetricEntry,
   type LevelEntry,
   buildQueryPairs,
+  parseMetricsPerLevelQuery,
   writeQueryFiles,
 } from "../generate-queries-shared.js";
 import fs from "fs";
@@ -53,6 +57,18 @@ class GenerateQueriesFromSMLParamsSet extends ParameterSet {
       required = false;
     })(),
     new (class extends StringParameter {
+      name = "metrics-per-level-query";
+      description =
+        "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) " +
+        "or \"each\" (one query per level and metric, so a metric not defined over a " +
+        "dimension fails only its own query)";
+      required = false;
+      defaultValue = "all";
+      validate(value: string): void {
+        parseMetricsPerLevelQuery(value);
+      }
+    })(),
+    new (class extends StringParameter {
       name = "xmla-output-file";
       description = "Path to write the XMLA (MDX) query JSON file";
       required = true;
@@ -69,6 +85,7 @@ type Params = {
   "sml-dir": string;
   "model-name"?: string;
   "cube-name"?: string;
+  "metrics-per-level-query"?: string;
   "xmla-output-file": string;
   "sql-output-file": string;
 };
@@ -208,11 +225,13 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
     this.logger.info(`  Hierarchy levels: ${levels.length}`);
 
     // ── Generate and write ────────────────────────────────────────────────────
-    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, cubeName);
+    const metricsPerLevelQuery = parseMetricsPerLevelQuery(params["metrics-per-level-query"]);
+    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, cubeName, metricsPerLevelQuery);
 
+    const breakdowns = metricsPerLevelQuery === "each" ? levels.length * metrics.length : levels.length;
     this.logger.info(
       `Generated ${xmlaQueries.length} XMLA and ${sqlQueries.length} SQL queries ` +
-      `(${metrics.length} metric totals + ${levels.length} level breakdowns each)`,
+      `(${metrics.length} metric totals + ${breakdowns} level breakdowns each)`,
     );
 
     writeQueryFiles(

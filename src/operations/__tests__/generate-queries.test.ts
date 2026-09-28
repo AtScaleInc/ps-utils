@@ -4,6 +4,7 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildServiceRegistry } from "../../services/index.js";
 import type { Logger } from "../../logging.js";
+import { buildQueryPairs, parseMetricsPerLevelQuery, type LevelEntry } from "../generate-queries-shared.js";
 import { GenerateQueriesFromSMLOperation } from "../generate-queries-from-sml/GenerateQueriesFromSMLOperation.js";
 import { GenerateQueriesFromModelOperation } from "../generate-queries-from-model/GenerateQueriesFromModelOperation.js";
 
@@ -125,5 +126,49 @@ describe("GenerateQueriesFromSMLOperation", () => {
     const sql = readJson(sqlPath).find((q) => q.queryName === name);
     expect(sql.originalText).toContain('GROUP BY "product_level"');
     expect(sql.originalText).not.toContain("english_product_name");
+  });
+});
+
+describe("buildQueryPairs metrics-per-level-query", () => {
+  const metrics = [
+    { uniqueName: "salesamount", label: "Sales Amount" },
+    { uniqueName: "listprice", label: "List Price" },
+  ];
+  const levels: LevelEntry[] = [{
+    dimName: "Product", hierName: "Color", levelName: "color",
+    dimLabel: "Product", hierLabel: "Color", levelLabel: "Color",
+    levelNameColumn: "color",
+  }];
+
+  it("defaults to one level query selecting every metric", () => {
+    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, "cube");
+    const level = xmlaQueries.filter((q) => q.queryName.startsWith("Product |"));
+    expect(level.map((q) => q.queryName)).toEqual(["Product | Color | Color"]);
+    expect(level[0].originalText).toContain("{[Measures].[salesamount], [Measures].[listprice]}");
+    expect(sqlQueries).toHaveLength(3);
+  });
+
+  it("emits one level query per metric with \"each\"", () => {
+    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, "cube", "each");
+    const level = xmlaQueries.filter((q) => q.queryName.startsWith("Product |"));
+    expect(level.map((q) => q.queryName)).toEqual([
+      "Product | Color | Color | Sales Amount",
+      "Product | Color | Color | List Price",
+    ]);
+    expect(level[1].originalText).toContain("SELECT {[Measures].[listprice]} ON COLUMNS");
+    expect(level[1].originalText).not.toContain("salesamount");
+    const sqlLevel = sqlQueries.find((q) => q.queryName === "Product | Color | Color | List Price")!;
+    expect(sqlLevel.originalText).toBe(
+      'SELECT\n  "color",\n  "listprice"\nFROM "cube"\nGROUP BY "color"\nORDER BY "color"',
+    );
+    // Totals are unaffected.
+    expect(xmlaQueries.filter((q) => q.queryName.endsWith("| Total"))).toHaveLength(2);
+    expect(sqlQueries).toHaveLength(4);
+  });
+
+  it("rejects an unknown mode", () => {
+    expect(parseMetricsPerLevelQuery(undefined)).toBe("all");
+    expect(parseMetricsPerLevelQuery("EACH")).toBe("each");
+    expect(() => parseMetricsPerLevelQuery("group")).toThrow(/"all" or "each"/);
   });
 });

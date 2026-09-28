@@ -1574,6 +1574,8 @@ Reads an SML directory and generates two query JSON files — one XMLA (MDX) and
 - **Metric totals** — one query per metric with no dimensional breakdown (verifies the measure computes without errors and returns a value)
 - **Level breakdowns** — one query per hierarchy level across all dimensions, selecting all model metrics broken down by that level (verifies dimensional slicing at every granularity)
 
+By default each level breakdown selects **every** metric. If one metric isn't defined over that level's dimension, AtScale rejects the whole query (*measures … are not defined over the product of these dimensions*) and no metric is tested on that level. Pass `--metrics-per-level-query each` to emit one breakdown per (level, metric) instead, so the failure pins down exactly which metric isn't conformed.
+
 **XMLA query formats:**
 
 Metric total:
@@ -1628,6 +1630,7 @@ Names come from the SML `unique_name`s, which is how AtScale exposes objects: th
 | `--sml-dir` | Yes | | Path to the SML directory (must contain `models/`, `metrics/`, `dimensions/` sub-directories) |
 | `--model-name` | No | First model found | Model `label` or `unique_name` to use |
 | `--cube-name` | No | Model label | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `--metrics-per-level-query` | No | `all` | `all`: one level-breakdown query per level selecting every metric. `each`: one query per (level, metric), named `Dim \| Hierarchy \| Level \| Metric`, so a metric not defined over a dimension (another fact / measure group) fails only its own query instead of every breakdown on that level |
 | `--xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
 | `--sql-output-file` | Yes | | Path to write the SQL query JSON |
 
@@ -1663,6 +1666,7 @@ MDX resolves levels by name, not caption, so the level breakdowns put each level
 | `--model-file` | Yes | | Path to the `model.yaml` file |
 | `--model-name` | No | First model found | Top-level model key to use when the file contains multiple models |
 | `--cube-name` | No | Model name | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `--metrics-per-level-query` | No | `all` | `all`: one level-breakdown query per level selecting every metric. `each`: one query per (level, metric), named `Dim \| Hierarchy \| Level \| Metric`, so a metric not defined over a dimension (another fact / measure group) fails only its own query instead of every breakdown on that level |
 | `--xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
 | `--sql-output-file` | Yes | | Path to write the SQL query JSON |
 
