@@ -469,40 +469,6 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     }
   }
 
-  // ── "Used across cubes" tally — now that every cube's data-set-ref logical section
-  //    has been ingested (Phase 5), keyMap/attrMap hold every key-ref/attribute-ref
-  //    binding, each tagged with the cube it came from (or untagged, for a binding
-  //    declared only in a dataset's own schema-level <logical> block). A key/attribute
-  //    id is genuinely tied to a cube if ANY binding for that id — on this dataset, or on
-  //    another one, e.g. the fact table whose FK binding shares the same id as this
-  //    dataset's own authoritative definition — is cube-tagged. That is the same
-  //    "real join" shape isRealJoin (below) checks per-cube; this just answers it once,
-  //    across all cubes, per dataset. Only bindings for ids that clear that bar are
-  //    counted, so a fully-populated but never-joined dataset (declares plenty of
-  //    key-refs/attribute-refs about its own columns, but no cube's data-set-ref ever
-  //    touches the same ids) correctly reports zero usage instead of its raw declaration
-  //    count.
-  function tallyUsageByDataset(bindingsById: Map<string, { dataset: string; cube?: string }[]>): Map<string, number> {
-    const counts = new Map<string, number>();
-    for (const bindings of bindingsById.values()) {
-      if (!bindings.some((b) => b.cube !== undefined)) continue;
-      // Count this id once per dataset it touches, not once per binding — an id can be
-      // declared twice for the SAME dataset (once untagged in that dataset's own
-      // schema-level <logical> block, once tagged in a cube's data-set-ref <logical>
-      // block that simply restates it), and that must still land as a single "used by
-      // this id" credit, not two.
-      const datasetsForId = new Set(bindings.map((b) => b.dataset));
-      for (const dataset of datasetsForId) counts.set(dataset, (counts.get(dataset) ?? 0) + 1);
-    }
-    return counts;
-  }
-  const keyRefUsage = tallyUsageByDataset(keyMap);
-  const attrRefUsage = tallyUsageByDataset(attrMap);
-  for (const ds of datasets) {
-    ds.keyRefCount = keyRefUsage.get(ds.name) ?? 0;
-    ds.attrRefCount = attrRefUsage.get(ds.name) ?? 0;
-  }
-
   // ── Phase 6: cube-usage rollup ──────────────────────────────────────────────
   // This report is a complete inventory of the XML schema (see file header) — every
   // dataset/dimension/attribute/calculated-member the schema declares is documented
@@ -752,6 +718,43 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   for (const attrId of usedAttrIds) {
     const keyUuid = attrDef.get(attrId)?.keyUuid;
     for (const b of keyUuid ? keyMap.get(keyUuid) ?? [] : []) usedDatasetNames.add(b.dataset);
+  }
+
+  // ── "Used across cubes" tally — usedDatasetNames is now fully grown (direct cube
+  //    data-set-ref references, plus every dataset that only backs a used dimension level,
+  //    including one reached solely through a snowflake/embedded relationship), so gate the
+  //    tally on dataset membership in that set rather than requiring each individual id to
+  //    independently carry a cube-tagged binding. The per-id gate undercounted: only a
+  //    key-ref id gets restated elsewhere (the fact table's own FK binding, sharing the same
+  //    id as the dimension's authoritative definition) — an attribute-ref for a genuine
+  //    (non-degenerate) snowflake dimension is never duplicated onto the fact table, so
+  //    requiring a per-id restatement left attribute-ref counts at zero for every such
+  //    dimension, and silently dropped any of its key-refs that likewise never happen to be
+  //    restated. A dataset that clears the usedDatasetNames bar is, by construction, one
+  //    whose own declared key-refs/attribute-refs are actually wired into the model — mirrors
+  //    xml-converter.ts, which never excludes individual attributes within a dataset it keeps
+  //    — so once a dataset clears that bar, every one of its own bindings counts; a dataset
+  //    that never clears it still reports zero instead of its raw declaration count.
+  function tallyUsageByDataset(bindingsById: Map<string, { dataset: string }[]>): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const bindings of bindingsById.values()) {
+      // Count this id once per dataset it touches, not once per binding — an id can be
+      // declared twice for the SAME dataset (once in that dataset's own schema-level
+      // <logical> block, once in a cube's data-set-ref <logical> block that simply
+      // restates it), and that must still land as a single "used by this id" credit.
+      const datasetsForId = new Set(bindings.map((b) => b.dataset));
+      for (const dataset of datasetsForId) {
+        if (!usedDatasetNames.has(dataset)) continue;
+        counts.set(dataset, (counts.get(dataset) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }
+  const keyRefUsage = tallyUsageByDataset(keyMap);
+  const attrRefUsage = tallyUsageByDataset(attrMap);
+  for (const ds of datasets) {
+    ds.keyRefCount = keyRefUsage.get(ds.name) ?? 0;
+    ds.attrRefCount = attrRefUsage.get(ds.name) ?? 0;
   }
 
   // ============================================================
