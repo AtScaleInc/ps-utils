@@ -998,6 +998,17 @@
 
   .build-error { padding: 8px 24px; white-space: pre-wrap; }
 
+  /* Preview: DMV / Freehand toggle and the query editor. */
+  .preview-mode { display: flex; border: 1px solid var(--as-muted-30); }
+  .preview-mode button { height: 30px; padding: 0 16px; border: 0; background: transparent; color: var(--as-muted-56); font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+  .preview-mode button.on { background: var(--as-fact); color: #fff; }
+  .preview-editor-head { display: flex; align-items: center; gap: 12px; }
+  .preview-editor { flex: 0 0 200px; min-height: 140px; resize: vertical; padding: 12px 14px; background: var(--as-modal); color: var(--as-ink); border: 1px solid var(--as-muted-30); font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; outline: none; tab-size: 2; }
+  .preview-editor:focus { border-color: var(--as-fact); }
+  .btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
+  .preview-query summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; color: var(--as-muted-56); text-transform: uppercase; letter-spacing: .08em; }
+  .preview-query pre { margin: 6px 0 0; padding: 8px 10px; background: var(--as-modal); font-family: var(--font-mono); font-size: 11.5px; white-space: pre-wrap; }
+
   /* Deploy-to host picker in the SML modal. */
   .deploy-targets { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding: 12px 20px; border-bottom: 1px solid var(--as-hairline); }
   .deploy-env { display: flex; align-items: center; gap: 12px; }

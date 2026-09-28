@@ -316,3 +316,8 @@ export interface PreviewQueryResult {
 export function runPreviewQuery(payload: PreviewQueryPayload) {
   return request<PreviewQueryResult>(hostPath('/preview/query'), { method: 'POST', body: JSON.stringify(payload) })
 }
+
+/** Build > Preview > Freehand: run MDX or SQL the user typed against a catalog/cube. */
+export function runFreehandQuery(payload: { catalog: string; cube: string; dialect: 'mdx' | 'sql'; query: string; useAgg?: boolean; useCache?: boolean }) {
+  return request<PreviewQueryResult>(hostPath('/preview/freehand'), { method: 'POST', body: JSON.stringify(payload) })
+}

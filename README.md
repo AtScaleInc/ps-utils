@@ -1,26 +1,39 @@
 # AtScale Environment Manager
 
 One console for many AtScale **container** hosts, grouped into three
-environments: **Dev**, **Test-QA** and **Prod**. From one screen you can build
-a new semantic model and deploy it to several hosts at once, see what each host
-runs, manage its semantic models and aggregates, and promote
-models and system aggregates from one environment to the next, such as Dev → QA
-→ Prod. It checks what already exists on the target and only moves what's new.
+environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
+
+- **build** a semantic model visually and deploy it to one or many hosts,
+- **manage** each host's models and aggregates,
+- **test** that an environment answers the same queries as another, with the
+  same model and the same values,
+- **promote** models and system aggregates from one environment to the next,
+  such as Dev → QA → Prod, moving only what's new.
 
 ```
-┌─────────────── Settings ───────────────┐   ┌──────── Manage ────────┐   ┌──────────── Promote ────────────┐
-│ Git profile (shared)                   │   │ pick group → host      │   │ source host  ─┐                 │
-│ Dev   │ Test-QA │ Prod                 │ → │  Models:  link, deploy │ → │  diff states  ├─ drag to stage  │
-│ hosts │ hosts   │ hosts  + credentials │   │   undeploy, unlink     │   │ target host  ─┘  promote        │
-│ test connection                        │   │  Aggregates: build,    │   │  (Prod always asks to confirm)  │
-└────────────────────────────────────────┘   │   deactivate/reactivate│   └─────────────────────────────────┘
-                                             └────────────────────────┘
+┌──── Build ─────┐   ┌──── Manage ─────┐   ┌───── Test ──────┐   ┌──── Promote ────┐
+│ warehouse →    │   │ group → host    │   │ generate queries│   │ source host     │
+│ canvas → SML   │ → │ Models: link,   │ → │ from a model,   │ → │  diff → stage   │
+│ push to Git    │   │  deploy, unlink │   │ run on hosts,   │   │ target host     │
+│ deploy to any  │   │ Aggregates:     │   │ compare model + │   │  promote (Prod  │
+│ hosts          │   │  build, (de)act │   │ results         │   │  asks first)    │
+└────────────────┘   └─────────────────┘   └─────────────────┘   └─────────────────┘
+        Settings: Hosts & Git (credentials, shared Git profile) · Cache & Database
 ```
 
-The top tabs are **Build · Manage · Test · Promote**, with **Settings** on the
-right. The left rail lists the current tab's sections: Model / Preview for
-Build; Models / Aggregates for Manage and Promote; Run / Results / Compare
-results / Compare model for Test.
+The top tabs are **Build · Manage · Test · Promote**, with **⚙ Settings** on the
+right. The left rail lists the current tab's sections:
+
+| Tab | Rail sections |
+|---|---|
+| Build | Model · Preview |
+| Manage | Models · Aggregates |
+| Test | Run · Results · Compare results · Compare model |
+| Promote | Models · Aggregates |
+| Settings | Hosts & Git · Cache & Database |
+
+Every tab picks its group and host the same way: the env picker and host
+dropdown sit at the left of the bar.
 
 ---
 
@@ -39,35 +52,26 @@ Settings. There's no separate login.
 - **Save / Load.** Saving writes plain SML to `workspace/models/<model>/`.
   Loading reads from there, from a repo already attached on the host, or from
   any path or Git URL.
-- **Deploy.** Generates the SML and shows it for review. **Validate with
-  sml-cli** is optional. **Deploy to** lists every host by group; the Build
-  host is checked by default. The SML is pushed to Git once: a new model gets
-  `github.com/<git user>/<model>`, and a loaded one goes back to its own repo
-  and branch. Then each checked host attaches the repo and deploys that branch,
-  using the same call Promote uses. A host without the model's data warehouse
-  connection is greyed out, and results are reported per host.
-- **Preview.** Browse a deployed cube's dimensions and measures and run an MDX
-  or SQL query against it on the Build host.
+- **Deploy.** Generates the SML and shows it for review; **Validate with
+  sml-cli** is optional. **Deploy to** lists every host by group, with the
+  Build host checked by default. The SML is pushed to Git once: a new model
+  gets `github.com/<git user>/<model>`, and a loaded one goes back to its own
+  repo and branch. Then each checked host attaches the repo and deploys that
+  branch, using the same call Promote uses. A host without the model's data
+  warehouse connection is greyed out, and results are reported per host.
+- **Preview.** Pick a deployed catalog/cube on the Build host, then a mode:
+  - **DMV**: drag hierarchies, levels and measures (read from the cube's DMV)
+    onto Rows / Measures, and run the query the app builds. Levels of the same
+    hierarchy are combined with `Hierarchize`. You can expand the generated
+    query under the grid.
+  - **Freehand**: type your own MDX, or SQL when **SQL Dialect** is ticked.
+    Dragging an item into the editor inserts its MDX unique name or its quoted
+    SQL column name. **Use last query** copies the last built query,
+    **Template** starts an empty one, and Cmd/Ctrl+Enter runs it. MDX and SQL
+    keep separate drafts.
 
 Build is a quick-start modeler, not a replacement for AtScale's own. Multi-table
 dimension hierarchies and multi-hierarchy dimensions only partly import.
-
-### Settings: hosts, credentials and Git
-
-- **Hosts.** Register any number of AtScale container hosts. Each one has a
-  label, a hostname (no scheme or port), a Keycloak ID and password, an
-  optional API token, and a group (Dev, Test-QA or Prod).
-  - **Test connection** logs in and makes one cheap call. On success it records
-    the host's ids (models, catalog objects, aggregate instances) in the
-    working folder.
-  - Secrets are never sent back to the browser. The UI only knows whether a
-    password or token has been saved.
-- **Git profile.** One GitHub username, email and personal access token
-  (`repo` scope), shared by all hosts. **Test Git** checks the token. Linking,
-  deploying and promoting models are disabled until it works.
-- **Cache & Database** (its own Settings section) shows the list cache in the
-  working folder (see *Caching*) and lets you clear it, next to the Test
-  history database and its clean-up.
 
 ### Manage → Models
 
@@ -106,43 +110,52 @@ confirmation dialogs list every model affected.
 
 ### Test: prove an environment matches before promoting
 
-Test is ps-utils' *Testing / Query Processing* group, for several hosts at once.
+Test is ps-utils' *Testing / Query Processing* group, run on several hosts at
+once. A candidate environment is ready to promote to when its **model** and its
+**query results** match the baseline.
 
 - **Run.** Pick a host and one of its deployed models. The app generates one
   grand-total query per metric and one breakdown per hierarchy level
-  (`generate-queries-from-model`), each in MDX and SQL. Pick the hosts to run
-  on (a host counts as having the model when it has a cube with the same
-  name), which queries to run, MDX and/or SQL, workers per host, and the
-  aggregate and cache flags. The queries run like `execute-atscale-query-harness`:
-  status, time, row count and checksum per query, and every query's result
-  rows are kept.
-- **Results.** Runs are grouped by model, newest first. A run's detail shows a
-  **promotion check** for each host against a baseline host: is the model (DMV)
-  identical, are all results identical, what failed, how the time compares.
-  Opening a query shows its text, any errors, and its **history** across past
-  runs.
+  (ps-utils `generate-queries-from-model`), each in MDX and SQL. Then pick:
+  - the hosts to run on. A host counts as having the model when it has a cube
+    with the same name, even if its catalog name carries a branch suffix.
+  - which queries to run (filter by totals / level breakdowns, or search)
+  - MDX and/or SQL, workers per host, and the aggregate / cache flags
+  - whether to annotate each query with a `/* {run_id, …} */` comment, so
+    AtScale's query log can be matched to the run
+
+  The queries run like ps-utils `execute-atscale-query-harness`. Each one
+  records its status, time, size and checksum, and the result rows are stored
+  too. Each host's model (DMV) is snapshotted at the start of the run.
+- **Results.** Runs are grouped by model, newest first. A run's detail shows:
+  - a **promotion check** for each host against a baseline host you pick:
+    whether the model is identical and all results are identical, what failed,
+    and how the time compares. A banner says whether it's safe to promote.
+  - per-host totals (ok / failed, average and max time)
+  - every execution per host. Opening one shows its text, any errors, and its
+    **history** across past runs: time, size, and whether the result changed.
 - **Compare results.** Baseline vs candidate, each picked as model → run →
   host. That can be two hosts in one run (Dev vs QA), or the same host in two
   runs (before and after a redeploy). Queries are matched by name, rows by
-  member, and values per measure, within a tolerance you pick. You get a
-  verdict, then each problem query with its variance table (member, measure,
-  baseline, candidate, Δ, Δ%) and any rows found on only one side. The
-  comparison exports as CSV.
+  member, and values per measure, within a tolerance you pick (exact to 1%).
+  You get:
+  - a verdict, plus model / results / response-time checks
+  - problem queries first: Differs, Failed on baseline / candidate, Missing
+  - for each differing query, a variance table (member, measure, baseline,
+    candidate, Δ, Δ%) and any rows found on only one side
+  - a CSV export of the comparison
 - **Compare model.** A live DMV diff of two deployed models. Metrics and levels
-  are listed as only in baseline, only in candidate, or changed, with the
-  baseline → candidate value.
-- **Clean up** is in **Settings → Cache & Database**. You can see stored runs
-  per model, delete runs older than N days and/or beyond the newest N per model
-  (with a preview count first), and compact the file. Runs are also pruned
-  automatically after every run (100 per model, 90 days by default), and at
-  most 3 runs execute at once.
+  are listed as *Only in baseline*, *Only in candidate* or *Changed*, with the
+  baseline → candidate value. **Show matching objects** lists the rest.
 
-Runs are stored in one SQLite file, `workspace/tests.db`.
+MDX sizes are **cell** counts (rows × measures) and SQL sizes are row counts. A
+level whose key repeats (for example a month name keyed by day) is compared as
+a multiset, so row order never makes equal results differ.
 
 ### Promote
 
 The source (group and host) is on top and the target is below. Choose
-**Models** or **Aggregates** in the sidebar.
+**Models** or **Aggregates** in the rail.
 
 **Models.** Each row shows how the source compares with the target, using a
 GitHub compare of the two commits:
@@ -185,7 +198,7 @@ Other rules:
 - Changing the source clears what's staged.
 - **Promoting to Prod always asks for confirmation.**
 
-### How aggregate promotion works across hosts
+#### How aggregate promotion works across hosts
 
 Every host that deploys the same SML generates **its own ids**: catalog, model,
 keys, role-play references and instances. Matching by id would never work, so
@@ -210,6 +223,35 @@ everything is matched by **name**, and then the target's id is looked up.
    skipped and the missing names are listed.
 5. **Re-check at promote time.** The target's current state is re-read before
    importing, in case it changed since the diff was shown.
+
+### Settings
+
+**Hosts & Git**
+
+- **Hosts.** Register any number of AtScale container hosts. Each one has a
+  label, a hostname (no scheme or port), a Keycloak ID and password, an
+  optional API token, and a group (Dev, Test-QA or Prod).
+  - **Test connection** logs in and makes one cheap call. On success it records
+    the host's ids (models, catalog objects, aggregate instances) in the
+    working folder.
+  - Secrets are never sent back to the browser. The UI only knows whether a
+    password or token has been saved.
+- **Git profile.** One GitHub username, email and personal access token
+  (`repo` scope), shared by all hosts. **Test Git** checks the token. Linking,
+  deploying and promoting models, and Build's deploy, are disabled until it
+  works.
+
+**Cache & Database**
+
+- **Cache.** The list cache in the working folder (see *Caching and storage*):
+  how many lists, how many are fresh, their size. You can show the contents
+  and clear it.
+- **Database.** The Test history in `workspace/tests.db`:
+  - stored runs, executions and result data per model, with the oldest and
+    newest run
+  - **Delete runs** older than N days and/or beyond the newest N per model, for
+    all models or one, with a count shown before anything is deleted
+  - **Compact** gives space freed by deleted runs back to the disk
 
 ---
 
@@ -252,11 +294,12 @@ echo atscale-env-manager > .venv
 `start.sh` looks for `.venv/bin/activate` inside the repo first. If it doesn't
 find one, it reads the name in the `.venv` file and uses
 `~/Development/venv/<name>`. If neither exists, it falls back to `python3` on
-your PATH. The first run installs the frontend packages (`npm install` in
-`web/`) automatically. That also installs the pinned `sml-cli` that Build's
-**Validate** uses. If you pulled the merge into an existing checkout, run
-`npm install` in `web/` once, and install `api/requirements.txt` again to get
-GitPython.
+your PATH.
+
+The first run installs the frontend packages (`npm install` in `web/`)
+automatically, including the pinned `sml-cli` that Build's **Validate** uses.
+After pulling changes that touch dependencies, run `npm install` in `web/` and
+`pip install -r api/requirements.txt` again.
 
 ### Start
 
@@ -267,10 +310,11 @@ GitPython.
 - API: http://127.0.0.1:5050, log in `.logs/api.log`
 - Web: http://127.0.0.1:5174, log in `.logs/web.log`
 
-Open the web URL, go to **Settings**, save and test the **Git** profile, then
-add hosts to each group and **Test connection**.
+Open the web URL and go to **Settings → Hosts & Git**. Save and test the **Git**
+profile, then add hosts to each group and **Test connection**.
 
-`start.sh` first stops anything already bound to its two ports. To use other ports:
+`start.sh` first stops anything already bound to its two ports. To use other
+ports:
 
 ```bash
 API_PORT=5060 WEB_PORT=5184 ./start.sh
@@ -284,14 +328,16 @@ ENV_MANAGER_FAKE=1 ./start.sh
 
 This runs against an in-memory backend seeded with sample data: five hosts
 across the three groups, seven models, and aggregates with duplicates, stale
-rows and user-defined rows. Every screen and rule can be tried here.
+rows and user-defined rows. Manage and Promote can be tried in full here.
 
 - Demo hosts are stored in `api/connections.fake.yaml`.
-- Demo cache goes to `workspace/cache-demo/`, and Build's saved models go to `workspace/models-demo/`.
+- Demo data goes to its own files: `workspace/cache-demo/`,
+  `workspace/models-demo/` and `workspace/tests-demo.db`.
 - In Build, every demo host has a `PostgresDB` warehouse except prod-west, so
-  you can see a deploy skip a host. Deploy doesn't really push to Git, and
-  Preview and Load from Git need a real host.
-- **Settings → Reset demo data** restores the seed.
+  you can see a deploy skip a host. Deploy doesn't really push to Git.
+- Build's Preview, Load from Git, and the Test tab run real queries, so they
+  need a real host.
+- **Settings → Hosts & Git → Reset demo data** restores the seed.
 
 ### Tests and build
 
@@ -305,15 +351,19 @@ cd web && npm run build
 
 The API tests cover:
 
-- the diff states
-- duplicate filtering and system-only filtering
-- model matching by name, and name-based aggregate fingerprints across hosts
-  with different ids
-- payload remapping, including the import schema's required fields
-- hostname normalisation
-- the credential store round-trip (secrets masked)
+- Promote: the diff states, duplicate and system-only filtering, model matching
+  by name, name-based aggregate fingerprints across hosts with different ids,
+  and payload remapping (including the import schema's required fields)
+- the credential store round-trip (secrets masked) and hostname normalisation
 - caching and its disk mirror
 - full promote flows against the demo backend
+- Build: SML generation and parsing, sml-cli validation, per-host sources and
+  schemas, multi-host deploy with its preflight, the preview MDX builder
+  (including levels of one hierarchy), and freehand MDX/SQL
+- Test: query generation (level names, not captions), the harness (checksums
+  ignore per-response timestamps; `<FmtValue>` isn't counted), result variance
+  and model diffs, the compare endpoint, the SQLite store (history, retention,
+  restart recovery, JSON import), cleanup, the concurrent-run cap and job pruning
 
 ---
 
@@ -323,14 +373,16 @@ The API tests cover:
 |---|---|---|
 | `api/connections.yaml` | Hosts, credentials, Git token. Written by Settings, file mode 0600. See `api/connections.yaml.sample`. | **no** (gitignored) |
 | `api/connections.fake.yaml` | Demo-mode hosts | no |
-| `workspace/cache/` | Working folder: every cached list as readable JSON | no |
-| `workspace/cache-demo/` | The same, in demo mode | no |
+| `workspace/cache/` | Every cached list as readable JSON (demo: `cache-demo/`) | no |
+| `workspace/models/<model>/` | Build's working copy of each model's SML, also the Git checkout it pushes from (demo: `models-demo/`) | no |
+| `workspace/tests.db` | Test runs, model snapshots and result rows, in SQLite (demo: `tests-demo.db`) | no |
+| `workspace/tests-imported/` | Test runs from the earlier JSON layout, left after their one-time import into `tests.db`. Safe to delete. | no |
 | `.logs/` | API and web logs from `start.sh` | no |
 
 `connections.yaml` uses the ps-utils connection layout. Each host is an entry
 with an `atscale:` block, plus `env`, `label`, `status`, `links` (repos linked
 through the app) and `deployments` (the commit this app deployed per catalog).
-The shared Git profile is `connections.git.git`, the same as in sml-wizard.
+The shared Git profile is `connections.git.git`.
 
 Environment variables:
 
@@ -338,21 +390,26 @@ Environment variables:
 |---|---|---|
 | `API_PORT` / `WEB_PORT` | `5050` / `5174` | Ports used by `start.sh` |
 | `ENV_MANAGER_FAKE` | unset | `1` runs the demo backend |
-| `ENV_MANAGER_CACHE_TTL` | `7200` | How long cached lists stay valid, in seconds |
-| `ENV_MANAGER_WORKSPACE` | `./workspace` | Location of the working folder |
 | `ENV_MANAGER_CONNECTIONS_FILE` | `api/connections.yaml` | Location of the credential store |
+| `ENV_MANAGER_WORKSPACE` | `./workspace` | Location of the working folder |
+| `ENV_MANAGER_CACHE_TTL` | `7200` | How long cached lists stay valid, in seconds |
+| `ENV_MANAGER_MODELS_DIR` | `workspace/models` | Where Build keeps each model's working copy |
+| `ENV_MANAGER_TESTS_DB` | `workspace/tests.db` | Location of the Test database |
+| `ENV_MANAGER_TEST_KEEP` | `100` | Runs kept per model; older ones are pruned after each run |
+| `ENV_MANAGER_TEST_MAX_AGE_DAYS` | `90` | Runs older than this are pruned after each run |
+| `ENV_MANAGER_TEST_MAX_ACTIVE` | `3` | Test runs that can execute at once; more are refused until one finishes |
 
-### Caching
+### Caching and storage
 
 Container calls are slow: each list needs authentication and several REST
 calls. To keep switching between hosts, models and views instant:
 
 - **Session reuse.** Each host keeps its AtScale login token between requests.
 - **Server cache.** Every list (models, aggregate models, aggregates, repos,
-  branches, id maps, commit comparisons) is cached per host and per model for
-  **2 hours**. Each one is also written to `workspace/cache/…json` with its
-  load and expiry times, so you can see exactly what's being served, and a
-  restarted API picks it up.
+  branches, id maps, commit comparisons, Build's data sources and schema trees)
+  is cached per host and per model for **2 hours**. Each one is also written to
+  `workspace/cache/…json` with its load and expiry times, so you can see exactly
+  what's being served, and a restarted API picks it up.
 - **Start-up.** When the API starts it pre-loads every host whose last test
   didn't fail. **Test connection** re-captures that host.
 - **Browser cache.** The browser keeps whatever you've already viewed for
@@ -366,6 +423,13 @@ calls. To keep switching between hosts, models and views instant:
   - Saving the Git profile clears every host's cache.
 - **Builds.** Aggregate lists that contain Building rows are cached for only
   5 seconds, so builds show progress.
+- **Not cached:** preview and Test queries, which always go to the host. Model
+  metadata can change between one deploy and the next.
+
+Test history lives in `workspace/tests.db`, not the cache. Each execution is
+written as soon as it finishes, so a restart mid-run keeps what's done (that
+run is then marked failed). Background jobs (deploy, build, promote) are kept in
+memory: finished jobs for an hour, at most 500.
 
 ---
 
@@ -373,12 +437,20 @@ calls. To keep switching between hosts, models and views instant:
 
 ```
 web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (UI state)
+  src/build/        Build: wizard panels, SML model store, preview (DMV / Freehand)
+  src/components/   Manage, Promote, Settings
+  src/test/         Test: run setup, results, compare results, compare model, database card
   └─ /api/* ──► api/  Flask
                  routes/      settings (hosts, git, cache) · objects (models, aggregates, jobs) · promote
+                              build (sources, SML, preview, multi-host deploy) · testing (Test)
                  envs/        store.py (connections.yaml) · registry.py (host → backend, sessions, warm-up)
-                 atscale/     client.py (AtScale REST) · github.py · backend.py (real host)
-                              fake.py (demo host) · cached.py (cache wrapper)
+                 atscale/     client.py (AtScale REST) · github.py · git_ops.py (repo create + push)
+                              backend.py (real host) · fake.py (demo host) · cached.py (cache wrapper)
+                              preview.py (DMV metadata, MDX/SQL preview)
+                 smlgen/      SML build / parse / validate (sml-cli)
                  promote/     diff.py (states + rules) · idmap.py (id ↔ name) · remap.py (payload rewrite)
+                 testing/     generate.py (queries) · harness.py (execution) · model.py (DMV snapshot + diff)
+                              results.py (result rows + variance) · store.py (SQLite)
                  cache.py     2 h cache + working-folder mirror
                  jobs.py      background jobs for deploy / build / promote (UI polls /api/jobs/:id)
 reference/ps-utils              git submodule, read-only reference for porting
@@ -400,6 +472,9 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 | Build | `POST /v1/aggregates-batch/catalogs/{c}/models/{m}?isFullBuild=` |
 | Build history | `GET /wapi/p/aggregate/batch-history` |
 | Export / import | `GET /v1/aggregates/export/…` · `POST /v1/aggregates/import/…` |
+| Data warehouses, schema tree (Build) | `GET /wapi/p/data-warehouses`, `/wapi/p/data-sources/conn/{connectionId}/databases/…/tables/{t}/info` |
+| DMV metadata, MDX queries (Preview, Test) | `POST /engine/xmla` (`MDSCHEMA_CUBES / DIMENSIONS / HIERARCHIES / LEVELS / MEASURES / PROPERTIES`, and MDX) |
+| SQL queries (Preview, Test) | `POST /engine/query/submit` |
 
 Sources: the AtScale Container API docs, ps-utils, and SML's API SDKs. See
 `docs/BUILD_PLAN.md` for which source each call comes from, what has been
@@ -411,20 +486,20 @@ All routes are under `/api`. List endpoints accept `?refresh=1` and return
 `cachedAt`. Long-running calls return a job, and you poll `GET /api/jobs/:id`.
 
 ```
-GET/POST        /hosts                    PATCH/DELETE /hosts/:id    POST /hosts/:id/test
-GET/PUT         /git                      POST /git/test             GET /git/repos · /git/repos/models
-GET/DELETE      /cache
-GET             /hosts/:id/models · /repos · /branches?url= · /aggregate-models · /aggregates?catalogId&modelId
-POST            /hosts/:id/models/link · deploy · undeploy · unlink
-POST            /hosts/:id/aggregates/build · deactivate · reactivate     GET /hosts/:id/aggregates/builds
-POST            /promote/diff · /promote/models · /promote/aggregates
-GET             /hosts/:id/sources · /sources/:sourceId/schemas?search= · /build/repos
-GET/POST        /hosts/:id/preview/catalogs · /preview/metadata · /preview/query
-POST            /sml/generate · validate · save · save-path · import · import-path · import-git   GET /sml/models
-POST            /build/deploy {…model, hostIds}     GET /build/preflight?connection=&hostIds=
-GET             /hosts/:id/test/cubes            POST /test/generate · /test/runs · /test/compare · /test/model-compare · /test/cleanup
-GET             /test/runs · /test/runs/:id · /test/runs/:id.csv · /test/history?model=&query=&protocol= · /test/store
-GET             /jobs/:id
+Settings        GET/POST /hosts · PATCH/DELETE /hosts/:id · POST /hosts/:id/test
+                GET/PUT /git · POST /git/test · GET /git/repos · /git/repos/models · GET/DELETE /cache
+Manage          GET /hosts/:id/models · /repos · /branches?url= · /aggregate-models · /aggregates?catalogId&modelId
+                POST /hosts/:id/models/link · deploy · undeploy · unlink
+                POST /hosts/:id/aggregates/build · deactivate · reactivate · GET /hosts/:id/aggregates/builds
+Promote         POST /promote/diff · /promote/models · /promote/aggregates
+Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= · /build/repos
+                GET /hosts/:id/preview/catalogs · /preview/metadata · POST /preview/query · /preview/freehand
+                POST /sml/generate · validate · save · save-path · import · import-path · import-git · GET /sml/models
+                POST /build/deploy {…model, hostIds} · GET /build/preflight?connection=&hostIds=
+Test            GET /hosts/:id/test/cubes · POST /test/generate · /test/runs · /test/compare · /test/model-compare
+                GET /test/runs · /test/runs/:id · /test/runs/:id.csv · /test/history?model=&query=&protocol=
+                GET /test/store · POST /test/cleanup {olderThanDays, keepPerModel, model, dryRun} · /test/compact
+Jobs            GET /jobs/:id
 ```
 
 ---
@@ -433,6 +508,9 @@ GET             /jobs/:id
 
 - **Container hosts only.** Installer-style hosts (`:10500`/`:10502` URLs with
   `orgId`) aren't supported.
+- **Deploy needs `POST /v1/catalogs/deploy`.** Older container builds don't
+  have it and answer 404 ("Cannot POST /v1/public/catalogs/deploy"), so
+  Manage, Promote and Build can't deploy to them. The repo still gets attached.
 - **Deploy needs a real Keycloak username and password**, not just an API
   token. Accounts that only sign in through SSO can't deploy.
 - **Deploy is by branch, not commit.** A deploy always gets the branch's head
@@ -442,19 +520,22 @@ GET             /jobs/:id
 - **Build models one physical table per dimension, with one hierarchy each.**
   Richer patterns only partly import; use AtScale's own modeler for those.
 - **A Build deploy needs the same warehouse connection id on every target host**
-  (for example `PostgresDB`). Hosts without it are skipped.
-- **The DMV doesn't say which dimensions a measure relates to**, so Compare
-  model can call two models identical when one of them can't answer some
-  queries. The result compare still catches it as failed queries.
-- **Single user, single process.** Jobs and sessions live in memory; the cache
-  also has a copy on disk.
+  (for example `Postgres14`). Hosts without it are skipped.
+- **The DMV doesn't say which dimensions a measure relates to**, and AtScale
+  rejects `MDSCHEMA_MEASUREGROUP_DIMENSIONS`. So Compare model can call two
+  models identical when one of them can't answer some queries. The result
+  compare still catches it, as failed queries.
+- **Generated level breakdowns select every metric** (as ps-utils does), so one
+  metric that isn't related to a dimension fails every breakdown on it.
+- **Single process.** Sessions and background jobs live in memory. Test history
+  and the list cache are on disk.
 
 ## Related
 
 - `CLAUDE.md`: conventions for working on this repo with Claude Code
-- Build replaces the standalone `sml-wizard` repo, which is being deprecated
 - `docs/BUILD_PLAN.md`: the call map, decisions and open items
-- `docs/handoff-ps-utils-aggregate-import.md`: the matching fix requested
-  upstream in ps-utils
-- `docs/handoff-ps-utils-query-testing.md`: ps-utils query generation / harness
-  fixes found while building Test
+- `docs/handoff-ps-utils-aggregate-import.md`: the aggregate import fix
+  requested upstream in ps-utils
+- `docs/handoff-ps-utils-query-testing.md`: query generation and harness fixes
+  for ps-utils, found while building Test
+- Build replaces the standalone `sml-wizard` repo, which is being deprecated

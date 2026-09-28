@@ -17,7 +17,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from .client import AtScaleClient
+from .client import AtScaleApiError, AtScaleClient
 
 _SOAP_NS = {
     "soap": "http://schemas.xmlsoap.org/soap/envelope/",
@@ -581,6 +581,57 @@ def load_cube_metadata(client: AtScaleClient, catalog: str, cube: str) -> dict[s
     return {"dimensions": dims_out, "measures": measures_out, "_levels": levels, "_measures": measures}
 
 
+def sql_payload(sql: str, catalog: str, use_agg: bool = True, use_cache: bool = True) -> dict[str, Any]:
+    """/engine/query/submit body for a SQL query against `catalog`."""
+    return {
+        "language": "SQL",
+        "query": sql,
+        "context": {
+            "organization": {"id": "default"},
+            "environment": {"id": "default"},
+            "project": {"name": catalog},
+        },
+        "useAggs": use_agg,
+        "genAggs": use_agg,
+        "fakeResults": False,
+        "dryRun": False,
+        "useLocalCache": use_cache,
+        "useAggregateCache": use_cache,
+        "timeout": "2.minutes",
+    }
+
+
+_FAULT = re.compile(r"<faultstring>([\s\S]*?)</faultstring>", re.I)
+
+
+def run_freehand_query(client: AtScaleClient, catalog: str, cube: str, dialect: str, query: str,
+                       use_agg: bool = True, use_cache: bool = True) -> dict[str, Any]:
+    """A query the user typed (Build > Preview > Freehand), in the same
+    {columns, rows, query} shape as run_preview_query. MDX results go through
+    testing/results.py mdx_rows, which also handles a query with no row axis
+    (a grand total) and several members per row; parse_xmla_result returns
+    nothing for those."""
+    from testing.results import mdx_rows
+
+    if dialect == "sql":
+        result = parse_sql_result(client.submit_query(sql_payload(query, catalog, use_agg, use_cache)))
+        result["query"] = query
+        return result
+    try:
+        body = client.run_xmla(build_xmla_request(query, catalog, cube, use_agg, use_cache))
+    except AtScaleApiError as e:
+        fault = _FAULT.search(e.body or "")
+        raise RuntimeError(fault.group(1).strip() if fault else str(e)) from e
+    fault = _FAULT.search(body)
+    if fault:
+        raise RuntimeError(fault.group(1).strip())
+    data = mdx_rows(body)
+    depth = max((len(r["label"]) for r in data["rows"]), default=0)
+    columns = [f"Row {i + 1}" if depth > 1 else "Row Labels" for i in range(depth)] + data["measures"]
+    rows = [list(r["label"]) + [None] * (depth - len(r["label"])) + list(r["values"]) for r in data["rows"]]
+    return {"columns": columns, "rows": rows, "query": query}
+
+
 def run_preview_query(
     client: AtScaleClient,
     catalog: str,
@@ -600,22 +651,7 @@ def run_preview_query(
             return hlevels[0]["LEVEL_UNIQUE_NAME"] if hlevels else name
 
         sql = build_sql_query([as_level(h) for h in hierarchies], measures, cube)
-        payload = {
-            "language": "SQL",
-            "query": sql,
-            "context": {
-                "organization": {"id": "default"},
-                "environment": {"id": "default"},
-                "project": {"name": catalog},
-            },
-            "useAggs": use_agg,
-            "genAggs": use_agg,
-            "fakeResults": False,
-            "dryRun": False,
-            "useLocalCache": use_cache,
-            "useAggregateCache": use_cache,
-            "timeout": "2.minutes",
-        }
+        payload = sql_payload(sql, catalog, use_agg, use_cache)
         response_xml = client.submit_query(payload)
         result = parse_sql_result(response_xml)
         result["query"] = sql

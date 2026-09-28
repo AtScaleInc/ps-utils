@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   fetchPreviewCatalogs,
   fetchPreviewMetadata,
+  runFreehandQuery,
   runPreviewQuery,
   type CatalogCube,
   type PreviewMetadata,
@@ -18,8 +19,27 @@ interface DragItem {
   caption: string
 }
 
-/** Cube data preview: pick a deployed catalog/cube, drag dimensions/hierarchies/
- *  levels and measures onto the query builder, then run it as MDX or SQL.
+type Mode = 'dmv' | 'freehand'
+
+/** Last [..] part of a unique name: [Measures].[salesamount] -> salesamount,
+ *  the SQL interface's column name for that measure / level. */
+function sqlName(uniqueName: string): string {
+  const parts = uniqueName.match(/\[([^\]]*)\]/g)
+  return parts ? parts[parts.length - 1].slice(1, -1) : uniqueName
+}
+
+function template(dialect: 'mdx' | 'sql', cube: string): string {
+  return dialect === 'mdx'
+    ? `SELECT\n  { } ON COLUMNS,\n  NON EMPTY { } ON ROWS\nFROM [${cube}]`
+    : `SELECT\n  \nFROM "${cube}"\nGROUP BY 1`
+}
+
+/** Cube data preview: pick a deployed catalog/cube, then either
+ *  - DMV: drag dimensions/hierarchies/levels and measures (read from the cube's
+ *    MDSCHEMA_* rowsets) onto the query builder, or
+ *  - Freehand: type MDX or SQL (drag the same items into the editor to insert
+ *    their names),
+ *  and run it as MDX or SQL.
  *  Ported query logic (XMLA templates, MDX/SQL building, result parsing) lives
  *  in api/atscale/preview.py - this component only drives that API. */
 export function PreviewTab() {
@@ -32,6 +52,13 @@ export function PreviewTab() {
   const [result, setResult] = useState<PreviewQueryResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [log, setLog] = useState<string[]>(['Cube Data Preview ready.'])
+  const [mode, setMode] = useState<Mode>('dmv')
+  // One draft per dialect, so switching the SQL checkbox doesn't lose what was typed.
+  const [drafts, setDrafts] = useState<Record<'mdx' | 'sql', string>>({ mdx: '', sql: '' })
+  const editor = useRef<HTMLTextAreaElement>(null)
+  const cube = selectedKey ? selectedKey.split('||')[1] : ''
+  const draft = drafts[dialect] || (cube ? template(dialect, cube) : '')
+  const setDraft = (text: string) => setDrafts((d) => ({ ...d, [dialect]: text }))
 
   function appendLog(message: string) {
     setLog((l) => [...l.slice(-199), message])
@@ -124,6 +151,63 @@ export function PreviewTab() {
     }
   }
 
+  /** Insert at the caret (or replace the selection) and keep focus in the editor. */
+  function insertText(text: string) {
+    const el = editor.current
+    const start = el?.selectionStart ?? draft.length
+    const end = el?.selectionEnd ?? draft.length
+    const next = draft.slice(0, start) + text + draft.slice(end)
+    setDraft(next)
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(start + text.length, start + text.length)
+    })
+  }
+
+  function textFor(item: DragItem): string {
+    return dialect === 'sql' ? `"${sqlName(item.uniqueName)}"` : item.uniqueName
+  }
+
+  function onDropEditor(e: React.DragEvent<HTMLTextAreaElement>) {
+    const raw = e.dataTransfer.getData(DRAG_MIME)
+    if (!raw) return
+    e.preventDefault()
+    // Place the caret where the item was dropped before inserting.
+    const el = e.currentTarget
+    el.focus()
+    // Only when the browser resolves the point inside this textarea; otherwise
+    // keep the current caret (a drop outside the text, or no support).
+    const doc = document as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null }
+    const pos = doc.caretPositionFromPoint?.(e.clientX, e.clientY)
+    if (pos && (pos.offsetNode === el || el.contains(pos.offsetNode))) el.setSelectionRange(pos.offset, pos.offset)
+    insertText(textFor(JSON.parse(raw) as DragItem))
+  }
+
+  async function handleExecuteFreehand() {
+    if (!selectedKey) {
+      appendLog('Please select a catalog and cube first.')
+      return
+    }
+    const query = draft.trim()
+    if (!query) {
+      appendLog('Type a query first.')
+      return
+    }
+    const [catalog, cubeName] = selectedKey.split('||')
+    setBusy(true)
+    setResult(null)
+    try {
+      appendLog(`Executing freehand ${dialect.toUpperCase()} query…`)
+      const res = await runFreehandQuery({ catalog, cube: cubeName, dialect, query })
+      setResult(res)
+      appendLog(`Query executed successfully (${res.rows.length} rows)${res.truncated ? ' - truncated to 1000' : ''}.`)
+    } catch (e) {
+      appendLog(`Query execution error: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -139,16 +223,25 @@ export function PreviewTab() {
             </option>
           ))}
         </select>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={dialect === 'sql'} onChange={(e) => setDialect(e.target.checked ? 'sql' : 'mdx')} />
-          SQL Dialect
-        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div className="preview-mode" role="tablist" aria-label="Query mode">
+            {([['dmv', 'DMV'], ['freehand', 'Freehand']] as [Mode, string][]).map(([m, label]) => (
+              <button key={m} type="button" role="tab" aria-selected={mode === m} className={mode === m ? 'on' : ''}
+                title={m === 'dmv' ? 'Build the query by dragging from the cube metadata' : 'Type your own query (drag items in to insert their names)'}
+                onClick={() => setMode(m)}>{label}</button>
+            ))}
+          </div>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={dialect === 'sql'} onChange={(e) => setDialect(e.target.checked ? 'sql' : 'mdx')} />
+            SQL Dialect
+          </label>
+        </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', gap: 16, padding: '0 16px', minHeight: 0 }}>
         <div style={{ flex: '0 0 320px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
           <div>
-            <div className="section-label">Dimensions &amp; Hierarchies (drag to Rows)</div>
+            <div className="section-label">Dimensions &amp; Hierarchies ({mode === 'dmv' ? 'drag to Rows' : 'drag into the editor'})</div>
             <div className="preview-listbox">
               {metadata?.dimensions.map((dim) => (
                 <div key={dim.uniqueName}>
@@ -190,7 +283,7 @@ export function PreviewTab() {
           </div>
 
           <div>
-            <div className="section-label">Measures (drag to Measures)</div>
+            <div className="section-label">Measures ({mode === 'dmv' ? 'drag to Measures' : 'drag into the editor'})</div>
             <div className="preview-listbox">
               {metadata?.measures.map((group) => (
                 <div key={group.folder || '__none'}>
@@ -212,43 +305,81 @@ export function PreviewTab() {
         </div>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div
-              className="preview-dropzone"
-              style={{ flex: 1 }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={onDropOn('rows')}
-            >
-              <div className="section-label">Rows</div>
-              {rows.length === 0 && <div className="field-note">Drag a hierarchy or level here.</div>}
-              {rows.map((r) => (
-                <span key={r.uniqueName} className="preview-chip">
-                  {r.caption}
-                  <button onClick={() => removeRow(r.uniqueName)}>✕</button>
-                </span>
-              ))}
+          {mode === 'dmv' ? (
+            <>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div
+                className="preview-dropzone"
+                style={{ flex: 1 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={onDropOn('rows')}
+              >
+                <div className="section-label">Rows</div>
+                {rows.length === 0 && <div className="field-note">Drag a hierarchy or level here.</div>}
+                {rows.map((r) => (
+                  <span key={r.uniqueName} className="preview-chip">
+                    {r.caption}
+                    <button onClick={() => removeRow(r.uniqueName)}>✕</button>
+                  </span>
+                ))}
+              </div>
+              <div
+                className="preview-dropzone"
+                style={{ flex: 1 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={onDropOn('measures')}
+              >
+                <div className="section-label">Measures</div>
+                {measures.length === 0 && <div className="field-note">Drag a measure here.</div>}
+                {measures.map((m) => (
+                  <span key={m.uniqueName} className="preview-chip">
+                    {m.caption}
+                    <button onClick={() => removeMeasure(m.uniqueName)}>✕</button>
+                  </span>
+                ))}
+              </div>
             </div>
-            <div
-              className="preview-dropzone"
-              style={{ flex: 1 }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={onDropOn('measures')}
-            >
-              <div className="section-label">Measures</div>
-              {measures.length === 0 && <div className="field-note">Drag a measure here.</div>}
-              {measures.map((m) => (
-                <span key={m.uniqueName} className="preview-chip">
-                  {m.caption}
-                  <button onClick={() => removeMeasure(m.uniqueName)}>✕</button>
-                </span>
-              ))}
-            </div>
-          </div>
 
-          <button className="btn btn-primary" onClick={handleExecute} disabled={busy}>
-            {busy ? 'Executing…' : 'Execute Query'}
-          </button>
+            <button className="btn btn-primary" onClick={handleExecute} disabled={busy}>
+              {busy ? 'Executing…' : 'Execute Query'}
+            </button>
+            </>
+          ) : (
+            <>
+              <div className="preview-editor-head">
+                <div className="section-label">{dialect === 'mdx' ? 'MDX' : 'SQL'} query</div>
+                <span className="field-note" style={{ margin: 0 }}>Drag items in to insert {dialect === 'mdx' ? 'unique names' : 'column names'} · ⌘/Ctrl + Enter runs</span>
+                <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                  <button className="btn btn-ghost btn-sm" disabled={!result?.query} title="Copy the last query built in DMV mode" onClick={() => result?.query && setDraft(result.query)}>Use last query</button>
+                  <button className="btn btn-ghost btn-sm" disabled={!cube} onClick={() => setDraft(template(dialect, cube))}>Template</button>
+                </div>
+              </div>
+              <textarea
+                ref={editor}
+                className="preview-editor"
+                spellCheck={false}
+                placeholder={cube ? '' : 'Select a catalog and cube first'}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onDragOver={(e) => { if (e.dataTransfer.types.includes(DRAG_MIME)) e.preventDefault() }}
+                onDrop={onDropEditor}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleExecuteFreehand() }
+                  if (e.key === 'Tab') { e.preventDefault(); insertText('  ') }
+                }}
+              />
+              <button className="btn btn-primary" onClick={handleExecuteFreehand} disabled={busy || !cube}>
+                {busy ? 'Executing…' : `Execute ${dialect === 'mdx' ? 'MDX' : 'SQL'}`}
+              </button>
+            </>
+          )}
 
+          {mode === 'dmv' && result?.query && (
+            <details className="preview-query">
+              <summary>Generated {dialect.toUpperCase()}</summary>
+              <pre>{result.query}</pre>
+            </details>
+          )}
           <div className="preview-results" style={{ flex: 1, overflow: 'auto' }}>
             {result && result.rows.length > 0 && (
               <table className="preview-table">

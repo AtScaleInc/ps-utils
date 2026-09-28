@@ -32,7 +32,7 @@ from flask import Blueprint, jsonify, request
 import cache
 import jobs
 from atscale.git_ops import ensure_github_repo, push_sml_to_repo, slugify_repo_name
-from atscale.preview import list_catalogs_and_cubes, load_cube_metadata, run_preview_query
+from atscale.preview import list_catalogs_and_cubes, load_cube_metadata, run_freehand_query, run_preview_query
 from envs import registry
 from routes.objects import host_errors
 from smlgen.build import ValidationError, build_sml
@@ -405,6 +405,29 @@ def preview_query(host_id: str):
     except ValueError:
         raise
     except Exception as e:  # noqa: BLE001
+        return jsonify({"error": str(e)}), 502
+    if len(result["rows"]) > 1000:
+        result["rows"], result["truncated"] = result["rows"][:1000], True
+    return jsonify(result)
+
+
+@build_bp.post("/hosts/<host_id>/preview/freehand")
+@host_errors
+def preview_freehand(host_id: str):
+    """Build > Preview > Freehand: run the MDX or SQL the user typed."""
+    b = _body()
+    catalog, cube, dialect, query = b.get("catalog"), b.get("cube"), b.get("dialect", "mdx"), (b.get("query") or "").strip()
+    if not catalog or not cube:
+        return jsonify({"error": "Missing 'catalog' or 'cube'"}), 400
+    if not query:
+        return jsonify({"error": "Type a query first"}), 400
+    api = registry.source_api(host_id)
+    try:
+        result = run_freehand_query(api, catalog, cube, dialect, query,
+                                    use_agg=b.get("useAgg", True), use_cache=b.get("useCache", True))
+    except ValueError:
+        raise
+    except Exception as e:  # noqa: BLE001 - the engine's message is what the user needs
         return jsonify({"error": str(e)}), 502
     if len(result["rows"]) > 1000:
         result["rows"], result["truncated"] = result["rows"][:1000], True

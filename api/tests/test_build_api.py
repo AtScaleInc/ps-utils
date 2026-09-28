@@ -80,3 +80,34 @@ def test_real_client_has_every_source_api_call():
 
     calls = [n for n in vars(FakeSourceApi) if not n.startswith("_")]
     assert calls and all(callable(getattr(AtScaleClient, n, None)) for n in calls), calls
+
+
+def test_preview_freehand_mdx_sql_and_fault(client, monkeypatch):
+    from envs import registry
+    from tests.test_testing import SQL_OK, XMLA_FAULT, cellset
+
+    class Api:
+        def __init__(self, body):
+            self.body = body
+
+        def run_xmla(self, xml, timeout=None):
+            return self.body
+
+        def submit_query(self, payload, timeout=None):
+            assert payload["query"] == 'SELECT "a" FROM "c"' and payload["context"]["project"]["name"] == "cat"
+            return SQL_OK
+
+    url = "/api/hosts/dev-east/preview/freehand"
+    body = {"catalog": "cat", "cube": "c", "dialect": "mdx", "query": "SELECT {[Measures].[s]} ON COLUMNS FROM [c]"}
+    monkeypatch.setattr(registry, "source_api", lambda h: Api(cellset([42], rows=False)))
+    r = client.post(url, json=body).get_json()
+    assert r["columns"] == ["Sales"] and r["rows"] == [["42"]]          # grand total: no row axis
+    monkeypatch.setattr(registry, "source_api", lambda h: Api(cellset([10, 20])))
+    r = client.post(url, json=body).get_json()
+    assert r["columns"] == ["Row Labels", "Sales"] and r["rows"] == [["Bikes", "10"], ["Helmets", "20"]]
+    monkeypatch.setattr(registry, "source_api", lambda h: Api(XMLA_FAULT))
+    r = client.post(url, json=body)
+    assert r.status_code == 502 and r.get_json()["error"] == "Level not found"
+    r = client.post(url, json={**body, "dialect": "sql", "query": 'SELECT "a" FROM "c"'}).get_json()
+    assert r["columns"] == ["a"] and r["rows"] == [["x"], ["y"]]
+    assert client.post(url, json={**body, "query": "  "}).status_code == 400
