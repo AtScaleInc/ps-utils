@@ -176,23 +176,30 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
       const dim = dimensionsLookup.get(dimUniqueName);
       if (!dim) { this.logger.verbose(`Dimension not found: ${dimUniqueName}`); continue; }
 
-      const dimLabel: string = dim.label ?? dimUniqueName;
+      // AtScale exposes SML objects under their unique_name: it is the MDX
+      // name of the dimension / hierarchy / level (LEVEL_NAME equals the level
+      // attribute's unique_name) and the level's column name in the SQL
+      // interface. Labels are captions — display only — and name_column is
+      // the dataset's physical column, which the SQL interface never exposes.
+      const dimName: string  = dim.unique_name ?? dimUniqueName;
+      const dimLabel: string = dim.label ?? dimName;
       const laLookup = new Map<string, any>();
       for (const la of (dim.level_attributes ?? [])) laLookup.set(la.unique_name, la);
 
       for (const hier of (dim.hierarchies ?? [])) {
-        const hierLabel: string = hier.label ?? hier.unique_name;
+        const hierName: string  = hier.unique_name;
+        const hierLabel: string = hier.label ?? hierName;
         for (const levelRef of (hier.levels ?? [])) {
           const la = laLookup.get(levelRef.unique_name);
           if (!la) continue;
           levels.push({
-            dimName:         dimLabel,
-            hierName:        hierLabel,
-            levelName:       la.label ?? la.name_column,
+            dimName,
+            hierName,
+            levelName:       la.unique_name,
             dimLabel,
             hierLabel,
-            levelLabel:      la.label ?? la.name_column,
-            levelNameColumn: la.name_column,
+            levelLabel:      la.label ?? la.unique_name,
+            levelNameColumn: la.unique_name,
           });
         }
       }
