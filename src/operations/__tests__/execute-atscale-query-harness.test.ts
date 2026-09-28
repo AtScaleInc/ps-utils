@@ -68,3 +68,15 @@ describe("summarizeXmlaResponse checksum", () => {
     expect(summarizeXmlaResponse(response({ cells: [] })).checksum).toBe("");
   });
 });
+
+describe("summarizeXmlaResponse row count", () => {
+  it("counts each cell once when cells carry both <Value> and <FmtValue>", () => {
+    const body = response({ cells: [{ value: "1", fmt: "1.00" }, { value: "2", fmt: "2.00" }] });
+    expect(summarizeXmlaResponse(body).rowCount).toBe(2);
+  });
+
+  it("counts namespace-prefixed <Value> elements", () => {
+    const body = response({ cells: [{ value: "1" }] }).replace(/<(\/?)Value/g, "<$1x:Value");
+    expect(summarizeXmlaResponse(body).rowCount).toBe(1);
+  });
+});

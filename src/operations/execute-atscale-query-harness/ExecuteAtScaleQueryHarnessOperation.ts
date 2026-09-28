@@ -595,7 +595,8 @@ function buildSoapEnvelope(
 /**
  * Summarise a successful (HTTP 200) XMLA response body into row count and checksum.
  *
- * Row count: counts <Value> elements within the <CellData> section of the XMLA response.
+ * Row count: counts <Value> elements within the <CellData> section of the XMLA
+ * response — a cell count (rows × measures), not a row count.
  *
  * Checksum: SHA1 of the result itself — the <Axes> (tuples) and <CellData>
  * sections of the SOAP <Body>. Everything else is metadata that varies per
@@ -612,13 +613,15 @@ export function summarizeXmlaResponse(body: string): { rowCount: number; checksu
   const bodyTagMatch = body.match(/<[A-Za-z0-9_]*:?Body[^>]*>([\s\S]*)<\/[A-Za-z0-9_]*:?Body>/i);
   const bodyContent = bodyTagMatch ? bodyTagMatch[1] : body;
 
-  // Count <Value> elements inside <CellData> as the row count.
+  // Count <Value> elements inside <CellData> as the row count. For XMLA this
+  // is a cell count (rows × measures). The prefix must end in a colon, or
+  // <FmtValue> would also match and every formatted cell count twice.
   let rowCount = 0;
   const cellDataMatch = bodyContent.match(
     /<[A-Za-z0-9_]*:?CellData[^>]*>([\s\S]*?)<\/[A-Za-z0-9_]*:?CellData>/i,
   );
   if (cellDataMatch) {
-    rowCount = (cellDataMatch[1].match(/<[A-Za-z0-9_]*:?Value[\s>\/]/gi) ?? []).length;
+    rowCount = (cellDataMatch[1].match(/<(?:[A-Za-z0-9_]+:)?Value[\s>\/]/gi) ?? []).length;
   }
 
   if (!cellDataMatch || rowCount === 0) return { rowCount, checksum: "" };
