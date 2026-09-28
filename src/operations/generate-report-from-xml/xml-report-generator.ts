@@ -1189,6 +1189,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
    * bare key-ref join (schemaJoinedDimNames, from computeCubeJoins) with no <dimension-ref>
    * ever naming it — without that, such dimensions would silently vanish from "Dimensions
    * used" even though the cube genuinely depends on them.
+   *
+   * The converse also has to be filtered: a schema-level <dimension-ref> is only a
+   * *declaration* that the cube's schema mentions the dimension, not proof the cube joins
+   * to it. A schema can (and legitimately does) declare a dimension-ref whose dataset has
+   * no key-ref binding to any of this cube's fact datasets anywhere in the model — a
+   * dimension left over from another cube's schema, or never wired up at all. Such a
+   * dimension-ref is excluded here exactly as xml-converter.ts excludes it from the
+   * emitted SML (its referencedDimNames is built from real relationships/degenerate
+   * bindings, not from the mere presence of a <dimension-ref>), so this report's "used by
+   * a cube" counts agree with what actually gets converted.
    */
   function computeCubeDimNames(cube: El, schemaJoinedDimNames: Set<string>): { dimNames: string[]; usedNames: Set<string> } {
     const dimNames: string[] = [];
@@ -1203,6 +1213,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(dimRef, "id");
         const found = [...schemaDims.entries()].find(([, d]) => a(d, "id") === refId);
         const dName = found ? found[0] : refId ?? "?";
+        // Only drop it when we positively resolved the ref to a real schema-level
+        // dimension AND that dimension has zero cube-tagged key-ref bindings anywhere
+        // (schemaJoinedDimNames). An unresolved ref (found undefined) is kept as before —
+        // there's nothing to check it against.
+        if (found && !schemaJoinedDimNames.has(dName)) continue;
         dimNames.push(dName);
         namedDimNames.add(dName);
       }
