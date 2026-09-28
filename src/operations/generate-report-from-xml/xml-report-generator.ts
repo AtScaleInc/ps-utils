@@ -660,18 +660,24 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   /**
    * Resolves a cross-dimension embed the same way xml-converter.ts's
    * resolveSnowflakeRelationship does: ref-id bridges to the key-ref id that actually carries
-   * it (refPathIdToKeyRefId), which must resolve to EXACTLY one target binding (complete="true"
-   * and unique) plus one other (host) binding — anything else (no bridge, more/fewer than two
-   * bindings, no unique target, or the target resolving back to the host dimension itself) is
-   * not a real, resolvable relationship and must be left out, matching the converter exactly
-   * (e.g. a same-shaped embed whose "target" key-ref is complete but not unique is excluded).
+   * it (refPathIdToKeyRefId). A key-ref id names an abstract <attribute-key>, not a
+   * join-specific pairing, so it can be redeclared by other, unrelated datasets elsewhere in
+   * the schema — keyMap.get(hostKeyRefId) is not reliably exactly the two datasets on either
+   * side of this particular join. The host side is picked by matching the dataset the level's
+   * own primary attribute already lives on (hostDatasetName); the target side by completeness
+   * alone when there are more than two redeclarations, or by completeness AND uniqueness (the
+   * only other signal available) in the ordinary two-entry case — mirrors the converter
+   * exactly, including its own more-than-two-datasets fix.
    */
-  function resolveEmbeddedDimName(refId: string, attrId: string, hostDimName: string): string | undefined {
+  function resolveEmbeddedDimName(refId: string, attrId: string, hostDimName: string, hostDatasetName: string | undefined): string | undefined {
     const hostKeyRefId = refPathIdToKeyRefId.get(refId);
     const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) ?? [] : [];
-    if (entries.length !== 2) return undefined;
-    const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
-    const hostEntry = entries.find((e) => e !== targetEntry);
+    if (entries.length < 2) return undefined;
+    const hostEntry = entries.find((e) => e.dataset === hostDatasetName);
+    const targetEntry =
+      entries.length === 2
+        ? entries.find((e) => e.complete === "true" && e.unique)
+        : entries.find((e) => e.complete === "true" && e !== hostEntry);
     if (!targetEntry || !hostEntry) return undefined;
     const targetDimName = attrIdToDimName.get(attrId);
     if (!targetDimName || targetDimName === hostDimName) return undefined;
@@ -686,7 +692,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   /** Every cross-dimension embed (ref-id present) found on a currently-used dimension's own
    *  level, collected alongside usedAttrIds so the fixed-point loop below can attempt to
    *  resolve each one without re-walking every dimension's levels again. */
-  let pendingEmbeds: Array<{ refId: string; attrId: string; hostDimName: string }> = [];
+  let pendingEmbeds: Array<{ refId: string; attrId: string; hostDimName: string; hostDatasetName: string | undefined }> = [];
   function collectUsedAttrIds(): void {
     usedAttrIds.clear();
     pendingEmbeds = [];
@@ -695,6 +701,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         for (const level of arr(hier.level)) {
           const primaryId = a(level, "primary-attribute");
           if (primaryId) usedAttrIds.add(primaryId);
+          // The dataset this level's own primary attribute is authoritatively bound to — same
+          // pick xml-converter.ts's authEntry.datasetName makes — used below to identify which
+          // of a redeclared key-ref's bindings is the host side, not the embed's target.
+          const hostDatasetName = primaryId ? pickAuthBinding(keyMap.get(attrDef.get(primaryId)?.keyUuid ?? "") ?? [])?.dataset : undefined;
           for (const kref of arr(level["keyed-attribute-ref"])) {
             const attrId = a(kref, "attribute-id");
             if (!attrId) continue;
@@ -705,7 +715,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
               // relationship (matching xml-converter.ts, which drops an unresolved embed
               // entirely — dimMeta.skippedCrossDimRefs — rather than treating it as a live
               // secondary attribute).
-              pendingEmbeds.push({ refId, attrId, hostDimName: d.name });
+              pendingEmbeds.push({ refId, attrId, hostDimName: d.name, hostDatasetName });
             } else {
               usedAttrIds.add(attrId); // plain secondary attribute, hosted natively here
             }
@@ -721,8 +731,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   let grew = true;
   while (grew) {
     grew = false;
-    for (const { refId, attrId, hostDimName } of pendingEmbeds) {
-      const targetDimName = resolveEmbeddedDimName(refId, attrId, hostDimName);
+    for (const { refId, attrId, hostDimName, hostDatasetName } of pendingEmbeds) {
+      const targetDimName = resolveEmbeddedDimName(refId, attrId, hostDimName, hostDatasetName);
       if (targetDimName && !usedDimNames.has(targetDimName)) {
         usedDimNames.add(targetDimName);
         grew = true;
