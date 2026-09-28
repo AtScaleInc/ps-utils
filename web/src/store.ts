@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { EnvId, Host, PromoteMode } from './api'
 
-export type View = 'manage' | 'promote' | 'settings'
+export type View = 'build' | 'manage' | 'promote' | 'settings'
 export type Section = 'models' | 'aggs'
+/** Build's left-rail sections: the wizard canvas, and the cube data preview. */
+export type BuildSection = 'model' | 'preview'
 
 export interface Ask {
   eyebrow: string
@@ -19,6 +21,9 @@ interface HostPick { env: EnvId; hostId: string | null }
 interface UiState {
   view: View
   section: Section
+  buildSection: BuildSection
+  /** Build's host: where data sources are browsed and the default deploy target. */
+  build: HostPick
   manage: HostPick & { modelKey: string | null; sel: string[]; q: string }
   src: HostPick
   tgt: HostPick
@@ -35,6 +40,8 @@ interface UiState {
 
   setView: (v: View) => void
   setSection: (s: Section) => void
+  setBuildSection: (s: BuildSection) => void
+  setBuild: (p: HostPick) => void
   setManage: (p: Partial<UiState['manage']>) => void
   setSrc: (p: HostPick) => void
   setTgt: (p: HostPick) => void
@@ -55,6 +62,8 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 export const useUi = create<UiState>((set) => ({
   view: 'manage',
   section: 'models',
+  buildSection: 'model',
+  build: { env: 'dev', hostId: null },
   manage: { env: 'dev', hostId: null, modelKey: null, sel: [], q: '' },
   src: { env: 'dev', hostId: null },
   tgt: { env: 'qa', hostId: null },
@@ -68,6 +77,8 @@ export const useUi = create<UiState>((set) => ({
   linkOpen: false,
 
   setView: (view) => set({ view }),
+  setBuildSection: (buildSection) => set({ buildSection }),
+  setBuild: (build) => set({ build }),
   setSection: (section) => set((s) => ({
     section, view: s.view === 'settings' ? 'manage' : s.view, manage: { ...s.manage, sel: [], q: '' },
   })),

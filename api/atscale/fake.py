@@ -272,3 +272,59 @@ class FakeBackend:
 
     def catalog_ids(self, catalog_id: str) -> dict[str, str]:
         return {}
+
+
+# -- Build (SML wizard) --------------------------------------------------------------------
+# Warehouse metadata per host, in the shape AtScale's /wapi/p/data-sources API
+# returns (sml-wizard routes/sources.py docstring). prod-west has no PostgresDB
+# connection, so deploying a Build model there fails its preflight check.
+_COLS = {
+    "factinternetsales": [("salesordernumber", "String"), ("orderdatekey", "Int"), ("customerkey", "Int"),
+                          ("productkey", "Int"), ("salesamount", "Decimal"), ("orderquantity", "Int")],
+    "dimcustomer": [("customerkey", "Int"), ("firstname", "String"), ("lastname", "String"),
+                    ("gender", "String"), ("geographykey", "Int")],
+    "dimgeography": [("geographykey", "Int"), ("city", "String"), ("stateprovincename", "String"),
+                     ("countryregioncode", "String")],
+    "dimproduct": [("productkey", "Int"), ("englishproductname", "String"), ("color", "String"),
+                   ("productsubcategorykey", "Int")],
+    "dimdate": [("datekey", "Int"), ("fulldatealternatekey", "Date"), ("calendaryear", "Int"),
+                ("monthnumberofyear", "Int"), ("englishmonthname", "String")],
+}
+_WAREHOUSES = [{"id": "wh-pg", "name": "Postgres", "connectionId": "PostgresDB", "platformType": "postgresql"}]
+FAKE_SOURCES: dict[str, list[dict[str, Any]]] = {
+    h["id"]: ([] if h["id"] == "prod-west" else _WAREHOUSES) for h in SEED_HOSTS
+}
+
+
+class FakeSourceApi:
+    """Stands in for the AtScaleClient data-source calls Build uses."""
+
+    def __init__(self, host_id: str):
+        self.host_id = host_id
+
+    def list_data_sources(self) -> list[dict[str, Any]]:
+        return [dict(w) for w in FAKE_SOURCES.get(self.host_id, _WAREHOUSES)]
+
+    def list_databases(self, connection_id: str) -> list[str]:
+        return ["tutorial"]
+
+    def list_schemas(self, connection_id: str, database: str) -> list[str]:
+        return ["public", "information_schema"]
+
+    def list_tables(self, connection_id: str, database: str, schema: str) -> list[str]:
+        return list(_COLS) if schema == "public" else []
+
+    def get_table_info(self, connection_id: str, database: str, schema: str, table: str) -> dict[str, Any]:
+        return {"columns": [{"name": n, "dataType": t} for n, t in _COLS.get(table, [])]}
+
+    def run_xmla(self, xml_body: str) -> str:
+        raise ValueError("Preview queries need a live AtScale host - not available in demo mode")
+
+    submit_query = run_xmla
+
+
+def register_built_model(repo_url: str, model: str, catalog: str) -> None:
+    """A model pushed by Build becomes a repo the fake hosts can deploy."""
+    with _lock:
+        FAKE_REPOS[repo_url] = [model]
+        CATALOG[model] = catalog

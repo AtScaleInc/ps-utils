@@ -1,0 +1,59 @@
+/* Design tokens — from design_handoff_sml_wizard/README.md, "Design Tokens" section.
+   Recreated verbatim; do not invent new colors/sizes without updating that README's
+   authoritative spec first. */
+:root {
+  /* Ground */
+  --as-canvas: #161616;
+  --as-node-body: #1c1c1c;
+  --as-panel: #242424;
+
+  /* Panel / row */
+  --as-field: #2b2b2b;
+  --as-list-title: #2e2e2e;
+  --as-flag-gutter: #333333;
+  --as-row: #3a3a3a;
+
+  /* Modal */
+  --as-modal: #141414;
+
+  /* Ink */
+  --as-ink: #f2f2f2;
+  --as-ink-strong: #ececec;
+  --as-muted: #9a9a9a;
+  --as-muted-56: rgba(255, 255, 255, 0.56);
+  --as-muted-30: rgba(255, 255, 255, 0.3);
+  --as-muted-13: rgba(255, 255, 255, 0.13);
+  --as-muted-08: rgba(255, 255, 255, 0.08);
+  --as-muted-04: rgba(255, 255, 255, 0.04);
+
+  --as-hairline: rgba(255, 255, 255, 0.13);
+  --as-row-line: #141414;
+  --as-hover: rgba(255, 255, 255, 0.04);
+
+  /* Roles */
+  --as-fact: #2aa5c7;
+  --as-dimension: #12a594;
+
+  /* Joins / selection */
+  --as-join: #f07b29;
+  --as-attribute-ring: #e8833a;
+  --as-selected-row: rgba(240, 123, 41, 0.2);
+
+  /* Flags */
+  --as-flag-l1: #f5a623;
+  --as-flag-other: #3bd44a;
+  --as-hierarchy-glyph: #8b7be8;
+
+  /* Type */
+  --font-display: 'Suffix Serif', Georgia, serif;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* Sizes */
+  --node-w: 258px;
+  --node-header-h: 44px;
+  --node-row-h: 24px;
+  --panel-left-w: 306px;
+  --panel-right-w: 372px;
+  --shell-min-w: 1320px;
+}

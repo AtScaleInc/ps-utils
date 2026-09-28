@@ -93,6 +93,23 @@ def backend(host_id: str, refresh: bool = False) -> CachedBackend:
     return CachedBackend(RealBackend(raw, store(), store().get_git_raw(), api=_client(raw)), host_id, refresh)
 
 
+def source_api(host_id: str) -> Any:
+    """What Build calls for warehouse metadata and cube preview: the host's
+    AtScaleClient (same session as its backend), or the demo stand-in."""
+    raw = host(host_id)
+    if FAKE:
+        from atscale.fake import FakeSourceApi
+
+        return FakeSourceApi(host_id)
+    if not profile_to_connection(raw)["atscale"]["url"]:
+        raise ValueError("Host has no hostname set")
+    return _client(raw)
+
+
+def git_profile() -> dict[str, Any]:
+    return store().get_git_raw()
+
+
 def forget_host(host_id: str) -> None:
     """Host edited / removed / re-tested: drop its session and cached lists."""
     _clients.pop(host_id, None)

@@ -170,13 +170,12 @@ export function PromoteView() {
     <div className="col">
       <section className="pane src" onDragOver={(e) => e.preventDefault()} onDrop={onDropSource}>
         <div className="bar">
-          <div className="row" style={{ alignItems: 'baseline', gap: 14 }}>
-            <span className="eyebrow">03 — Source · {isM ? 'Models' : 'Aggregates'}</span>
-            <span className="hint">{same || !diffQ.data ? '' : `${isM ? srcRows.length : aDiff.data?.rows.length ?? 0} on host`}</span>
-          </div>
+          {/* Env + host picker first, same place as Build and Manage. */}
           <div className="row">
             <EnvSegment value={src.env} onPick={(env) => setSrc({ env, hostId: null })} />
             <HostSelect hosts={hosts} env={src.env} value={sh?.id ?? null} onChange={(id) => setSrc({ env: src.env, hostId: id })} />
+            <span className="eyebrow" style={{ marginLeft: 6 }}>Source</span>
+            <span className="hint">{same || !diffQ.data ? '' : `${isM ? srcRows.length : aDiff.data?.rows.length ?? 0} on host`}</span>
           </div>
         </div>
         {!isM && (
@@ -233,9 +232,9 @@ export function PromoteView() {
       <section className="pane">
         <div className="bar">
           <div className="row">
-            <span className="eyebrow" style={{ marginRight: 6 }}>04 — Target</span>
             <EnvSegment value={tgt.env} onPick={(env) => setTgt({ env, hostId: null })} />
             <HostSelect hosts={hosts} env={tgt.env} value={th?.id ?? null} onChange={(id) => setTgt({ env: tgt.env, hostId: id })} />
+            <span className="eyebrow" style={{ marginLeft: 6 }}>Target</span>
             {!isM && (
               <div className={`tmodel ${pModel && !tModelOk ? 'bad' : ''}`}>
                 <span className="label">Target model</span>
