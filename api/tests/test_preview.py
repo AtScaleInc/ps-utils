@@ -237,3 +237,14 @@ def test_parse_sql_result():
     result = parse_sql_result(xml)
     assert result["columns"] == ["Product Name", "salesamount1"]
     assert result["rows"] == [["Bikes", "1234.5"], ["Accessories", None]]
+
+
+def test_sql_failure_raises_engine_message():
+    import pytest
+
+    from atscale.preview import parse_sql_result
+
+    xml = ("<query-results><metadata><succeeded>false</succeeded>"
+           "<error-message>Column [X] not found</error-message></metadata></query-results>")
+    with pytest.raises(RuntimeError, match="Column \\[X\\] not found"):
+        parse_sql_result(xml)

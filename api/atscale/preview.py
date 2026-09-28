@@ -342,8 +342,12 @@ def parse_xmla_result(xml_text: str) -> dict[str, Any]:
 
 def parse_sql_result(xml_text: str) -> dict[str, Any]:
     """Ported from parse_sql_results - no pandas, so no numeric coercion; the
-    frontend renders whatever string/None the engine returned."""
+    frontend renders whatever string/None the engine returned. A failed query
+    (`<succeeded>false</succeeded>`) raises with the engine's message instead
+    of rendering as an empty grid."""
     root = ET.fromstring(xml_text)
+    if (root.findtext(".//metadata/succeeded") or "").strip().lower() == "false":
+        raise RuntimeError(root.findtext(".//metadata/error-message") or "SQL query failed")
     columns = [col.find("name").text for col in root.findall(".//columns/column")]
     rows = []
     for row in root.findall(".//data/row"):
@@ -562,7 +566,13 @@ def run_preview_query(
     use_cache: bool = True,
 ) -> dict[str, Any]:
     if dialect == "sql":
-        sql = build_sql_query(hierarchies, measures, cube)
+        # SQL exposes levels as columns, not hierarchies: a dragged hierarchy
+        # becomes its first level - the same starting point build_initial_mdx uses.
+        def as_level(name: str) -> str:
+            hlevels = get_hierarchy_levels(name, levels)
+            return hlevels[0]["LEVEL_UNIQUE_NAME"] if hlevels else name
+
+        sql = build_sql_query([as_level(h) for h in hierarchies], measures, cube)
         payload = {
             "language": "SQL",
             "query": sql,
