@@ -1,8 +1,9 @@
 # AtScale Environment Manager
 
 One console for many AtScale **container** hosts, grouped into three
-environments: **Dev**, **Test-QA** and **Prod**. From one screen you can see
-what each host runs, manage its semantic models and aggregates, and promote
+environments: **Dev**, **Test-QA** and **Prod**. From one screen you can build
+a new semantic model and deploy it to several hosts at once, see what each host
+runs, manage its semantic models and aggregates, and promote
 models and system aggregates from one environment to the next, such as Dev → QA
 → Prod. It checks what already exists on the target and only moves what's new.
 
@@ -16,9 +17,39 @@ models and system aggregates from one environment to the next, such as Dev → Q
                                              └────────────────────────┘
 ```
 
+The top tabs are **Build · Manage · Promote**, with **Settings** on the right.
+The left rail lists the current tab's sections: Model / Preview for Build, and
+Models / Aggregates for Manage and Promote.
+
 ---
 
 ## What it does
+
+### Build: model SML and deploy it to one or many hosts
+
+Build is the SML wizard that used to be the separate `sml-wizard` repo. It
+works on the host picked in the Build bar, using that host's credentials from
+Settings. There's no separate login.
+
+- **Model.** Pick one of the host's data warehouses, drag tables onto the
+  canvas, mark each as a fact or a dimension, join them (snowflake joins work
+  too), and configure metrics, hierarchies, aliases, secondary attributes and
+  calculations. **Wizard** does the first pass for you from column names.
+- **Save / Load.** Saving writes plain SML to `workspace/models/<model>/`.
+  Loading reads from there, from a repo already attached on the host, or from
+  any path or Git URL.
+- **Deploy.** Generates the SML and shows it for review. **Validate with
+  sml-cli** is optional. **Deploy to** lists every host by group; the Build
+  host is checked by default. The SML is pushed to Git once: a new model gets
+  `github.com/<git user>/<model>`, and a loaded one goes back to its own repo
+  and branch. Then each checked host attaches the repo and deploys that branch,
+  using the same call Promote uses. A host without the model's data warehouse
+  connection is greyed out, and results are reported per host.
+- **Preview.** Browse a deployed cube's dimensions and measures and run an MDX
+  or SQL query against it on the Build host.
+
+Build is a quick-start modeler, not a replacement for AtScale's own. Multi-table
+dimension hierarchies and multi-hierarchy dimensions only partly import.
 
 ### Settings: hosts, credentials and Git
 
@@ -185,7 +216,10 @@ echo atscale-env-manager > .venv
 find one, it reads the name in the `.venv` file and uses
 `~/Development/venv/<name>`. If neither exists, it falls back to `python3` on
 your PATH. The first run installs the frontend packages (`npm install` in
-`web/`) automatically.
+`web/`) automatically. That also installs the pinned `sml-cli` that Build's
+**Validate** uses. If you pulled the merge into an existing checkout, run
+`npm install` in `web/` once, and install `api/requirements.txt` again to get
+GitPython.
 
 ### Start
 
@@ -199,9 +233,7 @@ your PATH. The first run installs the frontend packages (`npm install` in
 Open the web URL, go to **Settings**, save and test the **Git** profile, then
 add hosts to each group and **Test connection**.
 
-`start.sh` first stops anything already bound to its two ports. The defaults
-are deliberately **not** sml-wizard's 5000/5173, so both apps can run at the
-same time. To use other ports:
+`start.sh` first stops anything already bound to its two ports. To use other ports:
 
 ```bash
 API_PORT=5060 WEB_PORT=5184 ./start.sh
@@ -218,7 +250,10 @@ across the three groups, seven models, and aggregates with duplicates, stale
 rows and user-defined rows. Every screen and rule can be tried here.
 
 - Demo hosts are stored in `api/connections.fake.yaml`.
-- Demo cache goes to `workspace/cache-demo/`.
+- Demo cache goes to `workspace/cache-demo/`, and Build's saved models go to `workspace/models-demo/`.
+- In Build, every demo host has a `PostgresDB` warehouse except prod-west, so
+  you can see a deploy skip a host. Deploy doesn't really push to Git, and
+  Preview and Load from Git need a real host.
 - **Settings → Reset demo data** restores the seed.
 
 ### Tests and build
@@ -346,6 +381,10 @@ GET             /hosts/:id/models · /repos · /branches?url= · /aggregate-mode
 POST            /hosts/:id/models/link · deploy · undeploy · unlink
 POST            /hosts/:id/aggregates/build · deactivate · reactivate     GET /hosts/:id/aggregates/builds
 POST            /promote/diff · /promote/models · /promote/aggregates
+GET             /hosts/:id/sources · /sources/:sourceId/schemas?search= · /build/repos
+GET/POST        /hosts/:id/preview/catalogs · /preview/metadata · /preview/query
+POST            /sml/generate · validate · save · save-path · import · import-path · import-git   GET /sml/models
+POST            /build/deploy {…model, hostIds}     GET /build/preflight?connection=&hostIds=
 GET             /jobs/:id
 ```
 
@@ -361,12 +400,17 @@ GET             /jobs/:id
   commit.
 - **Versions of catalogs deployed outside this app are inferred** from the
   publish time (shown with `~`).
+- **Build models one physical table per dimension, with one hierarchy each.**
+  Richer patterns only partly import; use AtScale's own modeler for those.
+- **A Build deploy needs the same warehouse connection id on every target host**
+  (for example `PostgresDB`). Hosts without it are skipped.
 - **Single user, single process.** Jobs and sessions live in memory; the cache
   also has a copy on disk.
 
 ## Related
 
 - `CLAUDE.md`: conventions for working on this repo with Claude Code
+- Build replaces the standalone `sml-wizard` repo, which is being deprecated
 - `docs/BUILD_PLAN.md`: the call map, decisions and open items
 - `docs/handoff-ps-utils-aggregate-import.md`: the matching fix requested
   upstream in ps-utils

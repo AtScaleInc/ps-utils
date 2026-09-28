@@ -20,7 +20,6 @@ export function ManageView() {
   return (
     <div className="col">
       <div className="bar">
-        <span className="eyebrow">03 — Manage · {section === 'models' ? 'Models' : 'Aggregates'}</span>
         <div className="row">
           <EnvSegment value={manage.env} onPick={(e) => setManage({ env: e, hostId: null, sel: [], modelKey: null })} />
           <HostSelect hosts={hosts} env={manage.env} value={host?.id ?? null} onChange={(id) => setManage({ hostId: id, sel: [], modelKey: null })} />

@@ -190,3 +190,5 @@ api/*.yaml.tmp
 .logs/
 node_modules/
 *.tsbuildinfo
+# The Build tab's source (the Python template's build/ rule above would hide it)
+!web/src/build/

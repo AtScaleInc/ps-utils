@@ -58,22 +58,22 @@ a { color: var(--dev); text-decoration: none; }
 .settings-tab { display: flex; align-items: center; gap: 10px; padding: 0 28px; background: transparent; color: var(--ink); border: 0; border-left: 1px solid var(--hair); border-bottom: 3px solid transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
 .settings-tab:hover { background: var(--input); }
 .settings-tab.on { background: var(--panel); border-bottom-color: var(--dev); }
+.tabs { display: flex; align-self: stretch; margin-left: 12px; border-left: 1px solid var(--hair); }
+.tab { display: flex; align-items: center; padding: 0 26px; background: transparent; color: var(--muted); border: 0; border-right: 1px solid var(--hair); border-bottom: 3px solid transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tab:hover { background: var(--input); color: var(--ink); }
+.tab.on { background: var(--panel); color: var(--ink); border-bottom-color: var(--dev); }
 
 /* -- body / sidebar ---------------------------------------------------------------------- */
 .body { flex: 1; display: flex; min-height: 0; min-width: 1280px; }
 .sidebar { flex: 0 0 272px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--hair); background: var(--panel); }
-.side-head { padding: 18px 20px 10px; }
-.side-sep { margin-top: 14px; padding: 14px 20px 10px; border-top: 1px solid var(--hair); }
-.side-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 20px 10px 17px; background: transparent; border: 0; border-left: 3px solid transparent; color: var(--ink); text-align: left; cursor: pointer; }
+/* Rail sections share the top tabs' look: plain labels, a colored edge on the active one. */
+.side-nav { display: flex; flex-direction: column; padding-top: 10px; }
+.side-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; padding: 12px 20px 12px 17px; background: transparent; border: 0; border-left: 3px solid transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .side-btn:hover { background: var(--input); }
-.side-btn.on { background: var(--input); }
-.side-btn.mode { flex-direction: column; align-items: flex-start; gap: 3px; padding: 11px 20px 11px 17px; }
-.side-btn.mode.on { border-left-color: var(--dev); }
-.side-btn.sec.on { border-left-color: var(--prod); }
-.side-btn .t { font-size: 14px; font-weight: 600; }
-.side-btn.sec .t { font-size: 13px; font-weight: 500; }
+.side-btn.on { background: var(--input); border-left-color: var(--dev); }
+.side-btn .t { display: flex; align-items: baseline; gap: 10px; width: 100%; font-size: 14px; font-weight: 600; }
 .side-btn .n { font-size: 11.5px; color: var(--muted); }
-.side-btn .c { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.side-btn .c { margin-left: auto; font-family: var(--font-mono); font-size: 10px; font-weight: 400; color: var(--muted); }
 .side-ctx { margin-top: 14px; padding: 14px 20px; border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 6px; }
 .side-ctx .v { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; }
 .side-foot { margin-top: auto; padding: 14px 20px; border-top: 1px solid var(--hair); display: flex; align-items: center; gap: 10px; }

@@ -227,6 +227,36 @@ class AtScaleClient:
             raise AtScaleApiError(resp.status_code, resp.text, url)
         return resp
 
+    # -- data sources / schema tree (Build) - copied from sml-wizard api/atscale/client.py --
+    def list_data_sources(self) -> list[dict[str, Any]]:
+        return self._dispatch("GET", "/wapi/p/data-warehouses").json()
+
+    # -- schema tree (warehouse-agnostic through AtScale's own metadata API) --------
+    # NOTE: `connection_id` here is the data-warehouse's `connectionId` field (a
+    # name-based string, e.g. "PostgresDB") - confirmed against a real instance.
+    # The warehouse's own `id` (a UUID) and the inner `connections[].id` both 404 /
+    # 500 ("ConnectionGroup ... not found") on this path family.
+    def list_databases(self, connection_id: str) -> list[str]:
+        path = f"/wapi/p/data-sources/conn/{connection_id}/databases"
+        return self._dispatch("GET", path).json()
+
+    def list_schemas(self, connection_id: str, database: str) -> list[str]:
+        path = f"/wapi/p/data-sources/conn/{connection_id}/databases/{database}/schemas"
+        return self._dispatch("GET", path).json()
+
+    def list_tables(self, connection_id: str, database: str, schema: str) -> list[str]:
+        # Confirmed shape: a plain list of table-name strings, not objects.
+        path = f"/wapi/p/data-sources/conn/{connection_id}/databases/{database}/schemas/{schema}/tables"
+        return self._dispatch("GET", path).json()
+
+    def get_table_info(self, connection_id: str, database: str, schema: str, table: str) -> dict[str, Any]:
+        path = (
+            f"/wapi/p/data-sources/conn/{connection_id}/databases/{database}"
+            f"/schemas/{schema}/tables/{table}/info"
+        )
+        return self._dispatch("GET", path).json()
+
+
     # -- repos (git attach) ----------------------------------------------------------
     def list_repos(self) -> list[dict[str, Any]]:
         return self._dispatch("GET", "/wapi/p/repo").json()
@@ -350,3 +380,16 @@ class AtScaleClient:
             params["connectionRemap"] = connection_remap
         path = f"/v1/aggregates/import/catalogs/{catalog_id}/models/{model_id}"
         return self._dispatch("POST", path, params=params, json=payload, timeout=120).json()
+
+    # -- cube data preview (Build > Preview) - copied from sml-wizard api/atscale/client.py --
+    # Same bearer-JWT session as every /wapi/p/* call above - the container-mode
+    # AtScale deployment this wizard targets proxies both the XMLA and query/submit
+    # engines through the main host (no separate :10502 port or Basic-auth XMLA
+    # login, unlike the installer-mode pattern some standalone AtScale tools use).
+    def run_xmla(self, xml_body: str) -> str:
+        return self._dispatch(
+            "POST", "/engine/xmla", data=xml_body.encode("utf-8"), headers={"Content-Type": "text/xml"}
+        ).text
+
+    def submit_query(self, payload: dict[str, Any]) -> str:
+        return self._dispatch("POST", "/engine/query/submit", json=payload).text
