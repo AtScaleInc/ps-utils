@@ -17,9 +17,10 @@ models and system aggregates from one environment to the next, such as Dev → Q
                                              └────────────────────────┘
 ```
 
-The top tabs are **Build · Manage · Promote**, with **Settings** on the right.
-The left rail lists the current tab's sections: Model / Preview for Build, and
-Models / Aggregates for Manage and Promote.
+The top tabs are **Build · Manage · Test · Promote**, with **Settings** on the
+right. The left rail lists the current tab's sections: Model / Preview for
+Build; Models / Aggregates for Manage and Promote; Run / Results / Compare
+results / Compare model for Test.
 
 ---
 
@@ -64,8 +65,9 @@ dimension hierarchies and multi-hierarchy dimensions only partly import.
 - **Git profile.** One GitHub username, email and personal access token
   (`repo` scope), shared by all hosts. **Test Git** checks the token. Linking,
   deploying and promoting models are disabled until it works.
-- **Cache.** Shows what's in the working folder (see *Caching*) and lets you
-  clear it.
+- **Cache & Database** (its own Settings section) shows the list cache in the
+  working folder (see *Caching*) and lets you clear it, next to the Test
+  history database and its clean-up.
 
 ### Manage → Models
 
@@ -101,6 +103,41 @@ confirmation dialogs list every model affected.
 - **Deactivate** or **Reactivate** works on one row or on a multi-selection.
 - System aggregates have UUIDs for names, so the app shows a readable label
   built from their grain, such as `Product Category · Product Line · 24 measures`.
+
+### Test: prove an environment matches before promoting
+
+Test is ps-utils' *Testing / Query Processing* group, for several hosts at once.
+
+- **Run.** Pick a host and one of its deployed models. The app generates one
+  grand-total query per metric and one breakdown per hierarchy level
+  (`generate-queries-from-model`), each in MDX and SQL. Pick the hosts to run
+  on (a host counts as having the model when it has a cube with the same
+  name), which queries to run, MDX and/or SQL, workers per host, and the
+  aggregate and cache flags. The queries run like `execute-atscale-query-harness`:
+  status, time, row count and checksum per query, and every query's result
+  rows are kept.
+- **Results.** Runs are grouped by model, newest first. A run's detail shows a
+  **promotion check** for each host against a baseline host: is the model (DMV)
+  identical, are all results identical, what failed, how the time compares.
+  Opening a query shows its text, any errors, and its **history** across past
+  runs.
+- **Compare results.** Baseline vs candidate, each picked as model → run →
+  host. That can be two hosts in one run (Dev vs QA), or the same host in two
+  runs (before and after a redeploy). Queries are matched by name, rows by
+  member, and values per measure, within a tolerance you pick. You get a
+  verdict, then each problem query with its variance table (member, measure,
+  baseline, candidate, Δ, Δ%) and any rows found on only one side. The
+  comparison exports as CSV.
+- **Compare model.** A live DMV diff of two deployed models. Metrics and levels
+  are listed as only in baseline, only in candidate, or changed, with the
+  baseline → candidate value.
+- **Clean up** is in **Settings → Cache & Database**. You can see stored runs
+  per model, delete runs older than N days and/or beyond the newest N per model
+  (with a preview count first), and compact the file. Runs are also pruned
+  automatically after every run (100 per model, 90 days by default), and at
+  most 3 runs execute at once.
+
+Runs are stored in one SQLite file, `workspace/tests.db`.
 
 ### Promote
 
@@ -385,6 +422,8 @@ GET             /hosts/:id/sources · /sources/:sourceId/schemas?search= · /bui
 GET/POST        /hosts/:id/preview/catalogs · /preview/metadata · /preview/query
 POST            /sml/generate · validate · save · save-path · import · import-path · import-git   GET /sml/models
 POST            /build/deploy {…model, hostIds}     GET /build/preflight?connection=&hostIds=
+GET             /hosts/:id/test/cubes            POST /test/generate · /test/runs · /test/compare · /test/model-compare · /test/cleanup
+GET             /test/runs · /test/runs/:id · /test/runs/:id.csv · /test/history?model=&query=&protocol= · /test/store
 GET             /jobs/:id
 ```
 
@@ -404,6 +443,9 @@ GET             /jobs/:id
   Richer patterns only partly import; use AtScale's own modeler for those.
 - **A Build deploy needs the same warehouse connection id on every target host**
   (for example `PostgresDB`). Hosts without it are skipped.
+- **The DMV doesn't say which dimensions a measure relates to**, so Compare
+  model can call two models identical when one of them can't answer some
+  queries. The result compare still catches it as failed queries.
 - **Single user, single process.** Jobs and sessions live in memory; the cache
   also has a copy on disk.
 
@@ -414,3 +456,5 @@ GET             /jobs/:id
 - `docs/BUILD_PLAN.md`: the call map, decisions and open items
 - `docs/handoff-ps-utils-aggregate-import.md`: the matching fix requested
   upstream in ps-utils
+- `docs/handoff-ps-utils-query-testing.md`: ps-utils query generation / harness
+  fixes found while building Test

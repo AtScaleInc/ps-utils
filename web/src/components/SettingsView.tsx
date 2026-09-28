@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { api, type EnvId, type Host } from '../api'
 import { useUi } from '../store'
 import { CONN, ConnDot, ENVS, errMsg, fmtTime, plural, useGit, useHosts } from './ui'
+import { DatabaseCard } from '../test/DatabaseCard'
 
 function useInvalidateHosts() {
   const qc = useQueryClient()
@@ -27,6 +28,28 @@ function Secret({ value, onChange, onBlur, placeholder }: {
 }
 
 export function SettingsView() {
+  const { settingsSection } = useUi()
+  return settingsSection === 'storage' ? <StorageView /> : <HostsView />
+}
+
+/** Cache & Database: the 2 h list cache and the Test history database. */
+function StorageView() {
+  return (
+    <div className="settings">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640 }}>
+        <span className="eyebrow" style={{ color: 'var(--dev)' }}>Settings — Cache &amp; database</span>
+        <span className="display" style={{ fontSize: 34 }}>Keep the working folder <em>tidy</em>.</span>
+        <span className="muted" style={{ fontSize: 13.5, lineHeight: 1.4 }}>
+          The list cache reloads itself from AtScale; test history is kept until it's cleaned up here or aged out.
+        </span>
+      </div>
+      <CacheCard />
+      <DatabaseCard />
+    </div>
+  )
+}
+
+function HostsView() {
   const { flash, setAsk } = useUi()
   const hostsQ = useHosts()
   const hosts = hostsQ.data?.hosts ?? []
@@ -58,7 +81,6 @@ export function SettingsView() {
       </div>
 
       <GitCard />
-      <CacheCard />
 
       <div className="cols">
         {ENVS.map((e) => {

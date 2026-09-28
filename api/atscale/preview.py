@@ -367,24 +367,51 @@ def get_hierarchy_levels(hierarchy_unique_name: str, levels: list[dict[str, Any]
     return matches
 
 
+def _hierarchy_of(unique_name: str, levels: list[dict[str, Any]]) -> tuple[str, dict[str, Any] | None]:
+    """(hierarchy unique name, level row) for a selected hierarchy or level."""
+    for lv in levels:
+        if lv.get("LEVEL_UNIQUE_NAME") == unique_name:
+            return lv.get("HIERARCHY_UNIQUE_NAME") or unique_name, lv
+    return unique_name, None
+
+
 def build_initial_mdx(hierarchy_unique_names: list[str], measure_unique_names: list[str], cube: str, levels: list[dict[str, Any]]) -> str:
-    """Shows the first non-(All) level's members for each selected hierarchy -
-    a starting-point query the user refines by picking different levels, same
-    as the reference tool's build_initial_mdx()."""
+    """Rows = the selections grouped by hierarchy. A picked hierarchy shows its
+    first non-(All) level (the reference tool's build_initial_mdx); picked
+    levels show `<level>.MEMBERS`, the per-level form ps-utils
+    generate-queries-shared.ts mdxLevelQuery uses.
+
+    Several levels of the *same* hierarchy become one Hierarchize({...}) set -
+    CrossJoin of a hierarchy with itself is invalid MDX ("CrossJoin may not
+    cross the same hierarchy with itself", confirmed on a container host).
+    Different hierarchies are CrossJoined in selection order."""
     measures_set = ", ".join(measure_unique_names)
 
-    def first_level_set(hierarchy_name: str) -> str:
-        hlevels = get_hierarchy_levels(hierarchy_name, levels)
-        target = hlevels[0]["LEVEL_UNIQUE_NAME"] if hlevels else hierarchy_name
-        return f"{{ {target}.Members }}"
+    groups: dict[str, list[str]] = {}
+    for name in hierarchy_unique_names:
+        hier, level = _hierarchy_of(name, levels)
+        if level is None:
+            hlevels = [lv for lv in get_hierarchy_levels(hier, levels) if lv.get("LEVEL_NAME") != "(All)"]
+            member_level = hlevels[0]["LEVEL_UNIQUE_NAME"] if hlevels else hier
+        else:
+            member_level = name
+        picked = groups.setdefault(hier, [])
+        if member_level not in picked:
+            picked.append(member_level)
 
-    if len(hierarchy_unique_names) == 1:
-        rows_set = first_level_set(hierarchy_unique_names[0])
-    else:
-        crossjoin_items = [first_level_set(h) for h in hierarchy_unique_names]
-        rows_set = crossjoin_items[0]
-        for item in crossjoin_items[1:]:
-            rows_set = f"CrossJoin({rows_set}, {item})"
+    def level_number(level_name: str) -> int:
+        _, lv = _hierarchy_of(level_name, levels)
+        return int((lv or {}).get("LEVEL_NUMBER") or 0)
+
+    sets = []
+    for picked in groups.values():
+        picked.sort(key=level_number)
+        members = ", ".join(f"{lv}.Members" for lv in picked)
+        sets.append(f"{{ {members} }}" if len(picked) == 1 else f"Hierarchize({{ {members} }})")
+
+    rows_set = sets[0]
+    for item in sets[1:]:
+        rows_set = f"CrossJoin({rows_set}, {item})"
 
     return f"""SELECT
     {{ {measures_set} }} ON COLUMNS,
@@ -551,7 +578,7 @@ def load_cube_metadata(client: AtScaleClient, catalog: str, cube: str) -> dict[s
         )
     measures_out = [{"folder": folder, "items": items} for folder, items in measures_by_folder.items()]
 
-    return {"dimensions": dims_out, "measures": measures_out, "_levels": levels}
+    return {"dimensions": dims_out, "measures": measures_out, "_levels": levels, "_measures": measures}
 
 
 def run_preview_query(

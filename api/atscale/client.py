@@ -386,10 +386,11 @@ class AtScaleClient:
     # AtScale deployment this wizard targets proxies both the XMLA and query/submit
     # engines through the main host (no separate :10502 port or Basic-auth XMLA
     # login, unlike the installer-mode pattern some standalone AtScale tools use).
-    def run_xmla(self, xml_body: str) -> str:
+    def run_xmla(self, xml_body: str, timeout: float | None = None) -> str:
+        # timeout: the Test harness bounds every query (None = wait, as before)
         return self._dispatch(
-            "POST", "/engine/xmla", data=xml_body.encode("utf-8"), headers={"Content-Type": "text/xml"}
+            "POST", "/engine/xmla", data=xml_body.encode("utf-8"), headers={"Content-Type": "text/xml"}, timeout=timeout
         ).text
 
-    def submit_query(self, payload: dict[str, Any]) -> str:
-        return self._dispatch("POST", "/engine/query/submit", json=payload).text
+    def submit_query(self, payload: dict[str, Any], timeout: float | None = None) -> str:
+        return self._dispatch("POST", "/engine/query/submit", json=payload, timeout=timeout).text

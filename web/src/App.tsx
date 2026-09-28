@@ -5,8 +5,9 @@ import { AskDialog, LinkModelDialog, Toast } from './components/Dialogs'
 import { ManageView } from './components/ManageView'
 import { PromoteView } from './components/PromoteView'
 import { SettingsView } from './components/SettingsView'
+import { TestView } from './test/TestView'
 import { ENVS, envOf, plural, useHosts } from './components/ui'
-import { resolveHost, useUi, type BuildSection, type Section, type View } from './store'
+import { resolveHost, useUi, type BuildSection, type Section, type SettingsSection, type TestSection, type View } from './store'
 
 export default function App() {
   const { view, linkOpen, manage } = useUi()
@@ -21,6 +22,7 @@ export default function App() {
           {view === 'build' && <BuildView />}
           {view === 'manage' && <ManageView />}
           {view === 'promote' && <PromoteView />}
+          {view === 'test' && <TestView />}
           {view === 'settings' && <SettingsView />}
         </main>
       </div>
@@ -34,6 +36,7 @@ export default function App() {
 const TABS: { id: Exclude<View, 'settings'>; label: string; note: string }[] = [
   { id: 'build', label: 'Build', note: 'Model SML, deploy to hosts' },
   { id: 'manage', label: 'Manage', note: 'Objects on one host' },
+  { id: 'test', label: 'Test', note: 'Generate + run model queries on hosts' },
   { id: 'promote', label: 'Promote', note: 'Move objects between hosts' },
 ]
 
@@ -70,9 +73,9 @@ function Header() {
 
 /** Left rail: the current tab's sections, styled like the top tabs. */
 function Sidebar() {
-  const { view, section, setSection, buildSection, setBuildSection, manage, src, tgt, build } = useUi()
+  const { view, section, setSection, buildSection, setBuildSection, testSection, setTestSection, settingsSection, setSettingsSection, manage, src, tgt, build, test } = useUi()
   const hosts = useHosts().data?.hosts ?? []
-  const ctxHost = resolveHost(hosts, view === 'promote' ? src : view === 'build' ? build : manage)
+  const ctxHost = resolveHost(hosts, view === 'promote' ? src : view === 'build' ? build : view === 'test' ? test : manage)
   const th = resolveHost(hosts, tgt)
   const objects = view === 'manage' || view === 'promote'
   const models = useQuery({ queryKey: ['models', ctxHost?.id], queryFn: () => api.models(ctxHost!.id), enabled: !!ctxHost && objects })
@@ -84,9 +87,9 @@ function Sidebar() {
   }
   const context = view === 'promote' ? `${ctxHost?.label ?? '—'} → ${th?.label ?? '—'}`
     : view === 'settings' ? `${plural(hosts.length, 'host')} across 3 groups`
-    : `${envOf((view === 'build' ? build : manage).env).label} · ${ctxHost?.label ?? 'no host'}`
+    : `${envOf((view === 'build' ? build : view === 'test' ? test : manage).env).label} · ${ctxHost?.label ?? 'no host'}`
   const hint = view === 'promote' ? 'Drag source → target' : view === 'settings' ? 'Credentials per host'
-    : view === 'build' ? 'Deploy to one or many hosts' : 'Pick a group, then a host'
+    : view === 'build' ? 'Deploy to one or many hosts' : view === 'test' ? 'Same queries, every env' : 'Pick a group, then a host'
 
   return (
     <aside className="sidebar">
@@ -99,6 +102,16 @@ function Sidebar() {
             <span className="t">{s.label}</span><span className="n">{s.note}</span>
           </button>
         ))}
+        {view === 'test' && ([
+          { id: 'run', label: 'Run', note: 'Pick model, hosts, queries' },
+          { id: 'results', label: 'Results', note: 'Runs by model · promotion check' },
+          { id: 'compare', label: 'Compare results', note: 'Baseline vs candidate values' },
+          { id: 'model', label: 'Compare model', note: 'DMV metrics + levels diff' },
+        ] as { id: TestSection; label: string; note: string }[]).map((s) => (
+          <button key={s.id} type="button" className={`side-btn ${testSection === s.id ? 'on' : ''}`} onClick={() => setTestSection(s.id)}>
+            <span className="t">{s.label}</span><span className="n">{s.note}</span>
+          </button>
+        ))}
         {objects && ([
           { id: 'models', label: 'Models', note: view === 'promote' ? 'Repo attach + deploy' : 'Link, deploy, unlink' },
           { id: 'aggs', label: 'Aggregates', note: view === 'promote' ? 'System aggregates only' : 'Activate, build' },
@@ -107,11 +120,14 @@ function Sidebar() {
             <span className="t">{s.label}<span className="c">{counts[s.id]}</span></span><span className="n">{s.note}</span>
           </button>
         ))}
-        {view === 'settings' && (
-          <div className="side-btn on" style={{ cursor: 'default' }}>
-            <span className="t">Hosts &amp; Git</span><span className="n">Connections, profile, cache</span>
-          </div>
-        )}
+        {view === 'settings' && ([
+          { id: 'hosts', label: 'Hosts & Git', note: 'Connections, credentials, Git profile' },
+          { id: 'storage', label: 'Cache & Database', note: 'List cache, test history clean-up' },
+        ] as { id: SettingsSection; label: string; note: string }[]).map((s) => (
+          <button key={s.id} type="button" className={`side-btn ${settingsSection === s.id ? 'on' : ''}`} onClick={() => setSettingsSection(s.id)}>
+            <span className="t">{s.label}</span><span className="n">{s.note}</span>
+          </button>
+        ))}
       </nav>
 
       <div className="side-ctx">

@@ -8,10 +8,13 @@ authoritative).
 ## Project in one paragraph
 
 One console for many AtScale **container** hosts, grouped into Dev / Test-QA /
-Prod. Top tabs: **Build · Manage · Promote** (+ Settings); the left rail shows the
-current tab's sections. Build is the SML wizard (merged from the now-deprecated
+Prod. Top tabs: **Build · Manage · Test · Promote** (+ Settings); the left rail
+shows the current tab's sections. Build is the SML wizard (merged from the now-deprecated
 sml-wizard repo): browse a host's warehouse, model on a canvas, generate SML, push
-it to Git once and deploy it to one or many hosts. Settings registers hosts + a
+it to Git once and deploy it to one or many hosts. Test generates queries from a
+deployed model (ps-utils generate-queries-from-model), runs them on several hosts
+(execute-atscale-query-harness) and compares baseline vs candidate - model (DMV)
+and result values - before promoting. Settings registers hosts + a
 shared Git profile; Manage works on one host's
 models (link / deploy / unlink) and aggregates (deactivate / reactivate, full /
 incremental build); Promote diffs a source host against a target and moves models
@@ -47,7 +50,18 @@ incremental build); Promote diffs a source host against a target and moves model
     once, then `deploy_branch` per host (skips hosts without the model's
     `asConnection`). `registry.source_api(id)` gives the host's `AtScaleClient`,
     or `fake.FakeSourceApi` in demo mode — keep the two in sync (a test checks).
+  - `testing/` + `routes/testing.py` — the Test tab. `generate.py` (ps-utils
+    query generation, but level NAME in MDX brackets), `harness.py` (query
+    harness: XMLA via /engine/xmla, SQL via /engine/query/submit, 180 s timeout),
+    `model.py` (DMV snapshot + model diff), `results.py` (result rows + variance;
+    duplicate keys compared as multisets), `store.py` (SQLite `workspace/tests.db`:
+    runs, queries, model snapshots, executions with zlib result rows). Retention:
+    `ENV_MANAGER_TEST_KEEP` per model (100), `ENV_MANAGER_TEST_MAX_AGE_DAYS` (90);
+    `ENV_MANAGER_TEST_MAX_ACTIVE` concurrent runs (3, else 429). ps-utils bugs
+    found here: `docs/handoff-ps-utils-query-testing.md`.
+  - `jobs.py` keeps finished jobs 1 h, at most 500.
   - `atscale/preview.py` — cube preview (MDX/SQL), ported from PythonAtscaleUtility.
+    Levels of one hierarchy are Hierarchize'd, never CrossJoined with themselves.
     `atscale/git_ops.py` — create the model's GitHub repo + push (GitPython).
 - `/web` — React 19 + TypeScript + Vite, TanStack Query for server state, zustand
   for UI state. Theme tokens in `web/src/theme.css` (sml-wizard's dark theme).
@@ -116,3 +130,4 @@ incremental build); Promote diffs a source host against a target and moves model
 - `cd api && ~/Development/venv/atscale-env-manager/bin/python -m pytest tests -q`
 - `cd web && npm run build`
 - Build's working copies: `workspace/models/<model>` (demo: `workspace/models-demo/`).
+- Test history: `workspace/tests.db` (demo: `tests-demo.db`); Settings → Cache & Database cleans it up.

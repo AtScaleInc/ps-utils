@@ -317,7 +317,7 @@ class FakeSourceApi:
     def get_table_info(self, connection_id: str, database: str, schema: str, table: str) -> dict[str, Any]:
         return {"columns": [{"name": n, "dataType": t} for n, t in _COLS.get(table, [])]}
 
-    def run_xmla(self, xml_body: str) -> str:
+    def run_xmla(self, xml_body: str, timeout: float | None = None) -> str:
         raise ValueError("Preview queries need a live AtScale host - not available in demo mode")
 
     submit_query = run_xmla

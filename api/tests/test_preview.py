@@ -248,3 +248,33 @@ def test_sql_failure_raises_engine_message():
            "<error-message>Column [X] not found</error-message></metadata></query-results>")
     with pytest.raises(RuntimeError, match="Column \\[X\\] not found"):
         parse_sql_result(xml)
+
+
+DATE_LEVELS = [
+    {"HIERARCHY_UNIQUE_NAME": "[Order Date].[Calendar]", "LEVEL_NAME": "(All)", "LEVEL_UNIQUE_NAME": "[Order Date].[Calendar].[(All)]", "LEVEL_NUMBER": "0"},
+    {"HIERARCHY_UNIQUE_NAME": "[Order Date].[Calendar]", "LEVEL_NAME": "Year", "LEVEL_UNIQUE_NAME": "[Order Date].[Calendar].[Year]", "LEVEL_NUMBER": "1"},
+    {"HIERARCHY_UNIQUE_NAME": "[Order Date].[Calendar]", "LEVEL_NAME": "Month", "LEVEL_UNIQUE_NAME": "[Order Date].[Calendar].[Month]", "LEVEL_NUMBER": "2"},
+    {"HIERARCHY_UNIQUE_NAME": "[Product].[Product]", "LEVEL_NAME": "Name", "LEVEL_UNIQUE_NAME": "[Product].[Product].[Name]", "LEVEL_NUMBER": "1"},
+]
+
+
+def test_build_initial_mdx_levels_of_same_hierarchy_are_hierarchized():
+    """Two levels of one hierarchy used to be CrossJoined, which AtScale rejects
+    ("CrossJoin may not cross the same hierarchy with itself")."""
+    mdx = build_initial_mdx(["[Order Date].[Calendar].[Month]", "[Order Date].[Calendar].[Year]"],
+                            ["[Measures].[m]"], "c", DATE_LEVELS)
+    assert "CrossJoin" not in mdx
+    assert "Hierarchize({ [Order Date].[Calendar].[Year].Members, [Order Date].[Calendar].[Month].Members })" in mdx
+
+
+def test_build_initial_mdx_same_hierarchy_then_crossjoin_other():
+    mdx = build_initial_mdx(["[Order Date].[Calendar].[Year]", "[Product].[Product].[Name]", "[Order Date].[Calendar].[Month]"],
+                            ["[Measures].[m]"], "c", DATE_LEVELS)
+    assert mdx.count("CrossJoin(") == 1
+    assert "Hierarchize({ [Order Date].[Calendar].[Year].Members, [Order Date].[Calendar].[Month].Members })" in mdx
+    assert "{ [Product].[Product].[Name].Members }" in mdx
+
+
+def test_build_initial_mdx_hierarchy_skips_all_level():
+    mdx = build_initial_mdx(["[Order Date].[Calendar]"], ["[Measures].[m]"], "c", DATE_LEVELS)
+    assert "[Order Date].[Calendar].[Year].Members" in mdx and "(All)" not in mdx

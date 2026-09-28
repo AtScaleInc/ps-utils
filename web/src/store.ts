@@ -1,10 +1,15 @@
 import { create } from 'zustand'
 import type { EnvId, Host, PromoteMode } from './api'
 
-export type View = 'build' | 'manage' | 'promote' | 'settings'
+export type View = 'build' | 'manage' | 'promote' | 'test' | 'settings'
 export type Section = 'models' | 'aggs'
 /** Build's left-rail sections: the wizard canvas, and the cube data preview. */
 export type BuildSection = 'model' | 'preview'
+/** Test's left-rail sections: set up + run, past runs by model, baseline-vs-candidate result and model compares. */
+export type TestSection = 'run' | 'results' | 'compare' | 'model'
+/** Settings' left-rail sections. */
+export type SettingsSection = 'hosts' | 'storage'
+export interface RunSide { runId: string; hostId: string }
 
 export interface Ask {
   eyebrow: string
@@ -24,6 +29,14 @@ interface UiState {
   buildSection: BuildSection
   /** Build's host: where data sources are browsed and the default deploy target. */
   build: HostPick
+  testSection: TestSection
+  settingsSection: SettingsSection
+  /** Test's reference host: where the model is read and queries generated. */
+  test: HostPick
+  /** Run shown in the results panel (live or from history). */
+  testRunId: string | null
+  /** Compare results: baseline vs candidate (run + host each). */
+  testCompare: { baseline: RunSide | null; candidate: RunSide | null }
   manage: HostPick & { modelKey: string | null; sel: string[]; q: string }
   src: HostPick
   tgt: HostPick
@@ -42,6 +55,11 @@ interface UiState {
   setSection: (s: Section) => void
   setBuildSection: (s: BuildSection) => void
   setBuild: (p: HostPick) => void
+  setTestSection: (s: TestSection) => void
+  setSettingsSection: (s: SettingsSection) => void
+  setTest: (p: HostPick) => void
+  setTestRunId: (id: string | null) => void
+  setTestCompare: (p: Partial<UiState['testCompare']>) => void
   setManage: (p: Partial<UiState['manage']>) => void
   setSrc: (p: HostPick) => void
   setTgt: (p: HostPick) => void
@@ -64,6 +82,11 @@ export const useUi = create<UiState>((set) => ({
   section: 'models',
   buildSection: 'model',
   build: { env: 'dev', hostId: null },
+  testSection: 'run',
+  settingsSection: 'hosts',
+  test: { env: 'dev', hostId: null },
+  testRunId: null,
+  testCompare: { baseline: null, candidate: null },
   manage: { env: 'dev', hostId: null, modelKey: null, sel: [], q: '' },
   src: { env: 'dev', hostId: null },
   tgt: { env: 'qa', hostId: null },
@@ -79,6 +102,11 @@ export const useUi = create<UiState>((set) => ({
   setView: (view) => set({ view }),
   setBuildSection: (buildSection) => set({ buildSection }),
   setBuild: (build) => set({ build }),
+  setTestSection: (testSection) => set({ testSection }),
+  setSettingsSection: (settingsSection) => set({ settingsSection }),
+  setTest: (test) => set({ test }),
+  setTestRunId: (testRunId) => set({ testRunId }),
+  setTestCompare: (p) => set((s) => ({ testCompare: { ...s.testCompare, ...p } })),
   setSection: (section) => set((s) => ({
     section, view: s.view === 'settings' ? 'manage' : s.view, manage: { ...s.manage, sel: [], q: '' },
   })),
