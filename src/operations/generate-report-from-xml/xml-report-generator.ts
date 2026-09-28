@@ -1102,10 +1102,14 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
    * dimension's key still needs a row describing which column it joins on. That holds even
    * when the authoritative dataset is itself one of this cube's own fact tables (a
    * degenerate dimension whose values live on fact A, looked up via FK from fact B, is a
-   * real relationship, not a coincidence). The one case NOT a real join is two datasets that
+   * real relationship, not a coincidence). Two cases are NOT a real join: two datasets that
    * each independently declare complete="true" for the same key — both already own the
    * value outright, so neither is joining to the other, they just happen to carry the same
-   * degenerate value (shared_degenerate_columns).
+   * degenerate value (shared_degenerate_columns) — and, symmetrically, no dataset at all
+   * declaring complete="true" for the key (every entry is "false"/"partial"): there is no
+   * authoritative lookup table for any of them to join to, so every dataset under that key
+   * hosts the value directly and the whole group is shared-degenerate, not a join. Mirrors
+   * the dimTrueEntry rule in xml-converter.ts's gatherDimensionBindings.
    *
    * Also returns schemaJoinedDimNames: schema-level dimensions this cube actually uses via a
    * key-ref binding (as opposed to an explicit <dimension-ref>) — broader than isRealJoin, since
@@ -1119,6 +1123,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   function computeCubeJoins(cube: El): { joinRows: string[][]; schemaJoinedDimNames: Set<string> } {
     const cubeName = a(cube, "name") ?? "";
     function isRealJoin(b: KeyBinding, allBindings: KeyBinding[]): boolean {
+      // No dataset owns the key outright: it is a shared-degenerate value living directly
+      // on every dataset registered under it, not a cross-table relationship at all.
+      if (!allBindings.some((e) => e.complete === "true")) return false;
       return allBindings.some((other) => other.dataset !== b.dataset && !(b.complete === "true" && other.complete === "true"));
     }
     const joinRows: string[][] = [];
