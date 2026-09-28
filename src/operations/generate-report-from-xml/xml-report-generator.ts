@@ -99,6 +99,13 @@ function isQuantileGroupAttribute(attrEl: El): boolean {
   return !!(typeEl && arr(typeEl["quantile-group"]).length > 0);
 }
 
+/** True only when `<properties><visible>` is explicitly `false` — matches xml-converter.ts's
+ *  isExplicitlyHidden, the same "absent means visible" convention used for perspective hide-lists. */
+function isExplicitlyHidden(el: El): boolean {
+  const props = first(arr(el.properties)) as El | undefined;
+  return (props ? s(first(arr(props.visible))) : undefined) === "false";
+}
+
 // ── small Markdown helpers (same conventions as generate-sml-docs) ─────────
 
 function cell(v: unknown): string {
@@ -231,6 +238,13 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   const keyMap = new Map<string, KeyBinding[]>();
   const attrMap = new Map<string, AttrBinding[]>();
   const connectionIds = new Set<string>();
+  // A key-ref's <ref-path> can carry a plain <ref id="X"/> instead of a role-play <new-ref>
+  // — the "bridge" a cross-dimension embedded <keyed-attribute-ref ref-id="X"> uses to reach
+  // its target dimension's real key (see the Phase 6 snowflake-embed resolution below, and
+  // xml-converter.ts's own refPathIdToKeyRefId/resolveSnowflakeRelationship, which this
+  // mirrors). Maps that ref id to the key-ref's own id, so all of that id's bindings
+  // (already collected in keyMap) can be looked up.
+  const refPathIdToKeyRefId = new Map<string, string>();
 
   function ingestLogical(logicalEl: El, datasetName: string, cube?: string): void {
     for (const kr of arr(logicalEl["key-ref"])) {
@@ -240,6 +254,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       const refPathEl = first(arr(kr["ref-path"])) as El | undefined;
       const newRefEl = refPathEl ? (first(arr(refPathEl["new-ref"])) as El | undefined) : undefined;
       const rolePlay = newRefEl ? s(first(arr(newRefEl["ref-naming"]))) : undefined;
+      const plainRefEl = refPathEl ? (first(arr(refPathEl.ref)) as El | undefined) : undefined;
+      const bridgedRefId = plainRefEl ? a(plainRefEl, "id") : undefined;
+      if (bridgedRefId && !refPathIdToKeyRefId.has(bridgedRefId)) refPathIdToKeyRefId.set(bridgedRefId, id);
       const list = keyMap.get(id) ?? [];
       list.push({ dataset: datasetName, columns: cols, complete: a(kr, "complete") ?? "true", unique: a(kr, "unique") === "true", cube, rolePlay });
       keyMap.set(id, list);
@@ -274,7 +291,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         ? { database: s(first(arr(tableEl.database))), schema: s(first(arr(tableEl.schema))), name: s(first(arr(tableEl.name))) }
         : undefined;
 
-      const queryEl = physEl ? (first(arr(physEl.query)) as El | undefined) : undefined;
+      // A dataset can declare multiple <query> elements: the base query (no "alternate"
+      // attribute) plus alternate query/table bindings (alternate="true") — alternates are
+      // preview-only, so picking whichever <query> comes first in document order can
+      // misreport an alternate binding as the dataset's real SQL backing.
+      const queryEl = physEl ? (arr(physEl.query).find((q) => !a(q, "alternate")) as El | undefined) : undefined;
       const sql = queryEl ? s(first(arr(queryEl.sql))) : undefined;
 
       const immutable = physEl ? s(first(arr(physEl.immutable))) === "true" : undefined;
@@ -395,6 +416,12 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   //    ingested into keyMap/attrMap (tagged with the cube name) so joins and
   //    measure/dimension dataset bindings resolve per cube, same as datasets. ──
 
+  // Datasets at least one cube actually references via a data-set-ref — the same
+  // criterion generate-sml-from-xml's xml-converter.ts uses (referencedDatasetNames)
+  // to decide which datasets survive conversion. Tracked here, alongside keyMap/attrMap
+  // ingestion, so the Summary's "used by a cube" rollup can report the identical subset
+  // SML ends up with, next to this report's own schema-wide totals.
+  const usedDatasetNames = new Set<string>();
   const cubeEls = arr(schemaEl.cubes).flatMap((c) => arr(c.cube));
   for (const cube of cubeEls) {
     const cubeName = a(cube, "name") ?? "";
@@ -404,6 +431,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(dsRef, "id");
         const dsName = refId ? datasetIdToName.get(refId) ?? refId : undefined;
         if (!dsName) continue;
+        usedDatasetNames.add(dsName);
         for (const logSec of arr(dsRef.logical)) ingestLogical(logSec, dsName, cubeName);
       }
     }
@@ -458,7 +486,13 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     const counts = new Map<string, number>();
     for (const bindings of bindingsById.values()) {
       if (!bindings.some((b) => b.cube !== undefined)) continue;
-      for (const b of bindings) counts.set(b.dataset, (counts.get(b.dataset) ?? 0) + 1);
+      // Count this id once per dataset it touches, not once per binding — an id can be
+      // declared twice for the SAME dataset (once untagged in that dataset's own
+      // schema-level <logical> block, once tagged in a cube's data-set-ref <logical>
+      // block that simply restates it), and that must still land as a single "used by
+      // this id" credit, not two.
+      const datasetsForId = new Set(bindings.map((b) => b.dataset));
+      for (const dataset of datasetsForId) counts.set(dataset, (counts.get(dataset) ?? 0) + 1);
     }
     return counts;
   }
@@ -467,6 +501,247 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   for (const ds of datasets) {
     ds.keyRefCount = keyRefUsage.get(ds.name) ?? 0;
     ds.attrRefCount = attrRefUsage.get(ds.name) ?? 0;
+  }
+
+  // ── Phase 6: cube-usage rollup ──────────────────────────────────────────────
+  // This report is a complete inventory of the XML schema (see file header) — every
+  // dataset/dimension/attribute/calculated-member the schema declares is documented
+  // below whether or not any cube uses it. generate-sml-from-xml, by contrast, only
+  // emits the subset a cube actually references (xml-converter.ts's
+  // referencedDatasetNames/referencedDimNames and its calculated-member-ref exclusion).
+  // Comparing this report's schema-wide totals directly against generate-report-from-sml's
+  // SML-derived ones will therefore look like data loss even when nothing is missing —
+  // so this rollup computes the same cube-used subset here too, via the identical
+  // per-cube helpers (computeCubeJoins/computeCubeDimNames) the Cubes section renders
+  // with below, and the Summary reports both numbers side by side.
+  const usedDimNames = new Set<string>();
+  const usedCalcMemberIds = new Set<string>();
+  let usedMeasureCount = 0;
+  // Attribute ids of measures that actually resolve to a real bound-to column — the same
+  // subset generate-sml-from-xml emits as SML metrics. A perspective's flat-attribute-ref can
+  // name a measure id that never survives conversion at all (unresolvable binding), and that
+  // hide-list entry then hides nothing in the resulting SML rather than hiding a metric — see
+  // perspectiveHideSummary below, which needs this same subset to report a matching count.
+  const survivingMeasureIds = new Set<string>();
+  for (const cube of cubeEls) {
+    const { schemaJoinedDimNames } = computeCubeJoins(cube);
+    const { usedNames } = computeCubeDimNames(cube, schemaJoinedDimNames);
+    for (const n of usedNames) usedDimNames.add(n);
+    for (const cmSec of arr(cube["calculated-members"])) {
+      for (const cmRef of arr(cmSec["calculated-member-ref"])) {
+        const refId = a(cmRef, "id");
+        if (refId) usedCalcMemberIds.add(refId);
+      }
+    }
+    // A measure counts as "used by a cube" — the same bar generate-sml-from-xml applies when
+    // deciding whether to emit it as an SML metric — only once it resolves to a real (or
+    // verifiably inferred) dataset.column binding; see resolveMeasureBoundTo.
+    const quantileGroupDefs = buildQuantileGroupDefs(cube);
+    for (const attrsSec of arr(cube.attributes)) {
+      for (const attrEl of arr(attrsSec.attribute)) {
+        if (isQuantileGroupAttribute(attrEl)) continue;
+        if (resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs)) {
+          usedMeasureCount++;
+          const attrId = a(attrEl, "id");
+          if (attrId) survivingMeasureIds.add(attrId);
+        }
+      }
+    }
+  }
+
+  // A dimension's own attribute can be embedded into a DIFFERENT dimension's level as a
+  // cross-dimension secondary <keyed-attribute-ref ref-id="R" attribute-id="A"> (a
+  // snowflake/embedded reference — e.g. a "Client" dimension embedding a "Segment"
+  // dimension's own level attribute so a hierarchy can drill into it without a direct cube
+  // join). The owning dimension never gets a key-ref binding tagged with this cube — the
+  // cube only ever joins to the embedding dimension's own key — so
+  // computeCubeJoins/computeCubeDimNames above can't see it. xml-converter.ts resolves this
+  // via collectAttributeDimensionOwnership + resolveSnowflakeRelationship; mirror both here.
+  //
+  // attrIdToDimName resolves attribute A to the dimension that hosts it: a level's own
+  // primary-attribute wins (checked first, across every dimension), falling back to a plain
+  // (no ref-id) secondary <keyed-attribute-ref attribute-id="A"> only if no dimension already
+  // claims it as primary — same priority collectAttributeDimensionOwnership uses.
+  const attrIdToDimName = new Map<string, string>();
+  for (const d of dimEntries) {
+    for (const hier of arr(d.el.hierarchy)) {
+      for (const level of arr(hier.level)) {
+        const primaryId = a(level, "primary-attribute");
+        if (primaryId) attrIdToDimName.set(primaryId, d.name);
+      }
+    }
+  }
+  for (const d of dimEntries) {
+    for (const hier of arr(d.el.hierarchy)) {
+      for (const level of arr(hier.level)) {
+        for (const kref of arr(level["keyed-attribute-ref"])) {
+          const attrId = a(kref, "attribute-id");
+          const refId = a(kref, "ref-id");
+          if (attrId && !refId && !attrIdToDimName.has(attrId)) attrIdToDimName.set(attrId, d.name);
+        }
+      }
+    }
+  }
+
+  // dimIdToName resolves a <dimension id="..."> to its name — used only to resolve a
+  // perspective's <flat-dimensions><flat-dimension-ref id="..."> back to the dimension it
+  // hides (see perspectiveHideSummary below). Cube-level and schema-level dimension
+  // definitions can share a name but never an id, so last-write-wins here is fine.
+  const dimIdToName = new Map<string, string>();
+  for (const d of dimEntries) {
+    const id = a(d.el, "id");
+    if (id) dimIdToName.set(id, d.name);
+  }
+
+  /**
+   * Perspectives are a "hide list" (see xml-converter.ts's Phase 7d), not an inclusion list —
+   * an empty perspective hides nothing and leaves everything visible. Mirrors that same
+   * resolution (flat-attribute-ref → measure or dimension attribute, calculated-member-ref →
+   * calculated member, flat-dimension-ref/flat-hierarchy-ref/flat-level-ref → a whole
+   * dimension/hierarchy/level) closely enough to report the same counts the converted SML
+   * ends up with, without needing the converter's own unique-naming: only distinct hidden
+   * metric ids and distinct affected dimension names are counted here.
+   */
+  function perspectiveHideSummary(perspectiveEl: El): string {
+    const hiddenMetricIds = new Set<string>();
+    const hiddenDimNames = new Set<string>();
+
+    for (const faSec of arr(perspectiveEl["flat-attributes"])) {
+      for (const faRef of arr(faSec["flat-attribute-ref"])) {
+        const id = a(faRef, "id");
+        if (!id || !isExplicitlyHidden(faRef)) continue;
+        if (survivingMeasureIds.has(id)) {
+          hiddenMetricIds.add(id); // a measure that actually converted to an SML metric
+        } else {
+          // Only a dimension the converter actually kept (usedDimNames) can be hidden in the
+          // resulting SML — a hide-list entry pointing at an excluded, never-referenced
+          // dimension has nothing left to hide there (matching xml-converter.ts, which drops
+          // it as an unresolvable Perspective omission rather than emitting a hide).
+          const dimName = attrIdToDimName.get(id);
+          if (dimName && usedDimNames.has(dimName)) hiddenDimNames.add(dimName);
+        }
+      }
+    }
+
+    for (const cmSec of arr(perspectiveEl["calculated-members"])) {
+      for (const cmRef of arr(cmSec["calculated-member-ref"])) {
+        const id = a(cmRef, "id");
+        if (id && isExplicitlyHidden(cmRef) && calcMemberDef.has(id)) hiddenMetricIds.add(id);
+      }
+    }
+
+    for (const fdSec of arr(perspectiveEl["flat-dimensions"])) {
+      for (const fdRef of arr(fdSec["flat-dimension-ref"])) {
+        const dimId = a(fdRef, "id");
+        const dimName = dimId ? dimIdToName.get(dimId) : undefined;
+        if (!dimName || !usedDimNames.has(dimName)) continue;
+        if (isExplicitlyHidden(fdRef)) {
+          hiddenDimNames.add(dimName);
+          continue;
+        }
+        for (const fhRef of arr(fdRef["flat-hierarchy-ref"])) {
+          if (isExplicitlyHidden(fhRef)) {
+            hiddenDimNames.add(dimName);
+            continue;
+          }
+          for (const flRef of arr(fhRef["flat-level-ref"])) {
+            if (isExplicitlyHidden(flRef)) hiddenDimNames.add(dimName);
+          }
+        }
+      }
+    }
+
+    const nMetrics = hiddenMetricIds.size;
+    const nDims = hiddenDimNames.size;
+    if (nMetrics === 0 && nDims === 0) return "hides nothing — all metrics and dimensions visible";
+    return `hides ${nMetrics} metric(s), ${nDims} dimension(s)`;
+  }
+
+  /**
+   * Resolves a cross-dimension embed the same way xml-converter.ts's
+   * resolveSnowflakeRelationship does: ref-id bridges to the key-ref id that actually carries
+   * it (refPathIdToKeyRefId), which must resolve to EXACTLY one target binding (complete="true"
+   * and unique) plus one other (host) binding — anything else (no bridge, more/fewer than two
+   * bindings, no unique target, or the target resolving back to the host dimension itself) is
+   * not a real, resolvable relationship and must be left out, matching the converter exactly
+   * (e.g. a same-shaped embed whose "target" key-ref is complete but not unique is excluded).
+   */
+  function resolveEmbeddedDimName(refId: string, attrId: string, hostDimName: string): string | undefined {
+    const hostKeyRefId = refPathIdToKeyRefId.get(refId);
+    const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) ?? [] : [];
+    if (entries.length !== 2) return undefined;
+    const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
+    const hostEntry = entries.find((e) => e !== targetEntry);
+    if (!targetEntry || !hostEntry) return undefined;
+    const targetDimName = attrIdToDimName.get(attrId);
+    if (!targetDimName || targetDimName === hostDimName) return undefined;
+    return targetDimName;
+  }
+
+  // A keyed attribute is "used" iff it backs a level (primary or secondary) of a dimension
+  // that's currently marked used — mirrors how a whole dimension, not individual attributes
+  // within it, is the unit xml-converter.ts excludes or keeps.
+  const usedAttrIds = new Set<string>();
+  let usedDimEntries = dimEntries.filter((d) => usedDimNames.has(d.name));
+  /** Every cross-dimension embed (ref-id present) found on a currently-used dimension's own
+   *  level, collected alongside usedAttrIds so the fixed-point loop below can attempt to
+   *  resolve each one without re-walking every dimension's levels again. */
+  let pendingEmbeds: Array<{ refId: string; attrId: string; hostDimName: string }> = [];
+  function collectUsedAttrIds(): void {
+    usedAttrIds.clear();
+    pendingEmbeds = [];
+    for (const d of usedDimEntries) {
+      for (const hier of arr(d.el.hierarchy)) {
+        for (const level of arr(hier.level)) {
+          const primaryId = a(level, "primary-attribute");
+          if (primaryId) usedAttrIds.add(primaryId);
+          for (const kref of arr(level["keyed-attribute-ref"])) {
+            const attrId = a(kref, "attribute-id");
+            if (!attrId) continue;
+            const refId = a(kref, "ref-id");
+            if (refId) {
+              // A cross-dimension embed: attrId belongs to ANOTHER dimension, not this one, so
+              // it's only "used" if resolveEmbeddedDimName below actually resolves the
+              // relationship (matching xml-converter.ts, which drops an unresolved embed
+              // entirely — dimMeta.skippedCrossDimRefs — rather than treating it as a live
+              // secondary attribute).
+              pendingEmbeds.push({ refId, attrId, hostDimName: d.name });
+            } else {
+              usedAttrIds.add(attrId); // plain secondary attribute, hosted natively here
+            }
+          }
+        }
+      }
+    }
+  }
+  collectUsedAttrIds();
+  // Grow usedDimNames/usedAttrIds to a fixed point: resolving one embed can mark another
+  // dimension used, exposing more embeds of its own (a chain), so keep re-deriving until
+  // nothing new resolves.
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const { refId, attrId, hostDimName } of pendingEmbeds) {
+      const targetDimName = resolveEmbeddedDimName(refId, attrId, hostDimName);
+      if (targetDimName && !usedDimNames.has(targetDimName)) {
+        usedDimNames.add(targetDimName);
+        grew = true;
+      }
+    }
+    if (grew) {
+      usedDimEntries = dimEntries.filter((d) => usedDimNames.has(d.name));
+      collectUsedAttrIds();
+    }
+  }
+  // Schema-level dimensions never appear in a cube's own data-set-ref list (they're pulled
+  // in via keyed-attribute key-refs instead, resolved through keyMap below), so a dataset
+  // that only backs a dimension level — never a cube's fact table — still counts as used;
+  // matches xml-converter.ts, which scans each emitted dimension's own YAML for the
+  // datasets it names, in addition to what cubes reference directly, regardless of whether
+  // any individual binding happens to be cube-tagged.
+  for (const attrId of usedAttrIds) {
+    const keyUuid = attrDef.get(attrId)?.keyUuid;
+    for (const b of keyUuid ? keyMap.get(keyUuid) ?? [] : []) usedDatasetNames.add(b.dataset);
   }
 
   // ============================================================
@@ -478,13 +753,20 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   const hasRoles = arr(schemaEl.roles).length > 0 || arr(schemaEl.role).length > 0;
   const hasPerspectives = arr(schemaEl.perspectives).length > 0 || arr(schemaEl.perspective).length > 0;
   const hasTranslations = arr(schemaEl.translations).length > 0 || arr(schemaEl.translation).length > 0;
-  const perspectiveNames = arr(schemaEl.perspectives).flatMap((p) => arr(p.perspective)).map((p) => a(p, "name") ?? "").filter(Boolean);
+  const perspectiveEls = arr(schemaEl.perspectives).flatMap((p) => arr(p.perspective)).filter((p) => a(p, "name"));
+  const perspectiveNames = perspectiveEls.map((p) => a(p, "name") ?? "");
 
   const totalHierarchies = dimEntries.reduce((n, d) => n + arr(d.el.hierarchy).length, 0);
   const totalLevels = dimEntries.reduce(
     (n, d) => n + arr(d.el.hierarchy).reduce((k, h) => k + arr(h.level).length, 0),
     0,
   );
+  const usedHierarchies = usedDimEntries.reduce((n, d) => n + arr(d.el.hierarchy).length, 0);
+  const usedLevels = usedDimEntries.reduce(
+    (n, d) => n + arr(d.el.hierarchy).reduce((k, h) => k + arr(h.level).length, 0),
+    0,
+  );
+  const usedAttrCount = [...attrDef.keys()].filter((id) => usedAttrIds.has(id)).length;
   const totalMeasures = cubeEls.reduce(
     (n, c) => n + arr(c.attributes).reduce((k, s2) => k + arr(s2.attribute).filter((el) => !isQuantileGroupAttribute(el as El)).length, 0),
     0,
@@ -500,18 +782,31 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   out.push("## Summary", "");
   out.push(
+    "Counts below are schema-wide (every object the XML declares). The \"used by a cube\" rows " +
+      "show the subset at least one cube actually references — the same scope `generate-sml-from-xml` " +
+      "converts, so those rows are what to compare against a report generated from the resulting SML.",
+    "",
+  );
+  out.push(
     ...table(
       ["Object", "Count"],
       [
         ["Cubes / Models", String(cubeEls.length)],
         ["Datasets", String(datasets.length)],
+        ["Datasets used by a cube", String(usedDatasetNames.size)],
         ["Connections", String(connectionIds.size)],
         ["Schema-level attributes", String(attrDef.size)],
+        ["Attributes used by a cube", String(usedAttrCount)],
         ["Dimensions", String(dimEntries.length)],
+        ["Dimensions used by a cube", String(usedDimEntries.length)],
         ["Hierarchies", String(totalHierarchies)],
+        ["Hierarchies used by a cube", String(usedHierarchies)],
         ["Levels", String(totalLevels)],
+        ["Levels used by a cube", String(usedLevels)],
         ["Measures", String(totalMeasures)],
+        ["Measures used by a cube", String(usedMeasureCount)],
         ["Calculated members", String(calcMemberDef.size)],
+        ["Calculated members used by a cube", String(usedCalcMemberIds.size)],
         ["User Defined Aggregates", String(totalAggregates)],
         ["Named sets", String(totalNamedSets)],
         ["KPIs", String(totalKpis)],
@@ -620,9 +915,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
 
   // ── Perspectives ─────────────────────────────────────────────────────────────
 
-  if (perspectiveNames.length) {
+  if (perspectiveEls.length) {
     out.push("## Perspectives", "");
-    out.push(...perspectiveNames.map((n) => `- ${cell(n)}`), "");
+    out.push(...perspectiveEls.map((p) => `- **${cell(a(p, "name"))}** — ${perspectiveHideSummary(p)}`), "");
   }
 
   out.push("---", "", "_Generated by `atscale-utils generate-report-from-xml`._", "");
@@ -741,6 +1036,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           if (!attrId) continue;
           const kaDef = attrDef.get(attrId);
           const kaBindings = resolveAttrBindings(kaDef?.keyUuid);
+          const kaVisible = kaDef ? kaDef.visible : true;
           secondaryRows.push([
             code(def?.displayName ?? primaryId ?? "?"),
             code(kaDef?.displayName ?? attrId),
@@ -748,6 +1044,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             role ? cell(role) : refId ? "embedded ref" : "secondary",
             code(bindingLabel(kaBindings)),
             cell(kaDef?.folder),
+            flag(!kaVisible) ? "hidden" : "",
             kaDef?.allowedCalcTypes.join(", ") ?? "",
           ]);
         }
@@ -758,7 +1055,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       }
       if (secondaryRows.length) {
         o.push("Level attributes (name/sort overrides and secondary attributes):", "");
-        o.push(...table(["Level", "Attribute", "Caption", "Role", "Bound to (dataset.column)", "Folder", "Allowed DMA calcs"], secondaryRows));
+        o.push(...table(["Level", "Attribute", "Caption", "Role", "Bound to (dataset.column)", "Folder", "Hidden", "Allowed DMA calcs"], secondaryRows));
       }
     }
     o.push("");
@@ -775,43 +1072,39 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     return undefined;
   }
 
-  function renderCube(o: string[], cube: El): void {
-    const cubeName = a(cube, "name") ?? "?";
-    const props = first(arr(cube.properties)) as El | undefined;
-    const visible = props ? s(first(arr(props.visible))) !== "false" : true;
-    o.push(`### ${cubeName}${!visible ? "  \`hidden\`" : ""}`, "");
-
-    // Datasets used by this cube.
-    const dsRefs: string[] = [];
-    for (const dsSec of arr(cube["data-sets"])) {
-      for (const dsRef of arr(dsSec["data-set-ref"])) {
-        const refId = a(dsRef, "id");
-        const dsName = refId ? datasetIdToName.get(refId) ?? refId : undefined;
-        if (dsName) dsRefs.push(dsName);
-      }
-    }
-    if (dsRefs.length) o.push(`**Datasets:** ${dsRefs.map((d) => `\`${d}\``).join(", ")}`, "");
-
-    // Joins: this cube's own key-ref bindings, resolved against every dimension's
-    // keyed-attribute to show which fact dataset joins to which dimension level
-    // on which column(s) — the actual join graph, independent of SML shaping.
-    //
-    // A degenerate attribute (its value is a plain column on the fact table itself, no
-    // separate physical dimension table involved at all) has exactly one key-ref entry
-    // total for that key, declared complete="true" directly in the fact dataset's own
-    // <logical> section — with nothing else bound to the same key, there is no "other side"
-    // to join to, so it produces no join row. A genuine cross-table lookup instead has TWO
-    // (or more) entries for the same key on DIFFERENT datasets: whichever one owns the
-    // authoritative definition (complete="true") plus one or more FK references to it
-    // (typically complete="false"/"partial") — every dataset in that group gets its own join
-    // row, including the authoritative one itself, because a fact whose own column IS the
-    // dimension's key still needs a row describing which column it joins on. That holds even
-    // when the authoritative dataset is itself one of this cube's own fact tables (a
-    // degenerate dimension whose values live on fact A, looked up via FK from fact B, is a
-    // real relationship, not a coincidence). The one case NOT a real join is two datasets that
-    // each independently declare complete="true" for the same key — both already own the
-    // value outright, so neither is joining to the other, they just happen to carry the same
-    // degenerate value (shared_degenerate_columns).
+  /**
+   * Joins: this cube's own key-ref bindings, resolved against every dimension's
+   * keyed-attribute to show which fact dataset joins to which dimension level
+   * on which column(s) — the actual join graph, independent of SML shaping.
+   *
+   * A degenerate attribute (its value is a plain column on the fact table itself, no
+   * separate physical dimension table involved at all) has exactly one key-ref entry
+   * total for that key, declared complete="true" directly in the fact dataset's own
+   * <logical> section — with nothing else bound to the same key, there is no "other side"
+   * to join to, so it produces no join row. A genuine cross-table lookup instead has TWO
+   * (or more) entries for the same key on DIFFERENT datasets: whichever one owns the
+   * authoritative definition (complete="true") plus one or more FK references to it
+   * (typically complete="false"/"partial") — every dataset in that group gets its own join
+   * row, including the authoritative one itself, because a fact whose own column IS the
+   * dimension's key still needs a row describing which column it joins on. That holds even
+   * when the authoritative dataset is itself one of this cube's own fact tables (a
+   * degenerate dimension whose values live on fact A, looked up via FK from fact B, is a
+   * real relationship, not a coincidence). The one case NOT a real join is two datasets that
+   * each independently declare complete="true" for the same key — both already own the
+   * value outright, so neither is joining to the other, they just happen to carry the same
+   * degenerate value (shared_degenerate_columns).
+   *
+   * Also returns schemaJoinedDimNames: schema-level dimensions this cube actually uses via a
+   * key-ref binding (as opposed to an explicit <dimension-ref>) — broader than isRealJoin, since
+   * a degenerate dimension (its authoritative key-ref lives directly on one of this cube's own
+   * fact datasets, with no separate lookup table) never produces a real cross-table join, but the
+   * cube still genuinely depends on it whenever the cube's own data-set-ref declares a binding for
+   * that key at all — same "any cube-tagged binding counts as usage" rule the "used across cubes"
+   * tally above applies per-dataset. computeCubeDimNames (below) folds this into "Dimensions used",
+   * and the Phase 6 cube-usage rollup reuses it too, so both places agree on what counts as used.
+   */
+  function computeCubeJoins(cube: El): { joinRows: string[][]; schemaJoinedDimNames: Set<string> } {
+    const cubeName = a(cube, "name") ?? "";
     function isRealJoin(b: KeyBinding, allBindings: KeyBinding[]): boolean {
       return allBindings.some((other) => other.dataset !== b.dataset && !(b.complete === "true" && other.complete === "true"));
     }
@@ -822,14 +1115,6 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     // (dataset, columns, dimension, level) combinations already emitted to keep one real join
     // relationship from producing byte-identical duplicate rows.
     const seenJoinRowKeys = new Set<string>();
-    // Schema-level dimensions this cube actually uses via a key-ref binding (as opposed
-    // to an explicit <dimension-ref>) — tracked here so "Dimensions used" below can include
-    // them too, instead of only the dimensions the cube lists by name. This is broader than
-    // isRealJoin: a degenerate dimension (its authoritative key-ref lives directly on one of
-    // this cube's own fact datasets, with no separate lookup table) never produces a real
-    // cross-table join, but the cube still genuinely depends on it whenever the cube's own
-    // data-set-ref declares a binding for that key at all — same "any cube-tagged binding
-    // counts as usage" rule the "used across cubes" tally above applies per-dataset.
     const schemaJoinedDimNames = new Set<string>();
     for (const [dimName, dimEl] of schemaDims) {
       for (const hier of arr(dimEl.hierarchy)) {
@@ -842,7 +1127,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             if (b.cube !== cubeName) continue;
             schemaJoinedDimNames.add(dimName);
             if (!isRealJoin(b, allBindings)) continue;
-            const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
+            // Keyed by def.id (the keyed-attribute's own id), not def.name/displayName: two
+            // distinct keyed-attribute objects can share an identical name/caption and binding
+            // (a coincidence in the source model), and deduping on the name would silently drop
+            // one of them as if it were the same object visited via another hierarchy.
+            const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.id} ${b.rolePlay ?? ""}`;
             if (seenJoinRowKeys.has(joinRowKey)) continue;
             seenJoinRowKeys.add(joinRowKey);
             joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.displayName), cell(b.rolePlay), b.unique ? "yes" : ""]);
@@ -862,7 +1151,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
             const allBindings = keyMap.get(def.keyUuid) ?? [];
             for (const b of allBindings) {
               if (b.cube !== cubeName || !isRealJoin(b, allBindings)) continue;
-              const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.name} ${b.rolePlay ?? ""}`;
+              // See the matching comment above: dedup by def.id, not def.name/displayName.
+              const joinRowKey = `${b.dataset} ${b.columns.join(",")} ${dimName} ${def.id} ${b.rolePlay ?? ""}`;
               if (seenJoinRowKeys.has(joinRowKey)) continue;
               seenJoinRowKeys.add(joinRowKey);
               joinRows.push([code(b.dataset), code(b.columns.join(", ")), code(dimName), code(def.displayName), cell(b.rolePlay), b.unique ? "yes" : ""]);
@@ -871,12 +1161,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         }
       }
     }
-    if (joinRows.length) {
-      o.push("**Joins (fact dataset → dimension level)**", "");
-      o.push(...table(["From dataset", "Join column(s)", "To dimension", "To level", "Role play", "Unique"], joinRows));
-    }
+    return { joinRows, schemaJoinedDimNames };
+  }
 
-    // Dimensions used (inline + refs).
+  /**
+   * Dimensions used (inline + refs), plus every schema-level dimension reached only via a
+   * bare key-ref join (schemaJoinedDimNames, from computeCubeJoins) with no <dimension-ref>
+   * ever naming it — without that, such dimensions would silently vanish from "Dimensions
+   * used" even though the cube genuinely depends on them.
+   */
+  function computeCubeDimNames(cube: El, schemaJoinedDimNames: Set<string>): { dimNames: string[]; usedNames: Set<string> } {
     const dimNames: string[] = [];
     const namedDimNames = new Set<string>();
     for (const dimsSec of arr(cube.dimensions)) {
@@ -893,22 +1187,23 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         namedDimNames.add(dName);
       }
     }
-    // A schema-level dimension can be joined into a cube purely through a keyed-attribute
-    // key-ref (visible in the Joins table above) with no <dimension-ref> ever naming it —
-    // without this, such dimensions silently vanish from "Dimensions used" even though the
-    // cube genuinely depends on them.
     for (const dimName of schemaJoinedDimNames) {
       if (namedDimNames.has(dimName)) continue;
       dimNames.push(`${dimName} (schema-level)`);
       namedDimNames.add(dimName);
     }
-    if (dimNames.length) o.push(`**Dimensions used:** ${dimNames.map((d) => `\`${d}\``).join(", ")}`, "");
+    return { dimNames, usedNames: namedDimNames };
+  }
 
-    // Quantile-group definitions (the AtScale representation of a percentile measure's base
-    // attribute id + compression setting, referenced by id from one or more
-    // <quantile-instance> attributes) are hidden plumbing, not standalone measures — collected
-    // up front so the measures loop below can resolve each quantile-instance's real
-    // dataset/column and compression instead of falling back to a naive, wrong guess.
+  /**
+   * Quantile-group definitions (the AtScale representation of a percentile measure's base
+   * attribute id + compression setting, referenced by id from one or more
+   * <quantile-instance> attributes) are hidden plumbing, not standalone measures — collected
+   * up front so a percentile measure's binding can be resolved to its real dataset/column
+   * instead of falling back to a naive, wrong guess. Shared by the Phase 6 rollup and the
+   * Cubes section's own Measures table so both agree on which measures are bound.
+   */
+  function buildQuantileGroupDefs(cube: El): Map<string, { baseAttrId?: string; compression?: string }> {
     const quantileGroupDefs = new Map<string, { baseAttrId?: string; compression?: string }>();
     for (const attrsSec of arr(cube.attributes)) {
       for (const attrEl of arr(attrsSec.attribute)) {
@@ -925,6 +1220,96 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         });
       }
     }
+    return quantileGroupDefs;
+  }
+
+  /**
+   * Resolves the fact-side dataset.column a cube's measure attribute is bound to: prefer an
+   * inline <key-ref> under the measure's own <measure>/<count-distinct>/<count-nonnull>
+   * element (resolved through keyMap, same as a dimension level attribute), then an
+   * <attribute-ref> registered for this attribute id in the cube's own data-set-ref, then —
+   * for a percentile measure — the binding of the base attribute its quantile-group points to
+   * by id. Only after all three come up empty does this fall back to a naming-convention
+   * guess (e.g. "m_FOO_sum" → column FOO on the cube's first fact dataset), clearly labeled as
+   * inferred rather than declared, since it is not a fact stated anywhere in the XML. Returns
+   * "" when no binding — declared or verifiably inferred — exists at all, which is also the
+   * "used by a cube" signal the Phase 6 rollup counts, since generate-sml-from-xml's
+   * xml-converter.ts likewise excludes a fully unbound measure from SML.
+   */
+  function resolveMeasureBoundTo(
+    cube: El,
+    attrEl: El,
+    quantileGroupDefs: Map<string, { baseAttrId?: string; compression?: string }>,
+  ): string {
+    const cubeName = a(cube, "name") ?? "?";
+    const name = a(attrEl, "name") ?? "?";
+    const attrId = a(attrEl, "id");
+    const mProps = first(arr(attrEl.properties)) as El | undefined;
+    const typeEl = mProps ? (first(arr(mProps.type)) as El | undefined) : undefined;
+    const measureEl = typeEl ? (first(arr(typeEl.measure)) as El | undefined) : undefined;
+    const countDistEl = typeEl ? (first(arr(typeEl["count-distinct"])) as El | undefined) : undefined;
+    const countNonNullEl = typeEl ? (first(arr(typeEl["count-nonnull"])) as El | undefined) : undefined;
+    const quantileInstanceEl = typeEl ? (first(arr(typeEl["quantile-instance"])) as El | undefined) : undefined;
+
+    const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
+    const inlineKeyRefEl = measureTypeEl ? (first(arr(measureTypeEl["key-ref"])) as El | undefined) : undefined;
+    const inlineKeyRefId = inlineKeyRefEl ? a(inlineKeyRefEl, "id") : undefined;
+    const inlineBindings = inlineKeyRefId ? keyMap.get(inlineKeyRefId) ?? [] : [];
+    const attrBindings = attrId ? attrMap.get(attrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
+
+    const quantileGroupRefEl = quantileInstanceEl ? (first(arr(quantileInstanceEl["quantile-group-ref"])) as El | undefined) : undefined;
+    const quantileGroupRefId = quantileGroupRefEl ? a(quantileGroupRefEl, "id") : undefined;
+    const quantileBaseAttrId = quantileGroupRefId ? quantileGroupDefs.get(quantileGroupRefId)?.baseAttrId : undefined;
+    const quantileBindings = quantileBaseAttrId ? attrMap.get(quantileBaseAttrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
+
+    if (inlineBindings.length) return inlineBindings.map((b) => `${b.dataset}.${b.columns.join("+")}`).join(", ");
+    if (attrBindings.length) return attrBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
+    if (quantileBindings.length) return quantileBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
+
+    // No key-ref/attribute-ref binding exists anywhere for this attribute — a genuinely
+    // incomplete/orphaned definition left over in the source schema. Guessing a column from
+    // the attribute's own name (e.g. "m_FOO_sum" → FOO) is only worth reporting when the
+    // guess actually matches a column the target dataset declares; otherwise it fabricates a
+    // specific-looking binding for a column that does not exist, which is worse than
+    // reporting no binding at all. Matches the same guard in generate-sml-from-xml's
+    // xml-converter.ts, which excludes an unverifiable guess like this from SML entirely
+    // rather than emitting it.
+    const guessedDataset = getFactDatasetName(cube);
+    const guessedColumn = parseColumnFromAttrName(name);
+    const knownColumns = guessedDataset ? datasetByName.get(guessedDataset)?.columns : undefined;
+    const isUnverifiableGuess = !!knownColumns?.length && !knownColumns.some((c) => c.name === guessedColumn);
+    return guessedDataset && !isUnverifiableGuess ? `${guessedDataset}.${guessedColumn} (inferred)` : "";
+  }
+
+  function renderCube(o: string[], cube: El): void {
+    const cubeName = a(cube, "name") ?? "?";
+    const props = first(arr(cube.properties)) as El | undefined;
+    const visible = props ? s(first(arr(props.visible))) !== "false" : true;
+    o.push(`### ${cubeName}${!visible ? "  \`hidden\`" : ""}`, "");
+
+    // Datasets used by this cube.
+    const dsRefs: string[] = [];
+    for (const dsSec of arr(cube["data-sets"])) {
+      for (const dsRef of arr(dsSec["data-set-ref"])) {
+        const refId = a(dsRef, "id");
+        const dsName = refId ? datasetIdToName.get(refId) ?? refId : undefined;
+        if (dsName) dsRefs.push(dsName);
+      }
+    }
+    if (dsRefs.length) o.push(`**Datasets:** ${dsRefs.map((d) => `\`${d}\``).join(", ")}`, "");
+
+    const { joinRows, schemaJoinedDimNames } = computeCubeJoins(cube);
+    if (joinRows.length) {
+      o.push("**Joins (fact dataset → dimension level)**", "");
+      o.push(...table(["From dataset", "Join column(s)", "To dimension", "To level", "Role play", "Unique"], joinRows));
+    }
+
+    const { dimNames } = computeCubeDimNames(cube, schemaJoinedDimNames);
+    if (dimNames.length) o.push(`**Dimensions used:** ${dimNames.map((d) => `\`${d}\``).join(", ")}`, "");
+
+    // Quantile-group definitions (the AtScale representation of a percentile measure's base
+    // attribute id + compression setting) — see buildQuantileGroupDefs.
+    const quantileGroupDefs = buildQuantileGroupDefs(cube);
 
     // Measures.
     const measureRows: string[][] = [];
@@ -932,7 +1317,6 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       for (const attrEl of arr(attrsSec.attribute)) {
         if (isQuantileGroupAttribute(attrEl)) continue; // hidden plumbing — see quantileGroupDefs above
         const name = a(attrEl, "name") ?? "?";
-        const attrId = a(attrEl, "id");
         const mProps = first(arr(attrEl.properties)) as El | undefined;
         const caption = mProps ? s(first(arr(mProps.caption))) : undefined;
         const mVisible = mProps ? s(first(arr(mProps.visible))) !== "false" : true;
@@ -974,47 +1358,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           kind = "unknown";
         }
 
-        // Resolve the fact-side column: prefer an inline <key-ref> under the measure's own
-        // <measure>/<count-distinct>/<count-nonnull> element (resolved through keyMap, same
-        // as a dimension level attribute), then an <attribute-ref> registered for this
-        // attribute id in the cube's own data-set-ref, then — for a percentile measure — the
-        // binding of the base attribute its quantile-group points to by id. Only after all
-        // three come up empty does this fall back to a naming-convention guess (e.g. "m_FOO_sum"
-        // → column FOO on the cube's first fact dataset), clearly labeled as inferred rather
-        // than declared, since it is not a fact stated anywhere in the XML.
-        const measureTypeEl = measureEl ?? countDistEl ?? countNonNullEl;
-        const inlineKeyRefEl = measureTypeEl ? (first(arr(measureTypeEl["key-ref"])) as El | undefined) : undefined;
-        const inlineKeyRefId = inlineKeyRefEl ? a(inlineKeyRefEl, "id") : undefined;
-        const inlineBindings = inlineKeyRefId ? keyMap.get(inlineKeyRefId) ?? [] : [];
-        const attrBindings = attrId ? attrMap.get(attrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
-
-        const quantileGroupRefEl = quantileInstanceEl ? (first(arr(quantileInstanceEl["quantile-group-ref"])) as El | undefined) : undefined;
-        const quantileGroupRefId = quantileGroupRefEl ? a(quantileGroupRefEl, "id") : undefined;
-        const quantileBaseAttrId = quantileGroupRefId ? quantileGroupDefs.get(quantileGroupRefId)?.baseAttrId : undefined;
-        const quantileBindings = quantileBaseAttrId ? attrMap.get(quantileBaseAttrId)?.filter((b) => b.cube === cubeName) ?? [] : [];
-
-        let boundTo: string;
-        if (inlineBindings.length) {
-          boundTo = inlineBindings.map((b) => `${b.dataset}.${b.columns.join("+")}`).join(", ");
-        } else if (attrBindings.length) {
-          boundTo = attrBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
-        } else if (quantileBindings.length) {
-          boundTo = quantileBindings.map((b) => `${b.dataset}.${b.column}`).join(", ");
-        } else {
-          // No key-ref/attribute-ref binding exists anywhere for this attribute — a genuinely
-          // incomplete/orphaned definition left over in the source schema. Guessing a column
-          // from the attribute's own name (e.g. "m_FOO_sum" → FOO) is only worth reporting when
-          // the guess actually matches a column the target dataset declares; otherwise it
-          // fabricates a specific-looking binding for a column that does not exist, which is
-          // worse than reporting no binding at all. Matches the same guard in
-          // generate-sml-from-xml's xml-converter.ts, which excludes an unverifiable guess like
-          // this from SML entirely rather than emitting it.
-          const guessedDataset = getFactDatasetName(cube);
-          const guessedColumn = parseColumnFromAttrName(name);
-          const knownColumns = guessedDataset ? datasetByName.get(guessedDataset)?.columns : undefined;
-          const isUnverifiableGuess = !!knownColumns?.length && !knownColumns.some((c) => c.name === guessedColumn);
-          boundTo = guessedDataset && !isUnverifiableGuess ? `${guessedDataset}.${guessedColumn} (inferred)` : "";
-        }
+        // Resolve the fact-side column — see resolveMeasureBoundTo, shared with the Phase 6
+        // rollup so the Summary's "Measures used by a cube" count matches this column.
+        const boundTo = resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs);
 
         measureRows.push([
           code(name),

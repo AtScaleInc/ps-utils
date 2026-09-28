@@ -584,6 +584,13 @@ export async function convertXmlToSml(
   // same name gets its own distinct unique_name. Scoping this per-cube instead meant a
   // second cube reusing a common measure name silently overwrote the first cube's file.
   const seenMetricNames = new Set<string>();
+  // Cube-level measure attributes aren't kept in a project-wide map the way attrDef/
+  // calcMemberDefs are (each cube parses its own <attributes> section independently), so the
+  // Phase 7e truncated-identifier report can't just re-scan a map afterward — it has to be
+  // populated here, at the point each measure's unique_name is first computed. Keyed by
+  // original name so the same measure reused by another cube (see seenMetricNames above)
+  // isn't logged twice.
+  const rptTruncatedMeasureNames = new Map<string, string>();
   // Tracks, per emitted measure unique_name, whether its column actually resolved to a
   // declared physical column on its dataset — see the duplicate-measure handling below.
   const metricHasKnownColumn = new Map<string, boolean>();
@@ -867,6 +874,9 @@ export async function convertXmlToSml(
           // bind report fields to the exact unique_name string, so force-lowercasing here
           // silently breaks every existing report built against a prior deployment.
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (!rptTruncatedMeasureNames.has(attrNameRaw) && safeName(attrNameRaw).length > MAX_UNIQUE_NAME_LENGTH) {
+            rptTruncatedMeasureNames.set(attrNameRaw, uniqueName);
+          }
           // Dedup key is case-insensitive — matching the reference converter's own
           // CASE_INSENSITIVE_ORDER qnMap — so "Sales" and "sales" collide even though
           // their unique_name strings differ, but the emitted file/unique_name still uses
@@ -985,6 +995,9 @@ export async function convertXmlToSml(
 
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (!rptTruncatedMeasureNames.has(attrNameRaw) && safeName(attrNameRaw).length > MAX_UNIQUE_NAME_LENGTH) {
+            rptTruncatedMeasureNames.set(attrNameRaw, uniqueName);
+          }
           const dedupKey = uniqueName.toLowerCase();
           // Same project-wide dedup pattern as regular measures above (visibility included,
           // see the comment there): a percentile metric with the exact same definition
@@ -1036,6 +1049,9 @@ export async function convertXmlToSml(
           // Inline expression (calculated measure on attribute element)
           const label = caption ?? toTitleCase(attrNameRaw);
           const uniqueName = truncateUniqueName(safeName(attrNameRaw));
+          if (!rptTruncatedMeasureNames.has(attrNameRaw) && safeName(attrNameRaw).length > MAX_UNIQUE_NAME_LENGTH) {
+            rptTruncatedMeasureNames.set(attrNameRaw, uniqueName);
+          }
           const dedupKey = uniqueName.toLowerCase();
           if (seenMetricNames.has(dedupKey)) {
             if (metricDefSignature.get(dedupKey) === attrId) {
@@ -1915,6 +1931,9 @@ export async function convertXmlToSml(
     if (safe.length > MAX_UNIQUE_NAME_LENGTH) {
       rptTruncatedNames.push({ category: "Calculated Member", original: def.name, truncated: truncateUniqueName(safe) });
     }
+  }
+  for (const [original, truncated] of rptTruncatedMeasureNames) {
+    rptTruncatedNames.push({ category: "Measure", original, truncated });
   }
   for (const dimEl of allDims.values()) {
     for (const hierEl of arr(dimEl.hierarchy)) {
@@ -3068,24 +3087,44 @@ function collectAttributeDimensionOwnership(
  * rather than this function trying to derive one from the target side.
  *
  * Returns undefined (caller reports an omission) when the join can't be traced end to end: no
- * bridging key-ref, an ambiguous set of bindings, the target attribute's owning dimension is
- * unknown, or it resolves back to this same dimension.
+ * bridging key-ref, no entry for the host dataset itself, no complete counterpart, the target
+ * attribute's owning dimension is unknown, or it resolves back to this same dimension.
+ *
+ * A key-ref id names an abstract <attribute-key>, not a join-specific pairing, so it can be
+ * redeclared by other, unrelated datasets elsewhere in the schema — keyMap.get(hostKeyRefId)
+ * is not reliably exactly the two datasets on either side of this particular join. The host
+ * side is picked by matching the dataset the level itself already lives in (hostDatasetName);
+ * the target side by completeness alone, the same signal pickAuthEntry uses elsewhere in this
+ * file, since real-world data doesn't reliably also mark the complete side unique="true".
  */
 function resolveSnowflakeRelationship(
   refId: string,
   attrId: string,
   hostDimName: string,
   hostLevelUniqueName: string,
+  hostDatasetName: string,
   keyMap: Map<string, KeyRefEntry[]>,
   refPathIdToKeyRefId: Map<string, string>,
   attrIdToDimName: Map<string, string>,
 ): DimMeta["snowflakeRelationships"][number] | undefined {
   const hostKeyRefId = refPathIdToKeyRefId.get(refId);
   const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
-  if (!entries || entries.length !== 2) return undefined;
+  if (!entries || entries.length < 2) return undefined;
 
-  const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
-  const hostEntry = entries.find((e) => e !== targetEntry);
+  // Exactly two redeclarations is the ordinary host/target pairing this function has always
+  // handled — keep requiring the target side to be both complete AND unique there, since with
+  // only two candidates there's no other signal to rule out a non-unique "target" that would
+  // fan out the join. Only when the abstract key-ref has been redeclared by MORE than two
+  // datasets (the same key concept reused by other, unrelated host-side tables — see the
+  // comment above) is completeness alone used to single out the one real target, because at
+  // that point requiring uniqueness too would just as often reject the genuine target as a
+  // spurious one, and the host is already pinned down by hostDatasetName instead of by process
+  // of elimination.
+  const hostEntry = entries.find((e) => e.datasetName === hostDatasetName);
+  const targetEntry =
+    entries.length === 2
+      ? entries.find((e) => e.complete === "true" && e.unique)
+      : entries.find((e) => e.complete === "true" && e !== hostEntry);
   if (!targetEntry || !hostEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
@@ -3233,6 +3272,7 @@ interface LevelAttrDef {
   isUniqueKey?: boolean;
   folder?: string;
   description?: string;
+  format?: string;
   allowedCalcsForDma?: string[];
   /** Set instead of dataset/keyColumns/nameColumn when this level is degenerate on more
    *  than one fact dataset (e.g. a flag column present on both a cube's primary fact table
@@ -3316,14 +3356,16 @@ function buildDimensionYaml(
   // Collect level attributes (de-duplicated by uniqueName)
   const levelAttrMap = new Map<string, LevelAttrDef>();
   // A level shared across multiple hierarchies (e.g. a "Date" leaf common to a Calendar
-  // Hierarchy and a Fiscal Hierarchy) is the same physical level each time — the
-  // engine rejects it if its attached secondary_attributes/metrics differ between
-  // occurrences ("Level X is duplicated in hierarchies ... but levels below it differ").
-  // The source XML only declares the full keyed-attribute-ref list once, on whichever
-  // hierarchy's <level> element happens to carry it; every other hierarchy's <level> for
-  // the same primary-attribute has none. Emit the attached set once, on the level's first
-  // occurrence, and leave later occurrences bare rather than reproducing the mismatch.
-  const levelExtrasEmitted = new Set<string>();
+  // Hierarchy and a Fiscal Hierarchy) is the same physical level each time, but each
+  // hierarchy's own <level> element can carry its OWN, genuinely different
+  // <keyed-attribute-ref> list — e.g. a Performance Year hierarchy exposing
+  // performance-year-specific secondary attributes on the same shared date level a Calendar
+  // hierarchy exposes calendar-specific ones on. Tracking per exact secondary-attribute/
+  // metric unique_name (not per level as a whole) lets every hierarchy's distinct set through
+  // while still suppressing a literal re-declaration of the same attribute under the same
+  // level — which the engine does reject as a duplicate.
+  const levelSecondaryAttrsEmitted = new Set<string>();
+  const levelMetricsEmitted = new Set<string>();
 
   const hierarchies: Array<{
     uniqueName: string;
@@ -3480,7 +3522,7 @@ function buildDimensionYaml(
         const refId = a(kref, "ref-id");
         if (!attrId) continue;
         if (refId) {
-          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
           if (resolved) {
             // The engine requires a relationship's to.level key to have the same column
             // count as its own join_columns. That holds when the enclosing level's key IS
@@ -3627,21 +3669,30 @@ function buildDimensionYaml(
           isUniqueKey: isUniqueKey || undefined,
           folder: def.folder,
           description: def.description,
+          format: resolveFormat(def.formatString, def.namedFormat),
           allowedCalcsForDma: def.allowedCalcTypes,
           sharedDegenerateColumns,
         });
       }
 
-      const alreadyEmittedElsewhere = levelExtrasEmitted.has(levelUniqueName);
-      if ((secondaryAttrs.length || levelMetrics.length) && !alreadyEmittedElsewhere) {
-        levelExtrasEmitted.add(levelUniqueName);
-      }
+      const newSecondaryAttrs = secondaryAttrs.filter((sa) => {
+        const key = `${levelUniqueName}::${sa.uniqueName}`;
+        if (levelSecondaryAttrsEmitted.has(key)) return false;
+        levelSecondaryAttrsEmitted.add(key);
+        return true;
+      });
+      const newLevelMetrics = levelMetrics.filter((lm) => {
+        const key = `${levelUniqueName}::${lm.uniqueName}`;
+        if (levelMetricsEmitted.has(key)) return false;
+        levelMetricsEmitted.add(key);
+        return true;
+      });
 
       // The engine disallows secondary attributes entirely on a level that uses
       // shared_degenerate_columns (multi-dataset) — report the drop as an omission rather
       // than silently emitting an invalid combination.
-      if (sharedDegenerateColumns && !alreadyEmittedElsewhere) {
-        for (const sa of secondaryAttrs) {
+      if (sharedDegenerateColumns) {
+        for (const sa of newSecondaryAttrs) {
           metaDroppedSecondaryAttrsForSharedDegenerate.push({ level: levelUniqueName, secondaryAttrName: sa.uniqueName });
         }
       }
@@ -3650,9 +3701,8 @@ function buildDimensionYaml(
         uniqueName: levelUniqueName,
         timeUnit,
         isHidden: isHidden || undefined,
-        secondaryAttributes:
-          !alreadyEmittedElsewhere && !sharedDegenerateColumns && secondaryAttrs.length ? secondaryAttrs : undefined,
-        metrics: !alreadyEmittedElsewhere && levelMetrics.length ? levelMetrics : undefined,
+        secondaryAttributes: !sharedDegenerateColumns && newSecondaryAttrs.length ? newSecondaryAttrs : undefined,
+        metrics: newLevelMetrics.length ? newLevelMetrics : undefined,
       });
     }
 
@@ -3838,6 +3888,7 @@ function buildDimensionYaml(
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
+      if (la.format) laObj.format = la.format;
       if (la.isHiddenFromUi) laObj.is_hidden = true;
       if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
@@ -4503,7 +4554,21 @@ function buildModelYaml(
   }
 
   if (metricNames.length > 0) {
-    obj.metrics = metricNames.map((m) => {
+    // A cube can declare the same measure/calculated-member twice with an identical dedup
+    // signature (e.g. two <attribute> elements that differ only in an inert property) — the
+    // "already emitted, just reference it again" branches above correctly reuse the single
+    // metrics/*.yml file but still append to this cube's own metricNames list once per
+    // declaration, not once per unique_name. Dedup here (case-insensitive, matching this
+    // file's own dedupKey convention) so the model's metrics: list can't contain the same
+    // unique_name twice.
+    const seenMetricUniqueNames = new Set<string>();
+    const dedupedMetricNames = metricNames.filter((m) => {
+      const key = m.uniqueName.toLowerCase();
+      if (seenMetricUniqueNames.has(key)) return false;
+      seenMetricUniqueNames.add(key);
+      return true;
+    });
+    obj.metrics = dedupedMetricNames.map((m) => {
       const mObj: Record<string, unknown> = { unique_name: m.uniqueName };
       if (m.folder) mObj.folder = m.folder;
       return mObj;
