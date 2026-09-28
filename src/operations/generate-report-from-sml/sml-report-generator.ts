@@ -420,17 +420,30 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (raw.unique_name && raw.unique_name !== label(d)) o.push(`\`${raw.unique_name}\``, "");
     if (raw.description) o.push(cell(raw.description), "");
 
+    const attrs = asArray<Raw>(raw.level_attributes);
+    // xml-converter.ts's truncateUniqueName() shortens an over-length unique_name to
+    // `${head}_${8-hex sha1}_${tail}` — recognizable by that exact interior segment, unlike
+    // any ordinary sanitized name. Only fall back to the sibling level_attributes[].label for
+    // a level whose own unique_name matches this signature; substituting a label for every
+    // level would surface unrelated label/unique_name mismatches elsewhere in the SML as if
+    // they were this report's own bug.
+    const truncatedHashPattern = /_[0-9a-f]{8}_/;
+    const attrLabelByName = new Map(attrs.map((a) => [a?.unique_name, a?.label]));
+
     const hierarchies = asArray<Raw>(raw.hierarchies);
     if (hierarchies.length) {
       o.push("**Hierarchies**", "");
       for (const h of hierarchies) {
-        const levels = asArray<Raw>(h.levels).map((l) => cell(l?.unique_name ?? l));
+        const levels = asArray<Raw>(h.levels).map((l) => {
+          const uniqueName = l?.unique_name;
+          const isTruncated = typeof uniqueName === "string" && truncatedHashPattern.test(uniqueName);
+          return cell(isTruncated ? attrLabelByName.get(uniqueName) ?? uniqueName : uniqueName ?? l);
+        });
         o.push(`- **${cell(h?.label ?? h?.unique_name)}**: ${levels.map((l) => `\`${l}\``).join(" → ") || "_(no levels)_"}`);
       }
       o.push("");
     }
 
-    const attrs = asArray<Raw>(raw.level_attributes);
     if (attrs.length) {
       o.push("**Level attributes**", "");
       o.push(
