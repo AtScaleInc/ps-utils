@@ -2448,6 +2448,8 @@ Exports a catalog/model's System-Defined aggregate definitions to a JSON file, v
 
 User-Defined Aggregates (UDAs) are not included in the export — this is an AtScale API limitation.
 
+Alongside the raw AtScale export fields, the written file carries a `_psUtils.sourceObjectNames` map — this catalog's key and role-play reference ids resolved to logical names. `atscale-import-aggregates` uses it to translate those ids by name when importing into a different catalog/model whose ids for the same objects differ. It's inert extra data if you feed this file to AtScale's own import endpoint directly instead.
+
 ```bash
 ./atscale-utils atscale-export-aggregates \
   --connection-file "./connections.yaml" \
@@ -2476,6 +2478,15 @@ User-Defined Aggregates (UDAs) are not included in the export — this is an AtS
 
 Imports aggregate definitions (typically produced by [`atscale-export-aggregates`](#atscale-export-aggregates), then possibly hand-edited) into a target catalog/model, via AtScale's [Container API import endpoint](https://documentation.atscale.com/container-api/import). Per AtScale's own docs, the identical model must already exist in the target system, and importing from a newer AtScale version into an older one is not supported.
 
+Every id in an export is generated per-host (catalog, model, instance, connection, and the key/role-play reference ids inside each aggregate's `planJson`), so a straight re-post only works importing back into the exact same catalog/model. When the target differs from the file's `exportCatalogId`/`exportModelId`, this operation remaps the payload before posting it:
+
+- catalog/model ids (including every occurrence inside `planJson`) → the target's
+- key/role-play reference ids inside `planJson` → the target's ids for the same logical *names*. Name maps come from `atscale-export-aggregates`' embedded `_psUtils.sourceObjectNames` (the common case), or are fetched live via `--source-atscale-connection-name` when that isn't present (an older export file, or one hand-crafted per AtScale's own docs). An aggregate whose plan references an object missing on the target is skipped, not imported, and reported.
+- connection ids → the target model's connection, when it differs (ambiguous cases — more than one target connection, none matching the source — are skipped and reported; `--connection-remap` remains available as a manual override)
+- required string fields that are null/missing (e.g. because the source aggregate has no instance) → `""`, never `null` (AtScale's import schema rejects `null`)
+
+It also applies AtScale's promotion rules: an aggregate already active on the target (matched by the objects its plan selects, independent of ids) is skipped as a duplicate; one whose only match is blocked on the target reuses that instance id and is reactivated (unblocked) if AtScale doesn't reimport it because it already exists; an aggregate blocked on the *source* isn't promoted at all. This matching is best-effort — if the target's catalog representation or aggregate list can't be read, it's skipped gracefully (still importing, without duplicate detection).
+
 ```bash
 ./atscale-utils atscale-import-aggregates \
   --connection-file "./connections.yaml" \
@@ -2491,14 +2502,15 @@ Imports aggregate definitions (typically produced by [`atscale-export-aggregates
 | `--input-file` | Yes | | Path to the export JSON file to import (from [`atscale-export-aggregates`](#atscale-export-aggregates), optionally hand-edited) |
 | `--catalog-id` | No | | Target catalog (project) UUID to import into, from [`atscale-list-deployments`](#atscale-list-deployments). When omitted (with `--model-id`), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively |
 | `--model-id` | No | | Target model (cube) UUID to import into, from [`atscale-list-deployments`](#atscale-list-deployments). See `--catalog-id` for behavior when omitted |
-| `--connection-remap` | No | | Comma-separated list of `originalConnId:newConnId` pairs to remap connections referenced by the imported aggregates |
+| `--source-atscale-connection-name` | No | | Name of the AtScale connection entry for the *source* instance the export came from. Only consulted when the input file has no embedded `_psUtils.sourceObjectNames` — lets cross-host imports still translate key/role-play reference ids by name |
+| `--connection-remap` | No | | Comma-separated list of `originalConnId:newConnId` pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically to the target model's connection when it differs |
 | `--import-distribution-key` | No | `true` | Import distribution-key hints |
 | `--import-partition-keys` | No | `true` | Import partition-key hints |
 | `--import-replication` | No | `true` | Import replication hints |
 | `--connection-file` | No | `connections.yaml` | Path to the connections file |
 | `--insecure` | No | `true` | Skip TLS certificate verification |
 
-**Output:** JSON with the raw import response — `numberOfDefinitionsImported`, `numberOfDefinitionsIgnored`, and `aggregates.values[]` (each with `id`, `newId`, `imported`, optional `reason`).
+**Output:** JSON with the raw import response — `numberOfDefinitionsImported`, `numberOfDefinitionsIgnored`, and `aggregates.values[]` (each with `id`, `newId`, `imported`, optional `reason`) — plus `reactivated` (target definition ids unblocked because the import found them already present but blocked) and `skipped` (`{id, reason}` for aggregates not sent to AtScale at all: inactive on the source, a duplicate on the target, a missing connection match, or a plan referencing an object missing on the target).
 
 ---
 

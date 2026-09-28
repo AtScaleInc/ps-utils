@@ -843,10 +843,19 @@ inputs:
       Path to the export JSON file to import.
       Used by: atscale-import-aggregates.
     required: false
+  source-atscale-connection-name:
+    description: >
+      Name of the AtScale connection entry for the SOURCE instance the export came from. Only
+      consulted when the input file has no embedded _psUtils.sourceObjectNames map (an older
+      export file, or one hand-crafted per AtScale's own docs) — lets cross-host imports still
+      translate key/role-play reference ids by name instead of only substituting catalog/model ids.
+      Used by: atscale-import-aggregates.
+    required: false
   connection-remap:
     description: >
       Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by
-      the imported aggregates.
+      the imported aggregates. Manual override; connections are otherwise remapped automatically
+      to the target model's connection when it differs.
       Used by: atscale-import-aggregates.
     required: false
   import-distribution-key:
@@ -1546,6 +1555,7 @@ runs:
         )
         [[ -n "${{ inputs.catalog-id }}" ]]        && ARGS+=(--catalog-id       "${{ inputs.catalog-id }}")
         [[ -n "${{ inputs.model-id }}" ]]          && ARGS+=(--model-id         "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.source-atscale-connection-name }}" ]] && ARGS+=(--source-atscale-connection-name "${{ inputs.source-atscale-connection-name }}")
         [[ -n "${{ inputs.connection-remap }}" ]]  && ARGS+=(--connection-remap "${{ inputs.connection-remap }}")
         node "${{ github.action_path }}/dist/cli.js" atscale-import-aggregates "${ARGS[@]}"
       shell: bash

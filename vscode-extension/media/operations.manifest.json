@@ -2672,7 +2672,7 @@
       ]
     },
     "atscale-import-aggregates": {
-      "description": "Import aggregate definitions from an export file into a catalog/model",
+      "description": "Import aggregate definitions from an export file into a catalog/model, remapping ids for cross-host promotion",
       "group": "Aggregate Management",
       "contexts": [
         "file"
@@ -2722,8 +2722,16 @@
           "default": null
         },
         {
+          "name": "source-atscale-connection-name",
+          "description": "Name of the AtScale connection entry for the SOURCE instance the export came from, in the connections file. Only used when the input file doesn't already carry an embedded object-name map (files from an older atscale-export-aggregates, or hand-crafted per AtScale's own docs) — lets cross-host imports still translate key/role-play reference ids by name instead of only substituting catalog/model ids.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
           "name": "connection-remap",
-          "description": "Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates",
+          "description": "Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically to the target model's connection when it differs.",
           "type": "string",
           "role": "scalar",
           "required": false,

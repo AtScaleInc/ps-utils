@@ -14,6 +14,14 @@
  *
  * User-Defined Aggregates (UDAs) are not included in the export — this is an
  * AtScale API limitation, not a limitation of this operation.
+ *
+ * The written file also carries a `_psUtils.sourceObjectNames` map (this
+ * catalog's key/reference ids resolved to logical names) alongside the raw
+ * AtScale export fields. atscale-import-aggregates uses it to translate the
+ * plan's key and role-play reference ids by name when importing into a
+ * different catalog/model (whose ids for the same objects differ) — see
+ * atscale-aggregate-idmap.ts. It's inert extra data if this file is fed to
+ * AtScale's own import endpoint directly instead.
  */
 import fs from "fs";
 import { Operation } from "../Operation.js";
@@ -24,6 +32,7 @@ import { YamlService } from "../../services/YamlService.js";
 import { AtScaleRestClientService } from "../../services/AtScaleRestClientService.js";
 import { resolveAtScaleEnv } from "../atscale-env.js";
 import { resolveCatalogAndModel } from "../atscale-aggregate-shared.js";
+import { idNames } from "../atscale-aggregate-idmap.js";
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
@@ -96,8 +105,24 @@ export class AtScaleExportAggregatesOperation extends Operation<Params> {
 
     const result = await atScaleSvc.exportAggregates(env, { catalogId, modelId });
 
+    let sourceObjectNames: Record<string, string> | undefined;
+    try {
+      const catalogExport = await atScaleSvc.getCatalogExportRepresentation(env, { catalogId });
+      sourceObjectNames = idNames(catalogExport);
+    } catch (err) {
+      this.logger.verbose(
+        `[AtScaleExportAggregates] Could not fetch the catalog representation to embed source object names ` +
+        `(cross-host imports will fall back to catalog/model id substitution only): ${(err as Error).message}`,
+      );
+    }
+
+    const output: Record<string, unknown> = {
+      ...result,
+      _psUtils: { sourceCatalogId: catalogId, sourceModelId: modelId, sourceObjectNames: sourceObjectNames ?? {} },
+    };
+
     const outputFile = params["output-file"] ?? `aggregates-export-${catalogId}-${modelId}.json`;
-    fs.writeFileSync(outputFile, JSON.stringify(result, null, 2) + "\n", "utf8");
+    fs.writeFileSync(outputFile, JSON.stringify(output, null, 2) + "\n", "utf8");
 
     const aggregateCount = (result as any)?.aggregates?.count ?? (result as any)?.aggregates?.values?.length ?? 0;
     this.logger.log(`[AtScaleExportAggregates] Wrote ${aggregateCount} aggregate definition(s) to ${outputFile}`);

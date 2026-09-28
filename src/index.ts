@@ -1194,8 +1194,9 @@ export type AtScaleImportAggregatesParams = {
   inputFile: FileInput;
   catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
   modelId?: string;
+  sourceAtscaleConnectionName?: string;  // source instance the export came from; only consulted when the input file has no embedded _psUtils.sourceObjectNames
   connectionFile?: FileInput;  // default: "connections.yaml"
-  connectionRemap?: string;    // comma-separated originalConnId:newConnId pairs
+  connectionRemap?: string;    // comma-separated originalConnId:newConnId pairs; manual override, connections are otherwise remapped automatically
   importDistributionKey?: boolean;  // default: true
   importPartitionKeys?: boolean;    // default: true
   importReplication?: boolean;      // default: true
