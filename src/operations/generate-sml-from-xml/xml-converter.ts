@@ -3087,24 +3087,44 @@ function collectAttributeDimensionOwnership(
  * rather than this function trying to derive one from the target side.
  *
  * Returns undefined (caller reports an omission) when the join can't be traced end to end: no
- * bridging key-ref, an ambiguous set of bindings, the target attribute's owning dimension is
- * unknown, or it resolves back to this same dimension.
+ * bridging key-ref, no entry for the host dataset itself, no complete counterpart, the target
+ * attribute's owning dimension is unknown, or it resolves back to this same dimension.
+ *
+ * A key-ref id names an abstract <attribute-key>, not a join-specific pairing, so it can be
+ * redeclared by other, unrelated datasets elsewhere in the schema — keyMap.get(hostKeyRefId)
+ * is not reliably exactly the two datasets on either side of this particular join. The host
+ * side is picked by matching the dataset the level itself already lives in (hostDatasetName);
+ * the target side by completeness alone, the same signal pickAuthEntry uses elsewhere in this
+ * file, since real-world data doesn't reliably also mark the complete side unique="true".
  */
 function resolveSnowflakeRelationship(
   refId: string,
   attrId: string,
   hostDimName: string,
   hostLevelUniqueName: string,
+  hostDatasetName: string,
   keyMap: Map<string, KeyRefEntry[]>,
   refPathIdToKeyRefId: Map<string, string>,
   attrIdToDimName: Map<string, string>,
 ): DimMeta["snowflakeRelationships"][number] | undefined {
   const hostKeyRefId = refPathIdToKeyRefId.get(refId);
   const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
-  if (!entries || entries.length !== 2) return undefined;
+  if (!entries || entries.length < 2) return undefined;
 
-  const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
-  const hostEntry = entries.find((e) => e !== targetEntry);
+  // Exactly two redeclarations is the ordinary host/target pairing this function has always
+  // handled — keep requiring the target side to be both complete AND unique there, since with
+  // only two candidates there's no other signal to rule out a non-unique "target" that would
+  // fan out the join. Only when the abstract key-ref has been redeclared by MORE than two
+  // datasets (the same key concept reused by other, unrelated host-side tables — see the
+  // comment above) is completeness alone used to single out the one real target, because at
+  // that point requiring uniqueness too would just as often reject the genuine target as a
+  // spurious one, and the host is already pinned down by hostDatasetName instead of by process
+  // of elimination.
+  const hostEntry = entries.find((e) => e.datasetName === hostDatasetName);
+  const targetEntry =
+    entries.length === 2
+      ? entries.find((e) => e.complete === "true" && e.unique)
+      : entries.find((e) => e.complete === "true" && e !== hostEntry);
   if (!targetEntry || !hostEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
@@ -3502,7 +3522,7 @@ function buildDimensionYaml(
         const refId = a(kref, "ref-id");
         if (!attrId) continue;
         if (refId) {
-          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
           if (resolved) {
             // The engine requires a relationship's to.level key to have the same column
             // count as its own join_columns. That holds when the enclosing level's key IS
