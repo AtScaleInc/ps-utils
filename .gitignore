@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+.DS_Store
 # C extensions
 *.so
 
@@ -192,3 +192,4 @@ node_modules/
 *.tsbuildinfo
 # The Build tab's source (the Python template's build/ rule above would hide it)
 !web/src/build/
+.DS_Store
