@@ -221,6 +221,20 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     (n, d) => n + asArray<Raw>(d.raw.hierarchies).reduce((k, h) => k + asArray(h.levels).length, 0),
     0,
   );
+  // SML has no separate schema-level attribute library — level and secondary attributes
+  // live inline inside each dimension — but the XML report's "Attributes used by a cube"
+  // Summary row counts exactly this same population (the converter only ever emits
+  // attributes at least one cube references), so roll both up here for parity.
+  const attrCount = c.dimensions.reduce(
+    (n, d) =>
+      n +
+      asArray(d.raw.level_attributes).length +
+      asArray<Raw>(d.raw.hierarchies).reduce(
+        (k, h) => k + asArray<Raw>(h.levels).reduce((j, lvl) => j + asArray(lvl?.secondary_attributes).length, 0),
+        0,
+      ),
+    0,
+  );
   const perspectives = c.models.flatMap((m) => asArray<Raw>(m.raw.perspectives));
   const aggregateCount = c.models.reduce((n, m) => n + asArray<Raw>(m.raw.aggregates).length, 0);
 
@@ -232,6 +246,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
         ["Models", String(c.models.length)],
         ["Datasets", String(c.datasets.length)],
         ["Connections", String(c.connections.length)],
+        ["Attributes", String(attrCount)],
         ["Dimensions", String(c.dimensions.length)],
         ["Hierarchies", String(hierCount)],
         ["Levels", String(levelCount)],
