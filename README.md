@@ -1784,6 +1784,13 @@ Supports three input modes:
 
 Supports two connection config formats: `connections.yaml` or `systems.properties`.
 
+**XMLA authentication (`connections.yaml`, container hosts — `installer: false`)** — two options:
+
+- **XMLA token in the URL** — set `mdx.url` to `https://<host>/engine/xmla/<xmla-token>`. The URL authenticates on its own; no user credentials are needed.
+- **User password** — set `mdx.url` to the host (or `https://<host>/engine/xmla`) and `mdx.user` to a `users:` entry with `username` / `password`. The harness obtains a Keycloak token (password grant, same as `extract-model-from-atscale`) and sends it as a Bearer token.
+
+For SQL on a container host's port 15432, set `sql.ssl: true` — the server requires TLS.
+
 ```bash
 # Direct mode — XMLA queries from a JSON file
 ./atscale-utils execute-atscale-query-harness \

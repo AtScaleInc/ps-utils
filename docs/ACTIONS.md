@@ -1436,6 +1436,13 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 **Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file or a `systems.properties` file.
 
+**XMLA authentication (`connections.yaml`, container hosts — `installer: false`)** — two options:
+
+- **XMLA token in the URL** — set `mdx.url` to `https://<host>/engine/xmla/<xmla-token>`. The URL authenticates on its own; no user credentials are needed.
+- **User password** — set `mdx.url` to the host (or `https://<host>/engine/xmla`) and `mdx.user` to a `users:` entry with `username` / `password`. The harness obtains a Keycloak token (password grant, same as `extract-model-from-atscale`) and sends it as a Bearer token.
+
+For SQL on a container host's port 15432, set `sql.ssl: true` — the server requires TLS.
+
 #### Using the composite action
 
 ```yaml

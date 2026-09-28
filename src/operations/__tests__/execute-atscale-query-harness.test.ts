@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeXmlaResponse, xmlaFaultMessage } from "../execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
+import { summarizeXmlaResponse, xmlaConfigFromYaml, xmlaFaultMessage } from "../execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.js";
 
 type Cell = { value: string; fmt?: string };
 
@@ -93,5 +93,34 @@ describe("xmlaFaultMessage", () => {
 
   it("returns empty for a normal result", () => {
     expect(xmlaFaultMessage(response())).toBe("");
+  });
+});
+
+describe("xmlaConfigFromYaml container auth", () => {
+  const file = (mdxUrl: string) => ({
+    users: { u: { username: "user", password: "pw" } },
+    connections: {
+      c: { installer: false, mdx: { url: mdxUrl, user: "u", catalog_name: "cat" } },
+    },
+  });
+
+  it("fetches a Keycloak token for a bare host URL", () => {
+    const cfg = xmlaConfigFromYaml(file("https://host.example.com"), "c", "cube");
+    expect(cfg.url).toBe("https://host.example.com/engine/xmla");
+    expect(cfg.keycloakAuth).toBe(true);
+    expect(cfg.authUrl).toBe("https://host.example.com/auth/realms/atscale/protocol/openid-connect/token");
+  });
+
+  it("does not double an /engine/xmla suffix", () => {
+    const cfg = xmlaConfigFromYaml(file("https://host.example.com/engine/xmla"), "c", "cube");
+    expect(cfg.url).toBe("https://host.example.com/engine/xmla");
+    expect(cfg.keycloakAuth).toBe(true);
+    expect(cfg.authUrl).toBe("https://host.example.com/auth/realms/atscale/protocol/openid-connect/token");
+  });
+
+  it("uses an XMLA token embedded in the URL as-is, with no token fetch", () => {
+    const cfg = xmlaConfigFromYaml(file("https://host.example.com/engine/xmla/abc123"), "c", "cube");
+    expect(cfg.url).toBe("https://host.example.com/engine/xmla/abc123");
+    expect(cfg.keycloakAuth).toBe(false);
   });
 });
