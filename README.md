@@ -1836,7 +1836,7 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 - **`run_query_uuid`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `--annotate-queries true`)
 - **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
 - **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). `0` when no data is returned or on error.
-- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the SOAP `<Body>` content only (the `<Header>` is excluded because it contains per-request session IDs and timestamps). Empty when `row_count = 0` or when the query fails.
+- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the result itself — the `<Axes>` (tuples) and `<CellData>` sections — so per-request and per-response metadata (the SOAP `<Header>` session ID and the `LastDataUpdate` / `LastSchemaUpdate` timestamps in `OlapInfo`) does not affect it, and the same result gives the same checksum across runs and hosts. Empty when `row_count = 0` or when the query fails.
 
 **Output filename:**
 - Task-file mode: derived from `runLogFileName` in the task definition (`.log` → `.csv`)

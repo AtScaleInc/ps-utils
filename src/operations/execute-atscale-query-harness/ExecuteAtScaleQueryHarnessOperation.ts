@@ -593,14 +593,47 @@ function buildSoapEnvelope(
 }
 
 /**
- * Execute one XMLA query and return timing/row-count/checksum result.
+ * Summarise a successful (HTTP 200) XMLA response body into row count and checksum.
  *
  * Row count: counts <Value> elements within the <CellData> section of the XMLA response.
  *
- * Checksum: SHA1 of the SOAP <Body> content only — the SOAP <Header> is excluded
- * because it contains per-request values (SessionId, timestamps) that would make
- * identical result sets produce different checksums.  Empty when rowCount = 0 or
- * on error.
+ * Checksum: SHA1 of the result itself — the <Axes> (tuples) and <CellData>
+ * sections of the SOAP <Body>. Everything else is metadata that varies per
+ * request or per response and would make identical result sets produce
+ * different checksums: the SOAP <Header> (SessionId) and the
+ * <LastDataUpdate> / <LastSchemaUpdate> timestamps inside OlapInfo/CubeInfo,
+ * which change on every run even on the same host. Hashing only the result
+ * also ignores any other metadata AtScale may add later. Empty when
+ * rowCount = 0.
+ */
+export function summarizeXmlaResponse(body: string): { rowCount: number; checksum: string } {
+  // Extract SOAP Body content (excludes Header with session IDs / timestamps)
+  // Handles namespace-prefixed tags such as SOAP-ENV:Body or soap:Body.
+  const bodyTagMatch = body.match(/<[A-Za-z0-9_]*:?Body[^>]*>([\s\S]*)<\/[A-Za-z0-9_]*:?Body>/i);
+  const bodyContent = bodyTagMatch ? bodyTagMatch[1] : body;
+
+  // Count <Value> elements inside <CellData> as the row count.
+  let rowCount = 0;
+  const cellDataMatch = bodyContent.match(
+    /<[A-Za-z0-9_]*:?CellData[^>]*>([\s\S]*?)<\/[A-Za-z0-9_]*:?CellData>/i,
+  );
+  if (cellDataMatch) {
+    rowCount = (cellDataMatch[1].match(/<[A-Za-z0-9_]*:?Value[\s>\/]/gi) ?? []).length;
+  }
+
+  if (!cellDataMatch || rowCount === 0) return { rowCount, checksum: "" };
+
+  const axesMatch = bodyContent.match(
+    /<[A-Za-z0-9_]*:?Axes[\s>][\s\S]*?<\/[A-Za-z0-9_]*:?Axes>/i,
+  );
+  const hashed = (axesMatch ? axesMatch[0] : "") + cellDataMatch[0];
+  const checksum = createHash("sha1").update(hashed, "utf8").digest("hex");
+  return { rowCount, checksum };
+}
+
+/**
+ * Execute one XMLA query and return timing/row-count/checksum result.
+ * See summarizeXmlaResponse for how row count and checksum are derived.
  */
 async function executeXmlaQuery(
   query: QueryRecord,
@@ -648,23 +681,7 @@ async function executeXmlaQuery(
       };
     }
 
-    // Extract SOAP Body content (excludes Header with session IDs / timestamps)
-    // Handles namespace-prefixed tags such as SOAP-ENV:Body or soap:Body.
-    const bodyTagMatch = body.match(/<[A-Za-z0-9_]*:?Body[^>]*>([\s\S]*)<\/[A-Za-z0-9_]*:?Body>/i);
-    const bodyContent = bodyTagMatch ? bodyTagMatch[1] : body;
-
-    // Count <Value> elements inside <CellData> as the row count.
-    let rowCount = 0;
-    const cellDataMatch = bodyContent.match(
-      /<[A-Za-z0-9_]*:?CellData[^>]*>([\s\S]*?)<\/[A-Za-z0-9_]*:?CellData>/i,
-    );
-    if (cellDataMatch) {
-      rowCount = (cellDataMatch[1].match(/<[A-Za-z0-9_]*:?Value[\s>\/]/gi) ?? []).length;
-    }
-
-    const checksum = rowCount > 0
-      ? createHash("sha1").update(bodyContent, "utf8").digest("hex")
-      : "";
+    const { rowCount, checksum } = summarizeXmlaResponse(body);
 
     return { status: "SUCCEEDED", durationMs, rowCount, checksum, error: "" };
   } catch (err) {
