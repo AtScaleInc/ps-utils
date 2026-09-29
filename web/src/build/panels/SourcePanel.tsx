@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchSchemas, fetchSources, type SchemaEntry, type SourceSummary } from '../client'
+import { fetchSchemas, fetchSourceList, fetchTableColumns, type SchemaEntry, type SourceSummary } from '../client'
 import { useModelStore } from '../modelStore'
+
+/** Tables listed per schema before "show more" - big warehouses (1,000+ tables)
+ *  stay responsive; search reaches every table. */
+const PAGE = 100
 
 const KNOWN_DIALECTS = ['postgresql', 'snowflake', 'databricks', 'bigquery', 'redshift']
 
@@ -33,42 +37,81 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
   // useSyncExternalStore a different reference every render and loops.
   const placedTables = useMemo(() => new Set(nodes.map((n) => `${n.schema}.${n.table}`)), [nodes])
 
-  useEffect(() => {
-    fetchSources()
-      .then(setSources)
+  const [loadingSources, setLoadingSources] = useState(false)
+  function loadSources(refresh = false) {
+    setLoadingSources(true)
+    setError(null)
+    const tables = refresh && sourceId
+      ? fetchSchemas(sourceId, search || undefined, true).then(setSchemas)
+      : Promise.resolve()
+    Promise.all([fetchSourceList(refresh).then(setSources), tables])
       .catch((e) => setError(e.message))
-  }, [])
+      .finally(() => setLoadingSources(false))
+  }
+  useEffect(() => loadSources(), [])
+  // A warehouse AtScale couldn't list (suspended, unreachable) - shown, not hidden.
+  const failed = sources.filter((s) => s.error)
 
+  // Schema names come back at once; each schema's tables are listed in the
+  // background on the API (a Snowflake schema can take minutes), so poll while
+  // any is still loading.
+  const [pollTick, setPollTick] = useState(0)
+  const pending = schemas.filter((s) => s.loading).length
   useEffect(() => {
     if (!sourceId) {
       setSchemas([])
       return
     }
-    setLoadingSchemas(true)
+    let stale = false
+    if (pollTick === 0) setLoadingSchemas(true)
     setError(null)
     fetchSchemas(sourceId, search || undefined)
-      .then(setSchemas)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoadingSchemas(false))
-  }, [sourceId, search])
+      .then((s) => !stale && setSchemas(s))
+      .catch((e) => !stale && setError(e.message))
+      .finally(() => !stale && setLoadingSchemas(false))
+    return () => {
+      stale = true
+    }
+  }, [sourceId, search, pollTick])
+  useEffect(() => {
+    if (!pending) return
+    const t = setTimeout(() => setPollTick((n) => n + 1), 2000)
+    return () => clearTimeout(t)
+  }, [pending, schemas])
+  useEffect(() => setPollTick(0), [sourceId, search])
 
   const selectedSource = sources.find((s) => s.id === sourceId)
 
+  const [shown, setShown] = useState<Record<string, number>>({})
+
+  // Columns aren't in the tree (names only): the canvas drop fetches them when
+  // the payload has none (Canvas.tsx onDrop), keyed by the source here.
   function handleDragStart(e: React.DragEvent, schema: string, table: SchemaEntry['tables'][number]) {
     e.dataTransfer.effectAllowed = 'copy'
     e.dataTransfer.setData(
       'application/x-sml-table',
-      JSON.stringify({ schema, table: table.name, columns: table.columns }),
+      JSON.stringify({ schema, table: table.name, columns: table.columns, sourceId }),
     )
   }
 
-  function handleAdd(schema: string, table: SchemaEntry['tables'][number]) {
-    addNode(schema, table.name, 40 + Math.random() * 60, 40 + Math.random() * 60, table.columns)
+  async function handleAdd(schema: string, table: SchemaEntry['tables'][number]) {
+    if (!sourceId) return
+    try {
+      const columns = table.columns ?? (await fetchTableColumns(sourceId, schema, table.name))
+      addNode(schema, table.name, 40 + Math.random() * 60, 40 + Math.random() * 60, columns)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   return (
     <aside className="panel-left">
-      <div className="section-label">Data Source</div>
+      <div className="section-label source-head">
+        Data Source
+        <span className="link-btn" title="Reload this host's warehouses, databases and tables from AtScale" onClick={() => !loadingSources && loadSources(true)}>
+          {loadingSources ? 'loading…' : '↻ refresh'}
+        </span>
+      </div>
       <select
         className="source-select"
         value={sourceId ?? ''}
@@ -82,12 +125,18 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
         }}
       >
         <option value="">Select a data source…</option>
-        {sources.map((s) => (
+        {sources.filter((s) => !s.error).map((s) => (
           <option key={s.id} value={s.id}>
             {s.label}
           </option>
         ))}
       </select>
+      {failed.map((s) => (
+        <div key={s.id} className="source-failed" title={s.error}>
+          {s.label.replace(/ — unavailable$/, '')} couldn't be listed: {s.error}{' '}
+          <span className="link-btn" onClick={() => !loadingSources && loadSources(true)}>retry</span>
+        </div>
+      ))}
       {selectedSource && !editingConnection && (
         <div className="source-meta">
           {selectedSource.dialect?.toUpperCase()} · {selectedSource.database}{' '}
@@ -151,7 +200,7 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
       {sourceId && (
         <input
           className="source-search"
-          placeholder="Search tables"
+          placeholder="Search tables in every schema"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -159,6 +208,11 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
 
       {error && <div className="login-error">{error}</div>}
       {loadingSchemas && <div style={{ color: 'var(--as-muted)' }}>Loading…</div>}
+      {pending > 0 && !loadingSchemas && (
+        <div className="table-more" style={{ paddingLeft: 0 }}>
+          Listing tables in {pending} schema{pending === 1 ? '' : 's'}…{search ? ' search covers the schemas loaded so far' : ''}
+        </div>
+      )}
 
       {schemas.map((schema) => (
         <div key={schema.name}>
@@ -169,10 +223,19 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
               <span />
             </span>
             {schema.name} <span className="schema-meta">(Schema)</span>
-            <span className="schema-count">{schema.tables.length}</span>
+            <span className="schema-count">{schema.loading ? '…' : schema.error ? '!' : schema.tables.length}</span>
           </div>
+          {openSchemas[schema.name] && schema.loading && (
+            <div className="table-more">Listing tables… (large schemas can take AtScale a few minutes)</div>
+          )}
+          {openSchemas[schema.name] && schema.error && (
+            <div className="source-failed schema-failed" title={schema.error}>
+              Tables couldn't be listed: {schema.error}{' '}
+              <span className="link-btn" onClick={() => !loadingSources && loadSources(true)}>retry</span>
+            </div>
+          )}
           {openSchemas[schema.name] &&
-            schema.tables.map((t) => {
+            schema.tables.slice(0, search ? undefined : shown[schema.name] ?? PAGE).map((t) => {
               const isFact = /^(fct|fact)/i.test(t.name)
               const placed = placedTables.has(`${schema.name}.${t.name}`)
               if (discover) {
@@ -189,7 +252,7 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
                       style={{ background: isFact ? 'var(--as-fact)' : 'var(--as-dimension)' }}
                     />
                     <span className="table-name">{t.name}</span>
-                    <span className="table-cols">{placed ? '● ' : ''}{t.columns.length} cols</span>
+                    <span className="table-cols">{placed ? '● ' : ''}{t.columns ? `${t.columns.length} cols` : ''}</span>
                   </div>
                 )
               }
@@ -207,10 +270,20 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
                     style={{ background: isFact ? 'var(--as-fact)' : 'var(--as-dimension)' }}
                   />
                   <span className="table-name">{t.name}</span>
-                  <span className="table-cols">{t.columns.length} cols</span>
+                  <span className="table-cols">{t.columns ? `${t.columns.length} cols` : ''}</span>
                 </div>
               )
             })}
+          {openSchemas[schema.name] && !search && schema.tables.length > (shown[schema.name] ?? PAGE) && (
+            <div className="table-more">
+              {(shown[schema.name] ?? PAGE).toLocaleString()} of {schema.tables.length.toLocaleString()} ·{' '}
+              <span className="link-btn" onClick={() => setShown((m) => ({ ...m, [schema.name]: (m[schema.name] ?? PAGE) + PAGE }))}>
+                show {Math.min(PAGE, schema.tables.length - (shown[schema.name] ?? PAGE))} more
+              </span>{' '}
+              · <span className="link-btn" onClick={() => setShown((m) => ({ ...m, [schema.name]: schema.tables.length }))}>all</span>
+              <span className="field-note"> - or search</span>
+            </div>
+          )}
         </div>
       ))}
     </aside>

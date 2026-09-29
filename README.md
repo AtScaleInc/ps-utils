@@ -74,6 +74,13 @@ Settings. There's no separate login.
   run (row count, columns added / dropped / retyped, NULL % jumps, distinct
   count swings). A profile scans the whole table, so the first one on a very
   large table takes a while. Old runs are cleaned up in Settings.
+- **Large warehouses.** The Source panel (shared by Discovery and Develop) gets
+  schema names at once and lists each schema's tables in the background,
+  polling until all are in. A Snowflake schema can take AtScale minutes, and
+  the rest don't wait for it. Each schema shows 100 tables with **show more**;
+  search covers every table. Columns load per table when you add it to the
+  canvas or pick it. A warehouse or schema AtScale can't list shows its error
+  and is retried after a minute; **↻ refresh** reloads now.
 - **Develop.** Pick one of the host's data warehouses, drag tables onto the
   canvas, mark each as a fact or a dimension, join them (snowflake joins work
   too), and configure metrics, hierarchies, aliases, secondary attributes and
@@ -545,7 +552,8 @@ Manage          GET /hosts/:id/models · /repos · /branches?url= · /aggregate-
                 POST /hosts/:id/models/link · deploy · undeploy · unlink
                 POST /hosts/:id/aggregates/build · deactivate · reactivate · GET /hosts/:id/aggregates/builds
 Promote         POST /promote/diff · /promote/models · /promote/aggregates
-Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= · /build/repos
+Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)
+                GET /hosts/:id/sources/:sourceId/columns?schema=&table= · POST …/columns {tables} · GET /build/repos
                 GET /hosts/:id/preview/catalogs · /preview/metadata · POST /preview/query · /preview/freehand
                 POST /sml/generate · validate · save · save-path · import · import-path · import-git · GET /sml/models
                 POST /build/deploy {…model, hostIds} · GET /build/preflight?connection=&hostIds=

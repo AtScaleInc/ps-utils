@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import {
   discoveryApi,
   fetchSchemas,
+  fetchTableColumns,
   type DiscoveryTableRef,
   type JoinCheck,
   type ProfileColumn,
@@ -66,9 +67,10 @@ export function DiscoveryTab({ hostId }: { hostId: string }) {
     sourceId && picked ? { source: sourceId, schema: picked.schema, table: picked.table, dialect: sourceMeta?.dialect } : null
   const onCanvas = !!picked && nodes.some((n) => n.schema === picked.schema && n.table === picked.table)
 
-  function addToCanvas() {
-    if (!picked || onCanvas) return
-    addNode(picked.schema, picked.table, 40 + Math.random() * 60, 40 + Math.random() * 60, picked.columns)
+  async function addToCanvas() {
+    if (!picked || onCanvas || !sourceId) return
+    const columns = picked.columns ?? (await fetchTableColumns(sourceId, picked.schema, picked.table).catch(() => undefined))
+    addNode(picked.schema, picked.table, 40 + Math.random() * 60, 40 + Math.random() * 60, columns)
   }
 
   return (
@@ -444,33 +446,67 @@ function Stats({ info }: { info?: { statistics: { type: string; columns: string[
   )
 }
 
-/** Join check: for this table's key-like columns, suggest tables in the same
- *  source that have a column of the same name, and count orphans / fan-out. */
+/** Join check: for this table's key-like columns, suggest tables whose name
+ *  matches the key (customerkey -> *customer*; the tree has table names only),
+ *  and count orphans / fan-out. A target's columns load when it's picked. */
 function Joins({ tref, p }: { tref: DiscoveryTableRef; p?: TableProfile }) {
-  const schemas = useQuery({ queryKey: ['schemas', tref.source], queryFn: () => fetchSchemas(tref.source), staleTime: 2 * 3600e3 })
+  const schemas = useQuery({
+    queryKey: ['schemas', tref.source], queryFn: () => fetchSchemas(tref.source), staleTime: 2 * 3600e3,
+    refetchInterval: (q) => (q.state.data?.some((s) => s.loading) ? 2000 : false),
+  })
   const all = useMemo(
-    () => (schemas.data ?? []).flatMap((s) => s.tables.map((t) => ({ schema: s.name, table: t.name, columns: t.columns }))),
+    () => (schemas.data ?? []).flatMap((s) => s.tables.map((t) => ({ schema: s.name, table: t.name }))),
     [schemas.data],
   )
-  const self = all.find((t) => t.schema === tref.schema && t.table === tref.table)
   const [column, setColumn] = useState('')
   const [target, setTarget] = useState('') // schema.table.column
   const [result, setResult] = useState<JoinCheck | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const targetTable = target.split('.').slice(0, 2).join('.')
+  const [toSchema, toTable] = targetTable.split('.')
+  const targetCols = useQuery({
+    queryKey: ['columns', tref.source, targetTable],
+    queryFn: () => fetchTableColumns(tref.source, toSchema, toTable),
+    enabled: !!toTable,
+    staleTime: 2 * 3600e3,
+  })
 
   const candidates = useMemo(() => {
-    const out: { column: string; target: string }[] = []
+    const out: { column: string; table: string }[] = []
     const keyish = (p?.columns ?? []).filter((c) => c.role === 'join' || c.role === 'key' || /(_id|key|_sk|code)$/i.test(c.name))
+    const bare = (n: string) => n.toLowerCase().replace(/^(dim|dimension|d|lkp|lookup|ref)_?/, '').replace(/[^a-z0-9]/g, '')
     for (const c of keyish) {
+      const stem = bare(c.name.replace(/_?(key|id|sk|code)$/i, ''))
+      if (stem.length < 3) continue
       for (const t of all) {
         if (t.schema === tref.schema && t.table === tref.table) continue
-        const m = t.columns.find((tc) => tc.name.toLowerCase() === c.name.toLowerCase())
-        if (m) out.push({ column: c.name, target: `${t.schema}.${t.table}.${m.name}` })
+        const name = bare(t.table)
+        if (name === stem || name.startsWith(stem) || name.endsWith(stem)) out.push({ column: c.name, table: `${t.schema}.${t.table}` })
+        if (out.length >= 12) return out
       }
     }
     return out
   }, [p, all, tref])
+
+  /** A suggestion names the table; its column is the same-named one there. */
+  async function runSuggested(col: string, table: string) {
+    const [s, t] = table.split('.')
+    try {
+      const cols = await fetchTableColumns(tref.source, s, t)
+      const m = cols.find((c) => c.name.toLowerCase() === col.toLowerCase())
+      if (!m) {
+        setColumn(col)
+        setTarget(`${table}.`)
+        setResult(null)
+        setErr(`${table} has no column named ${col} - pick its key column below.`)
+        return
+      }
+      await run(col, `${table}.${m.name}`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   async function run(col: string, tgt: string, refresh = false) {
     const [toSchema, toTable, toColumn] = tgt.split('.')
@@ -488,9 +524,6 @@ function Joins({ tref, p }: { tref: DiscoveryTableRef; p?: TableProfile }) {
     }
   }
 
-  const targetTable = target.split('.').slice(0, 2).join('.')
-  const targetCols = all.find((t) => `${t.schema}.${t.table}` === targetTable)?.columns ?? []
-
   return (
     <div className="disc-joins">
       <span className="field-note">
@@ -499,12 +532,12 @@ function Joins({ tref, p }: { tref: DiscoveryTableRef; p?: TableProfile }) {
       </span>
       {candidates.length > 0 && (
         <div className="disc-cands">
-          <span className="section-label" style={{ margin: 0 }}>Suggested (same column name)</span>
+          <span className="section-label" style={{ margin: 0 }}>Suggested</span>
           {candidates.map((c) => (
-            <button key={c.column + c.target} type="button"
-              className={`disc-run ${column === c.column && target === c.target ? 'on' : ''}`}
-              disabled={busy} onClick={() => run(c.column, c.target)}>
-              <span className="mono">{c.column} → {c.target.split('.').slice(1).join('.')}</span>
+            <button key={c.column + c.table} type="button"
+              className={`disc-run ${column === c.column && targetTable === c.table ? 'on' : ''}`}
+              disabled={busy} onClick={() => runSuggested(c.column, c.table)}>
+              <span className="mono">{c.column} → {c.table.split('.')[1]}</span>
             </button>
           ))}
         </div>
@@ -512,7 +545,7 @@ function Joins({ tref, p }: { tref: DiscoveryTableRef; p?: TableProfile }) {
       <div className="disc-join-form">
         <select className="source-select" value={column} onChange={(e) => setColumn(e.target.value)}>
           <option value="">Column…</option>
-          {(self?.columns ?? p?.columns ?? []).map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          {(p?.columns ?? []).map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select>
         <span className="muted">→</span>
         <select className="source-select" value={targetTable} onChange={(e) => setTarget(e.target.value ? `${e.target.value}.` : '')}>
@@ -521,10 +554,10 @@ function Joins({ tref, p }: { tref: DiscoveryTableRef; p?: TableProfile }) {
             <option key={`${t.schema}.${t.table}`} value={`${t.schema}.${t.table}`}>{t.schema}.{t.table}</option>
           ))}
         </select>
-        <select className="source-select" value={target.split('.')[2] ?? ''} disabled={!targetTable}
+        <select className="source-select" value={target.split('.')[2] ?? ''} disabled={!targetTable || targetCols.isLoading}
           onChange={(e) => setTarget(`${targetTable}.${e.target.value}`)}>
           <option value="">Column…</option>
-          {targetCols.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+          {(targetCols.data ?? []).map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
         </select>
         <button type="button" className="btn btn-primary btn-sm" disabled={busy || !column || !target.split('.')[2]}
           onClick={() => run(column, target)}>

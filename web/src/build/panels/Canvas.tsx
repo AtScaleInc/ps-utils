@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useModelStore, joinedColumnKeys, type Join, type Node } from '../modelStore'
+import { fetchTableColumns } from '../client'
 
 const NODE_W = 258
 const HEADER_H = 44
@@ -63,13 +64,15 @@ export function Canvas() {
     e.dataTransfer.dropEffect = 'copy'
   }
 
-  function onDrop(e: React.DragEvent) {
+  async function onDrop(e: React.DragEvent) {
     e.preventDefault()
     const raw = e.dataTransfer.getData('application/x-sml-table')
     if (!raw) return
-    const { schema, table, columns } = JSON.parse(raw)
+    const { schema, table, columns, sourceId } = JSON.parse(raw)
     const p = surfacePoint(e)
-    addNode(schema, table, p.x - NODE_W / 2, p.y - HEADER_H / 2, columns)
+    // The Source panel's tree has table names only; fetch this table's columns.
+    const cols = columns ?? (sourceId ? await fetchTableColumns(sourceId, schema, table).catch(() => undefined) : undefined)
+    addNode(schema, table, p.x - NODE_W / 2, p.y - HEADER_H / 2, cols)
   }
 
   function onNodeGrab(e: React.PointerEvent, node: Node) {

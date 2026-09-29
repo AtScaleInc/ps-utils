@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchSchemas, fetchSources, type SchemaEntry, type SourceSummary } from '../client'
+import { fetchSchemas, fetchSources, fetchTablesColumns, type SchemaEntry, type SourceSummary } from '../client'
 import { MODEL_NAME_HINT, slugifyModelName } from '../lib/naming'
 import { planModel, type DimPlan, type ModelPlan, type WizardTable } from '../lib/wizardInference'
 import { useModelStore } from '../modelStore'
@@ -50,6 +50,7 @@ export function WizardModal({ onClose, onGenerate, onDone }: Props) {
   const [sources, setSources] = useState<SourceSummary[]>([])
   const [sourceId, setSourceId] = useState<string | null>(null)
   const [tables, setTables] = useState<WizardTable[]>([])
+  const [busyNote, setBusyNote] = useState<string | null>(null)
   const [factKey, setFactKey] = useState<string | null>(null)
   const [timeKey, setTimeKey] = useState<string | 'none' | null>(null)
   const [dimKeys, setDimKeys] = useState<Set<string>>(new Set())
@@ -70,16 +71,41 @@ export function WizardModal({ onClose, onGenerate, onDone }: Props) {
   const timeTable = timeKey && timeKey !== 'none' ? tables.find((t) => tableKey(t) === timeKey) ?? null : null
   const otherDimTables = tables.filter((t) => dimKeys.has(tableKey(t)))
 
-  const plan: ModelPlan | null = factTable ? planModel(factTable, timeTable, otherDimTables) : null
+  // The schema tree has table names only; the picked tables' columns load on
+  // the way to Review (loadPickedColumns), and the plan waits for them.
+  const [colsLoaded, setColsLoaded] = useState<Set<string>>(new Set())
+  const picked = [factTable, timeTable, ...otherDimTables].filter((t): t is WizardTable => !!t)
+  const plan: ModelPlan | null =
+    factTable && picked.every((t) => colsLoaded.has(tableKey(t))) ? planModel(factTable, timeTable, otherDimTables) : null
+
+  async function loadPickedColumns() {
+    const missing = picked.filter((t) => !colsLoaded.has(tableKey(t)))
+    if (!sourceId || missing.length === 0) return
+    const cols = await fetchTablesColumns(sourceId, missing.map((t) => ({ schema: t.schema, table: t.table })))
+    setTables((all) => all.map((t) => (cols[tableKey(t)] ? { ...t, columns: cols[tableKey(t)] } : t)))
+    setColsLoaded((prev) => new Set([...prev, ...Object.keys(cols)]))
+  }
 
   function stepIndex(s: Step) {
     return STEPS.indexOf(s)
   }
 
-  function goNext() {
+  async function goNext() {
     setError(null)
     const idx = stepIndex(step)
-    if (idx < STEPS.length - 1) setStep(STEPS[idx + 1])
+    if (idx >= STEPS.length - 1) return
+    if (STEPS[idx + 1] === 'review') {
+      setBusy(true)
+      try {
+        await loadPickedColumns()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        return
+      } finally {
+        setBusy(false)
+      }
+    }
+    setStep(STEPS[idx + 1])
   }
 
   function goBack() {
@@ -93,9 +119,17 @@ export function WizardModal({ onClose, onGenerate, onDone }: Props) {
     setBusy(true)
     setError(null)
     try {
-      const schemas = await fetchSchemas(sourceId)
+      // Tables are listed per schema in the background on the API; wait for all.
+      let schemas = await fetchSchemas(sourceId)
+      for (let i = 0; schemas.some((x) => x.loading) && i < 300; i++) {
+        const left = schemas.filter((x) => x.loading).length
+        setBusyNote(`Listing tables… ${left} schema${left === 1 ? '' : 's'} to go`)
+        await new Promise((r) => setTimeout(r, 2000))
+        schemas = await fetchSchemas(sourceId)
+      }
+      setBusyNote(null)
       const flattened: WizardTable[] = schemas.flatMap((s: SchemaEntry) =>
-        s.tables.map((t) => ({ schema: s.name, table: t.name, columns: t.columns })),
+        s.tables.map((t) => ({ schema: s.name, table: t.name, columns: t.columns ?? [] })),
       )
       setTables(flattened)
       goNext()
@@ -103,6 +137,7 @@ export function WizardModal({ onClose, onGenerate, onDone }: Props) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
+      setBusyNote(null)
     }
   }
 
@@ -396,7 +431,7 @@ export function WizardModal({ onClose, onGenerate, onDone }: Props) {
               onClick={step === 'source' ? handleSourceNext : goNext}
               disabled={!canNext || busy}
             >
-              {busy ? 'Loading…' : 'Next'}
+              {busy ? busyNote ?? 'Loading…' : 'Next'}
             </button>
           )}
         </div>

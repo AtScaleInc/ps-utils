@@ -27,7 +27,7 @@ from atscale.client import AtScaleAuthError
 from discovery import profile as prof
 from discovery import store
 from envs import registry
-from routes.build import _list_sources
+from routes.build import _list_sources, _sources_ttl
 from routes.objects import host_errors
 
 discovery_bp = Blueprint("discovery", __name__)
@@ -66,7 +66,8 @@ def _dialect(host_id: str, connection_id: str, src: dict) -> str | None:
     """The warehouse's platformType, from the host's cached sources list."""
     if src.get("dialect"):
         return src["dialect"]
-    sources, _ = cache.get(("host", host_id, "sources"), lambda: _list_sources(registry.source_api(host_id)))
+    sources, _ = cache.get(("host", host_id, "sources"), lambda: _list_sources(registry.source_api(host_id)),
+                           ttl=_sources_ttl)
     return next((s["dialect"] for s in sources if s["connectionId"] == connection_id), None)
 
 

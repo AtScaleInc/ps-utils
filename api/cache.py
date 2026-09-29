@@ -107,6 +107,18 @@ def get(key: tuple, loader: Callable[[], Any], refresh: bool = False,
         return value, loaded
 
 
+def peek(key: tuple) -> tuple[Any, float] | None:
+    """(value, loaded_at) if the key holds an unexpired value, else None -
+    never runs a loader (memory, then the disk mirror)."""
+    hit = _entries.get(key)
+    if not (hit and hit[1] > time.time()):
+        hit = _read(key)
+        if not (hit and hit[1] > time.time()):
+            return None
+        _entries[key] = hit
+    return hit[2], hit[0]
+
+
 def invalidate(*prefix: Any) -> None:
     """Drop every entry whose key starts with `prefix` (memory and disk)."""
     n = len(prefix)

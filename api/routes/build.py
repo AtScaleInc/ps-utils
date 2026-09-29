@@ -4,7 +4,8 @@ sml-wizard held one logged-in AtScale session per browser; here every
 host-bound call names a registered host instead (`/hosts/<id>/...`), and Git
 credentials come from the shared Git profile in Settings.
 
-  sources  GET  /hosts/<id>/sources, /hosts/<id>/sources/<sid>/schemas
+  sources  GET  /hosts/<id>/sources, /hosts/<id>/sources/<sid>/schemas (table
+           names), GET|POST /hosts/<id>/sources/<sid>/columns (per table, lazily)
            (sml-wizard routes/sources.py)
   sml      POST /sml/generate|validate|save|save-path|import|import-path|import-git,
            GET /sml/models (sml-wizard routes/sml.py)
@@ -24,6 +25,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -100,7 +102,19 @@ def _is_system_schema(name: str, database: str) -> bool:
     return lname == database.lower() or any(lname.startswith(p) for p in _SYSTEM_SCHEMA_PATTERNS)
 
 
+#: A sources list with an unreachable warehouse is re-read after a minute, not
+#: cached for the full TTL - a suspended warehouse still resuming, or a blip,
+#: would otherwise hide it for hours.
+_SOURCES_RETRY_TTL = 60
+
+
+def _sources_ttl(value: list[dict[str, Any]]) -> float:
+    return _SOURCES_RETRY_TTL if any(s.get("error") for s in value) else cache.TTL
+
+
 def _list_sources(api) -> list[dict[str, Any]]:
+    """One entry per warehouse database. A warehouse whose databases can't be
+    listed stays in as {error, ...} with no database, so the UI can say why."""
     out = []
     for w in api.list_data_sources():
         connection_id = w.get("connectionId")
@@ -108,7 +122,15 @@ def _list_sources(api) -> list[dict[str, Any]]:
             continue
         try:
             databases = api.list_databases(connection_id)
-        except Exception:  # noqa: BLE001 - an unreachable warehouse just drops out of the list
+        except Exception as e:  # noqa: BLE001 - reported on the warehouse's entry
+            out.append({
+                "id": f"{connection_id}::",
+                "label": f"{w.get('name')} — unavailable",
+                "dialect": w.get("platformType"),
+                "connectionId": connection_id,
+                "database": None,
+                "error": str(e)[:500],
+            })
             continue
         for database in databases:
             out.append({
@@ -121,25 +143,77 @@ def _list_sources(api) -> list[dict[str, Any]]:
     return out
 
 
-def _load_all_schemas(api, connection_id: str, database: str) -> list[dict]:
-    """sml-wizard routes/sources.py :: _load_all_schemas - one call per table for
-    columns (no bulk endpoint), fanned out on a thread pool."""
-    schema_names = [s for s in api.list_schemas(connection_id, database) if not _is_system_schema(s, database)]
-    schema_tables = [(s, api.list_tables(connection_id, database, s)) for s in schema_names]
-    jobs_ = [(s, t) for s, tables in schema_tables for t in tables]
-    infos: dict[tuple[str, str], dict] = {}
-    if jobs_:
-        with ThreadPoolExecutor(max_workers=16) as pool:
-            for (s, t), info in zip(jobs_, pool.map(lambda j: api.get_table_info(connection_id, database, *j), jobs_)):
-                infos[(s, t)] = info
-    return [
-        {"name": s, "tables": [
-            {"name": t, "columns": [{"name": c.get("name"), "type": c.get("dataType")}
-                                    for c in (infos.get((s, t)) or {}).get("columns", [])]}
-            for t in tables
-        ]}
-        for s, tables in schema_tables
-    ]
+# Tables are listed per schema in the background: a Snowflake schema can take
+# AtScale minutes to list, and the tree mustn't wait on the slowest one. The
+# Source panel polls /schemas while any schema is still `loading`.
+_tables_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="list-tables")
+_tables_inflight: set[tuple] = set()
+_tables_guard = threading.Lock()
+
+
+def _tables_ttl(value: dict) -> float:
+    return _SOURCES_RETRY_TTL if value.get("error") else cache.TTL
+
+
+def _schema_tables(api, key: tuple, connection_id: str, database: str, schema: str) -> dict:
+    """{tables: [{name}]} or {tables: [], error} - never raises."""
+    try:
+        return {"tables": [{"name": t} for t in api.list_tables(connection_id, database, schema)]}
+    except Exception as e:  # noqa: BLE001 - reported on the schema
+        return {"tables": [], "error": str(e)[:500]}
+
+
+def _start_tables(api, key: tuple, connection_id: str, database: str, schema: str, refresh: bool) -> None:
+    with _tables_guard:
+        if key in _tables_inflight:
+            return
+        _tables_inflight.add(key)
+
+    def run() -> None:
+        try:
+            cache.get(key, lambda: _schema_tables(api, key, connection_id, database, schema),
+                      refresh=refresh, ttl=_tables_ttl)
+        finally:
+            with _tables_guard:
+                _tables_inflight.discard(key)
+
+    _tables_pool.submit(run)
+
+
+def _schema_tree(api, host_id: str, source_id: str, connection_id: str, database: str,
+                 refresh: bool) -> list[dict]:
+    """[{name, tables: [{name}], error?, loading?}]: schema names at once (one
+    call), each schema's tables from the cache or, when not there yet, started
+    in the background and returned as `loading`.
+    (sml-wizard routes/sources.py :: _load_all_schemas also fetched every
+    table's columns up front - one call per table; columns now come per table
+    from /columns.)"""
+    names, _ = cache.get(("host", host_id, "schema-names", source_id),
+                         lambda: [s for s in api.list_schemas(connection_id, database)
+                                  if not _is_system_schema(s, database)], refresh=refresh)
+    if refresh:  # polls after a refresh must wait for the new lists, not see the old ones
+        cache.invalidate("host", host_id, "tables", source_id)
+    out = []
+    for schema in names:
+        key = ("host", host_id, "tables", source_id, schema)
+        hit = None if refresh else cache.peek(key)
+        if hit:
+            out.append({"name": schema, **hit[0]})
+        else:
+            _start_tables(api, key, connection_id, database, schema, refresh)
+            out.append({"name": schema, "tables": [], "loading": True})
+    return out
+
+
+def _table_columns(api, host_id: str, connection_id: str, database: str, schema: str, table: str,
+                   refresh: bool = False) -> list[dict]:
+    def load() -> list[dict]:
+        info = api.get_table_info(connection_id, database, schema, table) or {}
+        return [{"name": c.get("name"), "type": c.get("dataType")} for c in info.get("columns", [])]
+
+    value, _ = cache.get(("host", host_id, "columns", f"{connection_id}::{database}", schema, table), load,
+                         refresh=refresh)
+    return value
 
 
 def _refresh() -> bool:
@@ -150,25 +224,58 @@ def _refresh() -> bool:
 @host_errors
 def list_sources(host_id: str):
     api = registry.source_api(host_id)
-    value, loaded = cache.get(("host", host_id, "sources"), lambda: _list_sources(api), refresh=_refresh())
+    value, loaded = cache.get(("host", host_id, "sources"), lambda: _list_sources(api), refresh=_refresh(),
+                              ttl=_sources_ttl)
     return jsonify({"sources": value, "cachedAt": loaded})
+
+
+def _split_source(source_id: str) -> tuple[str, str] | None:
+    connection_id, _, database = source_id.partition("::")
+    return (connection_id, database) if connection_id and database else None
 
 
 @build_bp.get("/hosts/<host_id>/sources/<path:source_id>/schemas")
 @host_errors
 def list_schemas(host_id: str, source_id: str):
-    connection_id, _, database = source_id.partition("::")
-    if not connection_id or not database:
+    """[{name, tables: [{name}], error?, loading?}] - table names only; poll
+    while any schema is `loading`. ?search= filters the loaded tables."""
+    parts = _split_source(source_id)
+    if not parts:
         return jsonify({"error": f"Malformed source id '{source_id}'"}), 400
     api = registry.source_api(host_id)
-    schemas, _ = cache.get(("host", host_id, "schemas", source_id),
-                           lambda: _load_all_schemas(api, connection_id, database), refresh=_refresh())
+    schemas = _schema_tree(api, host_id, source_id, *parts, _refresh())
     search = request.args.get("search", "").lower()
     if search:
-        schemas = [{"name": s["name"], "tables": [t for t in s["tables"] if search in t["name"].lower()]}
-                   for s in schemas]
-        schemas = [s for s in schemas if s["tables"]]
+        schemas = [{**s, "tables": [t for t in s["tables"] if search in t["name"].lower()]} for s in schemas]
+        schemas = [s for s in schemas if s["tables"] or s.get("loading")]
     return jsonify(schemas)
+
+
+@build_bp.get("/hosts/<host_id>/sources/<path:source_id>/columns")
+@host_errors
+def table_columns(host_id: str, source_id: str):
+    """One table's columns: ?schema=&table= -> [{name, type}]."""
+    parts = _split_source(source_id)
+    schema, table = request.args.get("schema"), request.args.get("table")
+    if not parts or not schema or not table:
+        return jsonify({"error": "Need a source id, 'schema' and 'table'"}), 400
+    api = registry.source_api(host_id)
+    return jsonify(_table_columns(api, host_id, *parts, schema, table, _refresh()))
+
+
+@build_bp.post("/hosts/<host_id>/sources/<path:source_id>/columns")
+@host_errors
+def tables_columns(host_id: str, source_id: str):
+    """Several tables' columns at once (the Wizard's picks):
+    {tables: [{schema, table}]} -> {"schema.table": [{name, type}]}."""
+    parts = _split_source(source_id)
+    wanted = [(t.get("schema"), t.get("table")) for t in (_body().get("tables") or []) if t.get("schema") and t.get("table")]
+    if not parts or not wanted:
+        return jsonify({"error": "Need a source id and 'tables'"}), 400
+    api = registry.source_api(host_id)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        cols = list(pool.map(lambda st: _table_columns(api, host_id, *parts, *st), wanted))
+    return jsonify({f"{s}.{t}": c for (s, t), c in zip(wanted, cols)})
 
 
 # -- SML generate / validate / save / import (sml-wizard routes/sml.py) ---------------------

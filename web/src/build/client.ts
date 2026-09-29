@@ -32,10 +32,18 @@ export interface SourceSummary {
   dialect: string | null
   connectionId: string
   database: string
+  /** Set when AtScale couldn't list this warehouse's databases (no `database` then). */
+  error?: string
 }
 
+/** Every warehouse database, including warehouses AtScale couldn't list (`error` set). */
+export async function fetchSourceList(refresh = false) {
+  return (await request<{ sources: SourceSummary[] }>(hostPath(`/sources${refresh ? '?refresh=1' : ''}`))).sources
+}
+
+/** Only the usable sources (each has a database). */
 export async function fetchSources() {
-  return (await request<{ sources: SourceSummary[] }>(hostPath('/sources'))).sources
+  return (await fetchSourceList()).filter((s) => !s.error)
 }
 
 export interface SchemaColumn {
@@ -45,17 +53,38 @@ export interface SchemaColumn {
 
 export interface SchemaTable {
   name: string
-  columns: SchemaColumn[]
+  /** Not in the schema tree (names only); load with fetchTableColumns. */
+  columns?: SchemaColumn[]
 }
 
 export interface SchemaEntry {
   name: string
   tables: SchemaTable[]
+  /** AtScale couldn't list this schema's tables. */
+  error?: string
+  /** Tables still being listed in the background - poll /schemas again. */
+  loading?: boolean
 }
 
-export function fetchSchemas(sourceId: string, search?: string) {
-  const qs = search ? `?search=${encodeURIComponent(search)}` : ''
-  return request<SchemaEntry[]>(hostPath(`/sources/${encodeURIComponent(sourceId)}/schemas${qs}`))
+export function fetchSchemas(sourceId: string, search?: string, refresh = false) {
+  const qs = new URLSearchParams()
+  if (search) qs.set('search', search)
+  if (refresh) qs.set('refresh', '1')
+  const q = qs.toString()
+  return request<SchemaEntry[]>(hostPath(`/sources/${encodeURIComponent(sourceId)}/schemas${q ? `?${q}` : ''}`))
+}
+
+/** One table's columns (cached on the API per table). */
+export function fetchTableColumns(sourceId: string, schema: string, table: string) {
+  const qs = new URLSearchParams({ schema, table })
+  return request<SchemaColumn[]>(hostPath(`/sources/${encodeURIComponent(sourceId)}/columns?${qs}`))
+}
+
+/** Several tables' columns: -> {"schema.table": columns}. */
+export function fetchTablesColumns(sourceId: string, tables: { schema: string; table: string }[]) {
+  return request<Record<string, SchemaColumn[]>>(hostPath(`/sources/${encodeURIComponent(sourceId)}/columns`), {
+    method: 'POST', body: JSON.stringify({ tables }),
+  })
 }
 
 export interface SmlFile {

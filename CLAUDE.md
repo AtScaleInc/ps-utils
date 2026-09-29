@@ -46,7 +46,9 @@ incremental build); Promote diffs a source host against a target and moves model
     (`dimRole: 'level' | 'secondary' | 'alias'`, ordered by `levelOrder`), never
     fixed L1/L2/L3. sml-wizard's local catalog-XML compiler was dropped.
   - `routes/build.py` — Build endpoints. Host-bound calls are
-    `/hosts/<id>/sources|preview|build/repos`; `POST /build/deploy` pushes to Git
+    `/hosts/<id>/sources|preview|build/repos`; `/schemas` returns schema names
+    at once and lists tables per schema in the background (the UI polls while
+    `loading`); columns come per table from `/columns`, never the whole tree; `POST /build/deploy` pushes to Git
     once, then `deploy_branch` per host (skips hosts without the model's
     `asConnection`). `registry.source_api(id)` gives the host's `AtScaleClient`,
     or `fake.FakeSourceApi` in demo mode — keep the two in sync (a test checks).
