@@ -3,7 +3,8 @@
 One console for many AtScale **container** hosts, grouped into three
 environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
 
-- **build** a semantic model visually and deploy it to one or many hosts,
+- **build** a semantic model visually, after profiling the warehouse tables it
+  uses, and deploy it to one or many hosts,
 - **manage** each host's models and aggregates,
 - **test** that an environment answers the same queries as another, with the
   same model and the same values,
@@ -12,7 +13,7 @@ environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
 
 ```
 ┌──── Build ─────┐   ┌──── Manage ─────┐   ┌───── Test ──────┐   ┌──── Promote ────┐
-│ warehouse →    │   │ group → host    │   │ generate queries│   │ source host     │
+│ discover →     │   │ group → host    │   │ generate queries│   │ source host     │
 │ canvas → SML   │ → │ Models: link,   │ → │ from a model,   │ → │  diff → stage   │
 │ push to Git    │   │  deploy, unlink │   │ run on hosts,   │   │ target host     │
 │ deploy to any  │   │ Aggregates:     │   │ compare model + │   │  promote (Prod  │
@@ -26,7 +27,7 @@ right. The left rail lists the current tab's sections:
 
 | Tab | Rail sections |
 |---|---|
-| Build | Model · Preview |
+| Build | Discovery · Develop · Preview |
 | Manage | Models · Aggregates |
 | Test | Run · Results · Compare results · Compare model |
 | Promote | Models · Aggregates |
@@ -45,7 +46,35 @@ Build is the SML wizard that used to be the separate `sml-wizard` repo. It
 works on the host picked in the Build bar, using that host's credentials from
 Settings. There's no separate login.
 
-- **Model.** Pick one of the host's data warehouses, drag tables onto the
+- **Discovery.** See what a table holds before modeling it. Pick a warehouse,
+  database and schema, then click a table (the same Source panel as Develop,
+  which keeps the choice). The profile runs on the first visit:
+  - **tiles**: rows, columns, key candidates, duplicate rows, and how many
+    columns have findings
+  - **per column**: NULL %, blank strings and placeholder values (`N/A`,
+    `UNKNOWN`, `-999`…), distinct count, min / max / avg, negative amounts,
+    future dates and dates before 1900 or in the 9000s. From the sample rows:
+    numbers or dates stored as text, and the string formats (`AA-999`).
+  - a **suggested role** per column (key, join key, measure, attribute, time,
+    constant, empty) with the reason, and **findings** worth a look before
+    modeling. Click a column for its top 10 values.
+  - **Sample rows**, 100 from the table (10 on AtScale builds without the
+    engine's sample-data endpoint).
+  - **Joins**: suggests tables with a column of the same name, then counts
+    this table's keys missing from the other one (orphans) and checks the other
+    side is unique. If it isn't, the join fans out and double counts metrics.
+  - **AtScale statistics**: the row counts and cardinality AtScale's engine
+    has collected. The tab only shows when the host has some.
+  - **Add to canvas** puts the table on the Develop canvas.
+
+  Results are kept in `workspace/discovery.db`: a table is profiled once and
+  read from there on every later visit, even after a restart. **Re-profile**
+  reads the warehouse again and keeps the run as history: the newest 20 per
+  table, shown as a strip you can open, with what changed since the previous
+  run (row count, columns added / dropped / retyped, NULL % jumps, distinct
+  count swings). A profile scans the whole table, so the first one on a very
+  large table takes a while. Old runs are cleaned up in Settings.
+- **Develop.** Pick one of the host's data warehouses, drag tables onto the
   canvas, mark each as a fact or a dimension, join them (snowflake joins work
   too), and configure metrics, hierarchies, aliases, secondary attributes and
   calculations. **Wizard** does the first pass for you from column names.
@@ -252,6 +281,13 @@ everything is matched by **name**, and then the target's id is looked up.
   - **Delete runs** older than N days and/or beyond the newest N per model, for
     all models or one, with a count shown before anything is deleted
   - **Compact** gives space freed by deleted runs back to the disk
+- **Discovery.** Build › Discovery's stored profiles in `workspace/discovery.db`:
+  - each profiled table with its host, runs, size and last profile
+  - **Delete profile runs** older than N days and/or beyond the newest N per
+    table, for all hosts or one, with a count shown before anything is
+    deleted. A table left with no runs is profiled again on its next visit,
+    and its stored samples, top values and join checks go with it.
+  - **Compact** gives the freed space back to the disk
 
 ---
 
@@ -332,9 +368,12 @@ rows and user-defined rows. Manage and Promote can be tried in full here.
 
 - Demo hosts are stored in `api/connections.fake.yaml`.
 - Demo data goes to its own files: `workspace/cache-demo/`,
-  `workspace/models-demo/` and `workspace/tests-demo.db`.
+  `workspace/models-demo/`, `workspace/tests-demo.db` and
+  `workspace/discovery-demo.db`.
 - In Build, every demo host has a `PostgresDB` warehouse except prod-west, so
   you can see a deploy skip a host. Deploy doesn't really push to Git.
+- Build's Discovery works in full: the demo warehouse is an in-memory SQLite
+  with generated rows, and the real profile SQL runs against it.
 - Build's Preview, Load from Git, and the Test tab run real queries, so they
   need a real host.
 - **Settings → Hosts & Git → Reset demo data** restores the seed.
@@ -360,6 +399,10 @@ The API tests cover:
 - Build: SML generation and parsing, sml-cli validation, per-host sources and
   schemas, multi-host deploy with its preflight, the preview MDX builder
   (including levels of one hierarchy), and freehand MDX/SQL
+- Discovery: the profile, top values and join check running on the demo
+  warehouse, roles and findings, results served from the store instead of
+  re-read, drift between runs, cleanup, and a statistics 404 on older AtScale
+  builds
 - Test: query generation (level names, not captions), the harness (checksums
   ignore per-response timestamps; `<FmtValue>` isn't counted), result variance
   and model diffs, the compare endpoint, the SQLite store (history, retention,
@@ -376,6 +419,7 @@ The API tests cover:
 | `workspace/cache/` | Every cached list as readable JSON (demo: `cache-demo/`) | no |
 | `workspace/models/<model>/` | Build's working copy of each model's SML, also the Git checkout it pushes from (demo: `models-demo/`) | no |
 | `workspace/tests.db` | Test runs, model snapshots and result rows, in SQLite (demo: `tests-demo.db`) | no |
+| `workspace/discovery.db` | Build › Discovery profiles (with history), sample rows, top values and join checks, in SQLite (demo: `discovery-demo.db`) | no |
 | `workspace/tests-imported/` | Test runs from the earlier JSON layout, left after their one-time import into `tests.db`. Safe to delete. | no |
 | `.logs/` | API and web logs from `start.sh` | no |
 
@@ -398,6 +442,8 @@ Environment variables:
 | `ENV_MANAGER_TEST_KEEP` | `100` | Runs kept per model; older ones are pruned after each run |
 | `ENV_MANAGER_TEST_MAX_AGE_DAYS` | `90` | Runs older than this are pruned after each run |
 | `ENV_MANAGER_TEST_MAX_ACTIVE` | `3` | Test runs that can execute at once; more are refused until one finishes |
+| `ENV_MANAGER_DISCOVERY_DB` | `workspace/discovery.db` | Location of the Discovery database |
+| `ENV_MANAGER_DISCOVERY_KEEP` | `20` | Profile runs kept per table; older ones are pruned after each profile |
 
 ### Caching and storage
 
@@ -426,6 +472,10 @@ calls. To keep switching between hosts, models and views instant:
 - **Not cached:** preview and Test queries, which always go to the host. Model
   metadata can change between one deploy and the next.
 
+Discovery results aren't in the list cache either. They're kept in
+`workspace/discovery.db` with no expiry, because a profile scans a whole table;
+**Re-profile** and each panel's refresh are what read the warehouse again.
+
 Test history lives in `workspace/tests.db`, not the cache. Each execution is
 written as soon as it finishes, so a restart mid-run keeps what's done (that
 run is then marked failed). Background jobs (deploy, build, promote) are kept in
@@ -437,17 +487,18 @@ memory: finished jobs for an hour, at most 500.
 
 ```
 web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (UI state)
-  src/build/        Build: wizard panels, SML model store, preview (DMV / Freehand)
+  src/build/        Build: discovery, wizard panels, SML model store, preview (DMV / Freehand)
   src/components/   Manage, Promote, Settings
   src/test/         Test: run setup, results, compare results, compare model, database card
   └─ /api/* ──► api/  Flask
                  routes/      settings (hosts, git, cache) · objects (models, aggregates, jobs) · promote
-                              build (sources, SML, preview, multi-host deploy) · testing (Test)
+                              build (sources, SML, preview, multi-host deploy) · discovery · testing (Test)
                  envs/        store.py (connections.yaml) · registry.py (host → backend, sessions, warm-up)
                  atscale/     client.py (AtScale REST) · github.py · git_ops.py (repo create + push)
                               backend.py (real host) · fake.py (demo host) · cached.py (cache wrapper)
                               preview.py (DMV metadata, MDX/SQL preview)
                  smlgen/      SML build / parse / validate (sml-cli)
+                 discovery/   profile.py (profile SQL, top values, join check, roles + findings) · store.py (SQLite)
                  promote/     diff.py (states + rules) · idmap.py (id ↔ name) · remap.py (payload rewrite)
                  testing/     generate.py (queries) · harness.py (execution) · model.py (DMV snapshot + diff)
                               results.py (result rows + variance) · store.py (SQLite)
@@ -473,6 +524,8 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 | Build history | `GET /wapi/p/aggregate/batch-history` |
 | Export / import | `GET /v1/aggregates/export/…` · `POST /v1/aggregates/import/…` |
 | Data warehouses, schema tree (Build) | `GET /wapi/p/data-warehouses`, `/wapi/p/data-sources/conn/{connectionId}/databases/…/tables/{t}/info` |
+| Profile SQL (Discovery) | `POST /wapi/p/data-sources/conn/{connectionId}/query/sample` `{query, udf}`: AtScale runs it on the warehouse, wrapped in `LIMIT 10` |
+| Sample rows, statistics (Discovery) | `GET /engine/v1/datasources/{connectionId}/sample-data/{schema}/{table}`, `/engine/v1/datasources/{connectionId}/statistics` (newer engines only) |
 | DMV metadata, MDX queries (Preview, Test) | `POST /engine/xmla` (`MDSCHEMA_CUBES / DIMENSIONS / HIERARCHIES / LEVELS / MEASURES / PROPERTIES`, and MDX) |
 | SQL queries (Preview, Test) | `POST /engine/query/submit` |
 
@@ -496,6 +549,11 @@ Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= · 
                 GET /hosts/:id/preview/catalogs · /preview/metadata · POST /preview/query · /preview/freehand
                 POST /sml/generate · validate · save · save-path · import · import-path · import-git · GET /sml/models
                 POST /build/deploy {…model, hostIds} · GET /build/preflight?connection=&hostIds=
+Discovery       GET /hosts/:id/discovery/table · /discovery/profile[?id=] · /discovery/top-values?column=
+                  (table args: ?source=<connectionId::database>&schema=&table=)
+                POST /hosts/:id/discovery/join-check {…table, column, toSchema, toTable, toColumn}
+                GET /discovery/store · POST /discovery/cleanup {olderThanDays, keepPerTable, hostId, dryRun}
+                POST /discovery/compact
 Test            GET /hosts/:id/test/cubes · POST /test/generate · /test/runs · /test/compare · /test/model-compare
                 GET /test/runs · /test/runs/:id · /test/runs/:id.csv · /test/history?model=&query=&protocol=
                 GET /test/store · POST /test/cleanup {olderThanDays, keepPerModel, model, dryRun} · /test/compact
@@ -527,8 +585,13 @@ Jobs            GET /jobs/:id
   compare still catches it, as failed queries.
 - **Generated level breakdowns select every metric** (as ps-utils does), so one
   metric that isn't related to a dimension fails every breakdown on it.
-- **Single process.** Sessions and background jobs live in memory. Test history
-  and the list cache are on disk.
+- **Discovery reads the warehouse through AtScale's `query/sample`,** which
+  returns at most 10 rows. So the profile sticks to checks that fit one
+  aggregate row or a top 10: no median, skew or trend over time. A check a
+  warehouse rejects (for example `TRIM` or `CURRENT_DATE`) is left empty rather
+  than failing the column.
+- **Single process.** Sessions and background jobs live in memory. Test history,
+  Discovery results and the list cache are on disk.
 
 ## Related
 

@@ -4,6 +4,7 @@ import { api, type EnvId, type Host } from '../api'
 import { useUi } from '../store'
 import { CONN, ConnDot, ENVS, errMsg, fmtTime, plural, useGit, useHosts } from './ui'
 import { DatabaseCard } from '../test/DatabaseCard'
+import { DiscoveryStoreCard } from '../build/DiscoveryStoreCard'
 
 function useInvalidateHosts() {
   const qc = useQueryClient()
@@ -40,11 +41,12 @@ function StorageView() {
         <span className="eyebrow" style={{ color: 'var(--dev)' }}>Settings — Cache &amp; database</span>
         <span className="display" style={{ fontSize: 34 }}>Keep the working folder <em>tidy</em>.</span>
         <span className="muted" style={{ fontSize: 13.5, lineHeight: 1.4 }}>
-          The list cache reloads itself from AtScale; test history is kept until it's cleaned up here or aged out.
+          The list cache reloads itself from AtScale; test history and discovery profiles are kept until they're cleaned up here or aged out.
         </span>
       </div>
       <CacheCard />
       <DatabaseCard />
+      <DiscoveryStoreCard />
     </div>
   )
 }

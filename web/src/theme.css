@@ -269,3 +269,4 @@ button.cmp-check { cursor: pointer; }
 .cleanup { display: flex; flex-direction: column; gap: 8px; margin: 10px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--hair); }
 .grid-hist { grid-template-columns: 110px minmax(0, 1fr) 60px 80px 70px minmax(0, 1fr); }
 .grid-db { grid-template-columns: minmax(0, 1.6fr) 60px 90px 100px 130px 130px 90px; }
+.grid-disc { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 60px 90px 150px 100px; }

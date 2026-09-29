@@ -3,8 +3,8 @@ import type { EnvId, Host, PromoteMode } from './api'
 
 export type View = 'build' | 'manage' | 'promote' | 'test' | 'settings'
 export type Section = 'models' | 'aggs'
-/** Build's left-rail sections: the wizard canvas, and the cube data preview. */
-export type BuildSection = 'model' | 'preview'
+/** Build's left-rail sections: table discovery / profiling, the wizard canvas, and the cube data preview. */
+export type BuildSection = 'discover' | 'model' | 'preview'
 /** Test's left-rail sections: set up + run, past runs by model, baseline-vs-candidate result and model compares. */
 export type TestSection = 'run' | 'results' | 'compare' | 'model'
 /** Settings' left-rail sections. */
@@ -80,7 +80,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 export const useUi = create<UiState>((set) => ({
   view: 'manage',
   section: 'models',
-  buildSection: 'model',
+  buildSection: 'discover',
   build: { env: 'dev', hostId: null },
   testSection: 'run',
   settingsSection: 'hosts',

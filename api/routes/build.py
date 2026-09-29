@@ -10,6 +10,7 @@ credentials come from the shared Git profile in Settings.
            GET /sml/models (sml-wizard routes/sml.py)
   repos    GET/DELETE /hosts/<id>/build/repos (sml-wizard routes/sml.py
            list_attached_repos / unlink_attached_repo)
+  discover /hosts/<id>/discovery/... - routes/discovery.py
   preview  /hosts/<id>/preview/catalogs|metadata|query (sml-wizard routes/preview.py)
   deploy   POST /build/deploy - generate -> save -> push to Git once -> deploy
            on every selected host via the same Container API deploy Promote

@@ -7,6 +7,8 @@ tested - without a live container.
 
 from __future__ import annotations
 
+import random
+import sqlite3
 import threading
 import uuid
 from typing import Any
@@ -290,6 +292,72 @@ _COLS = {
     "dimdate": [("datekey", "Int"), ("fulldatealternatekey", "Date"), ("calendaryear", "Int"),
                 ("monthnumberofyear", "Int"), ("englishmonthname", "String")],
 }
+
+# Demo warehouse rows for Build > Discovery: deterministic per table, loaded into
+# an in-memory SQLite whose attached `public` schema lets the real profile SQL
+# ("public"."dimcustomer", COUNT DISTINCT, ROW_NUMBER() OVER ...) run unchanged.
+_ROW_COUNTS = {"factinternetsales": 600, "dimcustomer": 180, "dimgeography": 40, "dimproduct": 60, "dimdate": 120}
+_WORDS = {
+    "firstname": ["Ana", "Ben", "Chen", "Dara", "Eli", "Fatima", "Gus", "Hana"],
+    "lastname": ["Lee", "Garcia", "Kim", "Nguyen", "Patel", "Smith"],
+    "gender": ["F", "M"],
+    "city": ["Austin", "Boston", "Denver", "Paris", "Seattle", "Sydney", "Toronto"],
+    "stateprovincename": ["Texas", "Massachusetts", "Colorado", "Ile-de-France", "Washington", "NSW", "Ontario"],
+    "countryregioncode": ["US", "FR", "AU", "CA"],
+    "color": ["Black", "Red", "Silver", "Blue", None],
+    "englishmonthname": ["January", "February", "March", "April", "May", "June", "July", "August",
+                         "September", "October", "November", "December"],
+}
+
+
+def _fake_value(rnd: random.Random, table: str, col: str, typ: str, i: int) -> Any:
+    if col == f"{table.removeprefix('dim')}key" or (table == "dimdate" and col == "datekey"):
+        return i + 1
+    if col.endswith("key"):
+        fk = col.removesuffix("key")
+        return 20240101 + rnd.randrange(_ROW_COUNTS.get("dimdate", 1)) if col == "orderdatekey" \
+            else rnd.randrange(1, _ROW_COUNTS.get(f"dim{fk}", 50) + 1)
+    if col in _WORDS:
+        return rnd.choice(_WORDS[col])
+    if col == "englishproductname":
+        return f"Product {i + 1:03d}"
+    if col == "salesordernumber":
+        return f"SO{43000 + i // 3}"
+    if col == "salesamount":
+        return round(rnd.uniform(2, 3500), 2)
+    if col == "orderquantity":
+        return rnd.choice([1, 1, 1, 2, 3])
+    if col == "fulldatealternatekey":
+        return f"2024-{1 + i % 12:02d}-{1 + i % 28:02d}"
+    if col == "calendaryear":
+        return 2022 + i % 3
+    if col == "monthnumberofyear":
+        return 1 + i % 12
+    return rnd.randrange(1000) if typ in ("Int", "Decimal") else f"{col}_{i}"
+
+
+def fake_rows(table: str) -> list[tuple]:
+    rnd = random.Random(table)
+    cols = _COLS.get(table, [])
+    return [tuple(_fake_value(rnd, table, c, t, i) for c, t in cols) for i in range(_ROW_COUNTS.get(table, 0))]
+
+
+_warehouse: sqlite3.Connection | None = None
+_warehouse_lock = threading.Lock()
+
+
+def _fake_warehouse() -> sqlite3.Connection:
+    global _warehouse
+    if _warehouse is None:
+        conn = sqlite3.connect(":memory:", check_same_thread=False)
+        conn.execute("ATTACH DATABASE ':memory:' AS public")
+        for table, cols in _COLS.items():
+            conn.execute(f'CREATE TABLE public."{table}" ({", ".join(f"{c!r}" for c, _ in cols)})')
+            conn.executemany(f'INSERT INTO public."{table}" VALUES ({", ".join("?" * len(cols))})', fake_rows(table))
+        _warehouse = conn
+    return _warehouse
+
+
 _WAREHOUSES = [{"id": "wh-pg", "name": "Postgres", "connectionId": "PostgresDB", "platformType": "postgresql"}]
 FAKE_SOURCES: dict[str, list[dict[str, Any]]] = {
     h["id"]: ([] if h["id"] == "prod-west" else _WAREHOUSES) for h in SEED_HOSTS
@@ -316,6 +384,31 @@ class FakeSourceApi:
 
     def get_table_info(self, connection_id: str, database: str, schema: str, table: str) -> dict[str, Any]:
         return {"columns": [{"name": n, "dataType": t} for n, t in _COLS.get(table, [])]}
+
+    def query_sample(self, connection_id: str, query: str, timeout: float | None = 600) -> dict[str, Any]:
+        """Same wrapper the engine applies (DB.scala :: getQuerySampleData)."""
+        with _warehouse_lock:
+            try:
+                cur = _fake_warehouse().execute(f"SELECT * FROM ({query}) as_subselect_tmp LIMIT 10")
+            except sqlite3.Error as e:
+                raise ValueError(f"Problem getting query sample data: {e}") from None
+            rows = cur.fetchall()
+        return {"columns": [{"name": d[0], "column-type": {"data-type": "String"}} for d in cur.description],
+                "rows": [{"values": [None if v is None else str(v) for v in r]} for r in rows]}
+
+    def get_table_sample(self, connection_id: str, database: str, schema: str, table: str,
+                         limit: int = 100) -> dict[str, Any]:
+        if table not in _COLS:
+            raise ValueError(f"Table {schema}.{table} not found")
+        return {"columns": [{"name": c} for c, _ in _COLS[table]],
+                "rows": [list(r) for r in fake_rows(table)[:limit]], "rowCount": min(limit, _ROW_COUNTS[table])}
+
+    def list_datasource_statistics(self, connection_id: str) -> list[dict[str, Any]]:
+        # The engine only has row counts for tables its workers have visited.
+        return [{"connectionId": connection_id, "statisticType": "RowCount", "value": _ROW_COUNTS[t],
+                 "lastUpdated": "2026-09-01T00:00:00Z",
+                 "descriptor": {"dataSet": {"database": "tutorial", "schema": "public", "tableName": t}, "columns": []}}
+                for t in ("factinternetsales", "dimcustomer")]
 
     def run_xmla(self, xml_body: str, timeout: float | None = None) -> str:
         raise ValueError("Preview queries need a live AtScale host - not available in demo mode")

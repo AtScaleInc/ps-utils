@@ -321,3 +321,135 @@ export function runPreviewQuery(payload: PreviewQueryPayload) {
 export function runFreehandQuery(payload: { catalog: string; cube: string; dialect: 'mdx' | 'sql'; query: string; useAgg?: boolean; useCache?: boolean }) {
   return request<PreviewQueryResult>(hostPath('/preview/freehand'), { method: 'POST', body: JSON.stringify(payload) })
 }
+
+// -- Discovery (api/routes/discovery.py) ---------------------------------------------------
+
+export interface DiscoveryTableRef {
+  source: string // SourceSummary.id: `${connectionId}::${database}`
+  schema: string
+  table: string
+  dialect?: string | null
+}
+
+export interface DiscoveryFlag {
+  level: 'warn' | 'info'
+  text: string
+}
+
+export interface ProfileColumn {
+  name: string
+  type: string | null
+  kind: 'numeric' | 'temporal' | 'string' | 'boolean' | 'other'
+  nonNull: number | null
+  distinct: number | null
+  nulls: number | null
+  nullPct: number | null
+  distinctPct: number | null
+  min: string | null
+  max: string | null
+  avg: number | null
+  blanks?: number | null
+  sentinels?: number | null
+  negatives?: number | null
+  future?: number | null
+  patterns?: { pattern: string; share: number }[]
+  storedAs?: 'number' | 'date' | null
+  role: 'key' | 'join' | 'measure' | 'attribute' | 'time' | 'constant' | 'empty' | 'unknown'
+  roleWhy: string
+  flags: DiscoveryFlag[]
+  error: string | null
+}
+
+export interface ProfileRun {
+  id: number
+  profiledAt: string
+  rowCount: number | null
+  columnCount: number
+  elapsedMs: number
+  columns: SchemaColumn[]
+}
+
+export interface ProfileDrift {
+  since: string
+  rowCount: number | null
+  rowDelta: number | null
+  rowDeltaPct: number | null
+  added: string[]
+  removed: string[]
+  retyped: { name: string; from: string | null; to: string | null }[]
+  shifts: { name: string; what: 'nullPct' | 'distinct'; from: number; to: number }[]
+}
+
+export interface TableProfile {
+  id: number
+  table: string
+  profiledAt: string
+  rowCount: number | null
+  elapsedMs: number
+  columns: ProfileColumn[]
+  duplicates: { groups: number; extraRows: number } | null
+  duplicatesError: string | null
+  drift: ProfileDrift | null
+  history: ProfileRun[]
+}
+
+export interface DiscoveryTable {
+  dialect: string | null
+  columns: SchemaColumn[]
+  sample: { columns: string[]; rows: unknown[][]; source: string } | null
+  sampleAt?: string
+  sampleError?: string
+  statistics: { type: string; columns: string[]; value: unknown; lastUpdated: string }[] | null
+  statisticsAt?: string
+  statisticsError?: string
+}
+
+export interface JoinCheck {
+  from: string
+  to: string
+  keys: number
+  distinctKeys: number
+  orphanRows: number
+  orphanKeys: number
+  orphanPct: number
+  orphanSample: unknown[]
+  targetRows: number
+  targetDistinct: number
+  targetUnique: boolean
+  fetchedAt: string
+}
+
+export interface DiscoveryStore {
+  path: string
+  profiles: number
+  items: number
+  bytes: number
+  keepPerTable: number
+  tables: { hostId: string; connectionId: string; database: string; schema: string; table: string; runs: number; newest: string; bytes: number }[]
+}
+
+function tableQs(t: DiscoveryTableRef, extra: Record<string, string | undefined> = {}) {
+  const qs = new URLSearchParams({ source: t.source, schema: t.schema, table: t.table })
+  if (t.dialect) qs.set('dialect', t.dialect)
+  for (const [k, v] of Object.entries(extra)) if (v) qs.set(k, v)
+  return qs.toString()
+}
+
+export const discoveryApi = {
+  table: (t: DiscoveryTableRef, refresh = false) =>
+    request<DiscoveryTable>(hostPath(`/discovery/table?${tableQs(t, { refresh: refresh ? '1' : undefined })}`)),
+  profile: (t: DiscoveryTableRef, opts: { refresh?: boolean; id?: number } = {}) =>
+    request<TableProfile>(hostPath(`/discovery/profile?${tableQs(t, {
+      refresh: opts.refresh ? '1' : undefined, id: opts.id != null ? String(opts.id) : undefined,
+    })}`)),
+  topValues: (t: DiscoveryTableRef, column: string, refresh = false) =>
+    request<{ column: string; values: { value: unknown; count: number }[]; fetchedAt: string }>(
+      hostPath(`/discovery/top-values?${tableQs(t, { column, refresh: refresh ? '1' : undefined })}`)),
+  joinCheck: (t: DiscoveryTableRef, body: { column: string; toSchema: string; toTable: string; toColumn: string; refresh?: boolean }) =>
+    request<JoinCheck>(hostPath('/discovery/join-check'), { method: 'POST', body: JSON.stringify({ ...t, ...body }) }),
+  storeInfo: () => request<DiscoveryStore>('/discovery/store'),
+  cleanup: (body: { olderThanDays?: number | null; keepPerTable?: number | null; hostId?: string | null; dryRun?: boolean }) =>
+    request<{ count: number; runs?: { id: number; hostId: string; table: string; profiledAt: string }[] }>(
+      '/discovery/cleanup', { method: 'POST', body: JSON.stringify(body) }),
+  compact: () => request<{ freedBytes: number }>('/discovery/compact', { method: 'POST' }),
+}

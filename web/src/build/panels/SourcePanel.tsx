@@ -4,7 +4,14 @@ import { useModelStore } from '../modelStore'
 
 const KNOWN_DIALECTS = ['postgresql', 'snowflake', 'databricks', 'bigquery', 'redshift']
 
-export function SourcePanel() {
+/** With `discover`, a click picks the table to profile (Build > Discovery)
+ *  instead of dragging it onto the canvas. The source stays shared with Develop. */
+export interface DiscoverPick {
+  selected: { schema: string; table: string } | null
+  onSelect: (schema: string, table: SchemaEntry['tables'][number]) => void
+}
+
+export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
   const [sources, setSources] = useState<SourceSummary[]>([])
   const [schemas, setSchemas] = useState<SchemaEntry[]>([])
   const [loadingSchemas, setLoadingSchemas] = useState(false)
@@ -84,12 +91,14 @@ export function SourcePanel() {
       {selectedSource && !editingConnection && (
         <div className="source-meta">
           {selectedSource.dialect?.toUpperCase()} · {selectedSource.database}{' '}
-          <span className="link-btn" onClick={() => setEditingConnection(true)}>
-            Edit
-          </span>
+          {!discover && (
+            <span className="link-btn" onClick={() => setEditingConnection(true)}>
+              Edit
+            </span>
+          )}
         </div>
       )}
-      {!selectedSource && sourceMeta && !editingConnection && (
+      {!discover && !selectedSource && sourceMeta && !editingConnection && (
         <div className="source-meta">
           {sourceMeta.dialect?.toUpperCase() || 'UNKNOWN DIALECT'} · {sourceMeta.database} (from imported SML){' '}
           <span className="link-btn" onClick={() => setEditingConnection(true)}>
@@ -102,7 +111,7 @@ export function SourcePanel() {
           value in the SML's own connection file, or a bad guess when nothing
           matched a registered source, has to be fixable by hand rather than
           forcing a re-import. */}
-      {sourceMeta && editingConnection && (
+      {!discover && sourceMeta && editingConnection && (
         <div className="source-meta-edit">
           <label className="field">
             Connection ID
@@ -166,6 +175,24 @@ export function SourcePanel() {
             schema.tables.map((t) => {
               const isFact = /^(fct|fact)/i.test(t.name)
               const placed = placedTables.has(`${schema.name}.${t.name}`)
+              if (discover) {
+                const on = discover.selected?.schema === schema.name && discover.selected.table === t.name
+                return (
+                  <div
+                    key={t.name}
+                    className={`table-row pick ${on ? 'on' : ''}`}
+                    title={placed ? 'Already on the Develop canvas' : undefined}
+                    onClick={() => discover.onSelect(schema.name, t)}
+                  >
+                    <span
+                      className="table-swatch"
+                      style={{ background: isFact ? 'var(--as-fact)' : 'var(--as-dimension)' }}
+                    />
+                    <span className="table-name">{t.name}</span>
+                    <span className="table-cols">{placed ? '● ' : ''}{t.columns.length} cols</span>
+                  </div>
+                )
+              }
               return (
                 <div
                   key={t.name}

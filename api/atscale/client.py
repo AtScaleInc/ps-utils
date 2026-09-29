@@ -19,6 +19,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -256,8 +257,43 @@ class AtScaleClient:
         )
         return self._dispatch("GET", path).json()
 
+    # -- data discovery (Build > Discovery) -------------------------------------------
+    def query_sample(self, connection_id: str, query: str, timeout: float | None = 600) -> dict[str, Any]:
+        """POST /wapi/p/data-sources/conn/{id}/query/sample {query, udf} - runs SQL on
+        the warehouse through AtScale's own connection (SML-develop apps/api
+        data-sources.controller.ts :: getRawData -> engine DatasourceRest.scala ::
+        getQuerySampleData). The engine wraps the query as
+        `SELECT * FROM (<query>) as_subselect_tmp LIMIT 10` (DB.scala ::
+        getQuerySampleData) and caches the result by query text for its lifetime.
+        -> {columns: [{name, column-type}], rows: [{values: [str|None]}]}"""
+        body = self._dispatch("POST", f"/wapi/p/data-sources/conn/{connection_id}/query/sample",
+                              json={"query": query, "udf": None}, timeout=timeout).json()
+        # The SML API passes the engine envelope through (unlike /databases etc.).
+        return body.get("response", body) if isinstance(body, dict) else {}
 
-    # -- repos (git attach) ----------------------------------------------------------
+    def get_table_sample(self, connection_id: str, database: str, schema: str, table: str,
+                         limit: int = 100) -> dict[str, Any]:
+        """GET /engine/v1/datasources/{id}/sample-data/{schema}/{table}?database&limit
+        (mcp-develop engine/client.py :: get_sample_data; engine
+        DataSourceSampleDataController, limit clamped to 1..10000).
+        -> {columns: [{name, ...}], rows: [[...]], rowCount}"""
+        path = f"/engine/v1/datasources/{quote(connection_id, safe='')}/sample-data/" \
+               f"{quote(schema, safe='')}/{quote(table, safe='')}"
+        body = self._dispatch("GET", path, params={"database": database, "limit": limit}, timeout=120).json()
+        return body.get("response", {}) if isinstance(body, dict) else {}
+
+    def list_datasource_statistics(self, connection_id: str) -> list[dict[str, Any]]:
+        """GET /engine/v1/datasources/{id}/statistics - the engine's cached RowCount /
+        Cardinality statistics (mcp-develop engine/client.py :: get_statistics,
+        engine/datasources.py :: parse_statistics). Empty until the engine's
+        background statistics workers have run."""
+        path = f"/engine/v1/datasources/{quote(connection_id, safe='')}/statistics"
+        body = self._dispatch("GET", path, timeout=60).json()
+        response = body.get("response", {}) if isinstance(body, dict) else {}
+        values = response.get("values", []) if isinstance(response, dict) else []
+        return values if isinstance(values, list) else []
+
+    # -- repos (git attach)----------------------------------------------------------
     def list_repos(self) -> list[dict[str, Any]]:
         return self._dispatch("GET", "/wapi/p/repo").json()
 

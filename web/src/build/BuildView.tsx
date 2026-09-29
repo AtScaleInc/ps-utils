@@ -7,6 +7,7 @@ import { MODEL_NAME_HINT, slugifyModelName } from './lib/naming'
 import { counters, useModelStore } from './modelStore'
 import { CalculationsModal } from './panels/CalculationsModal'
 import { Canvas } from './panels/Canvas'
+import { DiscoveryTab } from './panels/DiscoveryTab'
 import { Inspector } from './panels/Inspector'
 import { ManageModelModal } from './panels/ManageModelModal'
 import { PreviewTab } from './panels/PreviewTab'
@@ -144,6 +145,8 @@ export function BuildView() {
         </div>
       ) : buildSection === 'preview' ? (
         <PreviewTab key={host.id} />
+      ) : buildSection === 'discover' ? (
+        <DiscoveryTab key={host.id} hostId={host.id} />
       ) : (
         <>
           {genError && <div className="login-error build-error">{genError}</div>}

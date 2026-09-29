@@ -10,6 +10,7 @@ from flask_cors import CORS
 import cache
 from envs import registry
 from routes.build import build_bp
+from routes.discovery import discovery_bp
 from routes.testing import testing_bp
 from routes.objects import objects_bp
 from routes.promote import promote_bp
@@ -27,6 +28,7 @@ def create_app() -> Flask:
     app.register_blueprint(objects_bp, url_prefix="/api")
     app.register_blueprint(promote_bp, url_prefix="/api")
     app.register_blueprint(build_bp, url_prefix="/api")
+    app.register_blueprint(discovery_bp, url_prefix="/api")
     app.register_blueprint(testing_bp, url_prefix="/api")
 
     @app.get("/api/health")

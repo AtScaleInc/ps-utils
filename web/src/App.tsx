@@ -95,7 +95,8 @@ function Sidebar() {
     <aside className="sidebar">
       <nav className="side-nav">
         {view === 'build' && ([
-          { id: 'model', label: 'Model', note: 'Sources, canvas, SML' },
+          { id: 'discover', label: 'Discovery', note: 'Profile a warehouse table' },
+          { id: 'model', label: 'Develop', note: 'Sources, canvas, SML' },
           { id: 'preview', label: 'Preview', note: 'Query a deployed cube' },
         ] as { id: BuildSection; label: string; note: string }[]).map((s) => (
           <button key={s.id} type="button" className={`side-btn ${buildSection === s.id ? 'on' : ''}`} onClick={() => setBuildSection(s.id)}>

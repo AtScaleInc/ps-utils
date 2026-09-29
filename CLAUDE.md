@@ -9,7 +9,7 @@ authoritative).
 
 One console for many AtScale **container** hosts, grouped into Dev / Test-QA /
 Prod. Top tabs: **Build · Manage · Test · Promote** (+ Settings); the left rail
-shows the current tab's sections. Build is the SML wizard (merged from the now-deprecated
+shows the current tab's sections (Build: Discovery · Develop · Preview). Build is the SML wizard (merged from the now-deprecated
 sml-wizard repo): browse a host's warehouse, model on a canvas, generate SML, push
 it to Git once and deploy it to one or many hosts. Test generates queries from a
 deployed model (ps-utils generate-queries-from-model), runs them on several hosts
@@ -59,6 +59,17 @@ incremental build); Promote diffs a source host against a target and moves model
     `ENV_MANAGER_TEST_KEEP` per model (100), `ENV_MANAGER_TEST_MAX_AGE_DAYS` (90);
     `ENV_MANAGER_TEST_MAX_ACTIVE` concurrent runs (3, else 429). ps-utils bugs
     found here: `docs/handoff-ps-utils-query-testing.md`.
+  - `discovery/` + `routes/discovery.py` — Build › Discovery: profile one
+    warehouse table before modeling. `profile.py` runs its SQL through
+    `POST /wapi/p/data-sources/conn/{id}/query/sample` (engine wraps it in
+    `LIMIT 10` and caches by query text - so one aggregate row or a
+    ROW_NUMBER-ranked top 10 per query, values read by position, a comment
+    nonce per recompute); sample rows + AtScale statistics come from engine
+    `/engine/v1/datasources/{id}/sample-data|statistics` (ported from
+    mcp-develop). `store.py` keeps results in SQLite `workspace/discovery.db`
+    (demo: `discovery-demo.db`): a profile runs once per table and again only on
+    Re-profile; `ENV_MANAGER_DISCOVERY_KEEP` runs per table (20) feed drift.
+    Demo mode runs the same SQL on an in-memory SQLite (`fake.FakeSourceApi`).
   - `jobs.py` keeps finished jobs 1 h, at most 500.
   - `atscale/preview.py` — cube preview (MDX/SQL), ported from PythonAtscaleUtility.
     Levels of one hierarchy are Hierarchize'd, never CrossJoined with themselves.
@@ -131,3 +142,4 @@ incremental build); Promote diffs a source host against a target and moves model
 - `cd web && npm run build`
 - Build's working copies: `workspace/models/<model>` (demo: `workspace/models-demo/`).
 - Test history: `workspace/tests.db` (demo: `tests-demo.db`); Settings → Cache & Database cleans it up.
+- Discovery profiles: `workspace/discovery.db` (demo: `discovery-demo.db`); the same Settings page cleans it up (older than N days / beyond newest N per table).
