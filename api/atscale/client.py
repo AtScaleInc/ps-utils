@@ -339,6 +339,33 @@ class AtScaleClient:
             body["gitUsername"] = git_username
         return self._dispatch("POST", "/v1/catalogs/deploy", json=body, timeout=300).json()
 
+    def cookie_client(self) -> "AtScaleClient":
+        """A client for /wapi/git/deploy/catalog, which takes a Design Center
+        session cookie instead of the Bearer JWT (ps-utils' dual-env design).
+        Same credentials; kept so the cookie is reused."""
+        if getattr(self, "_cookie_client", None) is None:
+            e = self.env
+            self._cookie_client = AtScaleClient(AtScaleEnvironment(
+                base_url=e.base_url, username=e.username, password=e.password, realm=e.realm,
+                client_id=e.client_id, client_secret=e.client_secret, api_token=e.api_token,
+                insecure=e.insecure, cookie_auth=True,
+            ))
+        return self._cookie_client
+
+    def deploy_repo(self, repo_id: str, sml_raw_files: list[dict[str, str]], project_xml: str, project_name: str,
+                    con_ids: list[str], project_id: str,
+                    tableau_servers: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        """POST /wapi/git/deploy/catalog - the deploy of AtScale builds without
+        /v1/catalogs/deploy (sml-wizard api/atscale/client.py :: deploy_repo).
+        Needs cookie auth: call it on cookie_client()."""
+        body = {
+            "repoId": repo_id, "projectId": project_id, "projectName": project_name, "conIds": con_ids,
+            "smlRawFiles": sml_raw_files, "projectXml": project_xml, "cubes": [],
+            "tableauServers": tableau_servers or [], "perspectives": [],
+        }
+        resp = self._dispatch("POST", "/wapi/git/deploy/catalog", json=body, timeout=300)
+        return resp.json() if resp.text else {}
+
     def get_catalog(self, catalog_id: str) -> dict[str, Any]:
         """GET /wapi/p/catalog/{id} -> {id, name, version, models[{id, connection_ids}], publishedAt}
         (SML-develop api-sdk CatalogApi.ts :: catalogControllerGetOne)."""

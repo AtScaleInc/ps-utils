@@ -305,18 +305,34 @@ class RealBackend:
 
     def deploy_branch(self, repo_url: str, branch: str, replace_catalogs: list[str] | None = None) -> dict[str, Any]:
         """Deploy repo@branch (Container API POST /v1/catalogs/deploy - AtScale
-        clones and compiles the SML) and record the commit it built.
+        clones and compiles the SML; older builds without it fall back to
+        atscale/legacy_deploy.py) and record the commit it built.
 
         A different branch of the same repo deploys as its own catalog, so the
         old branch's catalog keeps running; `replace_catalogs` are undeployed
         once the new deploy succeeds."""
         token = self._need_token()
         commit = github.head_commit(token, repo_url, branch)
+        legacy = False
         try:
-            self._ensure_repo(repo_url, branch)
-            result = self.api.deploy_catalog_from_git(repo_url, branch, token, self.git.get("username"))
+            repo_id = self._ensure_repo(repo_url, branch)
+            try:
+                result = self.api.deploy_catalog_from_git(repo_url, branch, token, self.git.get("username"))
+            except AtScaleApiError as e:
+                # Builds before /v1/catalogs/deploy (404 "Cannot POST .../catalogs/deploy",
+                # e.g. 34.x): the Design Center path - compile the catalog XML locally
+                # and POST it to /wapi/git/deploy/catalog (atscale/legacy_deploy.py).
+                if e.status != 404:
+                    raise
+                from . import legacy_deploy
+
+                files = legacy_deploy.read_repo_sml(repo_url, branch, self.git.get("username"), token)
+                result = legacy_deploy.deploy(self.api, self.api.cookie_client(), files, repo_id, branch)
+                legacy = True
         except AtScaleApiError as e:
             return {"ok": False, "repoUrl": repo_url, "branch": branch, "error": f"{e.status}: {e.body[:300]}"}
+        except ValueError as e:  # clone / SML problems on the legacy path
+            return {"ok": False, "repoUrl": repo_url, "branch": branch, "error": str(e)}
         cat_id = result.get("catalogId")
         if cat_id:
             self.store.record_deployment(self.host["id"], cat_id, {
@@ -332,7 +348,8 @@ class RealBackend:
                 self.store.record_deployment(self.host["id"], old, None)
                 replaced.append(old)
         return {"ok": True, "repoUrl": repo_url, "branch": branch, "catalogId": cat_id,
-                "commit": commit["sha"], "replaced": replaced, "warnings": [w for w in warnings if w]}
+                "commit": commit["sha"], "replaced": replaced, "warnings": [w for w in warnings if w],
+                **({"method": "legacy (/wapi/git/deploy/catalog)"} if legacy else {})}
 
     def deploy(self, keys: list[str], branches: dict[str, str] | None = None) -> list[dict[str, Any]]:
         """Deploy the catalogs behind `keys`; `branches` overrides the branch per key."""
