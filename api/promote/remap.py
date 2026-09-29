@@ -15,7 +15,11 @@ the payload is substituted with the target's before POSTing it to
   - key / role-play reference ids inside planJson -> the target's ids for the
     same *names* (promote/idmap.py); an object missing on the target skips
     that aggregate
-  - connectionId (values + exportSummary) -> target model's connection
+  - connectionId (values, exportSummary, and inside planJson for builds that
+    reference it there) -> the target model's connection:
+    environments don't share connection ids (Postgres14 on Dev, PG_PROD on
+    Prod), so connection_map() pairs them through the datasets both models
+    share. With no mapping found, the source id is kept (no swap).
 """
 
 from __future__ import annotations
@@ -42,9 +46,26 @@ def _swap(o: Any, ids: dict[str, str]) -> Any:
     return o
 
 
-def target_connection(source_conn: str | None, target_conns: list[str]) -> str | None:
-    """Same id on the target -> keep it; exactly one target connection -> use
-    it; otherwise ambiguous (None)."""
+def connection_map(source_datasets: dict[str, str], target_datasets: dict[str, str]) -> dict[str, str]:
+    """source connection id -> target connection id, from the datasets both
+    models have (dataset name -> connection, promote/idmap.py ::
+    dataset_connections). A source connection whose datasets point at more
+    than one target connection is ambiguous and left out."""
+    seen: dict[str, set[str]] = {}
+    for name, src in source_datasets.items():
+        tgt = target_datasets.get(name)
+        if tgt:
+            seen.setdefault(src, set()).add(tgt)
+    return {src: next(iter(tgts)) for src, tgts in seen.items() if len(tgts) == 1}
+
+
+def target_connection(source_conn: str | None, target_conns: list[str],
+                      mapped: dict[str, str] | None = None) -> str | None:
+    """The target connection for a source one: matched through the shared
+    datasets first; else the same id if the target model uses it; else the
+    target model's only connection; otherwise unresolved (None)."""
+    if source_conn and mapped and source_conn in mapped:
+        return mapped[source_conn]
     if source_conn and source_conn in target_conns:
         return source_conn
     if len(target_conns) == 1:
@@ -59,11 +80,13 @@ def remap_export(
     target_model_id: str,
     target_instances: dict[str, str | None],
     target_connections: list[str],
+    connections: dict[str, str] | None = None,
     source_names: dict[str, str] | None = None,
     target_ids_by_name: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     """(payload for the target, problems). `target_instances` maps a source
-    definition id -> the target counterpart's instance id (or None)."""
+    definition id -> the target counterpart's instance id (or None);
+    `connections` is connection_map() for this source / target model pair."""
     out = copy.deepcopy(payload)
     ids = {
         str(payload.get("exportCatalogId")): target_catalog_id,
@@ -86,17 +109,19 @@ def remap_export(
                 problems.append({"id": v.get("id"), "reason": "Not on target model: " + ", ".join(sorted(missing))})
                 continue
         src_conn = v.get("connectionId")
-        tgt_conn = target_connection(src_conn, target_connections) if target_connections else src_conn
-        if src_conn and tgt_conn is None:
-            problems.append({"id": v.get("id"), "reason": f"Connection {src_conn} has no unambiguous match on the target"})
-            continue
+        # No mapping found -> keep the source id (nothing to swap it with).
+        tgt_conn = target_connection(src_conn, target_connections, connections) or src_conn
         if src_conn and tgt_conn and src_conn != tgt_conn:
             conns[src_conn] = tgt_conn
-        nv = _swap(copy.deepcopy(v), {**ids, **conns})
+        # Connection ids are swapped inside planJson too: current exports only
+        # carry them in connectionId / exportSummary, newer AtScale builds may
+        # also reference the connection in the plan. Exact-value matches only.
+        swaps = {**ids, **({src_conn: tgt_conn} if src_conn and tgt_conn and src_conn != tgt_conn else {})}
+        nv = _swap(copy.deepcopy(v), {**swaps, **conns})
         plan = v.get("planJson")
         if isinstance(plan, str):
             try:
-                nv["planJson"] = json.dumps(_swap(json.loads(plan), ids))
+                nv["planJson"] = json.dumps(_swap(json.loads(plan), swaps))
             except ValueError:
                 nv["planJson"] = plan
         if object_ids:

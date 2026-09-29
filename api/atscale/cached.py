@@ -70,6 +70,10 @@ class CachedBackend:
     def model_connections(self, catalog_id: str, model_id: str) -> list[str]:
         return self.inner.model_connections(catalog_id, model_id)
 
+    def dataset_connections(self, catalog_id: str) -> dict[str, str]:
+        # Read fresh at promote time: a redeploy can repoint a dataset.
+        return self.inner.dataset_connections(catalog_id)
+
     def test(self) -> None:
         self.inner.test()
         self._drop()

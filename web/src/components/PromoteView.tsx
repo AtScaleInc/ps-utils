@@ -100,7 +100,9 @@ export function PromoteView() {
         return { ok: okNames.length, detail: okNames, problems: failed.map((f) => `${f.name}: ${f.error}`) }
       }
       const res = await waitForJob(await api.promoteAggs(sh!.id, th!.id, validStaged))
-      return { ok: res.promoted.length, detail: [] as string[], problems: res.skipped.map((s) => `${s.name}: ${s.reason}`) }
+      // Connection ids differ per environment - say which one the aggregates now use.
+      const conns = Object.keys(res.connections ?? {}).filter((c) => { const [a, b] = c.split(' → '); return a !== b })
+      return { ok: res.promoted.length, detail: conns.map((c) => `connection ${c}`), problems: res.skipped.map((s) => `${s.name}: ${s.reason}`) }
     },
     onSuccess: ({ ok, detail, problems }) => {
       const what = `${plural(ok, noun)} promoted to ${th!.label}${detail.length ? ` · ${detail.join(', ')}` : ''}`

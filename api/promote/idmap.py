@@ -75,6 +75,24 @@ def id_names(catalog_export: dict[str, Any]) -> dict[str, str]:
     return out
 
 
+def dataset_connections(catalog_export: dict[str, Any]) -> dict[str, str]:
+    """Dataset name -> the connection id it reads from (data-sets[].physical.
+    connection.id). Each environment can name its connections differently, so
+    a source connection is matched to the target's through the datasets both
+    models share (promote/remap.py :: connection_map)."""
+    raw = catalog_export.get("data-sets") or []
+    if isinstance(raw, dict):
+        raw = raw.get("data-set", raw)
+    out: dict[str, str] = {}
+    for d in [raw] if isinstance(raw, dict) else raw:
+        if not isinstance(d, dict):
+            continue
+        conn = ((d.get("physical") or {}).get("connection") or {}).get("id")
+        if d.get("name") and isinstance(conn, str) and conn:
+            out[d["name"]] = conn
+    return out
+
+
 def name_ids(catalog_export: dict[str, Any]) -> dict[str, str]:
     """Inverse: logical name -> id (names that aren't unique are dropped)."""
     seen: dict[str, list[str]] = defaultdict(list)

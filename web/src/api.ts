@@ -182,6 +182,6 @@ export const api = {
     req<Job<{ results: { name: string; ok: boolean; mode?: PromoteMode; branch?: string; commit?: string; replaced?: string[]; error?: string }[] }>>('POST', '/promote/models',
       { sourceHostId: src, targetHostId: tgt, models }),
   promoteAggs: (src: string, tgt: string, aggregates: string[]) =>
-    req<Job<{ promoted: string[]; skipped: { name: string; reason: string }[] }>>('POST', '/promote/aggregates',
+    req<Job<{ promoted: string[]; skipped: { name: string; reason: string }[]; connections?: Record<string, number> }>>('POST', '/promote/aggregates',
       { sourceHostId: src, targetHostId: tgt, aggregates }),
 }

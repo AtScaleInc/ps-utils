@@ -253,7 +253,14 @@ everything is matched by **name**, and then the target's id is looked up.
    - catalog and model ids → the target's
    - plan key and reference ids → the target's ids for the same names
    - instance ids → the target counterpart's
-   - connection id → the target model's connection
+   - connection id → the target model's connection. Environments don't share
+     connection ids (for example `Postgres14` on Dev, `PG_PROD` on Prod), so
+     each source connection is paired with a target one through the datasets
+     both models read: every dataset in the catalog names its connection. If
+     that doesn't settle it, the same id is used when the target model has it,
+     then the target model's only connection. With no mapping found, the
+     source id is kept. The swap also applies inside the aggregate plan, for
+     AtScale builds that reference the connection there. The result lists any swap, e.g. `Postgres14 → PG_PROD`.
 
    If an aggregate references something the target model doesn't have, it's
    skipped and the missing names are listed.
@@ -372,6 +379,8 @@ ENV_MANAGER_FAKE=1 ./start.sh
 This runs against an in-memory backend seeded with sample data: five hosts
 across the three groups, seven models, and aggregates with duplicates, stale
 rows and user-defined rows. Manage and Promote can be tried in full here.
+Each demo environment names its warehouse connection differently (`PG_DEV`,
+`PG_QA`, `PG_PROD`), so promoted aggregates show the connection swap.
 
 - Demo hosts are stored in `api/connections.fake.yaml`.
 - Demo data goes to its own files: `workspace/cache-demo/`,

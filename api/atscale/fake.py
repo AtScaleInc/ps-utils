@@ -250,9 +250,16 @@ class FakeBackend:
     def build_history(self, catalog_id: str, model_id: str) -> list[dict[str, Any]]:
         return []
 
+    def _connection(self) -> str:
+        """Each demo environment names its warehouse connection differently
+        (PG_DEV / PG_QA / PG_PROD), like real ones do."""
+        return f"PG_{str(self.host.get('env') or 'dev').upper()}"
+
     def export_aggregates(self, catalog_id: str, model_id: str, agg_ids: list[str]) -> Any:
-        values = [dict(a) for a in _inv(self.id)["aggs"] if a["model"] == model_id and a["id"] in agg_ids]
-        return {"exportModelId": model_id, "aggregates": {"count": len(values), "values": values}}
+        values = [{**a, "connectionId": a.get("connectionId") or self._connection()}
+                  for a in _inv(self.id)["aggs"] if a["model"] == model_id and a["id"] in agg_ids]
+        return {"exportModelId": model_id, "aggregates": {"count": len(values), "values": values},
+                "exportSummary": {"connectionIds": {"count": 1, "values": [self._connection()]}}}
 
     def import_aggregates(self, catalog_id: str, model_id: str, payload: Any) -> dict[str, Any]:
         """Like AtScale: a definition that already exists on the target is ignored."""
@@ -270,7 +277,10 @@ class FakeBackend:
                 "numberOfDefinitionsIgnored": sum(not o["imported"] for o in out), "aggregates": {"values": out}}
 
     def model_connections(self, catalog_id: str, model_id: str) -> list[str]:
-        return []
+        return [self._connection()]
+
+    def dataset_connections(self, catalog_id: str) -> dict[str, str]:
+        return {"factinternetsales": self._connection(), "dimcustomer": self._connection()}
 
     def catalog_ids(self, catalog_id: str) -> dict[str, str]:
         return {}

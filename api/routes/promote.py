@@ -8,7 +8,7 @@ import jobs
 from envs import registry
 from atscale import github
 from promote import diff as D
-from promote.remap import remap_export
+from promote.remap import connection_map, remap_export, target_connection
 from routes.objects import host_errors
 
 promote_bp = Blueprint("promote", __name__)
@@ -154,6 +154,7 @@ def promote_aggregates():
         # §5 rule 6: re-check now - the target may have changed since the diff.
         promote, skipped = D.partition_for_promote(ids, src_aggs, tgt_aggs, set(tgt_models))
         promoted: list[str] = []
+        connections: dict[str, int] = {}  # "source → target" connection -> aggregates remapped
         by_model: dict[str, list[dict]] = {}
         for a in promote:
             by_model.setdefault(a["model"], []).append(a)
@@ -175,14 +176,23 @@ def promote_aggregates():
             tgt_by_name: dict[str, str] = {}
             for tid, n in tgt_names.items():
                 tgt_by_name[n] = tid if n not in tgt_by_name else ""  # ambiguous -> unusable
+            # Connection ids differ per environment: pair them through the datasets
+            # both models read (each dataset names its connection).
+            conn_map = connection_map(src.dataset_connections(sm["catalogId"]), tgt.dataset_connections(tm["catalogId"]))
+            tgt_conns = tgt.model_connections(tm["catalogId"], tm["modelId"])
             body, problems = remap_export(
                 payload, target_catalog_id=tm["catalogId"], target_model_id=tm["modelId"],
-                target_instances=instances, target_connections=tgt.model_connections(tm["catalogId"], tm["modelId"]),
+                target_instances=instances, target_connections=tgt_conns, connections=conn_map,
                 source_names=src_names if src_names else None,
                 target_ids_by_name={n: i for n, i in tgt_by_name.items() if i} if src_names else None,
             )
             by_id = {a["id"]: a for a in aggs}
             skipped.extend({"id": p["id"], "name": by_id.get(p["id"], {}).get("name", p["id"]), "reason": p["reason"]} for p in problems)
+            for v in payload["aggregates"]["values"]:
+                sc = v.get("connectionId")
+                tc = target_connection(sc, tgt_conns, conn_map)
+                if sc and tc:
+                    connections[f"{sc} → {tc}"] = connections.get(f"{sc} → {tc}", 0) + 1
             if not body["aggregates"]["values"]:
                 continue
             result = tgt.import_aggregates(tm["catalogId"], tm["modelId"], body)
@@ -202,6 +212,6 @@ def promote_aggregates():
                         skipped.append({"id": a["id"], "name": a["name"], "reason": (r[0].get("error") if r else None) or v.get("reason") or "Ignored"})
                 else:
                     skipped.append({"id": a["id"], "name": a["name"], "reason": v.get("reason") or "Ignored by AtScale"})
-        return {"promoted": promoted, "skipped": skipped}
+        return {"promoted": promoted, "skipped": skipped, "connections": connections}
 
     return jsonify(jobs.submit("promote-aggregates", run)), 202

@@ -19,7 +19,7 @@ from typing import Any, Protocol
 
 from envs.store import Store, profile_to_connection
 
-from promote.idmap import id_names, translate_plan
+from promote.idmap import dataset_connections, id_names, translate_plan
 
 from . import github
 from .client import AtScaleApiError, AtScaleClient, AtScaleEnvironment
@@ -49,6 +49,7 @@ class Backend(Protocol):
     def export_aggregates(self, catalog_id: str, model_id: str, agg_ids: list[str]) -> Any: ...
     def import_aggregates(self, catalog_id: str, model_id: str, payload: Any) -> dict[str, Any]: ...
     def model_connections(self, catalog_id: str, model_id: str) -> list[str]: ...
+    def dataset_connections(self, catalog_id: str) -> dict[str, str]: ...
 
 
 def now_iso() -> str:
@@ -416,8 +417,15 @@ class RealBackend:
     def catalog_ids(self, catalog_id: str) -> dict[str, str]:
         """This host's id -> name map for the catalog's keys and references
         (GET /v1/catalogs/{id}/export, Container API "export-catalog-representation")."""
-        rep = self.api._dispatch("GET", f"/v1/catalogs/{catalog_id}/export", headers={"Accept": "application/json"}, timeout=60).json()
-        return id_names(rep)
+        return id_names(self._catalog_rep(catalog_id))
+
+    def _catalog_rep(self, catalog_id: str) -> dict[str, Any]:
+        return self.api._dispatch("GET", f"/v1/catalogs/{catalog_id}/export",
+                                  headers={"Accept": "application/json"}, timeout=60).json()
+
+    def dataset_connections(self, catalog_id: str) -> dict[str, str]:
+        """Dataset name -> connection id, from the same catalog representation."""
+        return dataset_connections(self._catalog_rep(catalog_id))
 
     def set_active(self, catalog_id: str, model_id: str, agg_ids: list[str], active: bool) -> list[dict[str, Any]]:
         results = []

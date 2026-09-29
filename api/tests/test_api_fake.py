@@ -175,3 +175,21 @@ def test_undeploy_keeps_link(client):
     assert after["Finance Ledger"]["status"] == "Linked"
     names = [m["name"] for m in client.get("/api/hosts/qa-main/aggregate-models").get_json()["models"]]
     assert "Finance Ledger" not in names
+
+
+def test_promoted_aggregate_gets_the_target_connection(client):
+    """Environments name their connections differently (demo: PG_DEV / PG_QA /
+    PG_PROD): a promoted aggregate must carry the target's, not the source's."""
+    from atscale import fake
+
+    src, tgt, name = "qa-main", "prod-east", "agg_sales_by_product_cat"
+    fake._inv(tgt)["aggs"] = [a for a in fake._inv(tgt)["aggs"] if a["id"] != name]  # not on the target yet
+    rows = {r["name"]: r for r in diff(client, "aggs", src, tgt, "Internet Sales")["rows"]}
+    new = rows[name]
+    assert new["diff"]["state"] == "new"
+    job = client.post("/api/promote/aggregates", json={
+        "sourceHostId": src, "targetHostId": tgt, "aggregates": [new["id"]]}).get_json()
+    result = wait(client, job)["result"]
+    assert result["promoted"] == [name] and result["connections"] == {"PG_QA → PG_PROD": 1}
+    stored = [a for a in fake._inv(tgt)["aggs"] if a["id"] == name]
+    assert stored and stored[0]["connectionId"] == "PG_PROD"
