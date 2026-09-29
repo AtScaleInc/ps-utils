@@ -32,7 +32,10 @@ incremental build); Promote diffs a source host against a target and moves model
     the single adapter to the ps-utils entry shape.
   - `atscale/client.py` — auth copied from sml-wizard; catalog + aggregate calls
     are container-only (see BUILD_PLAN.md call map). Deploy uses
-    `POST /v1/catalogs/deploy` (AtScale compiles SML), so there's no local compiler.
+    `POST /v1/catalogs/deploy` (AtScale compiles SML); builds without it (404,
+    e.g. 34.x) fall back to `atscale/legacy_deploy.py`: clone repo@branch,
+    compile the catalog XML locally (`smlgen/catalog_xml.py`, restored from
+    sml-wizard) and POST `/wapi/git/deploy/catalog` with a cookie session.
   - `atscale/github.py` — repo discovery, branches, commits; a model's version is
     the Git commit it was built from.
   - `atscale/backend.py` — `RealBackend` normalises AtScale responses into UI rows.
@@ -44,7 +47,8 @@ incremental build); Promote diffs a source host against a target and moves model
     The `atscale-sml-model-generator` skill's rules are authoritative for SML
     shape — cite the rule number when implementing one. Hierarchies are dynamic
     (`dimRole: 'level' | 'secondary' | 'alias'`, ordered by `levelOrder`), never
-    fixed L1/L2/L3. sml-wizard's local catalog-XML compiler was dropped.
+    fixed L1/L2/L3. sml-wizard's catalog-XML compiler is kept only for the
+    legacy deploy fallback.
   - `routes/build.py` — Build endpoints. Host-bound calls are
     `/hosts/<id>/sources|preview|build/repos`; `/schemas` returns schema names
     at once and lists tables per schema in the background (the UI polls while

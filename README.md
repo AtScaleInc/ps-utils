@@ -531,7 +531,7 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 | Authentication | Keycloak password grant, or `POST /v1/token` to exchange an API token for a JWT |
 | Deployed models | `GET /wapi/p/projects/deployed`, `GET /v1/catalogs` (for `publishedAt`), `GET /wapi/p/catalog/{id}` |
 | Repos | `GET/POST /wapi/p/repo`, `DELETE /wapi/p/repo/{id}` |
-| Deploy repo@branch | `POST /v1/catalogs/deploy` `{repoUrl, gitToken, branch}` |
+| Deploy repo@branch | `POST /v1/catalogs/deploy` `{repoUrl, gitToken, branch}`; on a 404 (older builds), local catalog-XML compile + `POST /wapi/git/deploy/catalog` |
 | Undeploy catalog | `DELETE /wapi/p/catalog/{catalogId}` |
 | Catalog representation (id ↔ name) | `GET /v1/catalogs/{id}/export` |
 | List aggregates | `GET /wapi/p/aggregate/definition?catalogId&modelId&page&limit` |
@@ -583,9 +583,12 @@ Jobs            GET /jobs/:id
 
 - **Container hosts only.** Installer-style hosts (`:10500`/`:10502` URLs with
   `orgId`) aren't supported.
-- **Deploy needs `POST /v1/catalogs/deploy`.** Older container builds don't
-  have it and answer 404 ("Cannot POST /v1/public/catalogs/deploy"), so
-  Manage, Promote and Build can't deploy to them. The repo still gets attached.
+- **Older AtScale builds deploy the Design Center way.** Builds without
+  `POST /v1/catalogs/deploy` (it answers 404, e.g. 34.x containers) fall back
+  to compiling the catalog XML locally from the repo's SML and posting it to
+  `/wapi/git/deploy/catalog`, as sml-wizard did. The catalog is then named
+  `<catalog>_<branch>` (e.g. `sales_catalog_main`); models and cubes keep their
+  names, so Promote and Test still match them.
 - **Deploy needs a real Keycloak username and password**, not just an API
   token. Accounts that only sign in through SSO can't deploy.
 - **Deploy is by branch, not commit.** A deploy always gets the branch's head
