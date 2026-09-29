@@ -612,6 +612,8 @@ Translation is deliberately conservative: where a DAX construct has no faithful 
 
 **Role-play family detection** is the core value-add: SSAS Tabular cannot role-play a dimension, so when the same real-world dimension is needed multiple times under different names (Order Date vs Ship Date), Tabular fakes it by importing the same source object once per role. This operation reads each table's partition query, resolves what object it actually reads from, and groups dimension tables that share the same source object into one consolidated SML dimension, wired to facts via SML `role_play` (when a fact has genuinely multiple distinct FK columns into the group) or an ordinary relationship (a single FK). Each role's original alias-prefix wording (e.g. "Serv", "AHP", "Refer Prov") is recovered by diffing member column aliases, so `role_play` labels reproduce historical naming.
 
+Generated objects preserve their source `unique_name` wherever possible. When a backing dataset's source name conflicts with a dimension, only that dataset receives the technical suffix `<table>.dataset`; the dimension retains its query-facing name, and all generated level, metric, and relationship references use the resolved dataset name.
+
 `--model-mode` behaves the same as in `generate-sml-from-xml` / `generate-sml-from-ddl`: optional unless a query-name collision occurs, at which point `new` renames colliding objects deterministically and `existing` preserves established names and reports a blocking conflict.
 
 **Getting the TMSL/XMLA export:** this operation does not connect to SSAS itself — you supply the export file. To produce it:

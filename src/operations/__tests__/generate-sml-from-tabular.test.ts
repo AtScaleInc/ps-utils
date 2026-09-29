@@ -145,6 +145,42 @@ describe("generate-sml-from-tabular converter", () => {
     expect(toLookup.role_play).toBeUndefined();
   });
 
+  it("keeps dataset and dimension unique_names distinct and updates every reference", () => {
+    const { sml } = convert();
+    const datasets = [...sml.entries()]
+      .filter(([file]) => file.startsWith("datasets/"))
+      .map(([, yaml]) => load(yaml) as any);
+    const dimensions = [...sml.entries()]
+      .filter(([file]) => file.startsWith("dimensions/"))
+      .map(([, yaml]) => load(yaml) as any);
+
+    const datasetNames = new Set(datasets.map((dataset) => dataset.unique_name.toLowerCase()));
+    const dimensionNames = new Set(dimensions.map((dimension) => dimension.unique_name.toLowerCase()));
+    expect([...datasetNames].filter((name) => dimensionNames.has(name))).toEqual([]);
+
+    expect((load(sml.get("datasets/Date Dimension.yml")!) as any).unique_name)
+      .toBe("Date Dimension.dataset");
+    expect((load(sml.get("datasets/Lookup.yml")!) as any).unique_name)
+      .toBe("Lookup.dataset");
+
+    for (const dimension of dimensions) {
+      for (const attribute of dimension.level_attributes ?? []) {
+        expect(datasetNames.has(attribute.dataset.toLowerCase())).toBe(true);
+      }
+    }
+
+    const metric = load(sml.get("metrics/SalesAmount.yml")!) as any;
+    expect(metric.dataset).toBe("Sales");
+
+    const model = load(sml.get("models/sales_model.yml")!) as any;
+    expect(model.relationships.every((relationship: any) => relationship.from.dataset === "Sales"))
+      .toBe(true);
+    expect(model.relationships.some((relationship: any) => relationship.to.dimension === "Date Dimension"))
+      .toBe(true);
+    expect(model.relationships.some((relationship: any) => relationship.to.dimension === "Lookup"))
+      .toBe(true);
+  });
+
   it("converts a simple measure to a base metric", () => {
     const { sml } = convert();
     const metric = load(sml.get("metrics/SalesAmount.yml")!) as any;
