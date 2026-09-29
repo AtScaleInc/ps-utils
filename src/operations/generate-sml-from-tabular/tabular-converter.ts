@@ -53,7 +53,7 @@
  *   - No semi-additive metrics, no time-intelligence calcs, no snowflake
  *     bridging, no parent-child hierarchy detection.
  */
-import { dump } from "js-yaml";
+import { dump, load } from "js-yaml";
 import {
   MeasureClassifier, buildResolver, defaultMetricName, isIncidentalBlocker,
   type ColumnLookup, type MeasureAssessment, type MetricProvider,
@@ -172,6 +172,43 @@ function toYaml(obj: unknown): string {
  */
 function fileSafe(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
+}
+
+/** Preserve the source name unless AtScale's project-wide object namespace
+ * already contains it. The `.dataset` fallback matches the other generators.
+ */
+function allocateDatasetName(name: string, reserved: Set<string>): string {
+  let candidate = name;
+  if (reserved.has(candidate.toLowerCase())) candidate = `${name}.dataset`;
+  let suffix = 2;
+  while (reserved.has(candidate.toLowerCase())) {
+    candidate = `${name}.dataset.${suffix}`;
+    suffix += 1;
+  }
+  reserved.add(candidate.toLowerCase());
+  return candidate;
+}
+
+function assertUniqueObjectNames(sml: ReadonlyMap<string, string>): void {
+  const seen = new Map<string, { name: string; objectType: string; file: string }>();
+  for (const [file, yaml] of sml) {
+    if (!file.endsWith(".yml")) continue;
+    const document = load(yaml) as Record<string, unknown> | null;
+    const name = document?.unique_name;
+    const objectType = document?.object_type;
+    if (typeof name !== "string" || typeof objectType !== "string") continue;
+
+    const normalized = name.toLowerCase();
+    const existing = seen.get(normalized);
+    if (existing) {
+      throw new Error(
+        `Generated ${objectType} '${name}' in '${file}' conflicts with ` +
+          `${existing.objectType} '${existing.name}' in '${existing.file}'. ` +
+          "SML object unique_name values must be unique across object types.",
+      );
+    }
+    seen.set(normalized, { name, objectType, file });
+  }
 }
 
 function cleanDesc(s: string | undefined): string {
@@ -866,10 +903,21 @@ export function convertTabularToSml(
     ),
   );
 
+  const reservedObjectNames = new Set<string>([
+    ...singletonDims,
+    ...[...familyMeta.values()].map((meta) => meta.label),
+  ].map((name) => name.toLowerCase()));
   const datasetFor = new Map<string, string>();
-  for (const t of allModeled) datasetFor.set(t, t);
+  for (const t of [...factTables, ...dimTables.filter((d) => !familyOfMember.has(d))]) {
+    datasetFor.set(t, allocateDatasetName(t, reservedObjectNames));
+  }
   const dimBaseLevel = new Map<string, string>();
   const familyDatasetName = new Map<string, string>();
+  for (const [fromObject, meta] of familyMeta) {
+    const datasetName = allocateDatasetName(meta.label, reservedObjectNames);
+    familyDatasetName.set(fromObject, datasetName);
+    for (const member of meta.members) datasetFor.set(member, datasetName);
+  }
 
   // --- DAX->MDX resolver registry -------------------------------------------
   // MDX needs qualified [Dimension].[Hierarchy].[Level] paths. Hierarchy naming
@@ -920,7 +968,7 @@ export function convertTabularToSml(
       `datasets/${t}.yml`,
       toYaml(
         od({
-          unique_name: t,
+          unique_name: datasetFor.get(t),
           object_type: "dataset",
           label: t,
           description: cleanDesc(desc),
@@ -934,7 +982,7 @@ export function convertTabularToSml(
 
   function secondaryAttrsForFamily(fromObject: string, exclude: Set<string>): Array<Record<string, unknown>> {
     const meta = familyMeta.get(fromObject)!;
-    const ds = meta.label;
+    const ds = familyDatasetName.get(fromObject)!;
     const physToAlias = new Map<string, [string, string]>();
     for (const m of meta.members) {
       const src = physicalSource[m];
@@ -963,17 +1011,16 @@ export function convertTabularToSml(
 
   for (const [fromObject, meta] of familyMeta) {
     const label = meta.label;
+    const datasetName = familyDatasetName.get(fromObject)!;
     const [db, schema, obj] = splitQualified(fromObject);
     const connId = connectionFor(db);
     const tablePhysName = W.toLowerCase() === "snowflake" ? obj.toUpperCase() : obj.toLowerCase();
-    familyDatasetName.set(fromObject, label);
-
     const dsColumns = [...meta.physCols].map(([pcol, dt]) => od({ name: pcol, data_type: smlDtype(dt) }));
     sml.set(
       `datasets/${label}.yml`,
       toYaml(
         od({
-          unique_name: label,
+          unique_name: datasetName,
           object_type: "dataset",
           label,
           description: cleanDesc(
@@ -992,10 +1039,10 @@ export function convertTabularToSml(
       const h = meta.hier;
       const { yearLabel: yl, quarterLabel: ql, monthLabel: ml, dayLabel: dl } = h;
       const levelAttrs = [
-        od({ unique_name: yl, label: yl, dataset: label, key_columns: [h.year], name_column: h.year, time_unit: "year" }),
-        od({ unique_name: ql, label: ql, dataset: label, key_columns: [h.quarter], name_column: h.quarter, time_unit: "quarter" }),
-        od({ unique_name: ml, label: ml, dataset: label, key_columns: [h.month], name_column: h.month, time_unit: "month" }),
-        od({ unique_name: dl, label: dl, dataset: label, key_columns: [meta.keyCol], name_column: h.day, time_unit: "day" }),
+        od({ unique_name: yl, label: yl, dataset: datasetName, key_columns: [h.year], name_column: h.year, time_unit: "year" }),
+        od({ unique_name: ql, label: ql, dataset: datasetName, key_columns: [h.quarter], name_column: h.quarter, time_unit: "quarter" }),
+        od({ unique_name: ml, label: ml, dataset: datasetName, key_columns: [h.month], name_column: h.month, time_unit: "month" }),
+        od({ unique_name: dl, label: dl, dataset: datasetName, key_columns: [meta.keyCol], name_column: h.day, time_unit: "day" }),
       ];
       const exclude = new Set([h.year!, h.quarter!, h.month!, h.day!, meta.keyCol]);
       const hierLevels = [
@@ -1053,7 +1100,7 @@ export function convertTabularToSml(
             ),
             hierarchies: [od({ unique_name: label, label, levels: [od({ unique_name: label, secondary_attributes: secondary })] })],
             level_attributes: [
-              od({ unique_name: label, label, dataset: label, key_columns: [meta.keyCol], name_column: meta.nameCol }),
+              od({ unique_name: label, label, dataset: datasetName, key_columns: [meta.keyCol], name_column: meta.nameCol }),
             ],
           }),
         ),
@@ -1264,7 +1311,7 @@ export function convertTabularToSml(
   // expression has a faithful equivalent, and deferral only when neither holds.
   const tableToDimension = new Map<string, string>();
   for (const [member, fromObject] of familyOfMember) {
-    const label = familyDatasetName.get(fromObject);
+    const label = familyMeta.get(fromObject)?.label;
     if (label) tableToDimension.set(member, label);
   }
   for (const dim of dimHierarchy.keys()) {
@@ -1437,13 +1484,13 @@ export function convertTabularToSml(
 
   const totalDeferred = [...factDeferred.values()].reduce((n, v) => n + v.length, 0);
 
-  function targetDatasetAndLevel(toTable: string): [string, string | undefined] {
+  function targetDimensionAndLevel(toTable: string): [string, string | undefined] {
     if (familyOfMember.has(toTable)) {
       const fromObject = familyOfMember.get(toTable)!;
-      const dsName = familyDatasetName.get(fromObject)!;
-      return [dsName, dimBaseLevel.get(dsName)];
+      const dimensionName = familyMeta.get(fromObject)!.label;
+      return [dimensionName, dimBaseLevel.get(dimensionName)];
     }
-    return [datasetFor.get(toTable) ?? toTable, dimBaseLevel.get(toTable) ?? toTable];
+    return [toTable, dimBaseLevel.get(toTable) ?? toTable];
   }
 
   const factTargetCols = new Map<string, Set<string>>();
@@ -1476,7 +1523,7 @@ export function convertTabularToSml(
     const ft = r.fromTable;
     if (!factTablesSet.has(ft)) continue;
     const dt = r.toTable;
-    const [dsName, level] = targetDatasetAndLevel(dt);
+    const [dimensionName, level] = targetDimensionAndLevel(dt);
     if (level === undefined) {
       logIssue(
         "error", "unmapped_relationship", `${ft} -> ${dt}`,
@@ -1508,17 +1555,17 @@ export function convertTabularToSml(
         );
       }
     }
-    let uname = `${ft}_${dsName}_${r.fromColumn}`;
+    let uname = `${ft}_${dimensionName}_${r.fromColumn}`;
     let i = 2;
     while (seen.has(uname)) {
-      uname = `${ft}_${dsName}_${r.fromColumn}_${i}`;
+      uname = `${ft}_${dimensionName}_${r.fromColumn}_${i}`;
       i += 1;
     }
     seen.add(uname);
     const rel: Record<string, unknown> = od({
       unique_name: uname,
       from: od({ dataset: datasetFor.get(ft), join_columns: [colPhysMap(ft).get(r.fromColumn)] }),
-      to: od({ dimension: dsName, level }),
+      to: od({ dimension: dimensionName, level }),
     });
     if (rolePlay) rel.role_play = rolePlay;
     modelRelationships.push(rel);
@@ -1948,6 +1995,8 @@ model (the conversion is deterministic).
     issues,
   };
   sml.set("CONVERSION_REPORT.json", JSON.stringify(conversionReportJson, null, 2));
+
+  assertUniqueObjectNames(sml);
 
   return { sml };
 }

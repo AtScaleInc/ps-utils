@@ -407,6 +407,8 @@ function generateSMLFromXML(
 
 Converts an SSAS Tabular model export (TMSL/XMLA `createOrReplace` JSON) to SML files, consolidating role-play dimension families and deferring complex DAX measures to `DEFERRED_MEASURES.md`.
 
+Generated objects preserve their source `unique_name` wherever possible. Only a backing dataset whose source name conflicts with a dimension receives the technical suffix `<table>.dataset`; generated level, metric, and relationship references use the resolved dataset name without changing query-facing dimension identifiers.
+
 ```typescript
 import { generateSMLFromTabular } from "@atscale-ps/ps-utils";
 
