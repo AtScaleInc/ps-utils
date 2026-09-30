@@ -72,7 +72,7 @@ function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: num
 }
 
 /** Part-to-whole of a few categories: ring + legend with value and share (identity never colour-alone). */
-export function Donut({ slices, title, center, sub }: { slices: Slice[]; title: string; center: string; sub: string }) {
+export function Donut({ slices, title, center, sub, footer }: { slices: Slice[]; title: string; center: string; sub: string; footer?: ReactNode }) {
   const tip = useTip()
   const total = slices.reduce((a, s) => a + s.value, 0)
   const size = 148, c = size / 2, r1 = 70, r0 = 47
@@ -109,6 +109,7 @@ export function Donut({ slices, title, center, sub }: { slices: Slice[]; title: 
           ))}
         </div>
       </div>
+      {footer}
       {tip.node}
     </div>
   )
@@ -205,47 +206,73 @@ export function StackedBars<T extends { t: number }>({ title, points, keys, buck
   )
 }
 
-// -- latency line ---------------------------------------------------------------------------------------
+// -- lines (latency, hit rates) ------------------------------------------------------------------------
 
-export function LineChart({ title, points, color, label, bucketMs, height = 190 }: {
-  title: string; points: { t: number; v: number | null }[]; color: string; label: string; bucketMs: number; height?: number
+export interface LineSeries { key: string; label: string; color: string; values: (number | null)[] }
+
+/** One or more lines on one y axis (same unit); a null value breaks the line. */
+export function LineChart({ title, times, series, bucketMs, height = 190, fmt = fmtMs, max: fixedMax, note }: {
+  title: string; times: number[]; series: LineSeries[]; bucketMs: number; height?: number
+  /** Value format for ticks + tooltip (default: duration). */
+  fmt?: (v: number | null) => string
+  /** Fixed y maximum (e.g. 1 for a rate), else rounded up from the data. */
+  max?: number
+  /** Extra tooltip lines per point. */
+  note?: (i: number) => string[]
 }) {
   const [ref, w] = useWidth<HTMLDivElement>()
   const tip = useTip()
   const [hover, setHover] = useState<number | null>(null)
-  const max = niceMax(Math.max(0, ...points.map((p) => p.v ?? 0)))
-  const n = Math.max(points.length, 1)
+  const points = times.map((t) => ({ t }))
+  const max = fixedMax ?? niceMax(Math.max(0, ...series.flatMap((s) => s.values.map((v) => v ?? 0))))
+  const n = Math.max(times.length, 1)
   const slot = (w - M.l - M.r) / n
   const plotH = height - M.t - M.b
   const x = (i: number) => M.l + slot * i + slot / 2
   const y = (v: number) => M.t + plotH * (1 - v / max)
-  // Break the line where a bucket had no finished query.
-  const paths: string[] = []
-  let cur = ''
-  points.forEach((p, i) => {
-    if (p.v === null) { if (cur) paths.push(cur); cur = ''; return }
-    cur += `${cur ? 'L' : 'M'} ${x(i)} ${y(p.v)} `
-  })
-  if (cur) paths.push(cur)
-  const hp = hover !== null ? points[hover] : null
+  const pathsOf = (vals: (number | null)[]) => {
+    const out: string[] = []
+    let cur = ''
+    vals.forEach((v, i) => {
+      if (v === null) { if (cur) out.push(cur); cur = ''; return }
+      cur += `${cur ? 'L' : 'M'} ${x(i)} ${y(v)} `
+    })
+    if (cur) out.push(cur)
+    return out
+  }
   return (
     <div className="viz" ref={ref}>
-      <div className="viz-head"><span className="eyebrow">{title}</span></div>
+      <div className="viz-head">
+        <span className="eyebrow">{title}</span>
+        {series.length > 1 && <div className="legend">{series.map((s) => <span key={s.key} className="legend-item"><span className="viz-key" style={{ background: s.color }} />{s.label}</span>)}</div>}
+      </div>
       <svg width={w} height={height} role="img" aria-label={title}>
-        <Grid w={w} h={height} max={max} fmt={(v) => (v ? fmtMs(v) : '0')} />
-        {paths.map((d, i) => <path key={i} d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />)}
-        {points.map((p, i) => (p.v !== null && (i === 0 || points[i - 1].v === null) && (i === points.length - 1 || points[i + 1].v === null)
-          ? <circle key={p.t} cx={x(i)} cy={y(p.v)} r={3} fill={color} /> : null))}
-        {hp && hover !== null && (
+        <Grid w={w} h={height} max={max} fmt={(v) => (v ? fmt(v) : '0')} />
+        {series.map((s) => (
+          <g key={s.key}>
+            {pathsOf(s.values).map((d, i) => <path key={i} d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />)}
+            {s.values.map((v, i) => (v !== null && (i === 0 || s.values[i - 1] === null) && (i === s.values.length - 1 || s.values[i + 1] === null)
+              ? <circle key={i} cx={x(i)} cy={y(v)} r={3} fill={s.color} /> : null))}
+          </g>
+        ))}
+        {hover !== null && (
           <g>
             <line x1={x(hover)} x2={x(hover)} y1={M.t} y2={M.t + plotH} className="viz-cross" />
-            {hp.v !== null && <circle cx={x(hover)} cy={y(hp.v)} r={4.5} fill={color} stroke="var(--panel)" strokeWidth={2} />}
+            {series.map((s) => (s.values[hover] !== null
+              ? <circle key={s.key} cx={x(hover)} cy={y(s.values[hover]!)} r={4.5} fill={s.color} stroke="var(--panel)" strokeWidth={2} /> : null))}
           </g>
         )}
         <XTicks points={points} x={x} h={height} bucketMs={bucketMs} />
-        {points.map((p, i) => (
-          <rect key={`h${p.t}`} x={M.l + slot * i} y={M.t} width={slot} height={plotH} fill="transparent"
-            onPointerMove={(e) => { setHover(i); tip.show(e, <><div className="viz-tip-h">{fmtStamp(p.t)}</div><TipRow color={color} label={label} value={fmtMs(p.v)} /></>) }}
+        {times.map((t, i) => (
+          <rect key={`h${t}`} x={M.l + slot * i} y={M.t} width={slot} height={plotH} fill="transparent"
+            onPointerMove={(e) => {
+              setHover(i)
+              tip.show(e, <>
+                <div className="viz-tip-h">{fmtStamp(t)}</div>
+                {series.map((s) => <TipRow key={s.key} color={s.color} label={s.label} value={fmt(s.values[i])} />)}
+                {note?.(i).map((line) => <TipRow key={line} label="" value={line} />)}
+              </>)
+            }}
             onPointerLeave={() => { setHover(null); tip.hide() }} />
         ))}
       </svg>
@@ -256,11 +283,13 @@ export function LineChart({ title, points, color, label, bucketMs, height = 190 
 
 // -- per-row 100% mix bars (models, users) ---------------------------------------------------------------
 
-export function MixBars({ title, rows, keys, onPick }: {
+export function MixBars<R extends { name: string; count: number; p95: number | null }>({ title, rows, keys, onPick, extra }: {
   title: string
-  rows: { name: string; count: number; p95: number | null }[]
+  rows: R[]
   keys: Key[]
   onPick?: (name: string) => void
+  /** One more numeric column after p95 (e.g. hit rate). */
+  extra?: { label: string; value: (r: R) => string; title?: (r: R) => string }
 }) {
   const tip = useTip()
   const val = (r: object, k: string) => Number((r as Record<string, unknown>)[k]) || 0
@@ -268,13 +297,14 @@ export function MixBars({ title, rows, keys, onPick }: {
     <div className="viz">
       <div className="viz-head"><span className="eyebrow">{title}</span></div>
       <div className="mix">
-        <div className="mix-row th"><span>Name</span><span className="num">Queries</span><span>Mix</span><span className="num">p95</span></div>
+        <div className={`mix-row th ${extra ? 'x' : ''}`}><span>Name</span><span className="num">Queries</span><span>Mix</span><span className="num">p95</span>{extra && <span className="num">{extra.label}</span>}</div>
         {rows.map((r) => (
-          <div key={r.name} className={`mix-row ${onPick ? 'pick' : ''}`} onClick={() => onPick?.(r.name)}
+          <div key={r.name} className={`mix-row ${onPick ? 'pick' : ''} ${extra ? 'x' : ''}`} onClick={() => onPick?.(r.name)}
             onPointerMove={(e) => tip.show(e, <>
               <div className="viz-tip-h">{r.name} · {fmtN(r.count)} queries</div>
               {keys.map((k) => <TipRow key={k.key} color={k.color} label={k.label} value={`${fmtN(val(r, k.key))} · ${pct(val(r, k.key), r.count)}`} />)}
               <TipRow label="p95 latency" value={fmtMs(r.p95)} />
+              {extra && <TipRow label={extra.label} value={extra.title ? extra.title(r) : extra.value(r)} />}
             </>)}
             onPointerLeave={tip.hide}>
             <span className="ellipsis">{r.name}</span>
@@ -286,6 +316,7 @@ export function MixBars({ title, rows, keys, onPick }: {
               })}
             </span>
             <span className="num mono">{fmtMs(r.p95)}</span>
+            {extra && <span className="num mono">{extra.value(r)}</span>}
           </div>
         ))}
         {!rows.length && <div className="empty">No queries</div>}

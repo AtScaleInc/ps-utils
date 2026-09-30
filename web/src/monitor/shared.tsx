@@ -10,6 +10,10 @@ export const CLS: Record<QueryClass, { label: string; long: string; color: strin
 export const CLS_KEYS: Key[] = (['agg', 'cache', 'raw'] as QueryClass[]).map((k) => ({ key: k, label: CLS[k].label, color: CLS[k].color }))
 export const TYPE_COLOR = { User: '#9085e9', System: '#c98500' }
 export const P95_COLOR = '#3987e5'
+/** Hit-rate lines: the aggregate and cache slots, so each rate wears the colour of what it counts. */
+export const HIT_COLOR = { agg: '#3987e5', cache: '#199e70' }
+/** A rate as the 0-1 ratio AtScale reports (0.73). */
+export const fmtRate = (v: number | null | undefined) => (v === null || v === undefined ? '—' : v.toFixed(2))
 export const AUTO_POLL_MS = 5 * 60e3
 
 export function ClsPill({ cls }: { cls: QueryClass }) {

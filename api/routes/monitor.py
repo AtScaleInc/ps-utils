@@ -111,7 +111,8 @@ def overview(host_id: str):
     registry.host(host_id)
     f = _filters()
     rows = store.select(host_id, f)
-    return jsonify({**stats.overview(rows, f["fromMs"], f["toMs"], _num("tz") or 0), **_lists(host_id, f)})
+    return jsonify({**stats.overview(rows, f["fromMs"], f["toMs"], _num("tz") or 0, f["queryType"] != "System"),
+                    **_lists(host_id, f)})
 
 
 @monitor_bp.get("/hosts/<host_id>/monitor/queries")
@@ -161,7 +162,7 @@ def query_detail(host_id: str, query_id: str):
 def hotspots(host_id: str):
     registry.host(host_id)
     f = _filters()
-    return jsonify({**stats.hotspots(store.select(host_id, f)), **_lists(host_id, f)})
+    return jsonify({**stats.hotspots(store.select(host_id, f), user_only=f["queryType"] != "System"), **_lists(host_id, f)})
 
 
 @monitor_bp.get("/monitor/store")

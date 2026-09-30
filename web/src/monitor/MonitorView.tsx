@@ -2,10 +2,10 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { EnvSegment, HostSelect, errMsg, plural, useHosts } from '../components/ui'
 import { resolveHost, useUi, type MonitorRange } from '../store'
-import { monitorApi, rangeMs, type MonitorStatus, type QueryClass } from './api'
+import { hitRate, monitorApi, rangeMs, type Hits, type MonitorStatus, type QueryClass } from './api'
 import { Donut, LineChart, MixBars, StackedBars, fmtMs, fmtN, fmtStamp, pct } from './charts'
 import { QueryDrawer } from './QueryDrawer'
-import { AUTO_POLL_MS, CLS, CLS_KEYS, ClsPill, P95_COLOR, StatusText, TYPE_COLOR } from './shared'
+import { AUTO_POLL_MS, CLS, CLS_KEYS, ClsPill, HIT_COLOR, P95_COLOR, StatusText, TYPE_COLOR, fmtRate } from './shared'
 import './monitor.css'
 
 const PRESETS: { id: Exclude<MonitorRange['preset'], 'custom'>; label: string }[] = [
@@ -212,9 +212,9 @@ function PollStatus({ st, now, polling, error }: { st?: MonitorStatus; now: numb
   )
 }
 
-function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
+function Kpi({ label, value, sub, tone, title }: { label: string; value: string; sub?: string; tone?: string; title?: string }) {
   return (
-    <div className="kpi" style={tone ? { borderTopColor: tone } : undefined}>
+    <div className="kpi" style={tone ? { borderTopColor: tone } : undefined} title={title}>
       <span className="eyebrow">{label}</span>
       <span className="kpi-v">{value}</span>
       {sub && <span className="hint">{sub}</span>}
@@ -237,11 +237,17 @@ function OverviewSection({ hostId, range }: { hostId: string; range: { fromMs: n
   if (!o) return <Loading q={q} />
   const t = o.totals
   const finished = t.count - t.running
+  const agg = hitRate(t.hits, false)
+  const withCache = hitRate(t.hits, true)
+  const scope = `successful ${o.hitScope.toLowerCase()} queries`
   return (
     <div className="mon-grid">
       <div className="kpis">
         <Kpi label="Queries" value={fmtN(t.count)} sub={`${plural(t.users, 'user')} · ${plural(t.models, 'model')}`} />
-        <Kpi label="Kept off the warehouse" value={t.servedPct === null ? '—' : `${t.servedPct.toFixed(0)}%`} sub="cache + aggregate" tone={CLS.agg.color} />
+        <Kpi label="Aggregate hit rate" value={fmtRate(agg.rate)} sub={`${fmtN(agg.hits)} of ${fmtN(agg.outOf)}`} tone={HIT_COLOR.agg}
+          title={`agg ÷ (agg + no agg): aggregate hits ÷ queries that reached aggregate selection (cache hits left out), over ${scope}`} />
+        <Kpi label="Hit rate incl. cache" value={fmtRate(withCache.rate)} sub={`${fmtN(withCache.hits)} of ${fmtN(withCache.outOf)}`} tone={HIT_COLOR.cache}
+          title={`(agg + cache) ÷ (agg + cache + no agg), over ${scope} - how much never reached the warehouse raw`} />
         <Kpi label="No aggregate" value={fmtN(t.raw)} sub={`${pct(t.raw, t.count)} of queries`} tone={CLS.raw.color} />
         <Kpi label="p50 latency" value={fmtMs(t.p50)} sub={`avg ${fmtMs(t.avg)}`} />
         <Kpi label="p95 latency" value={fmtMs(t.p95)} sub={`max ${fmtMs(t.max)}`} />
@@ -251,7 +257,8 @@ function OverviewSection({ hostId, range }: { hostId: string; range: { fromMs: n
 
       <div className="mon-row three">
         <Donut title="How queries were answered" center={fmtN(t.count)} sub="queries"
-          slices={(['agg', 'cache', 'raw'] as QueryClass[]).map((k) => ({ key: k, label: CLS[k].label, value: t[k], color: CLS[k].color }))} />
+          slices={(['agg', 'cache', 'raw'] as QueryClass[]).map((k) => ({ key: k, label: CLS[k].label, value: t[k], color: CLS[k].color }))}
+          footer={<HitLines hits={t.hits} scope={scope} />} />
         <Donut title="User vs system" center={fmtN(o.byType.User.count + o.byType.System.count)} sub="queries"
           slices={(['User', 'System'] as const).map((k) => ({ key: k, label: k, value: o.byType[k].count, color: TYPE_COLOR[k] }))} />
         <div className="viz">
@@ -279,16 +286,54 @@ function OverviewSection({ hostId, range }: { hostId: string; range: { fromMs: n
       </div>
 
       <StackedBars title={`Queries per ${fmtBucket(o.bucketMs)}`} points={o.series} keys={CLS_KEYS} bucketMs={o.bucketMs} />
-      <LineChart title={`p95 latency per ${fmtBucket(o.bucketMs)}`} label="p95 latency" color={P95_COLOR} bucketMs={o.bucketMs}
-        points={o.series.map((s) => ({ t: s.t, v: s.p95 }))} />
+      <div className="mon-row two">
+        <LineChart title={`Hit rate per ${fmtBucket(o.bucketMs)} · ${scope}`} bucketMs={o.bucketMs} times={o.series.map((s) => s.t)}
+          max={1} fmt={fmtRate}
+          series={[
+            { key: 'agg', label: 'Aggregate hit rate', color: HIT_COLOR.agg, values: o.series.map((s) => hitRate(s.hits, false).rate) },
+            { key: 'cache', label: 'Incl. cache', color: HIT_COLOR.cache, values: o.series.map((s) => hitRate(s.hits, true).rate) },
+          ]}
+          note={(i) => {
+            const a = hitRate(o.series[i].hits, false)
+            const c = hitRate(o.series[i].hits, true)
+            return [`${fmtN(a.hits)} of ${fmtN(a.outOf)} agg · ${fmtN(c.hits)} of ${fmtN(c.outOf)} incl. cache`]
+          }} />
+        <LineChart title={`p95 latency per ${fmtBucket(o.bucketMs)}`} bucketMs={o.bucketMs} times={o.series.map((s) => s.t)}
+          series={[{ key: 'p95', label: 'p95 latency', color: P95_COLOR, values: o.series.map((s) => s.p95) }]} />
+      </div>
 
       <div className="mon-row two">
-        <MixBars title="Top models" rows={o.byModel} keys={CLS_KEYS} onPick={(m) => setMonitorFilters({ model: m })} />
-        <MixBars title="Top users" rows={o.byUser} keys={CLS_KEYS} onPick={(u) => setMonitorFilters({ user: u })} />
+        <MixBars title="Top models" rows={o.byModel} keys={CLS_KEYS} onPick={(m) => setMonitorFilters({ model: m })} extra={HIT_COL} />
+        <MixBars title="Top users" rows={o.byUser} keys={CLS_KEYS} onPick={(u) => setMonitorFilters({ user: u })} extra={HIT_COL} />
       </div>
       {!t.count && <NoMatch what="No queries" />}
     </div>
   )
+}
+
+/** Both hit rates with their counts - under the answered-by donut. */
+function HitLines({ hits, scope }: { hits: Hits; scope: string }) {
+  const a = hitRate(hits, false)
+  const c = hitRate(hits, true)
+  return (
+    <div className="hit-lines" title={`Over ${scope}`}>
+      <div><span className="viz-key" style={{ background: HIT_COLOR.agg }} /><span>Aggregate hit rate</span><b>{fmtRate(a.rate)}</b>
+        <span className="mono muted">{fmtN(a.hits)} agg hits of {fmtN(a.outOf)}</span></div>
+      <div><span className="viz-key" style={{ background: HIT_COLOR.cache }} /><span>Hit rate incl. cache</span><b>{fmtRate(c.rate)}</b>
+        <span className="mono muted">{fmtN(c.hits)} of {fmtN(c.outOf)}</span></div>
+    </div>
+  )
+}
+
+/** Hit-rate column for the Top models / users bars. */
+const HIT_COL = {
+  label: 'Hit',
+  value: (r: { hits: Hits }) => fmtRate(hitRate(r.hits, false).rate),
+  title: (r: { hits: Hits }) => {
+    const a = hitRate(r.hits, false)
+    const c = hitRate(r.hits, true)
+    return `${fmtRate(a.rate)} (${a.hits} of ${a.outOf}) · incl. cache ${fmtRate(c.rate)} (${c.hits} of ${c.outOf})`
+  },
 }
 
 const fmtBucket = (ms: number) => (ms >= 86400e3 ? 'day' : ms >= 3600e3 ? `${ms / 3600e3} h`.replace('1 h', 'hour') : `${ms / 60e3} min`)
@@ -377,12 +422,14 @@ function HotspotsSection({ hostId, range }: { hostId: string; range: { fromMs: n
           <div className="viz">
             <span className="eyebrow">Models leaning on the warehouse</span>
             <div className="table flat">
-              <div className="tr th grid-hm"><span>Model</span><span className="num">Queries</span><span className="num">No aggregate</span><span className="num">p95 no-agg</span><span className="num">p95 all</span></div>
+              <div className="tr th grid-hm"><span>Model</span><span className="num">Queries</span><span className="num">No aggregate</span><span className="num" title="agg ÷ (agg + no agg)">Hit rate</span><span className="num" title="(agg + cache) ÷ all">+ cache</span><span className="num">p95 no-agg</span></div>
               {h.warehouseModels.map((m) => (
                 <div key={m.name} className="tr grid-hm" onClick={() => { setMonitorFilters({ model: m.name }); setMonitorSection('history') }} title="Show its queries">
                   <span className="ellipsis">{m.name}</span><span className="num mono">{fmtN(m.count)}</span>
                   <span className="num mono" style={{ color: m.rawPct > 40 ? CLS.raw.color : undefined }}>{fmtN(m.raw)} · {m.rawPct.toFixed(0)}%</span>
-                  <span className="num mono">{fmtMs(m.rawP95)}</span><span className="num mono">{fmtMs(m.p95)}</span>
+                  <span className="num mono">{fmtRate(hitRate(m.hits, false).rate)}</span>
+                  <span className="num mono">{fmtRate(hitRate(m.hits, true).rate)}</span>
+                  <span className="num mono">{fmtMs(m.rawP95)}</span>
                 </div>
               ))}
               {!h.warehouseModels.length && <div className="empty">No queries</div>}

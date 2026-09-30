@@ -46,8 +46,18 @@ export interface QueryDetail extends MonitorQuery {
 }
 
 export interface Latency { avg: number | null; p50: number | null; p95: number | null; max: number | null }
-export interface Mix { count: number; cache: number; agg: number; raw: number; failed: number; p50: number | null; p95: number | null; avg: number | null }
-export interface SeriesPoint { t: number; cache: number; agg: number; raw: number; failed: number; p95: number | null }
+/** Successful queries of the hit-rate scope by class; rate = agg / (agg + raw). */
+export interface Hits { agg: number; cache: number; raw: number; rate: number | null }
+export interface Mix { count: number; cache: number; agg: number; raw: number; failed: number; p50: number | null; p95: number | null; avg: number | null; hits: Hits }
+
+/** Aggregate hit rate = agg / (agg + raw); withCache = (agg + cache) / (agg + cache + raw). */
+export function hitRate(h: Hits | undefined, withCache: boolean): { hits: number; outOf: number; rate: number | null } {
+  if (!h) return { hits: 0, outOf: 0, rate: null }
+  const hits = h.agg + (withCache ? h.cache : 0)
+  const outOf = h.agg + h.raw + (withCache ? h.cache : 0)
+  return { hits, outOf, rate: outOf ? hits / outOf : null }
+}
+export interface SeriesPoint { t: number; cache: number; agg: number; raw: number; failed: number; p95: number | null; hits: Hits }
 
 export interface Lists { models: string[]; users: string[] }
 
@@ -58,6 +68,8 @@ export interface Overview extends Lists {
   totals: Mix & Latency & { running: number; servedPct: number | null; users: number; models: number }
   byClass: Record<QueryClass, Latency>
   byType: Record<'User' | 'System', Mix>
+  /** Which queries hit rate is measured on. */
+  hitScope: 'User' | 'System'
   series: SeriesPoint[]
   byModel: (Mix & { name: string })[]
   byUser: (Mix & { name: string })[]
@@ -65,7 +77,7 @@ export interface Overview extends Lists {
 
 export interface Hotspots extends Lists {
   slowest: MonitorQuery[]
-  warehouseModels: { name: string; count: number; raw: number; rawPct: number; rawP95: number | null; p95: number | null }[]
+  warehouseModels: { name: string; count: number; raw: number; rawPct: number; rawP95: number | null; p95: number | null; hits: Hits }[]
   pairs: { attribute: string | null; measure: string | null; count: number; raw: number; avgMs: number }[]
   failures: { message: string; count: number; lastMs: number; models: string[] }[]
 }

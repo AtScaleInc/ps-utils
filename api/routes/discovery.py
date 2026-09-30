@@ -139,7 +139,8 @@ def _with_history(key: store.TableKey, found: tuple[dict, str, int]) -> dict[str
 @_guard
 def profile(host_id: str):
     """The newest stored profile (or ?id=<run>); runs one when the table has
-    none yet or on ?refresh=1."""
+    none yet or on ?refresh=1. ?cached=1 never runs one: 404 with
+    notProfiled when the table has none (the Build wizard checks first)."""
     key = _table_key(host_id, request.args)
     if request.args.get("id"):
         found = store.get_profile(key, profile_id=int(request.args["id"]))
@@ -149,6 +150,8 @@ def profile(host_id: str):
     refresh = _refresh()
     if not refresh and (found := store.get_profile(key)):
         return jsonify(_with_history(key, found))
+    if request.args.get("cached") in ("1", "true"):
+        return jsonify({"error": "Not profiled yet", "notProfiled": True}), 404
     with _lock_for((*key, "profile")):
         if not refresh and (found := store.get_profile(key)):
             return jsonify(_with_history(key, found))

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSchemas, fetchSourceList, fetchTableColumns, type SchemaEntry, type SourceSummary } from '../client'
 import { useModelStore } from '../modelStore'
+import { PickList } from './PickList'
 
 /** Tables listed per schema before "show more" - big warehouses (1,000+ tables)
  *  stay responsive; search reaches every table. */
@@ -112,25 +113,22 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
           {loadingSources ? 'loading…' : '↻ refresh'}
         </span>
       </div>
-      <select
-        className="source-select"
-        value={sourceId ?? ''}
-        onChange={(e) => {
-          const id = e.target.value || null
-          const src = sources.find((s) => s.id === id)
-          setSourceId(
-            id,
-            src ? { dialect: src.dialect, connectionId: src.connectionId, database: src.database } : null,
-          )
-        }}
-      >
-        <option value="">Select a data source…</option>
-        {sources.filter((s) => !s.error).map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label}
-          </option>
-        ))}
-      </select>
+      <div className="source-pick">
+        <PickList
+          options={sources.filter((s) => !s.error).map((s) => ({
+            value: s.id, label: s.database, group: s.connectionId, prefix: s.connectionId, hint: s.dialect ?? undefined,
+            keywords: `${s.label} ${s.connectionId}`,
+          }))}
+          value={sourceId}
+          onChange={(id) => {
+            const src = sources.find((s) => s.id === id)
+            setSourceId(id, src ? { dialect: src.dialect, connectionId: src.connectionId, database: src.database } : null)
+          }}
+          placeholder="Select a data source…"
+          searchPlaceholder="Search warehouses and databases"
+          loading={loadingSources && !sources.length ? 'Loading data sources…' : undefined}
+        />
+      </div>
       {failed.map((s) => (
         <div key={s.id} className="source-failed" title={s.error}>
           {s.label.replace(/ — unavailable$/, '')} couldn't be listed: {s.error}{' '}

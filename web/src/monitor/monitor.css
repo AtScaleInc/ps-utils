@@ -9,7 +9,7 @@
 .mon-row.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .mon-row.three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
 
-.kpis { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; }
 .kpi { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--hair); border-top: 3px solid var(--off); min-width: 0; }
 .kpi-v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
@@ -50,6 +50,7 @@
 
 .mix { display: flex; flex-direction: column; }
 .mix-row { display: grid; grid-template-columns: minmax(0, 1.2fr) 70px minmax(0, 1.6fr) 70px; gap: 12px; align-items: center; height: 32px; border-top: 1px solid var(--row-line); font-size: 12.5px; }
+.mix-row.x { grid-template-columns: minmax(0, 1.2fr) 64px minmax(0, 1.4fr) 64px 44px; }
 .mix-row.th { height: 24px; border-top: 0; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .mix-row.pick { cursor: pointer; }
 .mix-row.pick:hover { background: var(--hover); }
@@ -63,7 +64,7 @@
 .th-btn.num { text-align: right; }
 .th-btn:hover { color: var(--ink); }
 .grid-mq { grid-template-columns: 104px minmax(90px, 1.3fr) minmax(70px, 1fr) 124px 88px 64px 36px; gap: 12px; height: 40px; }
-.grid-hm { grid-template-columns: minmax(110px, 1.8fr) 56px 96px 76px 64px; gap: 10px; height: 36px; }
+.grid-hm { grid-template-columns: minmax(100px, 1.6fr) 52px 84px 48px 52px 68px; gap: 10px; height: 36px; }
 .grid-hp { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 56px 56px 64px; gap: 10px; height: 36px; }
 .grid-hf { grid-template-columns: minmax(0, 2.4fr) 60px minmax(0, 1fr) 110px; height: 36px; }
 .table.flat { border: 0; }
@@ -90,3 +91,7 @@
 .mon-active .chip b { color: var(--ink); font-weight: 600; }
 .mon-active .btn { margin-left: auto; }
 .mon-nomatch { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hit-lines { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--row-line); font-size: 12.5px; }
+.hit-lines > div { display: grid; grid-template-columns: 10px minmax(0, 1fr) 40px auto; align-items: center; gap: 8px; }
+.hit-lines b { font-size: 15px; font-variant-numeric: tabular-nums; text-align: right; }
+.hit-lines .mono { font-size: 10.5px; white-space: nowrap; }

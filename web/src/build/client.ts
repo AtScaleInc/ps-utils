@@ -471,6 +471,14 @@ export const discoveryApi = {
     request<TableProfile>(hostPath(`/discovery/profile?${tableQs(t, {
       refresh: opts.refresh ? '1' : undefined, id: opts.id != null ? String(opts.id) : undefined,
     })}`)),
+  /** The stored profile only - null when the table was never profiled (no scan). */
+  cachedProfile: (t: DiscoveryTableRef) =>
+    fetch(`${BASE}${hostPath(`/discovery/profile?${tableQs(t, { cached: '1' })}`)}`).then(async (res) => {
+      const body = await res.json().catch(() => ({}))
+      if (res.status === 404 && body?.notProfiled) return null
+      if (!res.ok) throw new Error(body?.error ?? `Profile lookup failed with ${res.status}`)
+      return body as TableProfile
+    }),
   topValues: (t: DiscoveryTableRef, column: string, refresh = false) =>
     request<{ column: string; values: { value: unknown; count: number }[]; fetchedAt: string }>(
       hostPath(`/discovery/top-values?${tableQs(t, { column, refresh: refresh ? '1' : undefined })}`)),

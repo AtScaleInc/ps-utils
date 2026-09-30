@@ -47,6 +47,23 @@ def test_pair_counts_ports_ps_utils_null_pairs():
     assert (None, None) not in {(p["attribute"], p["measure"]) for p in pair_counts([a, system])}
 
 
+def test_hit_rate_counts_successful_user_queries():
+    def rec(i, cls, **kw):
+        opt = {"agg": ["AGGS"], "cache": ["CACHE"], "raw": []}[cls]
+        return normalize({**ROW, "queryId": f"h{i}", "optimization": opt, "aggregates": ["d"] if cls == "agg" else [], **kw})
+    recs = ([rec(i, "agg") for i in range(79)] + [rec(100 + i, "raw") for i in range(28)] + [rec(200 + i, "cache") for i in range(5)]
+            + [rec(300, "raw", status="failed"), rec(301, "raw", status="running", duration=None),
+               rec(302, "raw", queryType="System")])
+    h = stats.hits(recs)
+    assert (h["agg"], h["raw"], h["cache"]) == (79, 28, 5)   # failed, running and system queries left out
+    assert round(h["rate"], 3) == round(79 / 107, 3)
+    assert stats.hits(recs, user_only=False)["raw"] == 29
+    assert stats.hits([])["rate"] is None
+    o = stats.overview(recs, ROW["startTime"] - 60_000, ROW["startTime"] + 60_000)
+    assert o["totals"]["hits"]["agg"] == 79 and o["hitScope"] == "User"
+    assert sum(s["hits"]["agg"] for s in o["series"]) == 79 and o["byModel"][0]["hits"]["raw"] == 28
+
+
 def test_overview_buckets_and_percentiles():
     base = 1_700_000_000_000
     recs = [normalize({**ROW, "queryId": f"q{i}", "startTime": base + i * 60_000, "duration": float(i + 1) * 100,

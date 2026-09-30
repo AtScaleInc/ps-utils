@@ -169,7 +169,7 @@ export function BuildView() {
       )}
       {showManage && <ManageModelModal onClose={() => setShowManage(false)} />}
       {showCalculations && <CalculationsModal onClose={() => setShowCalculations(false)} />}
-      {showWizard && <WizardModal onClose={() => setShowWizard(false)} onGenerate={handleGenerate} onDone={() => setBuildSection('model')} />}
+      {showWizard && host && <WizardModal hostId={host.id} onClose={() => setShowWizard(false)} onGenerate={handleGenerate} onDone={() => setBuildSection('model')} />}
       </div>
     </div>
   )

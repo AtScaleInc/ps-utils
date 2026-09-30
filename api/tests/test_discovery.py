@@ -57,11 +57,14 @@ def test_profile_is_stored_not_rerun(client, monkeypatch):
     api = CountingApi()
     monkeypatch.setattr(registry, "source_api", lambda h: api)
     url = f"/api/hosts/dev-east/discovery/profile?{Q}&table=dimgeography"
+    miss = client.get(url + "&cached=1")
+    assert miss.status_code == 404 and miss.get_json()["notProfiled"] and api.queries == []
     first = client.get(url).get_json()
     n = len(api.queries)
     assert n > 0
     again = client.get(url).get_json()
     assert len(api.queries) == n and again["id"] == first["id"]       # served from discovery.db
+    assert client.get(url + "&cached=1").get_json()["id"] == first["id"]
     fresh = client.get(url + "&refresh=1").get_json()
     assert len(api.queries) > n and fresh["id"] != first["id"]
     assert fresh["drift"]["rowDelta"] == 0 and fresh["drift"]["added"] == [] and len(fresh["history"]) == 2
