@@ -95,7 +95,8 @@ allowed) - the model name is substituted along with the ids, after one warning.
     the first time a query is opened, then kept. Pruned past
     `ENV_MANAGER_MONITOR_MAX_AGE_DAYS` (90). `stats.py` holds the report maths
     (pure). The attribute × measure candidates port ps-utils
-    `extract-query-stats-from-atscale`.
+    `extract-query-stats-from-atscale`. ps-utils bugs found here:
+    `docs/handoff-ps-utils-query-history.md`.
   - `jobs.py` keeps finished jobs 1 h, at most 500.
   - `atscale/preview.py` — cube preview (MDX/SQL), ported from PythonAtscaleUtility.
     Levels of one hierarchy are Hierarchize'd, never CrossJoined with themselves.
@@ -170,5 +171,5 @@ allowed) - the model name is substituted along with the ids, after one warning.
 - `cd web && npm run build`
 - Build's working copies: `workspace/models/<model>` (demo: `workspace/models-demo/`).
 - Test history: `workspace/tests.db` (demo: `tests-demo.db`); Settings → Cache & Database cleans it up.
-- Query history (Monitor): `workspace/monitor.db` (demo: `monitor-demo.db`); Settings → Cache & Database deletes by age / host.
+- Query history (Monitor): `workspace/monitor.db` (demo: `monitor-demo.db`); Settings → Cache & Database deletes by host, model and / or age (none = everything).
 - Discovery profiles: `workspace/discovery.db` (demo: `discovery-demo.db`); the same Settings page cleans it up (older than N days / beyond newest N per table).

@@ -133,10 +133,22 @@ def _cutoff_ms(days: int) -> int:
     return int((time.time() - days * 86400) * 1000)
 
 
-def delete_older(days: int, host_id: str | None = None, dry_run: bool = False) -> int:
-    where, args = "start_ms < ?", [_cutoff_ms(days)]
+def delete_queries(older_than_days: int | None = None, host_id: str | None = None, model: str | None = None,
+                   dry_run: bool = False) -> int:
+    """Stored queries matching every given rule: started more than N days ago,
+    on a host, of a model. No rule = everything. Deleting all of a host's rows
+    makes its next poll start over at the default window."""
+    clauses, args = [], []
+    if older_than_days is not None:
+        clauses.append("start_ms < ?")
+        args.append(_cutoff_ms(older_than_days))
     if host_id:
-        where, args = where + " AND host_id = ?", [*args, host_id]
+        clauses.append("host_id = ?")
+        args.append(host_id)
+    if model:
+        clauses.append("model_name = ?")
+        args.append(model)
+    where = " AND ".join(clauses) or "1 = 1"
     with _lock, _db() as con:
         if dry_run:
             return con.execute(f"SELECT COUNT(*) FROM queries WHERE {where}", args).fetchone()[0]
@@ -152,7 +164,7 @@ def delete_host(host_id: str) -> int:
 
 
 def prune(max_age_days: int | None = MAX_AGE_DAYS) -> int:
-    return delete_older(max_age_days) if max_age_days else 0
+    return delete_queries(max_age_days) if max_age_days else 0
 
 
 def compact() -> None:
@@ -256,7 +268,11 @@ def stats() -> dict[str, Any]:
     p = path()
     size = sum(f.stat().st_size for f in (p, p.with_name(p.name + "-wal")) if f.exists())
     with _db() as con:
-        hosts = [{"hostId": r[0], "queries": r[1], "oldestMs": r[2], "newestMs": r[3]} for r in con.execute(
+        hosts = [{"hostId": r[0], "queries": r[1], "oldestMs": r[2], "newestMs": r[3], "models": []} for r in con.execute(
             "SELECT host_id, COUNT(*), MIN(start_ms), MAX(start_ms) FROM queries GROUP BY host_id ORDER BY host_id")]
+        by_host = {h["hostId"]: h for h in hosts}
+        for r in con.execute("SELECT host_id, model_name, COUNT(*), MIN(start_ms), MAX(start_ms) FROM queries "
+                             "GROUP BY host_id, model_name ORDER BY host_id, COUNT(*) DESC"):
+            by_host[r[0]]["models"].append({"model": r[1] or "", "queries": r[2], "oldestMs": r[3], "newestMs": r[4]})
     return {"path": str(p), "bytes": size, "queries": sum(h["queries"] for h in hosts), "hosts": hosts,
             "maxAgeDays": MAX_AGE_DAYS}

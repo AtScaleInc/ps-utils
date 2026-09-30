@@ -89,4 +89,6 @@ rows, no total), hence the internal definition list above.
    engine `/engine/queries` or `/engine/v1/query` (not ported). ps-utils
    `extract-query-stats-from-atscale` calls `/engine/queries/orgId/{org}`,
    which current engine code no longer routes (`/engine/queries` only).
+   Handoff with that and the other extraction bugs:
+   `docs/handoff-ps-utils-query-history.md`.
 

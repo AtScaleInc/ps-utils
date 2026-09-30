@@ -85,4 +85,4 @@
 .chip.m { border-color: rgba(57, 135, 229, .5); }
 .agg-used { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
 .mon-text { margin: 0; padding: 10px; background: var(--modal); border: 1px solid var(--hair); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--ink-soft); max-height: 320px; overflow: auto; }
-.grid-mdb { grid-template-columns: minmax(0, 1.6fr) 100px 150px 150px; }
+.grid-mdb { grid-template-columns: minmax(0, 1.6fr) 100px 150px 150px 90px; }

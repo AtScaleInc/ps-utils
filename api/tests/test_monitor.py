@@ -147,6 +147,39 @@ def test_range_backfill_and_page_cap(client, monkeypatch):
     assert client.get("/api/hosts/qa-main/monitor/status").get_json()["lastPoll"]["truncated"]
 
 
+def test_cleanup_by_host_and_model(client):
+    _poll(client, "prod-east")
+    _poll(client, "qa-main")
+    info = client.get("/api/monitor/store").get_json()
+    east = next(h for h in info["hosts"] if h["hostId"] == "prod-east")
+    model = east["models"][0]
+    assert sum(m["queries"] for m in east["models"]) == east["queries"]
+    body = {"hostId": "prod-east", "model": model["model"]}
+    assert client.post("/api/monitor/cleanup", json={**body, "dryRun": True}).get_json()["count"] == model["queries"]
+    assert client.post("/api/monitor/cleanup", json=body).get_json()["count"] == model["queries"]
+    # everything for one host; the other host is untouched and the next poll starts at the default window
+    left = client.post("/api/monitor/cleanup", json={"hostId": "prod-east"}).get_json()["count"]
+    assert left == east["queries"] - model["queries"]
+    hosts = {h["hostId"] for h in client.get("/api/monitor/store").get_json()["hosts"]}
+    assert hosts == {"qa-main"}
+    r = _poll(client, "prod-east")
+    assert abs(time.time() * 1000 - r["fromMs"] - poller.DEFAULT_DAYS * 86400_000) < 60_000
+
+
+def test_daily_polls_grow_history_without_duplicates(client, monkeypatch):
+    """Day 1 pulls the default window; each later poll only adds what's new."""
+    real = time.time()
+    for day in range(4):
+        monkeypatch.setattr(time, "time", lambda d=day: real + d * 86400)
+        _poll(client, "prod-east")
+    with store._db() as con:
+        rows, distinct, lo, hi = con.execute("SELECT COUNT(*), COUNT(DISTINCT query_id), MIN(start_ms), MAX(start_ms) "
+                                             "FROM queries WHERE host_id = 'prod-east'").fetchone()
+    assert rows == distinct
+    days = (hi - lo) / 86400_000
+    assert poller.DEFAULT_DAYS + 3 - 0.2 < days <= poller.DEFAULT_DAYS + 3 + 0.01
+
+
 def test_cleanup_and_bad_range(client):
     _poll(client, "dev-east")
     assert client.post("/api/hosts/dev-east/monitor/poll", json={"fromMs": 10, "toMs": 5}).status_code == 400

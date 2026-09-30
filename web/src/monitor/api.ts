@@ -126,7 +126,7 @@ export const monitorApi = {
     req<{ query: QueryDetail; errors: Record<string, string> }>('GET', `${h(hostId)}/queries/${encodeURIComponent(queryId)}`),
   hotspots: (hostId: string, range: { fromMs: number; toMs: number }, f: MonitorFilters) =>
     req<Hotspots>('GET', `${h(hostId)}/hotspots?${qs(range, f)}`),
-  storeInfo: () => req<{ path: string; bytes: number; queries: number; maxAgeDays: number; hosts: { hostId: string; queries: number; oldestMs: number; newestMs: number }[] }>('GET', '/monitor/store'),
-  cleanup: (body: { olderThanDays: number; hostId?: string | null; dryRun?: boolean }) => req<{ count: number }>('POST', '/monitor/cleanup', body),
+  storeInfo: () => req<{ path: string; bytes: number; queries: number; maxAgeDays: number; hosts: { hostId: string; queries: number; oldestMs: number; newestMs: number; models: { model: string; queries: number; oldestMs: number; newestMs: number }[] }[] }>('GET', '/monitor/store'),
+  cleanup: (body: { olderThanDays?: number | null; hostId?: string | null; model?: string | null; dryRun?: boolean }) => req<{ count: number }>('POST', '/monitor/cleanup', body),
   compact: () => req<{ freedBytes: number }>('POST', '/monitor/compact'),
 }

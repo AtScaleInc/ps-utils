@@ -10,7 +10,8 @@
   GET  /hosts/<id>/monitor/hotspots            ?fromMs&toMs&model&user&queryType -> slowest, models,
                                                aggregate candidates, failures
   GET  /monitor/store                          where it's kept, rows per host, retention
-  POST /monitor/cleanup                        {olderThanDays, hostId?, dryRun?} -> rows deleted
+  POST /monitor/cleanup                        {olderThanDays?, hostId?, model?, dryRun?} -> rows deleted
+                                               (every given rule must match; none = everything)
   POST /monitor/compact                        VACUUM
 
 Source: GET /wapi/p/queries (PythonAtscaleUtility queries/query_history_container.py),
@@ -167,13 +168,15 @@ def store_info():
 @monitor_bp.post("/monitor/cleanup")
 def cleanup():
     body = request.get_json(force=True, silent=True) or {}
-    try:
-        days = int(body.get("olderThanDays"))
-    except (TypeError, ValueError):
-        return jsonify({"error": "olderThanDays is required"}), 400
-    if days < 0:
-        return jsonify({"error": "olderThanDays must be 0 or more"}), 400
-    n = store.delete_older(days, body.get("hostId") or None, dry_run=bool(body.get("dryRun")))
+    days = body.get("olderThanDays")
+    if days is not None:
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            return jsonify({"error": "olderThanDays must be a number"}), 400
+        if days < 0:
+            return jsonify({"error": "olderThanDays must be 0 or more"}), 400
+    n = store.delete_queries(days, body.get("hostId") or None, body.get("model") or None, dry_run=bool(body.get("dryRun")))
     return jsonify({"count": n})
 
 
