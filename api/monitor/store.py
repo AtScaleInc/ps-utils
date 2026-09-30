@@ -194,6 +194,11 @@ def _row(r: sqlite3.Row, detail: bool = False) -> dict[str, Any]:
     return out
 
 
+# What the reports call a query without a model / user (system queries often have none);
+# as a model or user filter it matches exactly those.
+NONE = "(none)"
+
+
 def _filters(host_id: str, f: dict[str, Any]) -> tuple[str, list[Any]]:
     """f: fromMs, toMs, model, user, queryType, cls, status, q (query id / user / model contains)."""
     where, args = ["host_id = ?"], [host_id]
@@ -205,7 +210,9 @@ def _filters(host_id: str, f: dict[str, Any]) -> tuple[str, list[Any]]:
         args.append(int(f["toMs"]))
     for key, col in (("model", "model_name"), ("user", "user_name"), ("queryType", "query_type"),
                      ("cls", "cls"), ("status", "status")):
-        if f.get(key):
+        if f.get(key) == NONE and key in ("model", "user"):
+            where.append(f"({col} IS NULL OR {col} = '')")
+        elif f.get(key):
             where.append(f"{col} = ?")
             args.append(f[key])
     if f.get("q"):

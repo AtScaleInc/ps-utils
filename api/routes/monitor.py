@@ -70,8 +70,12 @@ def _filters() -> dict[str, Any]:
 def _lists(host_id: str, f: dict[str, Any]) -> dict[str, list[str]]:
     """Models and users seen in the window - the filter dropdowns."""
     rows = store.select(host_id, {"fromMs": f["fromMs"], "toMs": f["toMs"]})
-    return {"models": sorted({r["modelName"] for r in rows if r["modelName"]}),
-            "users": sorted({r["user"] for r in rows if r["user"]})}
+
+    def names(key: str) -> list[str]:
+        # "(none)" last, and only when some query really has no model / user
+        return sorted({r[key] for r in rows if r[key]}) + ([store.NONE] if any(not r[key] for r in rows) else [])
+
+    return {"models": names("modelName"), "users": names("user")}
 
 
 @monitor_bp.get("/hosts/<host_id>/monitor/status")

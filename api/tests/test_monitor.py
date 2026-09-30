@@ -137,6 +137,19 @@ def test_running_query_is_updated_not_duplicated():
     assert total == 1 and rows[0]["status"] == "successful" and rows[0]["durationMs"] == 812.0
 
 
+def test_none_filter_matches_queries_without_a_model(client):
+    now = int(time.time() * 1000)
+    rec = normalize({**ROW, "queryId": "nomodel", "startTime": now - 60_000, "modelName": "", "user": "", "userId": ""})
+    store.upsert("prod-east", [rec])
+    rng = f"fromMs={now - 3600_000}&toMs={now}"
+    o = client.get(f"/api/hosts/prod-east/monitor/overview?{rng}").get_json()
+    assert "(none)" in o["models"] and "(none)" in o["users"]
+    assert "(none)" in {m["name"] for m in o["byModel"]}
+    for key in ("model", "user"):
+        page = client.get(f"/api/hosts/prod-east/monitor/queries?{rng}&{key}=(none)").get_json()
+        assert [q["queryId"] for q in page["queries"]] == ["nomodel"]
+
+
 def test_range_backfill_and_page_cap(client, monkeypatch):
     now = int(time.time() * 1000)
     r = _poll(client, "qa-main", {"fromMs": now - 5 * 86400_000, "toMs": now - 4 * 86400_000})

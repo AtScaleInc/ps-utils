@@ -144,24 +144,56 @@ export function MonitorView() {
         </div>
         <select className="select mon-sel" value={f.model} onChange={(e) => setMonitorFilters({ model: e.target.value })}>
           <option value="">All models</option>
-          {(lists.data?.models ?? []).map((m) => <option key={m} value={m}>{m}</option>)}
-          {f.model && !(lists.data?.models ?? []).includes(f.model) && <option value={f.model}>{f.model}</option>}
+          {(lists.data?.models ?? []).map((m) => <option key={m} value={m}>{m === NONE ? '(no model)' : m}</option>)}
+          {f.model && !(lists.data?.models ?? []).includes(f.model) && <option value={f.model}>{filterLabel(f.model)}</option>}
         </select>
         <select className="select mon-sel" value={f.user} onChange={(e) => setMonitorFilters({ user: e.target.value })}>
           <option value="">All users</option>
-          {(lists.data?.users ?? []).map((u) => <option key={u} value={u}>{u}</option>)}
-          {f.user && !(lists.data?.users ?? []).includes(f.user) && <option value={f.user}>{f.user}</option>}
+          {(lists.data?.users ?? []).map((u) => <option key={u} value={u}>{u === NONE ? '(no user)' : u}</option>)}
+          {f.user && !(lists.data?.users ?? []).includes(f.user) && <option value={f.user}>{filterLabel(f.user)}</option>}
         </select>
-        {(f.model || f.user || f.queryType) && <button type="button" className="linkbtn" onClick={() => setMonitorFilters({ model: '', user: '', queryType: '' })}>Clear</button>}
       </div>
 
       {st?.lastPoll?.error && <div className="notice err"><span className="eyebrow" style={{ color: 'var(--danger)' }}>Last poll failed</span>{st.lastPoll.error}</div>}
 
+      <ActiveFilters />
       <div className="mon-scroll">
         {monitorSection === 'overview' && <OverviewSection hostId={host.id} range={range} />}
         {monitorSection === 'history' && <HistorySection hostId={host.id} range={range} />}
         {monitorSection === 'hotspots' && <HotspotsSection hostId={host.id} range={range} />}
       </div>
+    </div>
+  )
+}
+
+const NONE = '(none)'
+const filterLabel = (v: string) => (v === NONE ? '(no model / user)' : v)
+
+/** Model / user / type filters apply to every Monitor section - say so, with one way out. */
+function ActiveFilters() {
+  const { monitorFilters: f, setMonitorFilters } = useUi()
+  const on = ([['Model', f.model === NONE ? 'no model' : f.model], ['User', f.user === NONE ? 'no user' : f.user], ['Type', f.queryType]] as const)
+    .filter(([, v]) => v)
+  if (!on.length) return null
+  return (
+    <div className="mon-active">
+      <span className="label">Filtered by</span>
+      {on.map(([k, v]) => <span key={k} className="chip">{k}: <b>{v}</b></span>)}
+      <span className="hint">applies to Overview, History and Hotspots</span>
+      <button type="button" className="btn xs info" onClick={() => setMonitorFilters({ model: '', user: '', queryType: '' })}>Clear filters</button>
+    </div>
+  )
+}
+
+/** Empty result: filters (tab-wide or this list's own) are the usual reason, the stored range the other. */
+function NoMatch({ what, local, onClearLocal }: { what: string; local?: boolean; onClearLocal?: () => void }) {
+  const { monitorFilters: f, setMonitorFilters } = useUi()
+  const filtered = !!(f.model || f.user || f.queryType)
+  return (
+    <div className="empty mon-nomatch">
+      <span>{what}{filtered || local ? ' with these filters' : ' stored for this range - Poll now, or Pull this range to backfill it'}.</span>
+      {local && onClearLocal && <button type="button" className="btn xs" onClick={onClearLocal}>Clear list filters</button>}
+      {filtered && <button type="button" className="btn xs info" onClick={() => setMonitorFilters({ model: '', user: '', queryType: '' })}>Clear filters</button>}
     </div>
   )
 }
@@ -251,10 +283,10 @@ function OverviewSection({ hostId, range }: { hostId: string; range: { fromMs: n
         points={o.series.map((s) => ({ t: s.t, v: s.p95 }))} />
 
       <div className="mon-row two">
-        <MixBars title="Top models" rows={o.byModel} keys={CLS_KEYS} onPick={(m) => m !== '(none)' && setMonitorFilters({ model: m })} />
-        <MixBars title="Top users" rows={o.byUser} keys={CLS_KEYS} onPick={(u) => u !== '(none)' && setMonitorFilters({ user: u })} />
+        <MixBars title="Top models" rows={o.byModel} keys={CLS_KEYS} onPick={(m) => setMonitorFilters({ model: m })} />
+        <MixBars title="Top users" rows={o.byUser} keys={CLS_KEYS} onPick={(u) => setMonitorFilters({ user: u })} />
       </div>
-      {!t.count && <div className="empty">No queries stored for this range - Poll now, or Pull this range to backfill it.</div>}
+      {!t.count && <NoMatch what="No queries" />}
     </div>
   )
 }
@@ -320,7 +352,8 @@ function HistorySection({ hostId, range }: { hostId: string; range: { fromMs: nu
               <span className="num mono">{r.subqueries}</span>
             </div>
           ))}
-          {!rows.length && <div className="empty">{list.isLoading ? 'Loading…' : list.isError ? errMsg(list.error) : 'No queries match'}</div>}
+          {!rows.length && (list.isLoading ? <div className="empty">Loading…</div> : list.isError ? <div className="empty">{errMsg(list.error)}</div>
+            : <NoMatch what="No queries match" local={!!(cls || status || q)} onClearLocal={() => { setCls(''); setStatus(''); setSearch('') }} />)}
         </div>
       </div>
       {open && <QueryDrawer hostId={hostId} queryId={open} onClose={() => setOpen(null)} />}

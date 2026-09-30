@@ -10,6 +10,7 @@ from collections import Counter, defaultdict
 from typing import Any
 
 from monitor.queries import CLASSES, pair_counts
+from monitor.store import NONE
 
 _MIN = 60 * 1000
 # (max window span, bucket size): about 24-100 buckets whatever the window.
@@ -76,7 +77,7 @@ def overview(records: list[dict[str, Any]], from_ms: int, to_ms: int, tz_offset_
     def top(key: str) -> list[dict[str, Any]]:
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for r in records:
-            groups[r[key] or "(none)"].append(r)
+            groups[r[key] or NONE].append(r)
         rows = [{"name": name, **_mix(rs)} for name, rs in groups.items()]
         return sorted(rows, key=lambda x: -x["count"])[:10]
 
@@ -104,7 +105,7 @@ def hotspots(records: list[dict[str, Any]], limit: int = 20) -> dict[str, Any]:
     slowest = sorted(done, key=lambda r: -r["durationMs"])[:limit]
     models: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in records:
-        models[r["modelName"] or "(none)"].append(r)
+        models[r["modelName"] or NONE].append(r)
     model_rows = []
     for name, rs in models.items():
         raw = [r for r in rs if r["cls"] == "raw"]
