@@ -32,6 +32,10 @@ describe("buildExtractionSql", () => {
     expect(flat).toContain("AS raw_executions");
   });
 
+  it("excludes REFRESH CUBE commands, which also send no subquery", () => {
+    expect(flat).toContain("q.query_text NOT ILIKE 'REFRESH CUBE%'");
+  });
+
   it("escapes quotes and applies the filters", () => {
     expect(flat).toContain("p.cube_name = 'O''Brien Cube'");
     expect(flat).toContain("INTERVAL '30 days'");

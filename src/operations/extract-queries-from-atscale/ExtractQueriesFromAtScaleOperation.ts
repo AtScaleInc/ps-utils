@@ -237,6 +237,9 @@ per_query AS (
     AND    LENGTH(q.query_text) > 1
     AND    q.query_text NOT LIKE '/* Virtual query to get the members of a level */%'
     AND    q.query_text NOT LIKE '-- statement does not return rows%'
+    -- XMLA commands, not queries: they send no subquery (so the LEFT JOIN
+    -- keeps them) and replaying one would refresh the cube mid-run.
+    AND    q.query_text NOT ILIKE 'REFRESH CUBE%'
 )
 SELECT
     service,
