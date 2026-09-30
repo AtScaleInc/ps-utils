@@ -35,7 +35,7 @@ from flask import Blueprint, jsonify, request
 import cache
 import jobs
 from atscale.git_ops import ensure_github_repo, push_sml_to_repo, slugify_repo_name
-from atscale.preview import list_catalogs_and_cubes, load_cube_metadata, run_freehand_query, run_preview_query
+from atscale.preview import MAX_ROWS, list_catalogs_and_cubes, load_cube_metadata, run_freehand_query, run_preview_query
 from envs import registry
 from routes.objects import host_errors
 from smlgen.build import ValidationError, build_sml
@@ -493,6 +493,15 @@ def preview_metadata(host_id: str):
     return jsonify({"dimensions": result["dimensions"], "measures": result["measures"]})
 
 
+def _capped(result: dict) -> dict:
+    """At most preview.MAX_ROWS rows (the query asked for one more to tell if
+    there were more); freehand MDX can't be rewritten safely, so it is only trimmed here."""
+    if len(result["rows"]) > MAX_ROWS:
+        result["rows"], result["truncated"] = result["rows"][:MAX_ROWS], True
+    result["maxRows"] = MAX_ROWS
+    return result
+
+
 @build_bp.post("/hosts/<host_id>/preview/query")
 @host_errors
 def preview_query(host_id: str):
@@ -514,9 +523,7 @@ def preview_query(host_id: str):
         raise
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e)}), 502
-    if len(result["rows"]) > 1000:
-        result["rows"], result["truncated"] = result["rows"][:1000], True
-    return jsonify(result)
+    return jsonify(_capped(result))
 
 
 @build_bp.post("/hosts/<host_id>/preview/freehand")
@@ -537,9 +544,7 @@ def preview_freehand(host_id: str):
         raise
     except Exception as e:  # noqa: BLE001 - the engine's message is what the user needs
         return jsonify({"error": str(e)}), 502
-    if len(result["rows"]) > 1000:
-        result["rows"], result["truncated"] = result["rows"][:1000], True
-    return jsonify(result)
+    return jsonify(_capped(result))
 
 
 # -- deploy to one or more hosts --------------------------------------------------------------

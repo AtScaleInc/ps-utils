@@ -1265,3 +1265,5 @@
   .wizard-skipped div { padding: 1px 0 1px 14px; }
 }
 .wiz { .source-pick { margin-bottom: 6px; } }
+.wiz { .preview-limit { padding: 8px 12px; margin-bottom: 8px; font-size: 12px; color: var(--as-flag-l1);
+  border: 1px solid var(--as-hairline); border-left: 3px solid var(--as-flag-l1); } }

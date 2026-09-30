@@ -13,6 +13,7 @@ or Basic-auth XMLA login.
 
 from __future__ import annotations
 
+import os
 import re
 import xml.etree.ElementTree as ET
 from typing import Any
@@ -360,6 +361,11 @@ def parse_sql_result(xml_text: str) -> dict[str, Any]:
 
 # -- MDX/SQL builders (ported from cubes_core_functions.py / cube_data_sql.py) ---
 
+#: Build > Preview returns at most this many rows. The limit is part of the
+#: query (MDX HEAD / SQL LIMIT, one extra row to tell "exactly N" from "more"),
+#: so a drag-and-drop preview never pulls a whole dataset off the engine.
+MAX_ROWS = int(os.environ.get("ENV_MANAGER_PREVIEW_MAX_ROWS", "1000"))
+
 
 def get_hierarchy_levels(hierarchy_unique_name: str, levels: list[dict[str, Any]]) -> list[dict[str, Any]]:
     matches = [lv for lv in levels if lv.get("HIERARCHY_UNIQUE_NAME") == hierarchy_unique_name]
@@ -375,7 +381,8 @@ def _hierarchy_of(unique_name: str, levels: list[dict[str, Any]]) -> tuple[str, 
     return unique_name, None
 
 
-def build_initial_mdx(hierarchy_unique_names: list[str], measure_unique_names: list[str], cube: str, levels: list[dict[str, Any]]) -> str:
+def build_initial_mdx(hierarchy_unique_names: list[str], measure_unique_names: list[str], cube: str,
+                      levels: list[dict[str, Any]], limit: int | None = None) -> str:
     """Rows = the selections grouped by hierarchy. A picked hierarchy shows its
     first non-(All) level (the reference tool's build_initial_mdx); picked
     levels show `<level>.MEMBERS`, the per-level form ps-utils
@@ -384,7 +391,11 @@ def build_initial_mdx(hierarchy_unique_names: list[str], measure_unique_names: l
     Several levels of the *same* hierarchy become one Hierarchize({...}) set -
     CrossJoin of a hierarchy with itself is invalid MDX ("CrossJoin may not
     cross the same hierarchy with itself", confirmed on a container host).
-    Different hierarchies are CrossJoined in selection order."""
+    Different hierarchies are CrossJoined in selection order.
+
+    `limit`: the row set becomes HEAD(NONEMPTY(set, measures), limit) - empty
+    tuples are dropped before HEAD counts, so a sparse CrossJoin still fills
+    the limit (both functions are in engine-develop's MDX test suites)."""
     measures_set = ", ".join(measure_unique_names)
 
     groups: dict[str, list[str]] = {}
@@ -412,6 +423,8 @@ def build_initial_mdx(hierarchy_unique_names: list[str], measure_unique_names: l
     rows_set = sets[0]
     for item in sets[1:]:
         rows_set = f"CrossJoin({rows_set}, {item})"
+    if limit:
+        rows_set = f"HEAD(NONEMPTY({rows_set}, {{ {measures_set} }}), {int(limit)})"
 
     return f"""SELECT
     {{ {measures_set} }} ON COLUMNS,
@@ -429,14 +442,31 @@ def extract_sql_column_name(unique_name: str) -> str:
     return unique_name
 
 
-def build_sql_query(hierarchy_unique_names: list[str], measure_unique_names: list[str], cube: str) -> str:
+def build_sql_query(hierarchy_unique_names: list[str], measure_unique_names: list[str], cube: str,
+                    limit: int | None = None) -> str:
     dim_clauses = [f"`{cube}`.`{extract_sql_column_name(h)}` AS `{extract_sql_column_name(h)}`" for h in hierarchy_unique_names]
     measure_clauses = [f"`{extract_sql_column_name(m)}`" for m in measure_unique_names]
     select_clause = ", ".join(dim_clauses + measure_clauses)
     group_by_clause = ", ".join(str(i + 1) for i in range(len(dim_clauses)))
-    return f"""SELECT {select_clause}
+    sql = f"""SELECT {select_clause}
 FROM `{cube}` `{cube}`
 GROUP BY {group_by_clause}"""
+    return f"{sql}\nLIMIT {int(limit)}" if limit else sql
+
+
+_SQL_LIMIT = re.compile(r"\bLIMIT\s+(\d+)(\s+OFFSET\s+\d+)?\s*$", re.I)
+
+
+def limit_sql(query: str, limit: int) -> str:
+    """A typed SQL query with at most `limit` rows: a trailing LIMIT above it
+    is lowered, none gets one appended."""
+    q = query.strip().rstrip(";").rstrip()
+    m = _SQL_LIMIT.search(q)
+    if not m:
+        return f"{q}\nLIMIT {int(limit)}"
+    if int(m.group(1)) <= limit:
+        return q
+    return f"{q[:m.start(1)]}{int(limit)}{q[m.end(1):]}"
 
 
 # -- Orchestration used by routes/preview.py --------------------------------------
@@ -614,6 +644,7 @@ def run_freehand_query(client: AtScaleClient, catalog: str, cube: str, dialect: 
     from testing.results import mdx_rows
 
     if dialect == "sql":
+        query = limit_sql(query, MAX_ROWS + 1)
         result = parse_sql_result(client.submit_query(sql_payload(query, catalog, use_agg, use_cache)))
         result["query"] = query
         return result
@@ -650,14 +681,14 @@ def run_preview_query(
             hlevels = get_hierarchy_levels(name, levels)
             return hlevels[0]["LEVEL_UNIQUE_NAME"] if hlevels else name
 
-        sql = build_sql_query([as_level(h) for h in hierarchies], measures, cube)
+        sql = build_sql_query([as_level(h) for h in hierarchies], measures, cube, limit=MAX_ROWS + 1)
         payload = sql_payload(sql, catalog, use_agg, use_cache)
         response_xml = client.submit_query(payload)
         result = parse_sql_result(response_xml)
         result["query"] = sql
         return result
 
-    mdx = build_initial_mdx(hierarchies, measures, cube, levels)
+    mdx = build_initial_mdx(hierarchies, measures, cube, levels, limit=MAX_ROWS + 1)
     xmla_request = build_xmla_request(mdx, catalog, cube, use_agg, use_cache)
     response_xml = client.run_xmla(xmla_request)
     result = parse_xmla_result(response_xml)

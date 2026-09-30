@@ -136,7 +136,7 @@ def test_preview_freehand_mdx_sql_and_fault(client, monkeypatch):
             return self.body
 
         def submit_query(self, payload, timeout=None):
-            assert payload["query"] == 'SELECT "a" FROM "c"' and payload["context"]["project"]["name"] == "cat"
+            assert payload["query"] == 'SELECT "a" FROM "c"\nLIMIT 1001' and payload["context"]["project"]["name"] == "cat"
             return SQL_OK
 
     url = "/api/hosts/dev-east/preview/freehand"
@@ -151,7 +151,7 @@ def test_preview_freehand_mdx_sql_and_fault(client, monkeypatch):
     r = client.post(url, json=body)
     assert r.status_code == 502 and r.get_json()["error"] == "Level not found"
     r = client.post(url, json={**body, "dialect": "sql", "query": 'SELECT "a" FROM "c"'}).get_json()
-    assert r["columns"] == ["a"] and r["rows"] == [["x"], ["y"]]
+    assert r["columns"] == ["a"] and r["rows"] == [["x"], ["y"]] and not r.get("truncated") and r["maxRows"] == 1000
     assert client.post(url, json={**body, "query": "  "}).status_code == 400
 
 

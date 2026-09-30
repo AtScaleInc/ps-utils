@@ -143,7 +143,7 @@ export function PreviewTab() {
         measures: measures.map((m) => m.uniqueName),
       })
       setResult(res)
-      appendLog(`Query executed successfully (${res.rows.length} rows)${res.truncated ? ' - truncated to 1000' : ''}.`)
+      appendLog(`Query executed successfully (${res.rows.length} rows)${res.truncated ? ` - more exist, preview is limited to ${res.maxRows ?? 1000}` : ''}.`)
     } catch (e) {
       appendLog(`Query execution error: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -200,7 +200,7 @@ export function PreviewTab() {
       appendLog(`Executing freehand ${dialect.toUpperCase()} query…`)
       const res = await runFreehandQuery({ catalog, cube: cubeName, dialect, query })
       setResult(res)
-      appendLog(`Query executed successfully (${res.rows.length} rows)${res.truncated ? ' - truncated to 1000' : ''}.`)
+      appendLog(`Query executed successfully (${res.rows.length} rows)${res.truncated ? ` - more exist, preview is limited to ${res.maxRows ?? 1000}` : ''}.`)
     } catch (e) {
       appendLog(`Query execution error: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -381,6 +381,11 @@ export function PreviewTab() {
             </details>
           )}
           <div className="preview-results" style={{ flex: 1, overflow: 'auto' }}>
+            {result?.truncated && (
+              <div className="preview-limit">
+                Showing the first {(result.maxRows ?? result.rows.length).toLocaleString()} rows - the preview is capped. Filter or pick fewer / coarser levels to see the rest.
+              </div>
+            )}
             {result && result.rows.length > 0 && (
               <table className="preview-table">
                 <thead>

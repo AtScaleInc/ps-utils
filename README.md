@@ -105,6 +105,10 @@ Settings. There's no separate login.
     SQL column name. **Use last query** copies the last built query,
     **Template** starts an empty one, and Cmd/Ctrl+Enter runs it. MDX and SQL
     keep separate drafts.
+  - Either mode returns at most 1,000 rows (`ENV_MANAGER_PREVIEW_MAX_ROWS`),
+    with a notice when more exist. Built queries and typed SQL carry the limit
+    themselves (`HEAD` / `LIMIT`), so a preview never pulls a whole dataset;
+    typed MDX runs as written and is trimmed afterwards.
 
 Build is a quick-start modeler, not a replacement for AtScale's own. Multi-table
 dimension hierarchies and multi-hierarchy dimensions only partly import.
@@ -436,6 +440,7 @@ The API tests cover:
 | `workspace/models/<model>/` | Build's working copy of each model's SML, also the Git checkout it pushes from (demo: `models-demo/`) | no |
 | `workspace/tests.db` | Test runs, model snapshots and result rows, in SQLite (demo: `tests-demo.db`) | no |
 | `workspace/discovery.db` | Build › Discovery profiles (with history), sample rows, top values and join checks, in SQLite (demo: `discovery-demo.db`) | no |
+| `workspace/monitor.db` | Monitor query history, in SQLite (demo: `monitor-demo.db`) | no |
 | `workspace/tests-imported/` | Test runs from the earlier JSON layout, left after their one-time import into `tests.db`. Safe to delete. | no |
 | `.logs/` | API and web logs from `start.sh` | no |
 
@@ -460,6 +465,11 @@ Environment variables:
 | `ENV_MANAGER_TEST_MAX_ACTIVE` | `3` | Test runs that can execute at once; more are refused until one finishes |
 | `ENV_MANAGER_DISCOVERY_DB` | `workspace/discovery.db` | Location of the Discovery database |
 | `ENV_MANAGER_DISCOVERY_KEEP` | `20` | Profile runs kept per table; older ones are pruned after each profile |
+| `ENV_MANAGER_MONITOR_DB` | `workspace/monitor.db` | Location of the Monitor query-history database |
+| `ENV_MANAGER_MONITOR_DEFAULT_DAYS` | `2` | How many days back the first poll of a new host reaches |
+| `ENV_MANAGER_MONITOR_MAX_PAGES` | `200` | Pages (100 queries each) one poll reads before stopping; the poll is then marked truncated |
+| `ENV_MANAGER_MONITOR_MAX_AGE_DAYS` | `90` | Stored queries older than this are pruned |
+| `ENV_MANAGER_PREVIEW_MAX_ROWS` | `1000` | Most rows a Build › Preview query returns. The limit is part of the query (MDX `HEAD`, SQL `LIMIT`); typed MDX is only trimmed after it runs |
 
 ### Caching and storage
 

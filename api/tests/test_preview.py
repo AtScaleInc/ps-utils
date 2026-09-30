@@ -11,6 +11,7 @@ from atscale.preview import (
     _is_system_property,
     build_initial_mdx,
     build_sql_query,
+    limit_sql,
     extract_sql_column_name,
     parse_catalogs,
     parse_cubes,
@@ -278,3 +279,18 @@ def test_build_initial_mdx_same_hierarchy_then_crossjoin_other():
 def test_build_initial_mdx_hierarchy_skips_all_level():
     mdx = build_initial_mdx(["[Order Date].[Calendar]"], ["[Measures].[m]"], "c", DATE_LEVELS)
     assert "[Order Date].[Calendar].[Year].Members" in mdx and "(All)" not in mdx
+
+
+def test_preview_queries_carry_the_row_limit():
+    sql = build_sql_query(["[D].[H].[Name]"], ["[Measures].[m]"], "c", limit=1001)
+    assert sql.rstrip().endswith("LIMIT 1001")
+    levels = [{"HIERARCHY_UNIQUE_NAME": "[D].[H]", "LEVEL_UNIQUE_NAME": "[D].[H].[Name]", "LEVEL_NUMBER": "1"}]
+    mdx = build_initial_mdx(["[D].[H]"], ["[Measures].[m]"], "c", levels, limit=1001)
+    assert "HEAD(NONEMPTY({ [D].[H].[Name].Members }, { [Measures].[m] }), 1001)" in mdx
+    assert "HEAD(" not in build_initial_mdx(["[D].[H]"], ["[Measures].[m]"], "c", levels)
+
+
+def test_limit_sql_for_typed_queries():
+    assert limit_sql("select a from c;", 1001) == "select a from c\nLIMIT 1001"
+    assert limit_sql("select a from c limit 50", 1001) == "select a from c limit 50"
+    assert limit_sql("select a from c LIMIT 999999 OFFSET 10", 1001) == "select a from c LIMIT 1001 OFFSET 10"

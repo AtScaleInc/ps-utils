@@ -339,7 +339,9 @@ export interface PreviewQueryResult {
   columns: string[]
   rows: (string | null)[][]
   query: string
+  /** More rows existed than the preview returns (maxRows). */
   truncated?: boolean
+  maxRows?: number
 }
 
 export function runPreviewQuery(payload: PreviewQueryPayload) {
