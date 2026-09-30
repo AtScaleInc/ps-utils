@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  dmvStringLiteral,
   fetchAllQueryHistory,
   monthlyWindowsUtc,
   queryReceivedAt,
+  reservoirOffer,
   resolveQueryStatsConnection,
   queryHistoryBaseUrl,
   queryHistoryPageUrl,
@@ -118,5 +120,38 @@ describe("resolveQueryStatsConnection", () => {
   it("requires a catalog name", () => {
     expect(() => resolveQueryStatsConnection({ connections: { c: { atscale: { url: "https://h" } } } }, "c", undefined))
       .toThrow(/--catalog/);
+  });
+});
+
+describe("dmvStringLiteral", () => {
+  it("doubles single quotes and XML-escapes the result", () => {
+    expect(dmvStringLiteral("O'Brien & <Co>")).toBe("'O''Brien &amp; &lt;Co&gt;'");
+  });
+});
+
+describe("reservoirOffer (Algorithm R)", () => {
+  it("fills to capacity, then replaces slot j only when j < capacity", () => {
+    const sample: number[] = [];
+    for (let i = 0; i < 3; i++) reservoirOffer(sample, i, i, 3);
+    expect(sample).toEqual([0, 1, 2]);
+    // seen = 3: j = floor(r * 4); r = 0.9 -> j = 3 (>= capacity) -> kept out
+    reservoirOffer(sample, 3, 3, 3, () => 0.9);
+    expect(sample).toEqual([0, 1, 2]);
+    // r = 0.3 -> j = 1 -> replaces slot 1
+    reservoirOffer(sample, 4, 4, 3, () => 0.3);
+    expect(sample).toEqual([0, 4, 2]);
+  });
+
+  it("keeps every item with roughly equal probability", () => {
+    const hits = new Array(10).fill(0);
+    let seed = 1;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let t = 0; t < 20000; t++) {
+      const sample: number[] = [];
+      for (let i = 0; i < 10; i++) reservoirOffer(sample, i, i, 3, rand);
+      for (const x of sample) hits[x]++;
+    }
+    // Expected 20000 * 3/10 = 6000 each.
+    for (const h of hits) expect(Math.abs(h - 6000)).toBeLessThan(400);
   });
 });

@@ -126,6 +126,47 @@ function parsePairKey(key: PairKey): [string | null, string | null] {
 }
 
 // ---------------------------------------------------------------------------
+// Escaping and sampling helpers
+// ---------------------------------------------------------------------------
+
+/** Escape text for an XML element body (the SOAP envelope carries it raw). */
+export function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * A DMV string literal for a name, ready to embed in the SOAP <Statement>:
+ * single quotes doubled for the DMV parser, then XML-escaped for the envelope.
+ */
+export function dmvStringLiteral(value: string): string {
+  return `'${escapeXml(value.replace(/'/g, "''"))}'`;
+}
+
+/**
+ * Offer one item to a size-`capacity` reservoir that has already seen `seen`
+ * items (Algorithm R): the first `capacity` fill it, and item n (0-based) then
+ * replaces a random slot with probability capacity / (n + 1). Every item seen
+ * ends up in the sample with equal probability.
+ */
+export function reservoirOffer<T>(
+  sample: T[],
+  item: T,
+  seen: number,
+  capacity: number,
+  random: () => number = Math.random,
+): void {
+  if (seen < capacity) {
+    sample.push(item);
+    return;
+  }
+  const j = Math.floor(random() * (seen + 1));
+  if (j < capacity) sample[j] = item;
+}
+
+// ---------------------------------------------------------------------------
 // Connection
 // ---------------------------------------------------------------------------
 
@@ -388,12 +429,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
             <Execute xmlns="urn:schemas-microsoft-com:xml-analysis">
                 <Command><Statement>${statement}</Statement></Command>
                 <Properties>
-                    <PropertyList><Catalog>${catalogName}</Catalog></PropertyList>
+                    <PropertyList><Catalog>${escapeXml(catalogName)}</Catalog></PropertyList>
                 </Properties>
                 <Parameters>
                     <Parameter>
                         <Name>CubeName</Name>
-                        <Value>${modelName}</Value>
+                        <Value>${escapeXml(modelName)}</Value>
                     </Parameter>
                 </Parameters>
             </Execute>
@@ -508,15 +549,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     certConfig: Record<string, any>
   ): Promise<{ catalogId: string; modelId: string }> {
     const catalogStatement =
-      `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = '${catalogName}'`;
+      `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = ${dmvStringLiteral(catalogName)}`;
     const catalogRows = await this.getDmvData(
       token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
     const catalogId = catalogRows[0]?.CATALOG_GUID ?? "";
 
     const modelStatement =
-      `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = '${catalogName}' ` +
-      `and [CUBE_NAME] = '${modelName}'`;
+      `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = ${dmvStringLiteral(catalogName)} ` +
+      `and [CUBE_NAME] = ${dmvStringLiteral(modelName)}`;
     const modelRows = await this.getDmvData(
       token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
@@ -534,8 +575,9 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
    * tallying how many successful user queries involved each
    * (dimension-attribute, measure) pair.
    *
-   * Uses reservoir sampling so that at most `numQueries` representative query
-   * IDs are kept per pair (matching the notebook's approach exactly).
+   * Keeps at most `numQueries` sample query IDs per pair by reservoir sampling
+   * (Algorithm R, see reservoirOffer), so every query of a pair is equally
+   * likely to be kept. Sampling affects only which IDs are kept, not counts.
    *
    * Returns:
    *   occurrenceDict  — Map<pairKey, count>
@@ -616,14 +658,8 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
           const key = pairKey(attribute, measure);
           const count = occurrenceDict.get(key) ?? 0;
 
-          if (count === 0) {
-            sampleQueryIds.set(key, [[queryId, allFields]]);
-          } else if (count < numQueries) {
-            sampleQueryIds.get(key)!.push([queryId, allFields]);
-          } else if (Math.random() < 0.5) {
-            const idx = Math.floor(Math.random() * numQueries);
-            sampleQueryIds.get(key)![idx] = [queryId, allFields];
-          }
+          if (!sampleQueryIds.has(key)) sampleQueryIds.set(key, []);
+          reservoirOffer(sampleQueryIds.get(key)!, [queryId, allFields], count, numQueries);
 
           occurrenceDict.set(key, count + 1);
         }
