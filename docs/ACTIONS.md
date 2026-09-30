@@ -252,7 +252,7 @@ The `operation` input is required. All other inputs are optional and operation-s
 
 Connects to a live AtScale instance via MDX and extracts a model's metrics and attributes into `model.yaml`.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret whose named connection has either an `atscale:` entry (`url`, `username`, `password`; container hosts — pass `catalog-name`) or an `mdx:` block (`url`, `catalog_name`, `user`, and `organization_id` for installer connections).
 
 #### Using the composite action
 
@@ -1219,7 +1219,7 @@ Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Ea
 - An OLAP pivot table on the hidden `_Connections` sheet — click **Data → Refresh All** to load live data
 - Number formatting from the worksheet `format` field (`integer`, `decimal:N`, `percent:N`, `currency:N`)
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret whose named connection has either an `atscale:` entry (`url`, `username`, `password`; container hosts — pass `catalog-name`) or an `mdx:` block (`url`, `catalog_name`, `user`, and `organization_id` for installer connections).
 
 #### Using the composite action
 
@@ -1349,7 +1349,7 @@ Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-mo
 
 Paginates through the AtScale query history REST API for a given time window and writes a CSV occurrence matrix showing how many user queries involved each (dimension attribute × measure) pair. Mirrors the analysis in `query_histogram_updated.ipynb`.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret whose named connection has either an `atscale:` entry (`url`, `username`, `password`; container hosts — pass `catalog-name`) or an `mdx:` block (`url`, `catalog_name`, `user`, and `organization_id` for installer connections).
 
 #### Using the composite action
 
@@ -1371,20 +1371,23 @@ Paginates through the AtScale query history REST API for a given time window and
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `connection-name` | Yes | | Connection name in the file |
 | `model` | Yes | | AtScale model (cube) name to analyse |
+| `catalog-name` | No | `mdx.catalog_name` | AtScale catalog (project) name containing the model. Defaults to `mdx.catalog_name`; required when the connection has no `mdx:` block (e.g. a container connection with only an `atscale:` entry). |
 | `output-dir` | No | `.` | Directory to write the output CSV files |
 | `window-days` | No | `30` | Days to look back when no explicit date range is given |
 | `start-date` | No | | Explicit window start (ISO-8601, e.g. `2025-01-01T00:00:00Z`). Overrides `window-days`. |
 | `end-date` | No | now | Explicit window end (ISO-8601). Only used when `start-date` is set. |
 | `monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv` |
 | `monthly-year` | No | current year | Calendar year for the monthly breakdown |
-| `limit` | No | `100` | Page size for the query history API |
+| `limit` | No | `100` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
+| `query-source` | No | `user` | Which queries to read: `user` (queries sent by clients), `system` (engine-issued — aggregate builds, canaries, …) or `all` |
 | `num-queries` | No | `10` | Max sample query IDs retained per (attribute, measure) pair |
 
 **Outputs:**
+- `{output-dir}/{catalog}_{model}_queries.csv` — one row per query: `query_id`, `received`, `duration_ms`, `user_id`, `cube_name`, `class`, `aggregate_count`, `subquery_count`. `class` is how the query was answered, first match wins: **cache** (a subquery was served from the engine's local result cache, or the query sent no subquery), **agg** (the engine used an aggregate), **raw** (the warehouse answered without an aggregate). The log prints the totals per class.
 - `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
 - `{output-dir}/{catalog}_{model}_metric_by_hierarchy.csv` — long-form table: dimension, hierarchy, level, metric, and occurrence count for every observed combination
 - `{output-dir}/{catalog}_{model}_metric_pivot.csv` — pivot table with metrics as rows, `"Hierarchy > Level"` pairs as columns, and occurrence counts as cell values
-- `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts for all 12 months of `monthly-year` (only when `monthly: "true"`)
+- `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts for all 12 months of `monthly-year` (only when `monthly: "true"`). Months are UTC calendar months (Jan 1 00:00:00Z up to Feb 1 00:00:00Z, and so on), whatever the machine's time zone, and each query is counted in the month it was **received** — including one that finishes after midnight.
 
 ---
 
@@ -1424,7 +1427,7 @@ Connects to the AtScale internal Postgres backend and extracts deduplicated quer
 
 \* Required when using a `connections.yaml` file.
 
-**Outputs:** JSON files in `output-dir`, one per (model, protocol) pair — `{model}_sql_queries.json`, `{model}_sql_installer_queries.json`, `{model}_xmla_queries.json`.
+**Outputs:** JSON files in `output-dir`, one per (model, protocol) pair — `{model}_sql_queries.json`, `{model}_sql_installer_queries.json`, `{model}_xmla_queries.json`. Each record is one distinct query text: `numTimes` counts executions (not subqueries), cache-served queries with no subquery are included (`outboundText: null`), `aggregateUsed` comes from the engine's `query_aggregate_usage`, and `cacheExecutions` / `aggExecutions` / `rawExecutions` break the executions down by how they were answered. See the README for the classification.
 
 ---
 

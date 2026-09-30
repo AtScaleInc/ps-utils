@@ -132,7 +132,10 @@ inputs:
     description: Database schema to scope SML generation to.
     required: false
   catalog-name:
-    description: Catalog (database) name for the SML project.
+    description: >
+      Catalog (database) name for the SML project. For
+      extract-query-stats-from-atscale, the AtScale catalog containing the model
+      (defaults to mdx.catalog_name of the connection).
     required: false
   pii-severity:
     description: Minimum PII severity level to tag in generated SML (none/low/medium/high).
@@ -583,6 +586,11 @@ inputs:
       atscale-list-aggregate-build-history (default: 20).
     required: false
 
+  query-source:
+    description: >
+      Which queries to read: "user" (default), "system" (engine-issued) or "all".
+      Used by: extract-query-stats-from-atscale.
+    required: false
   # ── generate-enhanced-query-results ──────────────────────────────────────
   db-schema:
     description: >
@@ -1718,11 +1726,13 @@ runs:
           --model           "${{ inputs.model }}"
           --verbose true
         )
+        [[ -n "${{ inputs.catalog-name }}"  ]] && ARGS+=(--catalog       "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
         [[ -n "${{ inputs.window-days }}"   ]] && ARGS+=(--window-days   "${{ inputs.window-days }}")
         [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")
         [[ -n "${{ inputs.end-date }}"      ]] && ARGS+=(--end-date      "${{ inputs.end-date }}")
         [[ -n "${{ inputs.limit }}"         ]] && ARGS+=(--limit         "${{ inputs.limit }}")
+        [[ -n "${{ inputs.query-source }}"  ]] && ARGS+=(--query-source  "${{ inputs.query-source }}")
         [[ "${{ inputs.monthly }}" == "true" ]] && ARGS+=(--monthly true)
         [[ -n "${{ inputs.monthly-year }}"  ]] && ARGS+=(--monthly-year  "${{ inputs.monthly-year }}")
         node "${{ github.action_path }}/dist/cli.js" extract-query-stats-from-atscale "${ARGS[@]}"

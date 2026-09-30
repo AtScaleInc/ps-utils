@@ -1087,12 +1087,14 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-model \
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
 | `connectionName` | `String` | Yes | Connection name within the connections file |
 | `model` | `String` | Yes | AtScale model (cube) name to analyse |
+| `catalog` | `String` | No | AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name of the connection; required when the connection has no mdx: block. |
 | `windowDays` | `String` | No | Number of days to look back when no explicit start/end date is given |
 | `startDate` | `String` | No | Explicit window start (ISO-8601, e.g. 2025-01-01T00:00:00Z). Overrides --window-days. |
 | `endDate` | `String` | No | Explicit window end (ISO-8601). Defaults to now when --start-date is given. |
 | `monthly` | `String` | No | When 'true', also generates a month-by-month breakdown CSV for --monthly-year |
 | `monthlyYear` | `String` | No | Calendar year (e.g. 2025) for the monthly breakdown. Defaults to the current year. |
-| `limit` | `String` | No | Page size for the query history API |
+| `limit` | `String` | No | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped; every page is still fetched. |
+| `querySource` | `String` | No | Which queries to read: "user" (default — queries sent by clients), "system" (engine-issued: aggregate builds, canaries, …) or "all" |
 | `numQueries` | `String` | No | Maximum number of sample query IDs to retain per (attribute, measure) pair |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
