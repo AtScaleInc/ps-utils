@@ -1448,28 +1448,41 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       o.push(...table(["Name", "Caption", "Formula", "Folder", "Format", "Hidden"], calcRows));
     }
 
-    // User Defined Aggregates.
+    // User Defined Aggregates. Each attribute-ref is split into the dimension-attribute
+    // column or the metric column (measures and calculated members) based on which map
+    // resolved it, mirroring the SML report's separate "# attributes"/"# metrics" columns.
     const aggRows: string[][] = [];
     for (const aggsSec of arr(cube.aggregates)) {
       for (const aggEl of arr(aggsSec.aggregate)) {
         const aggName = a(aggEl, "name") ?? "?";
         const targetConn = s(first(arr(aggEl["target-connection"])));
-        const attrIds: string[] = [];
+        const attrNames: string[] = [];
+        const metricNames: string[] = [];
         for (const attrsWrap of arr(aggEl.attributes)) {
           for (const attrRef of arr(attrsWrap["attribute-ref"])) {
             const refId = a(attrRef, "id");
             const def = refId ? attrDef.get(refId) : undefined;
-            const resolvedName =
-              def?.name ?? (refId ? attrNameById.get(refId) ?? calcMemberDef.get(refId)?.name : undefined);
-            attrIds.push(resolvedName ?? refId ?? "?");
+            if (def) {
+              attrNames.push(def.name);
+              continue;
+            }
+            const resolvedName = refId ? attrNameById.get(refId) ?? calcMemberDef.get(refId)?.name : undefined;
+            metricNames.push(resolvedName ?? refId ?? "?");
           }
         }
-        aggRows.push([code(aggName), code(targetConn), String(attrIds.length), attrIds.map((n) => `\`${n}\``).join(", ")]);
+        aggRows.push([
+          code(aggName),
+          code(targetConn),
+          String(attrNames.length),
+          attrNames.map((n) => `\`${n}\``).join(", "),
+          String(metricNames.length),
+          metricNames.map((n) => `\`${n}\``).join(", "),
+        ]);
       }
     }
     if (aggRows.length) {
       o.push("**User Defined Aggregates**", "");
-      o.push(...table(["Name", "Target connection", "# attributes", "Attributes"], aggRows));
+      o.push(...table(["Name", "Target connection", "# attributes", "Attributes", "# metrics", "Metrics"], aggRows));
     }
 
     // Named sets / KPIs (presence-only — no SML equivalent, but the user should
