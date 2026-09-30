@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   fetchAllQueryHistory,
+  monthlyWindowsUtc,
+  queryReceivedAt,
   queryHistoryBaseUrl,
   queryHistoryPageUrl,
 } from "../extract-query-stats-from-atscale/ExtractQueryStatsFromAtScaleOperation.js";
@@ -58,5 +60,29 @@ describe("fetchAllQueryHistory", () => {
     const rows = await fetchAllQueryHistory(getPage, "https://h/engine/queries", filters, 100);
     expect(rows).toHaveLength(200);
     expect(urls).toHaveLength(3);
+  });
+});
+
+describe("monthlyWindowsUtc", () => {
+  it("builds UTC calendar months, extending each end to catch queries finishing after midnight", () => {
+    const w = monthlyWindowsUtc(2026);
+    expect(w).toHaveLength(12);
+    expect(w[0]).toEqual({
+      start: "2026-01-01T00:00:00Z",
+      end: "2026-02-02T00:00:00Z",
+      receivedBefore: "2026-02-01T00:00:00Z",
+    });
+    expect(w[11].receivedBefore).toBe("2027-01-01T00:00:00Z");
+    for (let i = 1; i < 12; i++) expect(w[i].start).toBe(w[i - 1].receivedBefore);
+  });
+});
+
+describe("queryReceivedAt", () => {
+  it("reads the QueryWallTime start", () => {
+    expect(queryReceivedAt({ timeline_events: [
+      { type: "QueryPlanning", started: "2026-01-31T23:59:59.9Z" },
+      { type: "QueryWallTime", started: "2026-01-31T23:59:59.5Z" },
+    ] })).toBe("2026-01-31T23:59:59.5Z");
+    expect(queryReceivedAt({})).toBeUndefined();
   });
 });

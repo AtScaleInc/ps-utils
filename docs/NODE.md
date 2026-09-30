@@ -1183,7 +1183,7 @@ function extractQueryStatsFromAtScale(
 | `model` | `string` | Yes | | AtScale model (cube) name to analyse |
 | `outputDir` | `DirOutput` | No | `"."` | Output directory for CSV files, or a `Writable` to receive a ZIP |
 | `windowDays` | `string` | No | `"30"` | Look-back window in days |
-| `monthly` | `string` | No | `"false"` | Generate monthly breakdown CSV |
+| `monthly` | `string` | No | `"false"` | Generate monthly breakdown CSV (UTC calendar months; each query counted in the month it was received) |
 | `limit` | `string` | No | `"100"` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
 | `numQueries` | `string` | No | `"10"` | Max sample query IDs per attribute × measure pair |
 | `startDate` | `string` | No | | Explicit window start (ISO-8601); overrides `windowDays` |

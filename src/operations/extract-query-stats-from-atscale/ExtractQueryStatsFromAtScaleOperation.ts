@@ -188,6 +188,48 @@ export async function fetchAllQueryHistory(
   return rows;
 }
 
+/** How long after a window's end a query may still finish and be counted in it. */
+const MONTH_FINISH_GRACE_MS = 24 * 60 * 60 * 1000;
+
+export interface MonthWindow {
+  /** queryDateTimeStart — the engine matches it against a query's received time. */
+  start: string;
+  /** queryDateTimeEnd — the engine matches it against a query's finish time. */
+  end: string;
+  /** Rows received at or after this instant belong to the next month. */
+  receivedBefore: string;
+}
+
+/**
+ * The twelve UTC calendar months of `year` as query history windows.
+ *
+ * The engine filters queryDateTimeStart on the received time and
+ * queryDateTimeEnd on the finish time, both inclusive (QueryInfoPostgresDao).
+ * Month boundaries alone would therefore drop a query received before
+ * midnight and finished after it. Each window's end is extended by a day and
+ * rows received after the month are dropped client-side (receivedBefore), so
+ * every query is counted in exactly one month — the one it was received in.
+ * Building the months in UTC keeps the result independent of the machine's
+ * time zone; local-time windows were shifted by the UTC offset.
+ */
+export function monthlyWindowsUtc(year: number): MonthWindow[] {
+  const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
+  return Array.from({ length: 12 }, (_, month) => {
+    const next = Date.UTC(year, month + 1, 1);
+    return {
+      start: iso(Date.UTC(year, month, 1)),
+      end: iso(next + MONTH_FINISH_GRACE_MS),
+      receivedBefore: iso(next),
+    };
+  });
+}
+
+/** When the engine received a query row: its QueryWallTime event's start. */
+export function queryReceivedAt(row: any): string | undefined {
+  const events: any[] = Array.isArray(row?.timeline_events) ? row.timeline_events : [];
+  return events.find((e) => e?.type === "QueryWallTime")?.started ?? undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Operation
 // ---------------------------------------------------------------------------
@@ -428,7 +470,8 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     limit: number,
     numQueries: number,
     proxyConfig: Record<string, any>,
-    certConfig: Record<string, any>
+    certConfig: Record<string, any>,
+    receivedBefore?: string,
   ): Promise<{
     occurrenceDict: Map<PairKey, number>;
     sampleQueryIds: Map<PairKey, Array<[string, string[]]>>;
@@ -450,10 +493,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
     const baseUrl = queryHistoryBaseUrl(installer, atscaleUrl, organizationId);
 
-    const data = await fetchAllQueryHistory(
+    const fetched = await fetchAllQueryHistory(
       async (url) => (await axios.get(url, config)).data,
       baseUrl, { catalogId, modelId, startTime, endTime }, limit, this.logger,
     );
+    const cutoff = receivedBefore ? Date.parse(receivedBefore) : undefined;
+    const data = cutoff === undefined ? fetched : fetched.filter((row) => {
+      const received = queryReceivedAt(row);
+      return received === undefined || Date.parse(received) < cutoff;
+    });
 
     for (const query of data) {
       const queryId: string = query.query_id ?? "";
@@ -780,7 +828,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // Monthly breakdown CSV (optional)
     // -----------------------------------------------------------------------
     if (doMonthly) {
-      const year = parseInt(params["monthly-year"] ?? String(now.getFullYear()), 10);
+      const year = parseInt(params["monthly-year"] ?? String(now.getUTCFullYear()), 10);
       this.logger.info(`Generating monthly breakdown for ${year}…`);
 
       const MONTHS = [
@@ -795,18 +843,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
       // Collect all 12 months' occurrence dicts
       const monthlyDicts: Map<PairKey, number>[] = [];
+      const windows = monthlyWindowsUtc(year);
       for (let month = 0; month < 12; month++) {
-        const monthStart = new Date(year, month, 1, 0, 0, 0);
-        const monthEnd = new Date(year, month + 1, 1, 0, 0, 0);
-        monthEnd.setSeconds(monthEnd.getSeconds() - 1);
-
-        const mStart = monthStart.toISOString().replace(/\.\d+Z$/, "Z");
-        const mEnd = monthEnd.toISOString().replace(/\.\d+Z$/, "Z");
+        const { start: mStart, end: mEnd, receivedBefore } = windows[month];
 
         this.logger.info(`  ${MONTHS[month]} ${year}…`);
         const { occurrenceDict: mDict } = await this.processQueries(
           installer, atscaleUrl, token, organizationId,
-          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig
+          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig, receivedBefore
         );
         monthlyDicts.push(mDict);
       }

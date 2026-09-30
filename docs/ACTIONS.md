@@ -1382,7 +1382,7 @@ Paginates through the AtScale query history REST API for a given time window and
 - `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
 - `{output-dir}/{catalog}_{model}_metric_by_hierarchy.csv` — long-form table: dimension, hierarchy, level, metric, and occurrence count for every observed combination
 - `{output-dir}/{catalog}_{model}_metric_pivot.csv` — pivot table with metrics as rows, `"Hierarchy > Level"` pairs as columns, and occurrence counts as cell values
-- `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts for all 12 months of `monthly-year` (only when `monthly: "true"`)
+- `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts for all 12 months of `monthly-year` (only when `monthly: "true"`). Months are UTC calendar months (Jan 1 00:00:00Z up to Feb 1 00:00:00Z, and so on), whatever the machine's time zone, and each query is counted in the month it was **received** — including one that finishes after midnight.
 
 ---
 

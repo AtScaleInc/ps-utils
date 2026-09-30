@@ -1703,7 +1703,7 @@ With a monthly breakdown:
 | `--window-days` | No | `30` | Days to look back when no explicit date range is given |
 | `--start-date` | No | | Explicit window start (ISO-8601, e.g. `2025-01-01T00:00:00Z`). Overrides `--window-days`. |
 | `--end-date` | No | now | Explicit window end (ISO-8601). Only used when `--start-date` is set. |
-| `--monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv` |
+| `--monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv`. Months are UTC calendar months (Jan 1 00:00:00Z up to Feb 1 00:00:00Z, and so on), whatever the machine's time zone, and each query is counted in the month it was **received** — including one that finishes after midnight. |
 | `--monthly-year` | No | current year | Calendar year for the monthly breakdown |
 | `--limit` | No | `100` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
 | `--num-queries` | No | `10` | Max sample query IDs retained per (attribute, measure) pair via reservoir sampling |
