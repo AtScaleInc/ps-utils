@@ -104,7 +104,11 @@ function ago(epochSec: number, now: number): string {
 }
 
 /** Reloads the current lists from AtScale, bypassing the 2 h cache. */
-export function RefreshButton({ cachedAt, onRefresh }: { cachedAt: number | null | undefined; onRefresh: () => Promise<unknown> }) {
+export function RefreshButton({ cachedAt, onRefresh, cachedFor = '2 h' }: {
+  cachedAt: number | null | undefined; onRefresh: () => Promise<unknown>
+  /** How long the list is kept before it reloads by itself (tooltip only). */
+  cachedFor?: string
+}) {
   const [busy, setBusy] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -115,7 +119,7 @@ export function RefreshButton({ cachedAt, onRefresh }: { cachedAt: number | null
     setBusy(true)
     try { await onRefresh() } finally { setBusy(false); setNow(Date.now()) }
   }
-  const title = cachedAt ? `Loaded from AtScale ${new Date(cachedAt * 1000).toLocaleTimeString()} · cached for 2 h` : 'Reload from AtScale'
+  const title = cachedAt ? `Loaded from AtScale ${new Date(cachedAt * 1000).toLocaleTimeString()} · cached for ${cachedFor}` : 'Reload from AtScale'
   return (
     <button type="button" className="btn info" style={{ height: 32, display: 'flex', alignItems: 'center', gap: 8 }} disabled={busy} title={title} onClick={run}>
       <span style={{ display: 'inline-block', animation: busy ? 'spin 0.9s linear infinite' : undefined }}>↻</span>

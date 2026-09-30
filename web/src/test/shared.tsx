@@ -1,7 +1,8 @@
+import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { Fragment, useState } from 'react'
 import { envOf, fmtDate } from '../components/ui'
 import type { EnvId } from '../api'
-import type { CompareResult, ModelDiff, ModelDiffSection, Variance, Verdict } from './api'
+import { testApi, type CompareResult, type ModelDiff, type ModelDiffSection, type Variance, type Verdict } from './api'
 
 export const VERDICT: Record<Verdict, [string, string, string]> = {
   identical: ['Identical', 'var(--qa)', '#fff'],
@@ -280,4 +281,41 @@ export function download(name: string, text: string) {
   a.download = name
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+// -- freshness ---------------------------------------------------------------------------
+// The app caches lists for 2 h (main.tsx), but a model deployed or redeployed a
+// minute ago must show up in Test's pickers. /test/cubes itself is live (XMLA,
+// no API cache), so the only stale copy is TanStack's: keep it short, and reload
+// a picker's list when it's opened.
+
+/** A list older than this reloads when its picker is opened. */
+export const TEST_FRESH_MS = 30_000
+
+/** Deployed catalogs / cubes on a host, reloaded when older than 30 s. */
+export function useTestCubes(hostId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['testCubes', hostId], queryFn: () => testApi.cubes(hostId!), enabled: !!hostId,
+    staleTime: TEST_FRESH_MS,
+  })
+}
+
+/** onMouseDown / onFocus for a <select>: reload its list first when it's old. */
+export function reloadIfOld(q: { dataUpdatedAt: number; isFetching: boolean; refetch: () => unknown }) {
+  return () => {
+    if (!q.isFetching && Date.now() - q.dataUpdatedAt > TEST_FRESH_MS) q.refetch()
+  }
+}
+
+/** RefreshButton's cachedAt (seconds): the oldest of the lists shown, null before any loaded. */
+export function loadedAt(...updatedAt: number[]) {
+  const loaded = updatedAt.filter((t) => t > 0)
+  return loaded.length ? Math.min(...loaded) / 1000 : null
+}
+
+/** ↻ Refresh in every Test section: models on every host, generated queries,
+ * runs and comparisons. */
+export function refreshTest(qc: QueryClient) {
+  return Promise.all(['testCubes', 'testQueries', 'testRuns', 'testRun', 'testCompare', 'testHistory']
+    .map((k) => qc.invalidateQueries({ queryKey: [k] })))
 }

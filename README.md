@@ -244,6 +244,14 @@ once. A candidate environment is ready to promote to when its **model** and its
   are listed as *Only in baseline*, *Only in candidate* or *Changed*, with the
   baseline → candidate value. **Show matching objects** lists the rest.
 
+**Keeping the lists current.** The model pickers (Run, Compare model) and the
+run pickers (Compare results) reload their list when you open them if it's
+more than 30 seconds old, so a model deployed or a run finished a minute ago
+shows up. **↻ Refresh** (Run, Compare results, Compare model) reloads
+everything Test holds: every host's models, the generated queries, runs and
+comparisons. Use it after redeploying a model under the same name, since the
+generated queries for a model already picked are kept until then.
+
 MDX sizes are **cell** counts (rows × measures) and SQL sizes are row counts. A
 level whose key repeats (for example a month name keyed by day) is compared as
 a multiset, so row order never makes equal results differ.

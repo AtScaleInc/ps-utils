@@ -2,9 +2,10 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { CompareSection, ModelCompareSection } from './Compare'
 import { ResultsSection } from './Results'
-import { ENVS, EnvSegment, HostSelect, errMsg, plural, useHosts } from '../components/ui'
+import { ENVS, EnvSegment, HostSelect, RefreshButton, errMsg, plural, useHosts } from '../components/ui'
 import { resolveHost, useUi } from '../store'
 import { testApi, type CubeRef, type Protocol, type TestOptions, type TestQuery } from './api'
+import { TEST_FRESH_MS, loadedAt, refreshTest, reloadIfOld, useTestCubes } from './shared'
 
 const cubeKey = (c: CubeRef) => `${c.catalog}|${c.cube}`
 
@@ -25,7 +26,7 @@ function RunSetup() {
   const host = resolveHost(hosts, test)
   const qc = useQueryClient()
 
-  const cubesQ = useQuery({ queryKey: ['testCubes', host?.id], queryFn: () => testApi.cubes(host!.id), enabled: !!host })
+  const cubesQ = useTestCubes(host?.id)
   const cubes = cubesQ.data?.cubes ?? []
   const [modelKey, setModelKey] = useState('')
   const ref = cubes.find((c) => cubeKey(c) === modelKey) ?? cubes[0] ?? null
@@ -39,7 +40,7 @@ function RunSetup() {
 
   // Every host's cubes, to show where the picked model exists.
   const allCubes = useQueries({
-    queries: hosts.map((h) => ({ queryKey: ['testCubes', h.id], queryFn: () => testApi.cubes(h.id) })),
+    queries: hosts.map((h) => ({ queryKey: ['testCubes', h.id], queryFn: () => testApi.cubes(h.id), staleTime: TEST_FRESH_MS })),
   })
   /** The picked model on another host: same catalog + cube, else the one
    * catalog holding a cube of that name (a catalog deployed from another
@@ -119,12 +120,13 @@ function RunSetup() {
           <EnvSegment value={test.env} onPick={(e) => { setTest({ env: e, hostId: null }); setTargets([]) }} />
           <HostSelect hosts={hosts} env={test.env} value={host?.id ?? null} onChange={(id) => { setTest({ env: test.env, hostId: id }); setTargets([]) }} />
           <select className="select" style={{ minWidth: 260 }} value={ref ? cubeKey(ref) : ''} onChange={(e) => setModelKey(e.target.value)}
-            disabled={!cubes.length}>
+            onMouseDown={reloadIfOld(cubesQ)} onFocus={reloadIfOld(cubesQ)} disabled={!cubes.length && !cubesQ.isFetching}>
             {!cubes.length && <option value="">{cubesQ.isLoading ? 'Loading models…' : cubesQ.isError ? 'Could not list models' : 'No deployed models'}</option>}
             {cubes.map((c) => <option key={cubeKey(c)} value={cubeKey(c)}>{c.cube} — {c.catalog}</option>)}
           </select>
         </div>
         <div className="row">
+          <RefreshButton cachedAt={loadedAt(cubesQ.dataUpdatedAt)} cachedFor="30 s" onRefresh={() => refreshTest(qc)} />
           <span className="hint">{genQ.isFetching ? 'Reading model…' : queries.length ? `${queries.length} ${queries.length === 1 ? 'query' : 'queries'} generated` : ''}</span>
           <button type="button" className="btn primary lg" disabled={!nRuns || starting} onClick={start}>
             {starting ? 'Starting…' : nRuns ? `Run ${nRuns} on ${plural(runnable.length, 'host')}` : 'Run'}

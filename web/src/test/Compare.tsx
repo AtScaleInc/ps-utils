@@ -1,11 +1,11 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { EnvSegment, HostSelect, errMsg, fmtDate, useHosts } from '../components/ui'
+import { EnvSegment, HostSelect, RefreshButton, errMsg, fmtDate, useHosts } from '../components/ui'
 import type { EnvId } from '../api'
 import { resolveHost, useUi, type RunSide } from '../store'
 import { testApi, type CubeRef, type TestRun } from './api'
 import { useRunGroups } from './Results'
-import { ComparisonView, ModelDiffView, VerdictBanner, comparisonCsv, download } from './shared'
+import { ComparisonView, ModelDiffView, VerdictBanner, comparisonCsv, download, loadedAt, refreshTest, reloadIfOld, useTestCubes } from './shared'
 
 const TOLERANCES: [number, string][] = [[1e-9, 'Exact'], [1e-6, '0.0001%'], [1e-4, '0.01%'], [1e-2, '1%']]
 
@@ -13,8 +13,10 @@ const TOLERANCES: [number, string][] = [[1e-9, 'Exact'], [1e-6, '0.0001%'], [1e-
  * run, or the same host before / after a redeploy. */
 export function CompareSection() {
   const { testCompare, setTestCompare } = useUi()
-  const { groups } = useRunGroups()
+  const runsQ = useRunGroups()
+  const { groups } = runsQ
   const runs = groups.flatMap(([, rs]) => rs)
+  const qc = useQueryClient()
   const [tolerance, setTolerance] = useState(1e-9)
 
   // Default: the newest multi-host run, first host vs second.
@@ -37,11 +39,14 @@ export function CompareSection() {
 
   return (
     <div className="col test-col">
-      <div className="bar"><span className="eyebrow">Compare results</span><span className="hint">Values matched per member and measure</span></div>
+      <div className="bar">
+        <div className="row"><span className="eyebrow">Compare results</span><span className="hint">Values matched per member and measure</span></div>
+        <RefreshButton cachedAt={loadedAt(runsQ.dataUpdatedAt)} cachedFor="30 s" onRefresh={() => refreshTest(qc)} />
+      </div>
       <div className="cmp-pickers">
-        <RunSidePicker label="Baseline" hint="What's known good - usually the lower env" groups={groups} value={baseline} onChange={(v) => setTestCompare({ baseline: v })} />
+        <RunSidePicker label="Baseline" hint="What's known good - usually the lower env" groups={groups} value={baseline} onChange={(v) => setTestCompare({ baseline: v })} onOpen={reloadIfOld(runsQ)} />
         <span className="cmp-vs">vs</span>
-        <RunSidePicker label="Candidate" hint="What you want to promote / verify" groups={groups} value={candidate} onChange={(v) => setTestCompare({ candidate: v })} />
+        <RunSidePicker label="Candidate" hint="What you want to promote / verify" groups={groups} value={candidate} onChange={(v) => setTestCompare({ candidate: v })} onOpen={reloadIfOld(runsQ)} />
         <div className="cmp-picker" style={{ flex: '0 0 auto' }}>
           <span className="eyebrow">Tolerance</span>
           <select className="select" value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))}>
@@ -60,8 +65,10 @@ export function CompareSection() {
   )
 }
 
-function RunSidePicker({ label, hint, groups, value, onChange }: {
+function RunSidePicker({ label, hint, groups, value, onChange, onOpen }: {
   label: string; hint: string; groups: [string, TestRun[]][]; value: RunSide | null; onChange: (v: RunSide) => void
+  /** Opening a picker reloads the run list when it's old (a run finished elsewhere). */
+  onOpen: () => void
 }) {
   const runs = groups.flatMap(([, rs]) => rs)
   const run = runs.find((r) => r.runId === value?.runId)
@@ -71,13 +78,13 @@ function RunSidePicker({ label, hint, groups, value, onChange }: {
     <div className="cmp-picker">
       <span className="eyebrow">{label}</span>
       <span className="hint">{hint}</span>
-      <select className="select" value={model} onChange={(e) => {
+      <select className="select" value={model} onMouseDown={onOpen} onFocus={onOpen} onChange={(e) => {
         const r = groups.find(([m]) => m === e.target.value)?.[1][0]
         if (r) onChange({ runId: r.runId, hostId: r.targets[0].hostId })
       }}>
         {groups.map(([m, rs]) => <option key={m} value={m}>{m} · {rs.length} run{rs.length === 1 ? '' : 's'}</option>)}
       </select>
-      <select className="select" value={value?.runId ?? ''} onChange={(e) => {
+      <select className="select" value={value?.runId ?? ''} onMouseDown={onOpen} onFocus={onOpen} onChange={(e) => {
         const r = modelRuns.find((x) => x.runId === e.target.value)
         if (r) onChange({ runId: r.runId, hostId: r.targets.find((t) => t.hostId === value?.hostId)?.hostId ?? r.targets[0].hostId })
       }}>
@@ -102,8 +109,9 @@ export function ModelCompareSection() {
   const [b, setB] = useState<Side>({ env: 'qa', hostId: null, key: '' })
   const ha = resolveHost(hosts, a)
   const hb = resolveHost(hosts, b)
-  const ca = useQuery({ queryKey: ['testCubes', ha?.id], queryFn: () => testApi.cubes(ha!.id), enabled: !!ha })
-  const cb = useQuery({ queryKey: ['testCubes', hb?.id], queryFn: () => testApi.cubes(hb!.id), enabled: !!hb })
+  const ca = useTestCubes(ha?.id)
+  const cb = useTestCubes(hb?.id)
+  const qc = useQueryClient()
   const refA = ca.data?.cubes.find((c) => cubeKey(c) === a.key) ?? ca.data?.cubes[0]
   // Candidate defaults to the baseline's cube name when the host has it.
   const refB = cb.data?.cubes.find((c) => cubeKey(c) === b.key) ?? cb.data?.cubes.find((c) => c.cube === refA?.cube) ?? cb.data?.cubes[0]
@@ -116,25 +124,32 @@ export function ModelCompareSection() {
   const d = m.data?.diff
   const nDiff = d ? d.metrics.onlyA.length + d.metrics.onlyB.length + d.metrics.changed.length + d.levels.onlyA.length + d.levels.onlyB.length + d.levels.changed.length : 0
 
-  const picker = (label: string, side: Side, set: (s: Side) => void, host: typeof ha, cubes: CubeRef[] | undefined, ref: CubeRef | undefined, loading: boolean) => (
+  const picker = (label: string, side: Side, set: (s: Side) => void, host: typeof ha, q: typeof ca, ref: CubeRef | undefined) => {
+    const cubes = q.data?.cubes
+    return (
     <div className="cmp-picker">
       <span className="eyebrow">{label}</span>
       <div className="row"><EnvSegment value={side.env} onPick={(e) => set({ env: e, hostId: null, key: '' })} /></div>
       <HostSelect hosts={hosts} env={side.env} value={host?.id ?? null} onChange={(id) => set({ ...side, hostId: id, key: '' })} />
-      <select className="select" value={ref ? cubeKey(ref) : ''} disabled={!cubes?.length} onChange={(e) => set({ ...side, key: e.target.value })}>
-        {!cubes?.length && <option value="">{loading ? 'Loading models…' : 'No deployed models'}</option>}
+      <select className="select" value={ref ? cubeKey(ref) : ''} disabled={!cubes?.length && !q.isFetching}
+        onMouseDown={reloadIfOld(q)} onFocus={reloadIfOld(q)} onChange={(e) => set({ ...side, key: e.target.value })}>
+        {!cubes?.length && <option value="">{q.isFetching ? 'Loading models…' : q.isError ? 'Could not list models' : 'No deployed models'}</option>}
         {cubes?.map((c) => <option key={cubeKey(c)} value={cubeKey(c)}>{c.cube} — {c.catalog}</option>)}
       </select>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="col test-col">
-      <div className="bar"><span className="eyebrow">Compare model</span><span className="hint">Metrics and levels from the DMV (MDSCHEMA_MEASURES / MDSCHEMA_LEVELS), live</span></div>
+      <div className="bar">
+        <div className="row"><span className="eyebrow">Compare model</span><span className="hint">Metrics and levels from the DMV (MDSCHEMA_MEASURES / MDSCHEMA_LEVELS), live</span></div>
+        <RefreshButton cachedAt={loadedAt(ca.dataUpdatedAt, cb.dataUpdatedAt)} cachedFor="30 s" onRefresh={() => refreshTest(qc)} />
+      </div>
       <div className="cmp-pickers">
-        {picker('Baseline', a, setA, ha, ca.data?.cubes, refA, ca.isLoading)}
+        {picker('Baseline', a, setA, ha, ca, refA)}
         <span className="cmp-vs">vs</span>
-        {picker('Candidate', b, setB, hb, cb.data?.cubes, refB, cb.isLoading)}
+        {picker('Candidate', b, setB, hb, cb, refB)}
         <div className="cmp-picker" style={{ flex: '0 0 auto', justifyContent: 'flex-end' }}>
           <button type="button" className="btn primary lg" disabled={!refA || !refB || m.isPending} onClick={() => m.mutate()}>
             {m.isPending ? 'Reading both models…' : 'Compare'}
