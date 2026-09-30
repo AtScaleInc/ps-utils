@@ -1375,7 +1375,7 @@ Paginates through the AtScale query history REST API for a given time window and
 | `end-date` | No | now | Explicit window end (ISO-8601). Only used when `start-date` is set. |
 | `monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv` |
 | `monthly-year` | No | current year | Calendar year for the monthly breakdown |
-| `limit` | No | `100` | Page size for the query history API |
+| `limit` | No | `100` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
 | `num-queries` | No | `10` | Max sample query IDs retained per (attribute, measure) pair |
 
 **Outputs:**

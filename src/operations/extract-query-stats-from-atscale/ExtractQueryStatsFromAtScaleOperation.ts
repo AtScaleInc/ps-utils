@@ -76,7 +76,9 @@ class ExtractQueryStatsParameterSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name = "limit";
-      description = "Page size for the query history API";
+      description =
+        "Page size for the query history API. The engine serves at most 101 rows per page, " +
+        "so values above 100 are clamped; every page is still fetched.";
       required = false;
       defaultValue = "100";
     })(),
@@ -150,6 +152,40 @@ export function queryHistoryPageUrl(
     `&queryDateTimeStart=${filters.startTime}&queryDateTimeEnd=${filters.endTime}` +
     `&offset=${offset}&limit=${limit}`
   );
+}
+
+/**
+ * Largest page the engine serves. PaginationSupport clamps `limit` to
+ * ResultsPerPage (101) without saying so, so a larger request gets 101 rows
+ * back. Requests are clamped below that, and paging is driven by the rows
+ * actually returned rather than by the requested size.
+ */
+export const MAX_QUERY_HISTORY_PAGE_SIZE = 100;
+
+/**
+ * Page through the query history list route until a page comes back empty or
+ * shorter than the (clamped) page size, returning every row.
+ */
+export async function fetchAllQueryHistory(
+  getPage: (url: string) => Promise<any>,
+  baseUrl: string,
+  filters: { catalogId: string; modelId: string; startTime: string; endTime: string },
+  requestedLimit: number,
+  logger?: Pick<Logger, "verbose">,
+): Promise<any[]> {
+  const limit = Math.min(Math.max(1, requestedLimit), MAX_QUERY_HISTORY_PAGE_SIZE);
+  const rows: any[] = [];
+  let offset = 0;
+  for (;;) {
+    const url = queryHistoryPageUrl(baseUrl, filters, offset, limit);
+    logger?.verbose(`Fetching query page at offset ${offset}: ${url}`);
+    const body = await getPage(url);
+    const data: any[] = body?.response?.data ?? [];
+    rows.push(...data);
+    if (data.length === 0 || data.length < limit) break;
+    offset += data.length;
+  }
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -414,69 +450,57 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
     const baseUrl = queryHistoryBaseUrl(installer, atscaleUrl, organizationId);
 
-    let offset = 0;
-    let done = false;
+    const data = await fetchAllQueryHistory(
+      async (url) => (await axios.get(url, config)).data,
+      baseUrl, { catalogId, modelId, startTime, endTime }, limit, this.logger,
+    );
 
-    while (!done) {
-      const url = queryHistoryPageUrl(baseUrl, { catalogId, modelId, startTime, endTime }, offset, limit);
+    for (const query of data) {
+      const queryId: string = query.query_id ?? "";
+      const rawAttrs: any[] | null | undefined = query.attributes;
 
-      this.logger.verbose(`Fetching query page at offset ${offset}: ${url}`);
-      const response = await axios.get(url, config);
-      const data: any[] = response.data?.response?.data ?? [];
+      if (rawAttrs == null) continue;
 
-      for (const query of data) {
-        const queryId: string = query.query_id ?? "";
-        const rawAttrs: any[] | null | undefined = query.attributes;
+      const measures: Array<string | null> = [];
+      const attributes: Array<string | null> = [];
 
-        if (rawAttrs == null) continue;
-
-        const measures: Array<string | null> = [];
-        const attributes: Array<string | null> = [];
-
-        for (const attr of rawAttrs) {
-          if (attr["attribute-type"] === "measure") {
-            measures.push(attr.name ?? null);
-          } else if (attr["attribute-type"] === "dimension") {
-            attributes.push(attr.name ?? null);
-          }
-        }
-
-        if (attributes.length === 0) attributes.push(null);
-        if (measures.length === 0) measures.push(null);
-
-        const allFields = [
-          ...measures.filter((x): x is string => x !== null),
-          ...attributes.filter((x): x is string => x !== null),
-        ];
-
-        for (const attribute of attributes) {
-          for (const measure of measures) {
-            const key = pairKey(attribute, measure);
-            const count = occurrenceDict.get(key) ?? 0;
-
-            if (count === 0) {
-              sampleQueryIds.set(key, [[queryId, allFields]]);
-            } else if (count < numQueries) {
-              sampleQueryIds.get(key)!.push([queryId, allFields]);
-            } else if (Math.random() < 0.5) {
-              const idx = Math.floor(Math.random() * numQueries);
-              sampleQueryIds.get(key)![idx] = [queryId, allFields];
-            }
-
-            occurrenceDict.set(key, count + 1);
-          }
+      for (const attr of rawAttrs) {
+        if (attr["attribute-type"] === "measure") {
+          measures.push(attr.name ?? null);
+        } else if (attr["attribute-type"] === "dimension") {
+          attributes.push(attr.name ?? null);
         }
       }
 
-      if (data.length < limit) {
-        done = true;
-      } else {
-        offset += limit;
+      if (attributes.length === 0) attributes.push(null);
+      if (measures.length === 0) measures.push(null);
+
+      const allFields = [
+        ...measures.filter((x): x is string => x !== null),
+        ...attributes.filter((x): x is string => x !== null),
+      ];
+
+      for (const attribute of attributes) {
+        for (const measure of measures) {
+          const key = pairKey(attribute, measure);
+          const count = occurrenceDict.get(key) ?? 0;
+
+          if (count === 0) {
+            sampleQueryIds.set(key, [[queryId, allFields]]);
+          } else if (count < numQueries) {
+            sampleQueryIds.get(key)!.push([queryId, allFields]);
+          } else if (Math.random() < 0.5) {
+            const idx = Math.floor(Math.random() * numQueries);
+            sampleQueryIds.get(key)![idx] = [queryId, allFields];
+          }
+
+          occurrenceDict.set(key, count + 1);
+        }
       }
     }
 
     this.logger.verbose(
-      `Processed ${offset + limit} query records; found ${occurrenceDict.size} unique (attribute, measure) pairs`,
+      `Processed ${data.length} query records; found ${occurrenceDict.size} unique (attribute, measure) pairs`,
     );
 
     return { occurrenceDict, sampleQueryIds };
