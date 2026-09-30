@@ -731,6 +731,7 @@ export type ExtractQueryStatsFromAtScaleParams = {
   connectionFile: FileInput;
   connectionName: string;
   model: string;
+  catalog?: string;
   outputDir?: DirOutput;  // default: "."
   windowDays?: string;     // default: "30"
   monthly?: string;     // default: "false"

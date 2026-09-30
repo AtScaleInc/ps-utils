@@ -132,7 +132,10 @@ inputs:
     description: Database schema to scope SML generation to.
     required: false
   catalog-name:
-    description: Catalog (database) name for the SML project.
+    description: >
+      Catalog (database) name for the SML project. For
+      extract-query-stats-from-atscale, the AtScale catalog containing the model
+      (defaults to mdx.catalog_name of the connection).
     required: false
   pii-severity:
     description: Minimum PII severity level to tag in generated SML (none/low/medium/high).
@@ -1711,6 +1714,7 @@ runs:
           --model           "${{ inputs.model }}"
           --verbose true
         )
+        [[ -n "${{ inputs.catalog-name }}"  ]] && ARGS+=(--catalog       "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
         [[ -n "${{ inputs.window-days }}"   ]] && ARGS+=(--window-days   "${{ inputs.window-days }}")
         [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")

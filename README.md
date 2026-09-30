@@ -1699,6 +1699,7 @@ With a monthly breakdown:
 | `--connection-file` | Yes | | Path to connections file |
 | `--connection-name` | Yes | | Connection name in the file |
 | `--model` | Yes | | AtScale model (cube) name to analyse |
+| `--catalog` | No | `mdx.catalog_name` | AtScale catalog (project) name containing the model. Defaults to `mdx.catalog_name`; required when the connection has no `mdx:` block (e.g. a container connection with only an `atscale:` entry). |
 | `--output-dir` | No | `.` | Directory to write the output CSV files |
 | `--window-days` | No | `30` | Days to look back when no explicit date range is given |
 | `--start-date` | No | | Explicit window start (ISO-8601, e.g. `2025-01-01T00:00:00Z`). Overrides `--window-days`. |
@@ -1712,7 +1713,19 @@ With a monthly breakdown:
 - `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
 - `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts (only when `--monthly true`)
 
-The `connections.yaml` entry must have an `mdx:` block with `url`, `organization_id`, `catalog_name`, and `user`. The user entry needs `username` and `password` (installer mode) or `username` and `password` for cloud OAuth2.
+**Connection entry.** Container hosts can use the standard `atscale:` entry — no `mdx:` block or `organization_id` needed — with the catalog passed as `--catalog`:
+
+```yaml
+connections:
+  dev:
+    atscale:
+      url: https://atscale.example.com
+      username: admin
+      password: "<password>"
+      insecure: true   # optional — skip TLS certificate verification
+```
+
+An `mdx:` block (`url`, `catalog_name`, `user`, plus `organization_id`) still works for both modes. `organization_id` is required only for installer connections (`installer: true`). Authentication is Keycloak (password grant) on container hosts and HTTP Basic against the installer auth endpoint otherwise.
 
 ---
 

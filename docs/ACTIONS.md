@@ -252,7 +252,7 @@ The `operation` input is required. All other inputs are optional and operation-s
 
 Connects to a live AtScale instance via MDX and extracts a model's metrics and attributes into `model.yaml`.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret whose named connection has either an `atscale:` entry (`url`, `username`, `password`; container hosts — pass `catalog-name`) or an `mdx:` block (`url`, `catalog_name`, `user`, and `organization_id` for installer connections).
 
 #### Using the composite action
 
@@ -1219,7 +1219,7 @@ Generates an Excel workbook (`.xlsx`) from a namespace YAML and a model YAML. Ea
 - An OLAP pivot table on the hidden `_Connections` sheet — click **Data → Refresh All** to load live data
 - Number formatting from the worksheet `format` field (`integer`, `decimal:N`, `percent:N`, `currency:N`)
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret whose named connection has either an `atscale:` entry (`url`, `username`, `password`; container hosts — pass `catalog-name`) or an `mdx:` block (`url`, `catalog_name`, `user`, and `organization_id` for installer connections).
 
 #### Using the composite action
 
@@ -1347,7 +1347,7 @@ Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-mo
 
 Paginates through the AtScale query history REST API for a given time window and writes a CSV occurrence matrix showing how many user queries involved each (dimension attribute × measure) pair. Mirrors the analysis in `query_histogram_updated.ipynb`.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block in the named connection.
+**Requires:** `CONNECTIONS_FILE` secret whose named connection has either an `atscale:` entry (`url`, `username`, `password`; container hosts — pass `catalog-name`) or an `mdx:` block (`url`, `catalog_name`, `user`, and `organization_id` for installer connections).
 
 #### Using the composite action
 
@@ -1369,6 +1369,7 @@ Paginates through the AtScale query history REST API for a given time window and
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `connection-name` | Yes | | Connection name in the file |
 | `model` | Yes | | AtScale model (cube) name to analyse |
+| `catalog-name` | No | `mdx.catalog_name` | AtScale catalog (project) name containing the model. Defaults to `mdx.catalog_name`; required when the connection has no `mdx:` block (e.g. a container connection with only an `atscale:` entry). |
 | `output-dir` | No | `.` | Directory to write the output CSV files |
 | `window-days` | No | `30` | Days to look back when no explicit date range is given |
 | `start-date` | No | | Explicit window start (ISO-8601, e.g. `2025-01-01T00:00:00Z`). Overrides `window-days`. |

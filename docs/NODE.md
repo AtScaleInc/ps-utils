@@ -1181,6 +1181,7 @@ function extractQueryStatsFromAtScale(
 | `connectionFile` | `FileInput` | Yes | | Path to connections file, or a `Readable` of its contents |
 | `connectionName` | `string` | Yes | | Connection name in the file |
 | `model` | `string` | Yes | | AtScale model (cube) name to analyse |
+| `catalog` | `string` | No | `mdx.catalog_name` | AtScale catalog (project) name containing the model. Defaults to `mdx.catalog_name`; required when the connection has no `mdx:` block (e.g. a container connection with only an `atscale:` entry). |
 | `outputDir` | `DirOutput` | No | `"."` | Output directory for CSV files, or a `Writable` to receive a ZIP |
 | `windowDays` | `string` | No | `"30"` | Look-back window in days |
 | `monthly` | `string` | No | `"false"` | Generate monthly breakdown CSV (UTC calendar months; each query counted in the month it was received) |

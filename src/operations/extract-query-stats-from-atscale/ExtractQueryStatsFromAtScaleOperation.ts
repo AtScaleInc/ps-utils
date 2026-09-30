@@ -42,6 +42,13 @@ class ExtractQueryStatsParameterSet extends ParameterSet {
       required = true;
     })(),
     new (class extends StringParameter {
+      name = "catalog";
+      description =
+        "AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name " +
+        "of the connection; required when the connection has no mdx: block.";
+      required = false;
+    })(),
+    new (class extends StringParameter {
       name = "output-dir";
       description = "Directory to write the output CSV files";
       required = false;
@@ -95,6 +102,7 @@ type Params = {
   "connection-file": string;
   "connection-name": string;
   model: string;
+  catalog?: string;
   "output-dir": string;
   "window-days": string;
   "start-date"?: string;
@@ -115,6 +123,81 @@ function pairKey(attribute: string | null, measure: string | null): PairKey {
 
 function parsePairKey(key: PairKey): [string | null, string | null] {
   return JSON.parse(key) as [string | null, string | null];
+}
+
+// ---------------------------------------------------------------------------
+// Connection
+// ---------------------------------------------------------------------------
+
+export interface QueryStatsConnection {
+  installer: boolean;
+  atscaleUrl: string;
+  /** Only used by installer deployments (auth, XMLA and query history paths). */
+  organizationId?: string;
+  catalogName: string;
+  username: string;
+  password: string;
+  /** connections.<name>.atscale.insecure: skip TLS certificate verification. */
+  insecure: boolean;
+}
+
+/**
+ * Resolve what this operation needs from a connections.yaml entry.
+ *
+ * Container hosts can use the standard `atscale: { url, username, password,
+ * insecure }` entry the other container operations use; an installer-shaped
+ * `mdx: { url, organization_id, catalog_name, user }` block still works for
+ * both modes. organization_id is required only for installer deployments —
+ * container routes (/engine/xmla, /engine/queries, Keycloak) never use it.
+ */
+export function resolveQueryStatsConnection(
+  connectionFile: any,
+  connectionName: string,
+  catalogParam: string | undefined,
+): QueryStatsConnection {
+  const connection = connectionFile?.connections?.[connectionName];
+  if (!connection) {
+    throw new Error(`Connection '${connectionName}' not found`);
+  }
+  const { mdx, atscale } = connection;
+  const installer = !!connection.installer;
+  if (!mdx && !atscale) {
+    throw new Error(
+      `Connection '${connectionName}' needs an 'atscale:' block (url, username, password) ` +
+      `or an 'mdx:' block (url, organization_id, catalog_name, user).`,
+    );
+  }
+
+  let atscaleUrl: string = atscale?.url ?? mdx?.url ?? "";
+  // mdx.url may carry an /engine/xmla suffix; auth and REST are against the host.
+  const engineIdx = atscaleUrl.toLowerCase().indexOf("/engine/xmla");
+  if (engineIdx >= 0) atscaleUrl = atscaleUrl.slice(0, engineIdx);
+  atscaleUrl = atscaleUrl.replace(/\/+$/, "");
+
+  const users = connectionFile.users ?? {};
+  const user = users[mdx?.user] ?? users[atscale?.user] ?? {};
+  const username: string = user.username ?? atscale?.username ?? "";
+  const password: string = user.password ?? atscale?.password ?? "";
+
+  const organizationId: string | undefined = mdx?.organization_id ?? atscale?.organization_id;
+  if (installer && !organizationId) {
+    throw new Error(
+      `Connection '${connectionName}' is an installer connection and needs mdx.organization_id.`,
+    );
+  }
+  const catalogName: string = catalogParam?.trim() || mdx?.catalog_name || "";
+  if (!catalogName) {
+    throw new Error(
+      `No catalog name: pass --catalog or set mdx.catalog_name on connection '${connectionName}'.`,
+    );
+  }
+  if (!atscaleUrl) {
+    throw new Error(`Connection '${connectionName}' has no AtScale URL (atscale.url or mdx.url).`);
+  }
+  return {
+    installer, atscaleUrl, organizationId, catalogName, username, password,
+    insecure: atscale?.insecure === true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -584,16 +667,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Connection setup ---
     this.logger.info(`Reading connection file: ${params["connection-file"]}`);
     const connectionFile = yaml.readFromFile<any>(params["connection-file"]);
-    const connection = connectionFile.connections[params["connection-name"]];
+    const connection = connectionFile.connections?.[params["connection-name"]];
     if (!connection) {
       throw new Error(`Connection '${params["connection-name"]}' not found in ${params["connection-file"]}`);
     }
-    if (!connection.mdx) {
-      throw new Error(
-        `Connection '${params["connection-name"]}' is missing an 'mdx:' block. ` +
-        `Add mdx: { url, organization_id, catalog_name, user } to this connection in ${params["connection-file"]}.`
-      );
-    }
+    const resolved = resolveQueryStatsConnection(connectionFile, params["connection-name"], params.catalog);
+    const { installer, atscaleUrl, catalogName, username, password, insecure } = resolved;
+    // Only installer paths use the org id; container routes ignore it.
+    const organizationId = resolved.organizationId ?? "";
 
     let proxyConfig: any = {};
     if (connection.proxy && connection.proxy.host) {
@@ -636,16 +717,16 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         certConfig.rejectUnauthorized = false;
       }
     }
+    if (insecure) {
+      certConfig.rejectUnauthorized = false;
+    }
 
-    const { installer, mdx } = connection;
-    const { url: atscaleUrl, organization_id: organizationId, catalog_name: catalogName } = mdx;
-    const user = (connectionFile.users ?? {})[mdx.user] ?? {};
     const modelName = params.model;
 
     // --- Auth ---
     this.logger.info("Authenticating…");
     const token = await this.getToken(
-      installer, atscaleUrl, organizationId, user.username, user.password, proxyConfig, certConfig
+      installer, atscaleUrl, organizationId, username, password, proxyConfig, certConfig
     );
 
     // --- Discover model schema ---

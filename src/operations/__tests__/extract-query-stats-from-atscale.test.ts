@@ -3,6 +3,7 @@ import {
   fetchAllQueryHistory,
   monthlyWindowsUtc,
   queryReceivedAt,
+  resolveQueryStatsConnection,
   queryHistoryBaseUrl,
   queryHistoryPageUrl,
 } from "../extract-query-stats-from-atscale/ExtractQueryStatsFromAtScaleOperation.js";
@@ -84,5 +85,38 @@ describe("queryReceivedAt", () => {
       { type: "QueryWallTime", started: "2026-01-31T23:59:59.5Z" },
     ] })).toBe("2026-01-31T23:59:59.5Z");
     expect(queryReceivedAt({})).toBeUndefined();
+  });
+});
+
+describe("resolveQueryStatsConnection", () => {
+  it("accepts the standard container atscale: entry with no mdx block or organization_id", () => {
+    const c = resolveQueryStatsConnection({ connections: { dev: {
+      atscale: { url: "https://h/", username: "u", password: "p", insecure: true },
+    } } }, "dev", "My Catalog");
+    expect(c).toEqual({
+      installer: false, atscaleUrl: "https://h", organizationId: undefined, catalogName: "My Catalog",
+      username: "u", password: "p", insecure: true,
+    });
+  });
+
+  it("still reads an mdx: block, stripping an /engine/xmla suffix", () => {
+    const c = resolveQueryStatsConnection({
+      users: { admin: { username: "u", password: "p" } },
+      connections: { dev: { mdx: { url: "https://h/engine/xmla", user: "admin", catalog_name: "Cat" } } },
+    }, "dev", undefined);
+    expect(c).toMatchObject({ installer: false, atscaleUrl: "https://h", catalogName: "Cat", username: "u" });
+  });
+
+  it("requires organization_id only for installer connections", () => {
+    const file = (installer: boolean) => ({ connections: { c: {
+      installer, mdx: { url: "https://h", catalog_name: "Cat" },
+    } } });
+    expect(() => resolveQueryStatsConnection(file(false), "c", undefined)).not.toThrow();
+    expect(() => resolveQueryStatsConnection(file(true), "c", undefined)).toThrow(/organization_id/);
+  });
+
+  it("requires a catalog name", () => {
+    expect(() => resolveQueryStatsConnection({ connections: { c: { atscale: { url: "https://h" } } } }, "c", undefined))
+      .toThrow(/--catalog/);
   });
 });
