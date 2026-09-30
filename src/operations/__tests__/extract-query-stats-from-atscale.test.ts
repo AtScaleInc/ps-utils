@@ -3,9 +3,11 @@ import {
   dmvStringLiteral,
   fetchAllQueryHistory,
   monthlyWindowsUtc,
+  parseQuerySource,
   queryReceivedAt,
   reservoirOffer,
   resolveQueryStatsConnection,
+  summarizeQueryRow,
   queryHistoryBaseUrl,
   queryHistoryPageUrl,
 } from "../extract-query-stats-from-atscale/ExtractQueryStatsFromAtScaleOperation.js";
@@ -153,5 +155,50 @@ describe("reservoirOffer (Algorithm R)", () => {
     }
     // Expected 20000 * 3/10 = 6000 each.
     for (const h of hits) expect(Math.abs(h - 6000)).toBeLessThan(400);
+  });
+});
+
+describe("query-source", () => {
+  it("filters on querySource for user / system and drops the filter for all", () => {
+    const base = "https://h/engine/queries";
+    expect(queryHistoryPageUrl(base, { ...filters, querySource: "system" }, 0, 100)).toContain("?querySource=system&status=success");
+    expect(queryHistoryPageUrl(base, { ...filters, querySource: "all" }, 0, 100)).toMatch(/\?status=success&/);
+    expect(queryHistoryPageUrl(base, filters, 0, 100)).toContain("?querySource=user&");
+    expect(parseQuerySource(undefined)).toBe("user");
+    expect(() => parseQuerySource("everyone")).toThrow(/user", "system" or "all/);
+  });
+});
+
+describe("summarizeQueryRow", () => {
+  const row = (opts: { children?: any[] | null; aggs?: string[]; succeeded?: boolean }) => ({
+    query_id: "q1", user_id: "u1", cube_name: "cube", succeeded: opts.succeeded ?? true,
+    aggregate_definition_ids: opts.aggs ?? [],
+    timeline_events: [
+      { type: "QueryWallTime", started: "2026-09-29T16:04:01.932869Z", duration: 0.126705, children: [] },
+      ...(opts.children === null ? [] : [{ type: "SubqueriesWall", children: opts.children ?? [] }]),
+    ],
+  });
+  const sq = (used_local_cache: boolean) => ({ used_local_cache, used_aggregate_cache: false });
+
+  it("classifies a local-cache subquery as cache, even with an aggregate", () => {
+    expect(summarizeQueryRow(row({ children: [sq(false), sq(true)], aggs: ["a"] })).class).toBe("cache");
+  });
+
+  it("classifies a successful query with no subquery as cache", () => {
+    expect(summarizeQueryRow(row({ children: null })).class).toBe("cache");
+    expect(summarizeQueryRow(row({ children: [] })).subquery_count).toBe(0);
+  });
+
+  it("classifies an aggregate hit as agg, and the rest as raw", () => {
+    expect(summarizeQueryRow(row({ children: [sq(false)], aggs: ["a", "b"] }))).toMatchObject({ class: "agg", aggregate_count: 2 });
+    expect(summarizeQueryRow(row({ children: [sq(false)] })).class).toBe("raw");
+    expect(summarizeQueryRow(row({ children: [], succeeded: false })).class).toBe("raw");
+  });
+
+  it("reads received time and duration from QueryWallTime", () => {
+    expect(summarizeQueryRow(row({ children: [sq(false)] }))).toMatchObject({
+      query_id: "q1", received: "2026-09-29T16:04:01.932869Z", duration_ms: 126.705,
+      user_id: "u1", cube_name: "cube", subquery_count: 1,
+    });
   });
 });

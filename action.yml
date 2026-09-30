@@ -586,6 +586,11 @@ inputs:
       atscale-list-aggregate-build-history (default: 20).
     required: false
 
+  query-source:
+    description: >
+      Which queries to read: "user" (default), "system" (engine-issued) or "all".
+      Used by: extract-query-stats-from-atscale.
+    required: false
   # ── generate-enhanced-query-results ──────────────────────────────────────
   db-schema:
     description: >
@@ -1720,6 +1725,7 @@ runs:
         [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")
         [[ -n "${{ inputs.end-date }}"      ]] && ARGS+=(--end-date      "${{ inputs.end-date }}")
         [[ -n "${{ inputs.limit }}"         ]] && ARGS+=(--limit         "${{ inputs.limit }}")
+        [[ -n "${{ inputs.query-source }}"  ]] && ARGS+=(--query-source  "${{ inputs.query-source }}")
         [[ "${{ inputs.monthly }}" == "true" ]] && ARGS+=(--monthly true)
         [[ -n "${{ inputs.monthly-year }}"  ]] && ARGS+=(--monthly-year  "${{ inputs.monthly-year }}")
         node "${{ github.action_path }}/dist/cli.js" extract-query-stats-from-atscale "${ARGS[@]}"

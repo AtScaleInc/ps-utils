@@ -1377,9 +1377,11 @@ Paginates through the AtScale query history REST API for a given time window and
 | `monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv` |
 | `monthly-year` | No | current year | Calendar year for the monthly breakdown |
 | `limit` | No | `100` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
+| `query-source` | No | `user` | Which queries to read: `user` (queries sent by clients), `system` (engine-issued — aggregate builds, canaries, …) or `all` |
 | `num-queries` | No | `10` | Max sample query IDs retained per (attribute, measure) pair |
 
 **Outputs:**
+- `{output-dir}/{catalog}_{model}_queries.csv` — one row per query: `query_id`, `received`, `duration_ms`, `user_id`, `cube_name`, `class`, `aggregate_count`, `subquery_count`. `class` is how the query was answered, first match wins: **cache** (a subquery was served from the engine's local result cache, or the query sent no subquery), **agg** (the engine used an aggregate), **raw** (the warehouse answered without an aggregate). The log prints the totals per class.
 - `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
 - `{output-dir}/{catalog}_{model}_metric_by_hierarchy.csv` — long-form table: dimension, hierarchy, level, metric, and occurrence count for every observed combination
 - `{output-dir}/{catalog}_{model}_metric_pivot.csv` — pivot table with metrics as rows, `"Hierarchy > Level"` pairs as columns, and occurrence counts as cell values

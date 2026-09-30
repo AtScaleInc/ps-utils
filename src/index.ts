@@ -736,6 +736,7 @@ export type ExtractQueryStatsFromAtScaleParams = {
   windowDays?: string;     // default: "30"
   monthly?: string;     // default: "false"
   limit?: string;     // default: "100"
+  querySource?: "user" | "system" | "all";  // default: "user"
   numQueries?: string;     // default: "10"
   startDate?: string;
   endDate?: string;

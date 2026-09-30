@@ -1604,6 +1604,14 @@
           "default": null
         },
         {
+          "name": "catalog",
+          "description": "AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name of the connection; required when the connection has no mdx: block.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
           "name": "output-dir",
           "description": "Directory to write the output CSV files",
           "type": "string",
@@ -1653,11 +1661,19 @@
         },
         {
           "name": "limit",
-          "description": "Page size for the query history API",
+          "description": "Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped; every page is still fetched.",
           "type": "string",
           "role": "scalar",
           "required": false,
           "default": "100"
+        },
+        {
+          "name": "query-source",
+          "description": "Which queries to read: \"user\" (default — queries sent by clients), \"system\" (engine-issued: aggregate builds, canaries, …) or \"all\"",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "user"
         },
         {
           "name": "num-queries",

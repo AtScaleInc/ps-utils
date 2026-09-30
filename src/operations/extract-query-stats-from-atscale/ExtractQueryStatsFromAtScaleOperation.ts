@@ -90,6 +90,17 @@ class ExtractQueryStatsParameterSet extends ParameterSet {
       defaultValue = "100";
     })(),
     new (class extends StringParameter {
+      name = "query-source";
+      description =
+        "Which queries to read: \"user\" (default — queries sent by clients), \"system\" " +
+        "(engine-issued: aggregate builds, canaries, …) or \"all\"";
+      required = false;
+      defaultValue = "user";
+      validate(value: string): void {
+        parseQuerySource(value);
+      }
+    })(),
+    new (class extends StringParameter {
       name = "num-queries";
       description = "Maximum number of sample query IDs to retain per (attribute, measure) pair";
       required = false;
@@ -110,6 +121,7 @@ type Params = {
   monthly: string;
   "monthly-year"?: string;
   limit: string;
+  "query-source"?: string;
   "num-queries": string;
 };
 export type ExtractQueryStatsFromAtScaleParams = Params;
@@ -263,15 +275,36 @@ export function queryHistoryBaseUrl(
     : `${atscaleUrl}/engine/queries`;
 }
 
+export type QuerySource = "user" | "system" | "all";
+
+export function parseQuerySource(value: string | undefined): QuerySource {
+  const v = (value ?? "user").trim().toLowerCase() || "user";
+  if (v !== "user" && v !== "system" && v !== "all") {
+    throw new Error('Parameter query-source must be "user", "system" or "all".');
+  }
+  return v;
+}
+
+export interface QueryHistoryFilters {
+  catalogId: string;
+  modelId: string;
+  startTime: string;
+  endTime: string;
+  /** Defaults to "user". "all" sends no querySource filter. */
+  querySource?: QuerySource;
+}
+
 /** One page request against the query history list route. */
 export function queryHistoryPageUrl(
   baseUrl: string,
-  filters: { catalogId: string; modelId: string; startTime: string; endTime: string },
+  filters: QueryHistoryFilters,
   offset: number,
   limit: number,
 ): string {
+  const source = filters.querySource ?? "user";
+  const sourceParam = source === "all" ? "" : `querySource=${source}&`;
   return (
-    `${baseUrl}?querySource=user&status=success` +
+    `${baseUrl}?${sourceParam}status=success` +
     `&projectId=${filters.catalogId}&cubeId=${filters.modelId}` +
     `&queryDateTimeStart=${filters.startTime}&queryDateTimeEnd=${filters.endTime}` +
     `&offset=${offset}&limit=${limit}`
@@ -293,7 +326,7 @@ export const MAX_QUERY_HISTORY_PAGE_SIZE = 100;
 export async function fetchAllQueryHistory(
   getPage: (url: string) => Promise<any>,
   baseUrl: string,
-  filters: { catalogId: string; modelId: string; startTime: string; endTime: string },
+  filters: QueryHistoryFilters,
   requestedLimit: number,
   logger?: Pick<Logger, "verbose">,
 ): Promise<any[]> {
@@ -352,6 +385,63 @@ export function monthlyWindowsUtc(year: number): MonthWindow[] {
 export function queryReceivedAt(row: any): string | undefined {
   const events: any[] = Array.isArray(row?.timeline_events) ? row.timeline_events : [];
   return events.find((e) => e?.type === "QueryWallTime")?.started ?? undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Answered-by classification
+// ---------------------------------------------------------------------------
+
+export type AnsweredBy = "cache" | "agg" | "raw";
+
+export interface QuerySummaryRow {
+  query_id: string;
+  received: string;
+  duration_ms: number | null;
+  user_id: string;
+  cube_name: string;
+  class: AnsweredBy;
+  aggregate_count: number;
+  subquery_count: number;
+}
+
+/**
+ * Reduce one engine query history row to its summary, classifying how it was
+ * answered (first match wins):
+ *   cache — a subquery was served from the engine's local result cache
+ *           (SubqueriesWall children used_local_cache), or the query succeeded
+ *           without sending any subquery (fully cache-served)
+ *   agg   — the engine lists aggregates it used (aggregate_definition_ids)
+ *   raw   — the warehouse answered it without an aggregate
+ */
+export function summarizeQueryRow(row: any): QuerySummaryRow {
+  const events: any[] = Array.isArray(row?.timeline_events) ? row.timeline_events : [];
+  const subqueries: any[] = events
+    .filter((e) => e?.type === "SubqueriesWall")
+    .flatMap((e) => (Array.isArray(e.children) ? e.children : []));
+  const wall = events.find((e) => e?.type === "QueryWallTime");
+  const aggregates: any[] = Array.isArray(row?.aggregate_definition_ids) ? row.aggregate_definition_ids : [];
+  const succeeded = row?.succeeded !== false;
+
+  let cls: AnsweredBy;
+  if (subqueries.some((sq) => sq?.used_local_cache === true) || (succeeded && subqueries.length === 0)) {
+    cls = "cache";
+  } else if (aggregates.length > 0) {
+    cls = "agg";
+  } else {
+    cls = "raw";
+  }
+
+  const seconds = typeof wall?.duration === "number" ? wall.duration : null;
+  return {
+    query_id: String(row?.query_id ?? ""),
+    received: String(wall?.started ?? ""),
+    duration_ms: seconds === null ? null : Math.round(seconds * 1000 * 1000) / 1000,
+    user_id: String(row?.user_id ?? ""),
+    cube_name: String(row?.cube_name ?? ""),
+    class: cls,
+    aggregate_count: aggregates.length,
+    subquery_count: subqueries.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -572,7 +662,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
   /**
    * Pages through the AtScale query history REST API for [startTime, endTime],
-   * tallying how many successful user queries involved each
+   * tallying how many successful queries (of querySource) involved each
    * (dimension-attribute, measure) pair.
    *
    * Keeps at most `numQueries` sample query IDs per pair by reservoir sampling
@@ -597,9 +687,11 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     proxyConfig: Record<string, any>,
     certConfig: Record<string, any>,
     receivedBefore?: string,
+    querySource: QuerySource = "user",
   ): Promise<{
     occurrenceDict: Map<PairKey, number>;
     sampleQueryIds: Map<PairKey, Array<[string, string[]]>>;
+    summaries: QuerySummaryRow[];
   }> {
     const occurrenceDict = new Map<PairKey, number>();
     const sampleQueryIds = new Map<PairKey, Array<[string, string[]]>>();
@@ -620,7 +712,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
     const fetched = await fetchAllQueryHistory(
       async (url) => (await axios.get(url, config)).data,
-      baseUrl, { catalogId, modelId, startTime, endTime }, limit, this.logger,
+      baseUrl, { catalogId, modelId, startTime, endTime, querySource }, limit, this.logger,
     );
     const cutoff = receivedBefore ? Date.parse(receivedBefore) : undefined;
     const data = cutoff === undefined ? fetched : fetched.filter((row) => {
@@ -670,7 +762,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       `Processed ${data.length} query records; found ${occurrenceDict.size} unique (attribute, measure) pairs`,
     );
 
-    return { occurrenceDict, sampleQueryIds };
+    return { occurrenceDict, sampleQueryIds, summaries: data.map(summarizeQueryRow) };
   }
 
   // -------------------------------------------------------------------------
@@ -806,6 +898,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Parse parameters ---
     const limit = Math.max(1, parseInt(params.limit, 10) || 100);
     const numQueries = Math.max(1, parseInt(params["num-queries"], 10) || 10);
+    const querySource = parseQuerySource(params["query-source"]);
     const doMonthly = params.monthly?.toLowerCase() === "true";
     const outputDir = path.resolve(params["output-dir"] ?? ".");
     fs.mkdirSync(outputDir, { recursive: true });
@@ -832,9 +925,27 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     }
 
     this.logger.info(`Collecting query stats from ${startTime} to ${endTime}…`);
-    const { occurrenceDict } = await this.processQueries(
+    const { occurrenceDict, summaries } = await this.processQueries(
       installer, atscaleUrl, token, organizationId,
-      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig, certConfig
+      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig, certConfig,
+      undefined, querySource,
+    );
+
+    // Per-query summary CSV with the answered-by breakdown.
+    const summaryColumns: Array<keyof QuerySummaryRow> = [
+      "query_id", "received", "duration_ms", "user_id", "cube_name", "class", "aggregate_count", "subquery_count",
+    ];
+    const summaryFile = `${filePrefix}_queries.csv`;
+    fs.writeFileSync(
+      summaryFile,
+      this.toCsv([summaryColumns, ...summaries.map((r) => summaryColumns.map((c) => r[c]))]),
+      "utf8",
+    );
+    const byClass = { cache: 0, agg: 0, raw: 0 };
+    for (const r of summaries) byClass[r.class]++;
+    this.logger.info(
+      `Wrote ${summaries.length} ${querySource === "all" ? "" : querySource + " "}quer${summaries.length === 1 ? "y" : "ies"} to ${summaryFile}` +
+      `  (cache ${byClass.cache}, agg ${byClass.agg}, raw ${byClass.raw})`,
     );
 
     // Build occurrence CSV: cross-product of attributes × measures
@@ -967,7 +1078,8 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         this.logger.info(`  ${MONTHS[month]} ${year}…`);
         const { occurrenceDict: mDict } = await this.processQueries(
           installer, atscaleUrl, token, organizationId,
-          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig, receivedBefore
+          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig, receivedBefore,
+          querySource,
         );
         monthlyDicts.push(mDict);
       }
