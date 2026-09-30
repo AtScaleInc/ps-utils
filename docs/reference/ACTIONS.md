@@ -218,7 +218,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 | `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors`, `atscale-list-aggregates`, `atscale-rebuild-aggregates`, `atscale-list-aggregate-build-history`, `atscale-export-aggregates`, `atscale-import-aggregates` | Full contents of your `connections.yaml` file (or a `systems.properties` file for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
-A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](../README.md#connection-yaml-connectionsyaml) for the full format reference.
+A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](../../README.md#connection-yaml-connectionsyaml) for the full format reference.
 
 > **Security:** Never commit `connections.yaml` to source control. Always supply it via a secret.
 
@@ -377,7 +377,7 @@ Connects to a live database, introspects its schema, runs semantic model inferen
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
-Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -413,7 +413,7 @@ All inference capabilities from `generate-sml-from-connection` apply — composi
 
 **Requires:** No secrets — the DDL file must be present in the repository.
 
-Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -980,7 +980,7 @@ With sampling tuning and MySQL (`--no-tablesample`):
 | `serial` | No | `"false"` | Set to `"true"` to profile dimensions one at a time instead of in parallel. Use when the database enforces a low per-user connection limit |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to store original table and column names in the fingerprint so that subsequent data generation creates tables matching the SML model schema |
 
-**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. Pass `preserve-meta-data: "true"` to also embed a `metadata:` block containing the original physical names. See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
+**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. Pass `preserve-meta-data: "true"` to also embed a `metadata:` block containing the original physical names. See [STATISTICS.md](../system/STATISTICS.md) for the full algorithm description.
 
 ---
 
@@ -1074,7 +1074,7 @@ With scale factor and seed:
 | `reports-dir` | No | `<output-dir>/_reports` | Directory for security audit artifacts |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
-**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls)).
+**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](../system/STATISTICS.md#security--compliance-controls)).
 
 ---
 
@@ -1140,7 +1140,7 @@ Full pipeline — extract shape, generate DDL, populate:
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimension inserts run in parallel; fact inserts run in parallel after all dimensions complete, ensuring FK constraints are respected throughout.
 
-**Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls) for the full list.
+**Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](../system/STATISTICS.md#security--compliance-controls) for the full list.
 
 ---
 
@@ -1681,7 +1681,7 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 
 Lists the data warehouses (data sources) registered in an AtScale instance and writes the result as JSON to stdout.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block in the named connection. Set `apiToken` to a Design Center API token (profile icon → API Token → Generate) — it is automatically exchanged for a JWT via `POST /v1/token`. See [Connection YAML](../README.md#atscale-rest-atscale-fields).
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block in the named connection. Set `apiToken` to a Design Center API token (profile icon → API Token → Generate) — it is automatically exchanged for a JWT via `POST /v1/token`. See [Connection YAML](../../README.md#atscale-rest-atscale-fields).
 
 #### Using the composite action
 
@@ -1990,7 +1990,7 @@ out is reported as a Phase 2 warning, so structural results are still produced.
 
 Gets the DSO count for a specified model or catalog if supplied or the entire system if none are specified.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the AtScale connection entry and a `sql:` block on the SQL connection entry. The API token is automatically exchanged for a JWT via `POST /v1/token`.
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block on the named connection pointing at the AtScale SQL endpoint. The operation reads `information_schema` through that endpoint, treating each schema as a catalog and each table as a model.
 
 #### Using the composite action
 
@@ -2006,7 +2006,7 @@ Gets the DSO count for a specified model or catalog if supplied or the entire sy
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-name` | Yes | | Name of the connection entry whose `sql:` block points at the AtScale SQL endpoint |
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `catalog` | No | all available catalogs | Count only models from the specified catalog |
 | `model` | No | all available models | Count only the specified model |

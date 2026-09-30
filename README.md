@@ -253,15 +253,17 @@ The `docs/` directory contains extended reference material:
 
 | File | Description |
 |------|-------------|
-| [docs/ACTIONS.md](docs/ACTIONS.md) | GitHub Actions guide — run any operation as a composite workflow step |
-| [docs/NODE.md](docs/NODE.md) | Node.js library API reference — typed `async` functions for every operation |
-| [docs/GRAPHQL.md](docs/GRAPHQL.md) | GraphQL API reference for the web services server (auto-generated) |
-| [docs/REST.md](docs/REST.md) | REST API reference for the web services server (auto-generated) |
-| [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
-| [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
+| [docs/reference/ACTIONS.md](docs/reference/ACTIONS.md) | GitHub Actions guide — run any operation as a composite workflow step |
+| [docs/reference/NODE.md](docs/reference/NODE.md) | Node.js library API reference — typed `async` functions for every operation |
+| [docs/reference/GRAPHQL.md](docs/reference/GRAPHQL.md) | GraphQL API reference for the web services server (auto-generated) |
+| [docs/reference/REST.md](docs/reference/REST.md) | REST API reference for the web services server (auto-generated) |
+| [docs/reference/DEVELOPER.md](docs/reference/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
+| [docs/reference/README.md](docs/reference/README.md) | API reference index — GitHub Actions, Node.js, GraphQL, REST, and developer guide |
+| [docs/workflows/CONVERSION.md](docs/workflows/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
 | [docs/workflows/README.md](docs/workflows/README.md) | Professional Services delivery workflows for existing-model conversion and net-new SML development |
-| [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
-| [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+| [docs/system/STATISTICS.md](docs/system/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
+| [docs/system/VERTICALS.md](docs/system/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+| [docs/system/README.md](docs/system/README.md) | System reference index — architecture, naming style guide, synthetic-data statistics, and industry verticals |
 | [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu, plus SML schema validation and highlighting (install & usage) |
 | [resources/sml-reference/UPSTREAM.md](resources/sml-reference/UPSTREAM.md) | Vendored SML language specification — source, pinned revision, and how to refresh it |
 
@@ -1167,7 +1169,7 @@ The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include
 
 Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
 
-Supports both star-schema (every hierarchy level denormalized into one dimension table) and snowflake-schema (each level normalized into its own physical table, resolved from the SML model's per-level datasets and `relationships` block) layouts — see [Snowflake-schema hierarchies](docs/STATISTICS.md#snowflake-schema-hierarchies) in STATISTICS.md.
+Supports both star-schema (every hierarchy level denormalized into one dimension table) and snowflake-schema (each level normalized into its own physical table, resolved from the SML model's per-level datasets and `relationships` block) layouts — see [Snowflake-schema hierarchies](docs/system/STATISTICS.md#snowflake-schema-hierarchies) in STATISTICS.md.
 
 No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
 
@@ -1213,7 +1215,7 @@ With sampling tuning:
 
 By default, all entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`) and the mapping is discarded. Pass `--preserve-meta-data` to retain the original physical names in a `metadata:` block so that downstream `generate-data-from-data-shape-to-connection` runs create tables that match the SML model schema.
 
-See [STATISTICS.md](docs/STATISTICS.md) for the full algorithm description.
+See [STATISTICS.md](docs/system/STATISTICS.md) for the full algorithm description.
 
 ---
 
@@ -1254,7 +1256,7 @@ With dialect selection:
 - `snowflake` — integer types are mapped to `NUMBER(n,0)`, decimals to `NUMBER(18,4)`
 - All other dialects — standard ANSI SQL types (`SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL(18,4)`, `VARCHAR(200)`)
 
-See [STATISTICS.md](docs/STATISTICS.md) §Phase 7 for the reconstruction algorithm.
+See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 7 for the reconstruction algorithm.
 
 ---
 
@@ -1290,7 +1292,7 @@ With a scale factor and reproducible seed:
 
 **Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
 
-See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
@@ -1339,7 +1341,7 @@ With scale factor and batch tuning:
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimensions are inserted in parallel since they have no inter-table FK dependencies. Facts are inserted in parallel after all dimension inserts complete, ensuring FK constraints are respected throughout.
 
-See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
@@ -2525,7 +2527,7 @@ Starts a GraphQL HTTP server that dynamically exposes every registered operation
 
 File parameters (names ending in `-file`) accept either a local path string or a multipart-uploaded file via the `Upload` scalar.
 
-See [GRAPHQL.md](docs/GRAPHQL.md) for the full schema reference and per-operation documentation.
+See [GRAPHQL.md](docs/reference/GRAPHQL.md) for the full schema reference and per-operation documentation.
 
 ```bash
 ./atscale-utils execute-web-services
@@ -3048,9 +3050,9 @@ An optional YAML file that stores SML generation parameters so you don't have to
 
 **Input vs. output:** `--sml-config-file` is the *input* path only. After generation, the **effective settings** (all values including defaults) are always written to `<output-dir>/sml.style.yaml` — a fixed location independent of the input path. If `--sml-config-file` points to the same file (e.g. you pass `--sml-config-file sml-output/sml.style.yaml`), it is simply overwritten.
 
-**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`docs/sml.style.yaml`](docs/sml.style.yaml). Copy it to your working directory as a starting point.
+**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`docs/system/sml.style.yaml`](docs/system/sml.style.yaml). Copy it to your working directory as a starting point.
 
-**Style guide:** [`docs/STYLE.md`](docs/STYLE.md) documents the naming conventions, casing rules, and generation settings that `sml.style.yaml` controls.
+**Style guide:** [`docs/system/STYLE.md`](docs/system/STYLE.md) documents the naming conventions, casing rules, and generation settings that `sml.style.yaml` controls.
 
 ### All fields
 

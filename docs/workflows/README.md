@@ -11,6 +11,19 @@ The paths begin with different inputs, then converge on the same governance, val
 
 These two workflows are a building block, not the committee's complete process map. They document one specific, concrete cycle each so a higher-level, cross-workflow view can reference something real rather than starting from a blank page.
 
+## Semantic CoE document set
+
+Customer-facing best practices for running AtScale through a hub-and-spoke Semantic Center of Excellence, in three levels of increasing technical depth:
+
+| Level | Document | Scope |
+| --- | --- | --- |
+| 0 | [Developing a Semantic Center of Excellence](COE_IMPLEMENTATION_LEVEL0.md) | Organization structure, the case for hub-and-spoke, team roles, pillars, and operating practices for container deployments |
+| 1 | [CoE Workflows and Responsibilities](COE_WORKFLOWS_LEVEL1.md) | The ownership, approval, and authorization contract between the CoE and business units for every step from model change to production, including the scale-test go / no-go decision and the pre-production artifact set |
+| 2 | [CoE System Structure](COE_SYSTEM_STRUCTURE_LEVEL2.md) | Repository topology, branch model, Git approval controls, pipelines, artifacts, aggregate export and import, and environment settings, implemented with PS-Utils operations |
+| Companion | [Validation Harness](VALIDATION_HARNESS.md) | Unit and scale validation workflows, coverage and comparison analysis, data strategies (production data, production queries, synthetic data), and portable reproducible issue packages, down to PS-Utils commands |
+
+The set uses four environments: a self-service DEV sandbox for modelers, TEST for automated unit validation, UAT for scale validation, and PROD.
+
 ## Workflow selection
 
 ```mermaid
@@ -145,11 +158,11 @@ These are improvement opportunities, not claims that a defect has been confirmed
 
 | Reference | Boundary |
 | --- | --- |
-| [Conversion algorithm](../CONVERSION.md) | Implementation details for converting AtScale `project_2_0` XML to SML; it is not the complete PS delivery or acceptance workflow. |
-| [Git and promotion strategy](../GIT.md) | Branching, review, and environment-promotion guidance. Example operation names must be checked against the current registry before use. |
-| [Specialized migration guide](../MIGRATE.md) | Installer/XML migration, environment setup, BI cutover, and promotion guidance for that migration scenario. |
-| [Migration management plan](../MIGRATE_PLAN.md) | Programme-level milestones, risks, decisions, and sign-off responsibilities. |
-| [GitHub Actions operation guide](../ACTIONS.md) | How registered operations are invoked through the composite action; it does not replace the lifecycle gates in these runbooks. |
+| [Conversion algorithm](CONVERSION.md) | Implementation details for converting AtScale `project_2_0` XML to SML; it is not the complete PS delivery or acceptance workflow. |
+| [Git and promotion strategy](GIT.md) | Branching, review, and environment-promotion guidance. Example operation names must be checked against the current registry before use. |
+| [Specialized migration guide](MIGRATE.md) | Installer/XML migration, environment setup, BI cutover, and promotion guidance for that migration scenario. |
+| [Migration management plan](MIGRATE_PLAN.md) | Programme-level milestones, risks, decisions, and sign-off responsibilities. |
+| [GitHub Actions operation guide](../reference/ACTIONS.md) | How registered operations are invoked through the composite action; it does not replace the lifecycle gates in these runbooks. |
 | [Root CLI operation reference](../../README.md#operations) | Current user-facing operation names, parameters, and outputs. Registration and implementation remain authoritative if older examples diverge. |
 
 ## Proposed Follow-On Work — Not Included in This Change
