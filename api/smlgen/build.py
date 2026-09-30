@@ -36,6 +36,7 @@ from typing import Any
 import yaml
 
 from .rules import AGG_TO_CALC_METHOD, cased, join_type_family, kebab, sml_data_type, title_case
+from .support import BUILT_BY_MARKER
 
 
 def _column_key(node_id: str, column: str) -> str:
@@ -93,7 +94,10 @@ def _resolve_key_display_sort(config: dict, own_col: str, dialect: str | None) -
 
 
 def _yaml_dump(obj: Any) -> str:
-    return yaml.safe_dump(obj, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    # The marker comment tags the repo as built here (support.built_here);
+    # AtScale ignores comments, Design Center drops them when it rewrites a file.
+    body = yaml.safe_dump(obj, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    return f"{BUILT_BY_MARKER}\n{body}"
 
 
 class ValidationError(Exception):

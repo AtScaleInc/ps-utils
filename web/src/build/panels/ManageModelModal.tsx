@@ -14,7 +14,7 @@ import {
   type WorkspaceModel,
 } from '../client'
 import { MODEL_NAME_HINT, slugifyModelName } from '../lib/naming'
-import { useModelStore } from '../modelStore'
+import { readOnlyReason, useModelStore } from '../modelStore'
 
 interface Props {
   onClose: () => void
@@ -60,6 +60,7 @@ export function ManageModelModal({ onClose }: Props) {
   const calculations = useModelStore((s) => s.calculations)
   const loadModelData = useModelStore((s) => s.loadModelData)
   const setSourceId = useModelStore((s) => s.setSourceId)
+  const readOnly = useModelStore(readOnlyReason)
 
   useEffect(() => {
     if (tab !== 'load') return
@@ -89,6 +90,10 @@ export function ManageModelModal({ onClose }: Props) {
   }
 
   async function handleSave() {
+    if (readOnly) {
+      setError(readOnly)
+      return
+    }
     if (!sourceMeta) {
       setError('Select a data source before saving.')
       return
@@ -150,6 +155,7 @@ export function ManageModelModal({ onClose }: Props) {
         joins: result.joins as never[],
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
+        loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
       })
       onClose()
     } catch (err) {
@@ -180,6 +186,7 @@ export function ManageModelModal({ onClose }: Props) {
         joins: result.joins as never[],
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
+        loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
       })
       onClose()
     } catch (err) {
@@ -231,6 +238,7 @@ export function ManageModelModal({ onClose }: Props) {
         joins: result.joins as never[],
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
+        loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
       })
       onClose()
     } catch (err) {
@@ -252,6 +260,7 @@ export function ManageModelModal({ onClose }: Props) {
         joins: result.joins as never[],
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
+        loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
       })
       onClose()
     } catch (err) {
@@ -318,7 +327,8 @@ export function ManageModelModal({ onClose }: Props) {
                 Save to
                 <input className="mono-input" value={resolvedSavePath} readOnly />
               </label>
-              <button className="btn btn-primary" disabled={busy} onClick={handleSave}>
+              {readOnly && <div className="login-error" style={{ marginBottom: 12 }}>{readOnly}</div>}
+              <button className="btn btn-primary" disabled={busy || !!readOnly} title={readOnly ?? undefined} onClick={handleSave}>
                 {busy ? 'Saving…' : 'Generate & save'}
               </button>
             </div>

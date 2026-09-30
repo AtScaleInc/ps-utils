@@ -119,8 +119,26 @@ export interface SourceRepo {
   branch: string
 }
 
+/** One thing in a loaded repo Build can't write back (api/smlgen/support.py). */
+export interface UnsupportedFeature {
+  feature: string
+  detail: string
+  file: string
+  /** complex = modelling logic (semi-additive, row security, ...); detail = folders, formats, labels. */
+  kind: 'complex' | 'detail'
+}
+
+/** Where the canvas came from. `unsupported` non-empty = read-only: Save and
+ *  Deploy regenerate every file and would drop those features. */
+export interface LoadedFrom {
+  builtHere: boolean
+  unsupported: UnsupportedFeature[]
+}
+
 export interface ModelState {
   modelName: string
+  /** Set by loadModelData from an SML import; null for a model started here. */
+  loadedFrom: LoadedFrom | null
   /** Set when the current model was loaded from an AtScale-attached repo, so
    *  Deploy pushes back to the same repo/branch it came from instead of
    *  requiring the model name alone to rediscover it. Cleared by reset(). */
@@ -184,6 +202,7 @@ export interface ModelState {
     joins: Join[]
     cfg: Record<ColumnKey, ColumnConfig>
     calculations?: Calculation[]
+    loadedFrom?: LoadedFrom | null
   }) => void
 }
 
@@ -270,6 +289,7 @@ let seq = 0
 
 export const useModelStore = create<ModelState>((set, get) => ({
   modelName: '',
+  loadedFrom: null,
   sourceRepo: null,
   sourceId: null,
   sourceMeta: null,
@@ -457,7 +477,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   removeCalculation: (id) => set((s) => ({ calculations: s.calculations.filter((c) => c.id !== id) })),
 
   reset: () =>
-    set({ nodes: [], joins: [], cfg: {}, calculations: [], selection: null, linkDrag: null, sourceRepo: null }),
+    set({ nodes: [], joins: [], cfg: {}, calculations: [], selection: null, linkDrag: null, sourceRepo: null, loadedFrom: null }),
 
   loadModelData: (data) => {
     // Imported/loaded ids (n0, j0, ...) come from a separate counter (the
@@ -476,6 +496,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       joins: data.joins,
       cfg: data.cfg,
       calculations: data.calculations ?? [],
+      loadedFrom: data.loadedFrom ?? null,
       selection: null,
       linkDrag: null,
     })
@@ -557,3 +578,10 @@ export function counters(state: ModelState) {
 }
 
 export { columnKey }
+
+/** Why Save / Deploy are off for the current canvas, or null when they're allowed. */
+export function readOnlyReason(state: Pick<ModelState, 'loadedFrom'>): string | null {
+  const n = state.loadedFrom?.unsupported.length ?? 0
+  if (!n) return null
+  return `Read-only: this model uses SML Build can't write back (${n} item${n === 1 ? '' : 's'}). Saving or deploying from here would remove them - edit it in Design Center.`
+}

@@ -25,9 +25,10 @@ type Tab = 'profile' | 'sample' | 'joins' | 'stats'
 
 // The picked table survives switching to Develop and back.
 const useDiscovery = create<{
-  picked: { schema: string; table: string; columns: SchemaTable['columns'] } | null
+  /** `hostId`: a table picked on one host means nothing on another. */
+  picked: { hostId: string; schema: string; table: string; columns: SchemaTable['columns'] } | null
   tab: Tab
-  pick: (p: { schema: string; table: string; columns: SchemaTable['columns'] } | null) => void
+  pick: (p: { hostId: string; schema: string; table: string; columns: SchemaTable['columns'] } | null) => void
   setTab: (t: Tab) => void
 }>((set) => ({
   picked: null,
@@ -50,7 +51,8 @@ const fmtAvg = (n: number | null) => (n == null ? '—' : Math.abs(n) >= 1000 ? 
 export function DiscoveryTab({ hostId }: { hostId: string }) {
   const sourceId = useModelStore((s) => s.sourceId)
   const sourceMeta = useModelStore((s) => s.sourceMeta)
-  const { picked, pick, tab, setTab } = useDiscovery()
+  const { picked: anyPicked, pick, tab, setTab } = useDiscovery()
+  const picked = anyPicked?.hostId === hostId ? anyPicked : null
   const addNode = useModelStore((s) => s.addNode)
   const nodes = useModelStore((s) => s.nodes)
 
@@ -78,7 +80,7 @@ export function DiscoveryTab({ hostId }: { hostId: string }) {
       <SourcePanel
         discover={{
           selected: picked,
-          onSelect: (schema, t) => pick({ schema, table: t.name, columns: t.columns }),
+          onSelect: (schema, t) => pick({ hostId, schema, table: t.name, columns: t.columns }),
         }}
       />
       <main className="disc">

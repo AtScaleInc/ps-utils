@@ -84,10 +84,65 @@ Settings. There's no separate login.
 - **Develop.** Pick one of the host's data warehouses, drag tables onto the
   canvas, mark each as a fact or a dimension, join them (snowflake joins work
   too), and configure metrics, hierarchies, aliases, secondary attributes and
-  calculations. **Wizard** does the first pass for you from column names.
+  calculations. **Wizard** does the first pass for you from column names. The
+  data source list is per host: switching to a host that doesn't have the
+  picked warehouse connection clears the pick instead of querying a connection
+  that isn't there.
+- **Preview data** (canvas toolbar, after Auto-arrange). Checks joins and
+  metrics against real data before anything is generated or deployed. In a
+  pop-up like the Wizard's, pick the table to start from (facts first), then
+  the metrics and each dimension's levels and attributes (all ticked by
+  default). Tables join the way the canvas says: fact → dimensions →
+  snowflaked dimensions, one join per role-play (Order Date / Ship Date), as
+  LEFT JOINs so a key with no match shows as NULL instead of vanishing.
+  - **Rows**: the joined rows as they are, metrics unaggregated. A dimension
+    column that is NULL on every row is flagged (its join likely matches
+    nothing).
+  - **Aggregated**: each metric with its own aggregation (SUM, COUNT
+    DISTINCT, …), grouped by the ticked attributes.
+  - **Check joins**: rows before vs after the joins (more after = fan-out,
+    which inflates every metric) and, per join, how many rows find no
+    dimension row. This one counts every row, so it's a full scan on large
+    tables.
+
+  It runs once when opened and again on **Run**; the SQL sent is shown under
+  the result. Rows and Aggregated return the first **10 rows**: the SQL goes
+  through the same AtScale interface as Discovery's profile, whose limit is
+  fixed by the engine. Calculations are MDX and aren't previewed; they run in
+  AtScale after deploy. Nothing is stored.
 - **Save / Load.** Saving writes plain SML to `workspace/models/<model>/`.
   Loading reads from there, from a repo already attached on the host, or from
   any path or Git URL.
+- **Built here / Built elsewhere.** Every file Build generates starts with the
+  comment `# Built with AtScale Environment Manager (Build)`. AtScale ignores
+  it; Design Center drops it when it rewrites a file. A loaded model shows
+  **Built here** when its `catalog.yml` still carries it, else **Built
+  elsewhere** (models built before the tag existed show as elsewhere, but stay
+  editable if nothing below applies).
+- **Read-only models.** Save and Deploy regenerate every file from the canvas,
+  so anything the canvas can't hold would be deleted from the model. When a
+  loaded repo uses any of it, the model opens **read-only**: Deploy and Save
+  are disabled, and a banner under the Build bar lists what it found, grouped,
+  with the file and object for each (**show details**). The API also refuses
+  (409) to save or deploy over a working copy that holds such SML. Checked
+  against the [SML reference](https://github.com/semanticdatalayer/SML/tree/main/sml-reference):
+  - **Complex features** (listed first): row security, composite models,
+    more than one model, packages, semi-additive metrics, calculation groups,
+    perspectives, user-defined aggregates, partitions, drill-throughs,
+    dimensions over several tables (snowflake hierarchies), more than one
+    hierarchy per dimension, composite keys and joins, SQL datasets and
+    calculated columns, many-to-many and dimension-level role-play
+    relationships, parallel periods, metrical attributes, quantiles, level
+    aliases, custom empty members, dataset / model properties, connection
+    overrides, calculation methods or unrelated-dimension handling Build
+    doesn't write, a catalog name other than `<model>_catalog`, several
+    metrics on one column.
+  - **Cosmetic** (also blocks, since a save would lose it): folders, formats,
+    descriptions, labels that differ from the name, hidden objects, Design
+    Center metadata, and identifier casing Build would change.
+
+  Edit such a model in Design Center. **Reset** (or the Wizard with a cleared
+  canvas) starts a new, editable model.
 - **Deploy.** Generates the SML and shows it for review; **Validate with
   sml-cli** is optional. **Deploy to** lists every host by group, with the
   Build host checked by default. The SML is pushed to Git once: a new model
@@ -110,8 +165,9 @@ Settings. There's no separate login.
     themselves (`HEAD` / `LIMIT`), so a preview never pulls a whole dataset;
     typed MDX runs as written and is trimmed afterwards.
 
-Build is a quick-start modeler, not a replacement for AtScale's own. Multi-table
-dimension hierarchies and multi-hierarchy dimensions only partly import.
+Build is a quick-start modeler, not a replacement for AtScale's own. A model
+using anything beyond Build's subset opens read-only (see above) rather than
+being partly imported and overwritten.
 
 ### Manage → Models
 
@@ -550,7 +606,7 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 | Build history | `GET /wapi/p/aggregate/batch-history` |
 | Export / import | `GET /v1/aggregates/export/…` · `POST /v1/aggregates/import/…` |
 | Data warehouses, schema tree (Build) | `GET /wapi/p/data-warehouses`, `/wapi/p/data-sources/conn/{connectionId}/databases/…/tables/{t}/info` |
-| Profile SQL (Discovery) | `POST /wapi/p/data-sources/conn/{connectionId}/query/sample` `{query, udf}`: AtScale runs it on the warehouse, wrapped in `LIMIT 10` |
+| Profile SQL (Discovery), Preview data (Develop) | `POST /wapi/p/data-sources/conn/{connectionId}/query/sample` `{query, udf}`: AtScale runs it on the warehouse, wrapped in `LIMIT 10` |
 | Sample rows, statistics (Discovery) | `GET /engine/v1/datasources/{connectionId}/sample-data/{schema}/{table}`, `/engine/v1/datasources/{connectionId}/statistics` (newer engines only) |
 | DMV metadata, MDX queries (Preview, Test) | `POST /engine/xmla` (`MDSCHEMA_CUBES / DIMENSIONS / HIERARCHIES / LEVELS / MEASURES / PROPERTIES`, and MDX) |
 | SQL queries (Preview, Test) | `POST /engine/query/submit` |
@@ -575,10 +631,13 @@ Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (po
                 GET /hosts/:id/sources/:sourceId/columns?schema=&table= · POST …/columns {tables} · GET /build/repos
                 GET /hosts/:id/preview/catalogs · /preview/metadata · POST /preview/query · /preview/freehand
                 POST /sml/generate · validate · save · save-path · import · import-path · import-git · GET /sml/models
+                  (import returns builtHere + unsupported[]; save / save-path / build/deploy answer 409
+                   {readOnly, unsupported} over a working copy Build can't write back)
                 POST /build/deploy {…model, hostIds} · GET /build/preflight?connection=&hostIds=
 Discovery       GET /hosts/:id/discovery/table · /discovery/profile[?id=] · /discovery/top-values?column=
                   (table args: ?source=<connectionId::database>&schema=&table=)
                 POST /hosts/:id/discovery/join-check {…table, column, toSchema, toTable, toColumn}
+                POST /hosts/:id/discovery/data-preview {source, mode: rows|aggregate|check, tables, columns}
                 GET /discovery/store · POST /discovery/cleanup {olderThanDays, keepPerTable, hostId, dryRun}
                 POST /discovery/compact
 Test            GET /hosts/:id/test/cubes · POST /test/generate · /test/runs · /test/compare · /test/model-compare
@@ -605,8 +664,14 @@ Jobs            GET /jobs/:id
   commit.
 - **Versions of catalogs deployed outside this app are inferred** from the
   publish time (shown with `~`).
-- **Build models one physical table per dimension, with one hierarchy each.**
-  Richer patterns only partly import; use AtScale's own modeler for those.
+- **Build models one physical table per dimension, with one hierarchy each,**
+  and only the SML it can write back. A loaded model using anything else
+  (semi-additive metrics, row security, several models, composite keys,
+  folders, formats, …) is read-only in Build: no Save, no Deploy. Most models
+  made in Design Center fall in this group; edit them there.
+- **Preview data returns 10 rows,** the engine's fixed limit on `query/sample`.
+  **Check joins** scans every row of the joined tables. Calculations (MDX)
+  aren't previewed.
 - **A Build deploy needs the same warehouse connection id on every target host**
   (for example `Postgres14`). Hosts without it are skipped.
 - **The DMV doesn't say which dimensions a measure relates to**, and AtScale

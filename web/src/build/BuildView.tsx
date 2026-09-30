@@ -4,11 +4,12 @@ import { EnvSegment, HostSelect, useHosts } from '../components/ui'
 import { resolveHost, useUi } from '../store'
 import { deployModel, generateSml, setBuildHost, SmlValidationFailure, type GenerateSmlPayload, type SmlFile } from './client'
 import { MODEL_NAME_HINT, slugifyModelName } from './lib/naming'
-import { counters, useModelStore } from './modelStore'
+import { counters, readOnlyReason, useModelStore } from './modelStore'
 import { CalculationsModal } from './panels/CalculationsModal'
 import { Canvas } from './panels/Canvas'
 import { DiscoveryTab } from './panels/DiscoveryTab'
 import { Inspector } from './panels/Inspector'
+import { LoadedBanner } from './panels/LoadedBanner'
 import { ManageModelModal } from './panels/ManageModelModal'
 import { PreviewTab } from './panels/PreviewTab'
 import { SmlViewerModal } from './panels/SmlViewerModal'
@@ -28,6 +29,7 @@ export function BuildView() {
 
   const state = useModelStore()
   const c = counters(state)
+  const readOnly = readOnlyReason(state)
   const qc = useQueryClient()
   const [files, setFiles] = useState<SmlFile[] | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -40,6 +42,13 @@ export function BuildView() {
   // to the store and calls generate in the same handler (sml-wizard App.tsx).
   function buildPayload(modelName: string): GenerateSmlPayload | null {
     const s = useModelStore.getState()
+    // Regenerating drops what the canvas can't hold (semi-additive metrics, row
+    // security, ...) - a loaded model using any of it is read-only.
+    const blocked = readOnlyReason(s)
+    if (blocked) {
+      setGenError(blocked)
+      return null
+    }
     if (!s.sourceMeta) {
       setGenError('Select a data source before generating SML.')
       return null
@@ -126,7 +135,7 @@ export function BuildView() {
             <button type="button" className="btn ghost" onClick={() => setShowManage(true)}>Save / Load</button>
             <button type="button" className="btn ghost" onClick={() => { state.reset(); setGenError(null) }}>Reset</button>
             <button type="button" className="btn ghost" onClick={() => setShowWizard(true)}>Wizard</button>
-            <button type="button" className="btn primary" onClick={handleGenerate} disabled={generating}>
+            <button type="button" className="btn primary" onClick={handleGenerate} disabled={generating || !!readOnly} title={readOnly ?? undefined}>
               {generating ? 'Generating…' : 'Deploy'}
             </button>
           </div>
@@ -149,6 +158,7 @@ export function BuildView() {
         <DiscoveryTab key={host.id} hostId={host.id} />
       ) : (
         <>
+          <LoadedBanner />
           {genError && <div className="login-error build-error">{genError}</div>}
           <div className="app-body" key={host.id}>
             <SourcePanel />

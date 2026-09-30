@@ -39,17 +39,32 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
   const placedTables = useMemo(() => new Set(nodes.map((n) => `${n.schema}.${n.table}`)), [nodes])
 
   const [loadingSources, setLoadingSources] = useState(false)
+  // null until this host's list arrives: the store's sourceId outlives a host
+  // switch, and another host may not have that connection (404 on /schemas).
+  const [hostSources, setHostSources] = useState<Set<string> | null>(null)
+  const activeId = sourceId && hostSources?.has(sourceId) ? sourceId : null
   function loadSources(refresh = false) {
     setLoadingSources(true)
     setError(null)
-    const tables = refresh && sourceId
-      ? fetchSchemas(sourceId, search || undefined, true).then(setSchemas)
+    const tables = refresh && activeId
+      ? fetchSchemas(activeId, search || undefined, true).then(setSchemas)
       : Promise.resolve()
-    Promise.all([fetchSourceList(refresh).then(setSources), tables])
+    Promise.all([
+      fetchSourceList(refresh).then((list) => {
+        setSources(list)
+        setHostSources(new Set(list.filter((s) => !s.error).map((s) => s.id)))
+      }),
+      tables,
+    ])
       .catch((e) => setError(e.message))
       .finally(() => setLoadingSources(false))
   }
   useEffect(() => loadSources(), [])
+  // A source picked on another host: drop the pick, keep sourceMeta (the
+  // model's own connection, which deploy preflight checks per host).
+  useEffect(() => {
+    if (hostSources && sourceId && !hostSources.has(sourceId)) setSourceId(null, sourceMeta)
+  }, [hostSources, sourceId, sourceMeta, setSourceId])
   // A warehouse AtScale couldn't list (suspended, unreachable) - shown, not hidden.
   const failed = sources.filter((s) => s.error)
 
@@ -59,27 +74,27 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
   const [pollTick, setPollTick] = useState(0)
   const pending = schemas.filter((s) => s.loading).length
   useEffect(() => {
-    if (!sourceId) {
+    if (!activeId) {
       setSchemas([])
       return
     }
     let stale = false
     if (pollTick === 0) setLoadingSchemas(true)
     setError(null)
-    fetchSchemas(sourceId, search || undefined)
+    fetchSchemas(activeId, search || undefined)
       .then((s) => !stale && setSchemas(s))
       .catch((e) => !stale && setError(e.message))
       .finally(() => !stale && setLoadingSchemas(false))
     return () => {
       stale = true
     }
-  }, [sourceId, search, pollTick])
+  }, [activeId, search, pollTick])
   useEffect(() => {
     if (!pending) return
     const t = setTimeout(() => setPollTick((n) => n + 1), 2000)
     return () => clearTimeout(t)
   }, [pending, schemas])
-  useEffect(() => setPollTick(0), [sourceId, search])
+  useEffect(() => setPollTick(0), [activeId, search])
 
   const selectedSource = sources.find((s) => s.id === sourceId)
 

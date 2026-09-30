@@ -41,6 +41,7 @@ from routes.objects import host_errors
 from smlgen.build import ValidationError, build_sml
 from smlgen.naming import is_valid_model_name, slugify_model_name
 from smlgen.parse import parse_sml
+from smlgen.support import unsupported_features
 from smlgen.validate import SmlCliNotFound, validate_sml
 
 build_bp = Blueprint("build", __name__)
@@ -82,6 +83,20 @@ def write_files(root: Path, files: list[dict[str, str]]) -> int:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f["body"], encoding="utf-8")
     return len(files)
+
+
+def _read_only(root: Path, dialect: str | None = None) -> Any:
+    """409 when `root` already holds SML that Build can't write back (support.py):
+    regenerating over it would drop semi-additive metrics, row security, ... -
+    the UI opens such a model read-only, this stops a direct call too."""
+    existing = _read_sml_directory(root) if root.is_dir() else {}
+    found = unsupported_features(existing, dialect) if existing else []
+    if not found:
+        return None
+    features = sorted({f["feature"] for f in found})
+    return jsonify({"error": f"'{root.name}' uses SML that Build can't write back ({', '.join(features[:5])}"
+                             f"{', ...' if len(features) > 5 else ''}) - edit it in Design Center instead",
+                    "readOnly": True, "unsupported": found}), 409
 
 
 def _missing(payload: dict) -> Any:
@@ -309,6 +324,8 @@ def save_path():
     if not b.get("path") or not b.get("files"):
         return jsonify({"error": "Missing 'path' or 'files'"}), 400
     root = Path(b["path"]).expanduser()
+    if (err := _read_only(root)):
+        return err
     return jsonify({"ok": True, "path": str(root), "count": write_files(root, b["files"])})
 
 
@@ -321,6 +338,8 @@ def save():
     if not is_valid_model_name(model_name):
         return jsonify({"error": f"'{model_name}' is not a valid model name - use letters, numbers, '-' or '_' only"}), 400
     root = model_workspace_dir(model_name)
+    if (err := _read_only(root)):
+        return err
     return jsonify({"ok": True, "path": str(root), "count": write_files(root, files)})
 
 
@@ -600,6 +619,8 @@ def deploy():
     if not registry.git_ready():
         return jsonify({"error": "Git profile is missing or failed its test - fix it in Settings", "needsGit": True}), 409
     hosts = {h: registry.host(h) for h in host_ids}  # 404 on an unknown id before anything runs
+    if (err := _read_only(model_workspace_dir(payload["modelName"]), payload.get("dialect"))):
+        return err
     try:
         files = build_sml(payload)
     except ValidationError as e:

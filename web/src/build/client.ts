@@ -200,6 +200,10 @@ export interface ImportedModel {
   cfg: Record<string, unknown>
   calculations?: unknown[]
   source?: ImportedSource | null
+  /** Catalog carries Build's marker comment (api/smlgen/support.py). */
+  builtHere?: boolean
+  /** Non-empty = open read-only: Save / Deploy would drop these. */
+  unsupported?: { feature: string; detail: string; file: string; kind: 'complex' | 'detail' }[]
 }
 
 export function importSmlPath(path: string) {
@@ -491,4 +495,40 @@ export const discoveryApi = {
     request<{ count: number; runs?: { id: number; hostId: string; table: string; profiledAt: string }[] }>(
       '/discovery/cleanup', { method: 'POST', body: JSON.stringify(body) }),
   compact: () => request<{ freedBytes: number }>('/discovery/compact', { method: 'POST' }),
+}
+
+// -- Develop > Preview data (api/discovery/data_preview.py) -------------------------------
+
+export type DataPreviewMode = 'rows' | 'aggregate' | 'check'
+
+export interface DataPreviewRows {
+  mode: 'rows' | 'aggregate'
+  sql: string
+  rows: (string | null)[][]
+  /** The engine's query/sample limit (10) - not adjustable. */
+  limit: number
+  elapsedMs: number
+}
+
+export interface DataPreviewCheck {
+  mode: 'check'
+  sql: string
+  rootRows: number | null
+  joinedRows: number | null
+  fanOut: boolean
+  joins: { alias: string; table: string; parent: string; on: [string, string][]; matched: number | null }[]
+  elapsedMs: number
+}
+
+export function runDataPreview(body: {
+  source: string
+  dialect?: string | null
+  mode: DataPreviewMode
+  tables: import('./lib/dataPreview').PreviewTable[]
+  columns: { alias: string; column: string; agg?: string }[]
+}) {
+  return request<DataPreviewRows | DataPreviewCheck>(hostPath('/discovery/data-preview'), {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useModelStore, joinedColumnKeys, type Join, type Node } from '../modelStore'
 import { fetchTableColumns } from '../client'
 import { joinTypeMismatch } from '../lib/joinTypes'
+import { DataPreviewModal } from './DataPreviewModal'
 
 const NODE_W = 258
 const HEADER_H = 44
@@ -44,6 +45,7 @@ export function Canvas() {
   const [linkTo, setLinkTo] = useState<{ x: number; y: number } | null>(null)
   const [zoom, setZoom] = useState(1)
   const [joinError, setJoinError] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   // While a join is being dragged, columns whose type can't join the drag
   // origin's are greyed out (same check addJoin enforces on drop).
@@ -177,6 +179,10 @@ export function Canvas() {
           </button>
           <button className="btn btn-ghost zoom-btn" onClick={autoArrange} disabled={nodes.length === 0}>
             Auto-arrange
+          </button>
+          <button className="btn btn-ghost zoom-btn" onClick={() => setShowPreview(true)} disabled={nodes.length === 0}
+            title="Run the joins, metrics and attributes on the warehouse - first 10 rows">
+            Preview data
           </button>
         </div>
       </div>
@@ -382,6 +388,14 @@ export function Canvas() {
         </div>
       ))}
       </div>
+      {/* Rendered inside <main> for the .wiz styles; its events stay out of the
+          canvas's own click / pointer / drop handlers. */}
+      {showPreview && (
+        <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
+          onPointerMove={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+          <DataPreviewModal onClose={() => setShowPreview(false)} />
+        </div>
+      )}
     </main>
   )
 }

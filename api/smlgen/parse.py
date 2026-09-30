@@ -50,6 +50,7 @@ from typing import Any
 import yaml
 
 from .rules import AGG_TO_CALC_METHOD
+from .support import built_here, unsupported_features
 
 CALC_METHOD_TO_AGG = {v: k for k, v in AGG_TO_CALC_METHOD.items()}
 
@@ -390,7 +391,11 @@ def parse_sml(files: dict[str, str]) -> dict[str, Any]:
         for i, calc in enumerate(calculations_by_name.values())
     ]
 
-    return {"nodes": nodes, "joins": joins, "cfg": cfg, "calculations": calculations, "source": source}
+    # Anything the canvas can't hold would be dropped by the next Save / Deploy,
+    # so the UI opens such a repo read-only (support.py).
+    return {"nodes": nodes, "joins": joins, "cfg": cfg, "calculations": calculations, "source": source,
+            "builtHere": built_here(files),
+            "unsupported": unsupported_features(files, source.get("dialect") if source else None)}
 
 
 def _dedupe_joins(joins: list[dict]) -> list[dict]:

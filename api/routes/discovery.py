@@ -4,6 +4,7 @@
   profile      GET  /hosts/<id>/discovery/profile      SQL profile + drift vs the previous run
   top values   GET  /hosts/<id>/discovery/top-values   a column's most frequent values
   join check   POST /hosts/<id>/discovery/join-check   orphans + target uniqueness for a join
+  data preview POST /hosts/<id>/discovery/data-preview Develop's Preview data: canvas joins as SQL, never stored
   store        GET  /discovery/store, POST /discovery/cleanup|compact   Settings > Cache & Database
 
 Table args are ?source=<connectionId::database>&schema=&table= (the Source
@@ -24,6 +25,7 @@ from flask import Blueprint, jsonify, request
 import cache
 from atscale.backend import now_iso
 from atscale.client import AtScaleAuthError
+from discovery import data_preview
 from discovery import profile as prof
 from discovery import store
 from envs import registry
@@ -198,6 +200,28 @@ def join_check(host_id: str):
                          lambda: prof.join_check(api, *key[1:], column, to_schema, to_table, to_column, dialect),
                          _refresh(b))
     return jsonify({**result, "fetchedAt": at})
+
+
+@discovery_bp.post("/hosts/<host_id>/discovery/data-preview")
+@host_errors
+@_guard
+def data_preview_run(host_id: str):
+    """Body: {source, dialect?, mode: rows|aggregate|check, tables, columns} -
+    see discovery/data_preview.py. Always live (a preview is cheap - 10 rows -
+    and must reflect the canvas as it is now)."""
+    b = request.get_json(force=True, silent=True) or {}
+    connection_id, _, database = (b.get("source") or "").partition("::")
+    if not connection_id or not database:
+        raise _BadRequest("Pick a data source first")
+    mode = b.get("mode") or "rows"
+    if mode not in data_preview.MODES:
+        raise _BadRequest(f"Unknown mode '{mode}'")
+    try:
+        return jsonify(data_preview.run(registry.source_api(host_id), connection_id, database,
+                                        _dialect(host_id, connection_id, b), b.get("tables") or [],
+                                        b.get("columns") or [], mode))
+    except data_preview.PreviewError as e:
+        raise _BadRequest(str(e)) from None
 
 
 @discovery_bp.get("/discovery/store")
