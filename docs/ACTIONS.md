@@ -1422,7 +1422,7 @@ Connects to the AtScale internal Postgres backend and extracts deduplicated quer
 
 \* Required when using a `connections.yaml` file.
 
-**Outputs:** JSON files in `output-dir`, one per (model, protocol) pair — `{model}_sql_queries.json`, `{model}_sql_installer_queries.json`, `{model}_xmla_queries.json`.
+**Outputs:** JSON files in `output-dir`, one per (model, protocol) pair — `{model}_sql_queries.json`, `{model}_sql_installer_queries.json`, `{model}_xmla_queries.json`. Each record is one distinct query text: `numTimes` counts executions (not subqueries), cache-served queries with no subquery are included (`outboundText: null`), `aggregateUsed` comes from the engine's `query_aggregate_usage`, and `cacheExecutions` / `aggExecutions` / `rawExecutions` break the executions down by how they were answered. See the README for the classification.
 
 ---
 

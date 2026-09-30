@@ -1760,7 +1760,12 @@ Supports two config formats:
 - `{model}_sql_installer_queries.json` — installer SQL queries (`sql`/Hive language)
 - `{model}_xmla_queries.json` — XMLA/MDX queries (`analysis` language)
 
-Each file is a JSON array of query records with fields: `queryName`, `queryLanguage`, `originalText`, `originalTextHash` (SHA-256), `outboundText`, `cubeName`, `projectId`, `aggregateUsed`, `numTimes`, `elapsedTimeInSeconds`, `avgResultSetSize`, `atscaleQueryId`.
+Each file is a JSON array of query records, one per distinct query text, with fields: `queryName`, `queryLanguage`, `originalText`, `originalTextHash` (SHA-256), `outboundText`, `cubeName`, `projectId`, `aggregateUsed`, `numTimes`, `elapsedTimeInSeconds`, `avgResultSetSize`, `atscaleQueryId`, plus how the executions were answered: `cacheExecutions`, `aggExecutions`, `rawExecutions`, `usedLocalCache`, `usedAggregateCache` and `avgSubqueryCount`.
+
+- **`numTimes`** counts executions — each query once, however many outbound subqueries it sent. `elapsedTimeInSeconds` and `avgResultSetSize` are averaged over executions.
+- **Cache-served queries are included.** A query answered without sending any subquery has `outboundText: null` and `avgSubqueryCount: 0`.
+- **`aggregateUsed`** is `true` when the engine recorded an aggregate for any execution (`query_aggregate_usage`).
+- **Answered-by breakdown** — each execution is classified, first match wins: **cache** (a subquery was served from the engine's local result cache, or no subquery was sent), **agg** (an aggregate was used), **raw** (the warehouse answered without an aggregate). `cacheExecutions + aggExecutions + rawExecutions = numTimes`.
 
 The `connections.yaml` entry must have a `sql:` block with `dialect: postgres` pointing at the AtScale Postgres backend (typically port `25432`, database `atscale`).
 
