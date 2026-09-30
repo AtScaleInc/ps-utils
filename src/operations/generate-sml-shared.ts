@@ -123,6 +123,10 @@ export async function runInferenceAndWrite(
       sampleSize:           styleConfig["sample-size"] ?? 0,
       minHierarchiesPerDim: styleConfig["min-hierarchies-per-dim"] ?? 1,
       maxHierarchiesPerDim: styleConfig["max-hierarchies-per-dim"] ?? 4,
+      viewsAsTables:        styleConfig["views-as-tables"],
+      columnTypes:          styleConfig["column-types"],
+      relationships:        styleConfig["relationships"],
+      inferKeyNameJoins:    styleConfig["infer-key-name-joins"],
     };
     if (generateStyleGuide(outputDir, styleGuideOpts)) {
       logger.log(`  → STYLE.md`);

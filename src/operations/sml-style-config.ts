@@ -46,6 +46,25 @@ export interface SmlStyleConfig {
    *  Only applies to generate-sml-from-connection — DDL operations always use 0. */
   "sample-size"?:         number;
 
+  // ── generate-sml-from-ddl (views, column types, relationships) ───────────
+  /** Treat CREATE VIEW objects as datasets (facts / dimensions).  Default: true. */
+  "views-as-tables"?:      boolean;
+  /**
+   * Column data type overrides keyed by "TABLE.COLUMN" (or "SCHEMA.TABLE.COLUMN"),
+   * e.g. { "VW_CASHFLOW.Amount": "NUMBER(38,6)" }.  Default: {} (none).
+   */
+  "column-types"?:         Record<string, string>;
+  /**
+   * Relationships to add, as "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN" strings.
+   * Default: [] (none).
+   */
+  "relationships"?:        string[];
+  /**
+   * Infer joins where a column name exactly matches another table's key column
+   * (single-column PK, or the first column of a view).  Default: true.
+   */
+  "infer-key-name-joins"?: boolean;
+
   // ── generate-metrics-from-model ───────────────────────────────────────────
   /** Maximum number of metric suggestions to output.  Default: 25. */
   "max-suggestions"?:  number;
@@ -70,6 +89,10 @@ export interface MergedSmlStyle {
   "camel-case-measures": boolean;
   "label-style": "title-case" | "camel-case" | "none";
   "sample-size":        number;
+  "views-as-tables":      boolean;
+  "column-types":         Record<string, string>;
+  "relationships":        string[];
+  "infer-key-name-joins": boolean;
   "max-suggestions":    number;
   "min-score":          number;
   "include-tuples":     boolean;
@@ -87,6 +110,10 @@ export const SML_STYLE_DEFAULTS: Omit<MergedSmlStyle, "catalog-name"> & { "catal
   "camel-case-measures": false,
   "label-style":         "title-case",
   "sample-size":         250,
+  "views-as-tables":      true,
+  "column-types":         {},
+  "relationships":        [],
+  "infer-key-name-joins": true,
   "max-suggestions":     25,
   "min-score":           0.5,
   "include-tuples":      true,
@@ -129,6 +156,11 @@ export function mergeSmlStyle(
     "camel-case-measures": cliValues["camel-case-measures"] ?? styleConfig["camel-case-measures"] ?? SML_STYLE_DEFAULTS["camel-case-measures"],
     "label-style":         cliValues["label-style"]         ?? styleConfig["label-style"]         ?? SML_STYLE_DEFAULTS["label-style"],
     "sample-size":         cliValues["sample-size"]         ?? styleConfig["sample-size"]         ?? SML_STYLE_DEFAULTS["sample-size"],
+    "views-as-tables":      cliValues["views-as-tables"]      ?? styleConfig["views-as-tables"]      ?? SML_STYLE_DEFAULTS["views-as-tables"],
+    // column-types: CLI entries are merged over (not instead of) style-file entries
+    "column-types":         { ...SML_STYLE_DEFAULTS["column-types"], ...(styleConfig["column-types"] ?? {}), ...(cliValues["column-types"] ?? {}) },
+    "relationships":        cliValues["relationships"]        ?? styleConfig["relationships"]        ?? [...SML_STYLE_DEFAULTS["relationships"]],
+    "infer-key-name-joins": cliValues["infer-key-name-joins"] ?? styleConfig["infer-key-name-joins"] ?? SML_STYLE_DEFAULTS["infer-key-name-joins"],
     "max-suggestions":     cliValues["max-suggestions"]     ?? styleConfig["max-suggestions"]     ?? SML_STYLE_DEFAULTS["max-suggestions"],
     "min-score":           cliValues["min-score"]           ?? styleConfig["min-score"]           ?? SML_STYLE_DEFAULTS["min-score"],
     "include-tuples":      cliValues["include-tuples"]      ?? styleConfig["include-tuples"]      ?? SML_STYLE_DEFAULTS["include-tuples"],

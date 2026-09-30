@@ -340,8 +340,8 @@ function generateSMLFromDDL(
 | `modelName` | `string` | No | | Model name (defaults to DDL filename stem) |
 | `catalogName` | `string` | No | | Catalog display name |
 | `piiSeverity` | `string` | No | | PII exclusion level |
-| `schema` | `string` | No | | Schema filter |
-| `database` | `string` | No | | Database name to embed in connection file |
+| `schema` | `string` | No | | Schema filter — a schema name or comma-separated list |
+| `database` | `string` | No | | Database name to embed in connection file(s); overrides the database in three-part DDL names |
 | `dialect` | `string` | No | | Database dialect (e.g. `snowflake`, `postgresql`) |
 | `factTables` | `string` | No | | Comma-separated fact table names |
 | `camelCaseFiles` | `boolean` | No | | Use camelCase for dataset/dimension filenames |
@@ -349,6 +349,22 @@ function generateSMLFromDDL(
 | `labelStyle` | `"title-case" \| "camel-case" \| "none"` | No | `"title-case"` | Label style for all SML object labels; overrides `camelCaseMeasures` |
 | `minHierarchiesPerDim` | `number` | No | | Min hierarchies per dimension |
 | `maxHierarchiesPerDim` | `number` | No | | Max hierarchies per dimension |
+| `viewsAsTables` | `boolean` | No | `true` | Treat `CREATE VIEW` objects as datasets (facts / dimensions) |
+| `columnTypes` | `string` | No | | Column type overrides: `"TABLE.COLUMN=TYPE"` pairs separated by `,` or `;` |
+| `relationships` | `string` | No | | Extra joins: comma-separated `"FROM_TABLE.COLUMN -> TO_TABLE.COLUMN"` entries |
+| `inferKeyNameJoins` | `boolean` | No | `true` | Infer joins where a column name matches another table's key column (tables without declared FKs only) |
+
+Views-only DDL spanning several schemas produces one connection file per schema; see [`generate-sml-from-ddl`](../README.md#generate-sml-from-ddl) for how view columns are typed and joined.
+
+```typescript
+await generateSMLFromDDL({
+  ddlFile:     "./DDL_Cashflow.ddl",
+  outputDir:   "./sml-output",
+  dialect:     "snowflake",
+  factTables:  "VW_CASHFLOW",
+  columnTypes: "VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE",
+});
+```
 
 ---
 

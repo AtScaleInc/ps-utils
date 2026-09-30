@@ -70,6 +70,17 @@ export interface SmlSerializerOptions {
   columnsByTable?: Map<string, ColumnMeta[]>;
 
   /**
+   * Schema / database of each table, keyed by table name (e.g. from qualified
+   * DDL names).  When the emitted datasets span more than one schema (or
+   * database), one connection file is written per schema — the SML
+   * specification requires a separate connection for each schema — and each
+   * dataset references the connection for its own schema.  An explicit
+   * `database` option overrides the per-table database; a per-table schema
+   * overrides the `schema` option.
+   */
+  tableLocations?: Map<string, { schema?: string; database?: string }>;
+
+  /**
    * Prefix for metric unique_names.  Default: "m_".
    * e.g. "m_revenue_sum", "m_quantity_average"
    */
@@ -431,14 +442,75 @@ function buildCatalog(model: SemanticModel, opts: SmlSerializerOptions): string 
 // 2. Connection file
 // ----------------------------------------------------------
 
-function buildConnection(opts: SmlSerializerOptions): string {
+interface ConnectionPlan {
+  uniqueName: string;
+  database: string;
+  schema: string;
+}
+
+/**
+ * Work out which connection files to emit and which connection each dataset
+ * uses.  A single connection (named `connectionName`) is emitted when every
+ * dataset lives in the same database and schema — the historical behaviour.
+ * Otherwise one connection per (database, schema) pair is emitted, named
+ * `<connectionName>_<schema>` (or `<connectionName>_<database>_<schema>` when
+ * datasets span several databases), all sharing `as_connection: connectionName`.
+ */
+function planConnections(
+  tableNames: string[],
+  opts: SmlSerializerOptions,
+): { connections: ConnectionPlan[]; connectionForTable: Map<string, string> } {
+  const locate = (table: string): { database: string; schema: string } => {
+    const loc = opts.tableLocations?.get(table);
+    return {
+      database: opts.database ?? loc?.database ?? "database_name",
+      schema:   loc?.schema   ?? opts.schema   ?? "default",
+    };
+  };
+
+  const groups = new Map<string, { database: string; schema: string; tables: string[] }>();
+  for (const table of tableNames) {
+    const { database, schema } = locate(table);
+    const key = `${database}\u0000${schema}`;
+    const g = groups.get(key) ?? { database, schema, tables: [] };
+    g.tables.push(table);
+    groups.set(key, g);
+  }
+
+  const connectionForTable = new Map<string, string>();
+  if (groups.size <= 1) {
+    const only = Array.from(groups.values())[0] ?? {
+      database: opts.database ?? "database_name",
+      schema:   opts.schema   ?? "default",
+      tables:   [],
+    };
+    for (const t of tableNames) connectionForTable.set(t, opts.connectionName);
+    return {
+      connections: [{ uniqueName: opts.connectionName, database: only.database, schema: only.schema }],
+      connectionForTable,
+    };
+  }
+
+  const multipleDatabases = new Set(Array.from(groups.values()).map((g) => g.database)).size > 1;
+  const connections: ConnectionPlan[] = [];
+  for (const g of groups.values()) {
+    const uniqueName = multipleDatabases
+      ? `${opts.connectionName}_${g.database}_${g.schema}`
+      : `${opts.connectionName}_${g.schema}`;
+    connections.push({ uniqueName, database: g.database, schema: g.schema });
+    for (const t of g.tables) connectionForTable.set(t, uniqueName);
+  }
+  return { connections, connectionForTable };
+}
+
+function buildConnection(opts: SmlSerializerOptions, plan: ConnectionPlan): string {
   return yamlDoc({
-    unique_name: opts.connectionName,
+    unique_name: plan.uniqueName,
     object_type: "connection",
-    label: opts.connectionName,
+    label: plan.uniqueName,
     as_connection: opts.connectionName,
-    database: opts.database ?? "database_name",
-    schema:   opts.schema   ?? "default",
+    database: plan.database,
+    schema:   plan.schema,
   });
 }
 
@@ -479,6 +551,7 @@ function buildDataset(
   tableName: string,
   referencedColumns: string[],
   opts: SmlSerializerOptions,
+  connectionId: string = opts.connectionName,
 ): string {
   const physicalTableName = opts.dialect?.toLowerCase() === "snowflake"
     ? tableName.toUpperCase()
@@ -506,7 +579,7 @@ function buildDataset(
     unique_name: datasetUniqueName(tableName),
     object_type: "dataset",
     label: applyLabelStyle(tableName, opts.labelStyle ?? "title-case"),
-    connection_id: opts.connectionName,
+    connection_id: connectionId,
     table: physicalTableName,
     columns,
   });
@@ -1334,11 +1407,19 @@ export function serializeToSml(
   // catalog.yml
   output.set("catalog.yml", buildCatalog(model, opts));
 
-  // connections/{name}.yml
-  output.set(
-    `connections/${toKebab(opts.connectionName)}.yml`,
-    buildConnection(opts),
-  );
+  // connections/{name}.yml — one per schema used by the emitted datasets
+  const datasetTables = [
+    ...model.dimensions.filter((d) => !isFactLikeDimension(d, factSourceTables)).map((d) => d.sourceTable),
+    ...model.facts.map((f) => f.sourceTable),
+  ];
+  const { connections, connectionForTable } = planConnections(datasetTables, opts);
+  for (const plan of connections) {
+    output.set(
+      `connections/${toKebab(plan.uniqueName)}.yml`,
+      buildConnection(opts, plan),
+    );
+  }
+  const connectionFor = (table: string): string => connectionForTable.get(table) ?? opts.connectionName;
 
   // datasets/{table}.yml — one per dimension table (skip bridge/junction tables)
   for (const dim of model.dimensions) {
@@ -1347,7 +1428,7 @@ export function serializeToSml(
     const dsFilename = opts.camelCaseFiles ? toCamelCase(dim.sourceTable) : dim.sourceTable;
     output.set(
       `datasets/${dsFilename}.yml`,
-      buildDataset(dim.sourceTable, referencedCols, opts),
+      buildDataset(dim.sourceTable, referencedCols, opts, connectionFor(dim.sourceTable)),
     );
   }
 
@@ -1357,7 +1438,7 @@ export function serializeToSml(
     const dsFilename = opts.camelCaseFiles ? toCamelCase(fact.sourceTable) : fact.sourceTable;
     output.set(
       `datasets/${dsFilename}.yml`,
-      buildDataset(fact.sourceTable, referencedCols, opts),
+      buildDataset(fact.sourceTable, referencedCols, opts, connectionFor(fact.sourceTable)),
     );
   }
 

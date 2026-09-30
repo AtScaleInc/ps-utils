@@ -68,6 +68,38 @@ min-hierarchies-per-dim: 1
 # the first N (highest-ranked) entries.  Set to 0 to keep all hierarchies.
 max-hierarchies-per-dim: 4
 
+# ── generate-sml-from-ddl: views, column types and relationships ───────────────
+# Used by: generate-sml-from-ddl
+
+# When true (default), CREATE VIEW objects are treated as datasets and
+# classified as facts / dimensions exactly like tables.  When false, views are
+# ignored for SML generation.
+views-as-tables: true
+
+# Column data type overrides, keyed by "TABLE.COLUMN" (or "SCHEMA.TABLE.COLUMN").
+# View DDL has no data types: view columns are typed from source tables in the
+# same DDL or CAST / :: expressions, otherwise VARCHAR.  Only numeric columns
+# become measures, so set the types of measure (and date) columns here when the
+# view's source tables are not in the DDL.  CLI --column-types entries are
+# merged over these.  Example:
+#   column-types:
+#     VW_CASHFLOW.Amount: NUMBER(38,6)
+#     VW_DATE.Date: DATE
+column-types: {}
+
+# Relationships to add on top of FK constraints in the DDL, as
+# "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN" strings.  The target column becomes the
+# target table's key when it has none (views cannot declare keys).  Example:
+#   relationships:
+#     - VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow
+relationships: []
+
+# When true (default), a column whose name exactly matches another table's key
+# column — its single-column primary key, or the first column of a view with no
+# key — is inferred as a join.  Only applies to tables with no declared foreign
+# keys; ambiguous matches are skipped with a warning.
+infer-key-name-joins: true
+
 # ── generate-metrics-from-model ────────────────────────────────────────────────
 
 # Maximum number of metric suggestions to output.

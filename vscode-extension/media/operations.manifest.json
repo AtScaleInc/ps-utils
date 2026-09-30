@@ -555,7 +555,7 @@
         },
         {
           "name": "schema",
-          "description": "Schema name used to filter the DDL (only tables in this schema will be included)",
+          "description": "Schema name, or comma-separated list of schema names, used to filter the DDL (only tables and views in these schemas, or unqualified, are included)",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -621,6 +621,38 @@
           "name": "max-hierarchies-per-dim",
           "description": "Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml.",
           "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "views-as-tables",
+          "description": "When true (default), CREATE VIEW objects are treated as datasets and classified as facts / dimensions like tables. When false, views are ignored for SML generation. Can also be set in sml.style.yaml.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "column-types",
+          "description": "Column data type overrides as \"TABLE.COLUMN=TYPE\" pairs separated by commas or semicolons, e.g. \"VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE\". Use for view columns whose type cannot be resolved from the DDL. Merged over column-types in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "relationships",
+          "description": "Relationships to add, as \"FROM_TABLE.COLUMN -> TO_TABLE.COLUMN\" entries separated by commas, e.g. \"VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow\". The target column becomes the target key when the target has none. Can also be set as a list in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "infer-key-name-joins",
+          "description": "When true (default), a column whose name exactly matches another table's key column (its single-column PK, or the first column of a view) is inferred as a join. Only applies to tables with no declared foreign keys. Can also be set in sml.style.yaml.",
+          "type": "boolean",
           "role": "scalar",
           "required": false,
           "default": null

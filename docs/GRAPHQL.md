@@ -434,7 +434,7 @@ curl -X POST http://localhost:4000/graphql \
 | `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
 | `catalogName` | `String` | No | Display name for the generated catalog (defaults to model-name). Can also be set in sml.style.yaml. |
 | `piiSeverity` | `String` | No | Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml. |
-| `schema` | `String` | No | Schema name used to filter the DDL (only tables in this schema will be included) |
+| `schema` | `String` | No | Schema name, or comma-separated list of schema names, used to filter the DDL (only tables and views in these schemas, or unqualified, are included) |
 | `database` | `String` | No | Database (catalog) name to embed in the SML connection file |
 | `dialect` | `String` | No | Database dialect (e.g. "snowflake", "postgresql"). When "snowflake", dataset table names are uppercased. |
 | `factTables` | `String` | No | Comma-separated list of table names to treat as fact tables, overriding automatic classification. Can also be set as a list in sml.style.yaml. |
@@ -443,6 +443,10 @@ curl -X POST http://localhost:4000/graphql \
 | `labelStyle` | `String` | No | Label style for all SML object labels: "title-case" (default), "camel-case", or "none" (raw source names). Overrides camel-case-measures. Can also be set in sml.style.yaml. |
 | `minHierarchiesPerDim` | `Int` | No | Minimum number of hierarchies a dimension must have to be included in the model (default: 1). Dimensions with fewer are dropped. Can also be set in sml.style.yaml. |
 | `maxHierarchiesPerDim` | `Int` | No | Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml. |
+| `viewsAsTables` | `Boolean` | No | When true (default), CREATE VIEW objects are treated as datasets and classified as facts / dimensions like tables. When false, views are ignored for SML generation. Can also be set in sml.style.yaml. |
+| `columnTypes` | `String` | No | Column data type overrides as "TABLE.COLUMN=TYPE" pairs separated by commas or semicolons, e.g. "VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE". Use for view columns whose type cannot be resolved from the DDL. Merged over column-types in sml.style.yaml. |
+| `relationships` | `String` | No | Relationships to add, as "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN" entries separated by commas, e.g. "VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow". The target column becomes the target key when the target has none. Can also be set as a list in sml.style.yaml. |
+| `inferKeyNameJoins` | `Boolean` | No | When true (default), a column whose name exactly matches another table's key column (its single-column PK, or the first column of a view) is inferred as a join. Only applies to tables with no declared foreign keys. Can also be set in sml.style.yaml. |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
 
@@ -2576,7 +2580,7 @@ input GenerateSmlFromDdlInput {
   catalogName: String
   """Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml."""
   piiSeverity: String
-  """Schema name used to filter the DDL (only tables in this schema will be included)"""
+  """Schema name, or comma-separated list of schema names, used to filter the DDL (only tables and views in these schemas, or unqualified, are included)"""
   schema: String
   """Database (catalog) name to embed in the SML connection file"""
   database: String
@@ -2594,6 +2598,14 @@ input GenerateSmlFromDdlInput {
   minHierarchiesPerDim: Int
   """Maximum number of hierarchies to keep per dimension (default: 4). Extra hierarchies are truncated. Can also be set in sml.style.yaml."""
   maxHierarchiesPerDim: Int
+  """When true (default), CREATE VIEW objects are treated as datasets and classified as facts / dimensions like tables. When false, views are ignored for SML generation. Can also be set in sml.style.yaml."""
+  viewsAsTables: Boolean
+  """Column data type overrides as "TABLE.COLUMN=TYPE" pairs separated by commas or semicolons, e.g. "VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE". Use for view columns whose type cannot be resolved from the DDL. Merged over column-types in sml.style.yaml."""
+  columnTypes: String
+  """Relationships to add, as "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN" entries separated by commas, e.g. "VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow". The target column becomes the target key when the target has none. Can also be set as a list in sml.style.yaml."""
+  relationships: String
+  """When true (default), a column whose name exactly matches another table's key column (its single-column PK, or the first column of a view) is inferred as a join. Only applies to tables with no declared foreign keys. Can also be set in sml.style.yaml."""
+  inferKeyNameJoins: Boolean
 }
 
 """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""

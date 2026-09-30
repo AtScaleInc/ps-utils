@@ -390,9 +390,11 @@ Parses a SQL DDL file from the repository and generates SML files without a live
 
 All inference capabilities from `generate-sml-from-connection` apply — composite keys, bridge detection, naming patterns, and one-relationship-per-hierarchy. FK constraints in the DDL (`FOREIGN KEY (…) REFERENCES …`) are parsed and used for relationship inference.
 
+`CREATE VIEW` objects (including Snowflake views with a column list and bracketed body) are treated as datasets by default. View column types come from `column-types` overrides, source tables in the same DDL, or `CAST` / `::`, otherwise `VARCHAR`. When the datasets span several schemas, one connection file is written per schema. See [`generate-sml-from-ddl`](../README.md#generate-sml-from-ddl) for details.
+
 **Requires:** No secrets — the DDL file must be present in the repository.
 
-Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`, `views-as-tables`, `column-types`, `relationships`, `infer-key-name-joins`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -414,6 +416,10 @@ Style parameters (`pii-severity`, `fact-tables`, `catalog-name`, `camel-case-fil
     label-style: "title-case"     # optional — label style (title-case/camel-case/none)
     min-hierarchies-per-dim: "1"  # optional — drop dimensions with fewer hierarchies
     max-hierarchies-per-dim: "4"  # optional — cap hierarchies per dimension
+    views-as-tables: "true"       # optional — treat CREATE VIEW objects as datasets
+    column-types: "VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE" # optional — type overrides
+    relationships: "VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow" # optional — extra joins
+    infer-key-name-joins: "true"  # optional — join columns matching another table's key
 ```
 
 ---

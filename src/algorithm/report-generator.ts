@@ -42,6 +42,14 @@ export interface StyleGuideOptions {
   minHierarchiesPerDim: number;
   /** Maximum hierarchies kept per dimension (default 4). */
   maxHierarchiesPerDim: number;
+  /** generate-sml-from-ddl only: whether CREATE VIEW objects were treated as datasets. */
+  viewsAsTables?: boolean;
+  /** generate-sml-from-ddl only: "TABLE.COLUMN" → data type overrides applied. */
+  columnTypes?: Record<string, string>;
+  /** generate-sml-from-ddl only: declared "FROM.COL -> TO.COL" relationships. */
+  relationships?: string[];
+  /** generate-sml-from-ddl only: whether key-name join inference was enabled. */
+  inferKeyNameJoins?: boolean;
 }
 
 function buildStyleGuide(opts: StyleGuideOptions): string {
@@ -75,6 +83,30 @@ function buildStyleGuide(opts: StyleGuideOptions): string {
 
   const sampleDesc = sampleSize === 0 ? "Disabled" : `${sampleSize} rows per table`;
   const hierarchyLimitsDesc = `min ${minHierarchiesPerDim} / max ${maxHierarchiesPerDim} per dimension`;
+
+  // ── DDL-only settings (views, column types, relationships) ───────────────
+  const ddlRows: string[] = [];
+  if (opts.viewsAsTables !== undefined) {
+    ddlRows.push(`| **Views** | ${opts.viewsAsTables
+      ? "Treated as datasets — classified as facts / dimensions like tables (\`views-as-tables: true\`)"
+      : "Not used as datasets (\`views-as-tables: false\`)"} |`);
+  }
+  if (opts.columnTypes !== undefined) {
+    const entries = Object.entries(opts.columnTypes);
+    ddlRows.push(`| **Column Type Overrides** | ${entries.length > 0
+      ? entries.map(([k, v]) => `\`${k}\` → \`${v}\``).join(", ")
+      : "None — types from DDL (view columns resolved via lineage / CAST, else VARCHAR)"} |`);
+  }
+  if (opts.relationships !== undefined) {
+    ddlRows.push(`| **Declared Relationships** | ${opts.relationships.length > 0
+      ? opts.relationships.map((r) => `\`${r}\``).join(", ")
+      : "None"} |`);
+  }
+  if (opts.inferKeyNameJoins !== undefined) {
+    ddlRows.push(`| **Key-Name Join Inference** | ${opts.inferKeyNameJoins
+      ? "Enabled — a column matching another table's key column (single-column PK, or first column of a view) becomes a join, for tables without declared FKs"
+      : "Disabled"} |`);
+  }
 
   // ── Metric label examples ─────────────────────────────────────────────────
   const metricLabelRows = effectiveLabelStyle === "camel-case"
@@ -198,6 +230,7 @@ function buildStyleGuide(opts: StyleGuideOptions): string {
     `| **Fact Tables** | ${factTablesDesc} |`,
     `| **Sample Size** | ${sampleDesc} |`,
     `| **Hierarchies per Dim** | ${hierarchyLimitsDesc} |`,
+    ...ddlRows,
     ``,
     `---`,
     ``,

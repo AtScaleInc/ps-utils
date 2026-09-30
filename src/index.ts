@@ -180,8 +180,13 @@ export type GenerateSMLFromDDLParams = {
   factTables?: string;
   camelCaseFiles?: boolean;
   camelCaseMeasures?: boolean;
+  labelStyle?: "title-case" | "camel-case" | "none";
   minHierarchiesPerDim?: number;
   maxHierarchiesPerDim?: number;
+  viewsAsTables?: boolean;      // default: true
+  columnTypes?: string;         // "TABLE.COLUMN=TYPE" pairs separated by , or ;
+  relationships?: string;       // "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN", comma-separated
+  inferKeyNameJoins?: boolean;  // default: true
 };
 
 export async function generateSMLFromDDL(p: GenerateSMLFromDDLParams, o: LibraryOptions = {}) {

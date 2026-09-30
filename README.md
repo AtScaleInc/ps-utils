@@ -460,6 +460,34 @@ Parses a SQL DDL file (`CREATE TABLE` / `CREATE VIEW` statements) and generates 
 
 All inference capabilities described under `generate-sml-from-connection` (composite keys, bridge table detection, naming patterns, one-relationship-per-hierarchy) apply equally to the DDL path. FK constraints declared in the DDL (`FOREIGN KEY (col1, col2) REFERENCES …`) are parsed and used for composite join inference.
 
+**Views.** `CREATE VIEW` objects are treated as datasets by default (`--views-as-tables true`) and classified as facts or dimensions exactly like tables. Snowflake-style view DDL is supported: `SECURE` / `RECURSIVE` / `MATERIALIZED` modifiers, an explicit column list (`VIEW v ("A", "B" COMMENT '…')`), `COPY GRANTS`, `COMMENT = '…'` and a bracketed body (`AS ( select … )`). View columns come from the column list when present, otherwise from the aliases in the top-level `SELECT`. View DDL carries no data types, so each view column's type is resolved from, in order:
+
+1. a `--column-types` / `column-types` override;
+2. the source column, when the view selects from a table (or another view) defined in the same DDL file (`o.amount` → type of `orders.amount`);
+3. an explicit `CAST(x AS type)` / `x::type`;
+4. otherwise `VARCHAR`, with a `[VIEW TYPES]` warning.
+
+Only numeric columns become measures, so when the view's source tables are not in the DDL, set the measure columns' types with `--column-types` (and date columns, so time columns are typed correctly).
+
+**Qualified names and multiple schemas.** Object names may have one, two or three parts (`name`, `schema.name`, `database.schema.name`), quoted or unquoted. When the generated datasets span more than one schema, one connection file is written per schema — the SML specification requires a separate connection for each schema — named `<connection-name>_<SCHEMA>` (or `<connection-name>_<DATABASE>_<SCHEMA>` when databases also differ), all sharing `as_connection: <connection-name>`; each dataset's `connection_id` points at its own schema's connection. With a single schema the output is one connection named `<connection-name>`, as before. An explicit `--database` overrides the database from the DDL (useful for re-targeting, e.g. DEV → PROD); each object's own schema is always used. `--schema` accepts a comma-separated list to filter to several schemas.
+
+**Joins without constraints.** Views cannot declare keys, so two further sources of relationships are available:
+
+- **Key-name inference** (`--infer-key-name-joins`, default `true`): a column whose name exactly matches another table's key column — its single-column primary key, or the first column of a keyless view — becomes a join (reported as `[INFERRED FK]`). It only applies to tables with no declared foreign keys, and ambiguous matches are skipped with an `[AMBIGUOUS JOIN]` warning.
+- **Declared relationships** (`--relationships`): `"FROM_TABLE.COLUMN -> TO_TABLE.COLUMN"` entries; the target column becomes the target's key when it has none.
+
+Views-only example (Snowflake views across three schemas, base tables not in the file):
+
+```bash
+./atscale-utils generate-sml-from-ddl \
+  --ddl-file "./DDL_Cashflow.ddl" \
+  --model-name "Cashflow" \
+  --output-dir "./sml-output" \
+  --dialect snowflake \
+  --fact-tables "VW_CASHFLOW" \
+  --column-types "VW_CASHFLOW.Amount=NUMBER(38,6);VW_CASHFLOW.Date=DATE;VW_DATE.Date=DATE"
+```
+
 ```bash
 ./atscale-utils generate-sml-from-ddl \
   --ddl-file "./schema.sql" \
@@ -482,7 +510,7 @@ With optional overrides:
   --camel-case-measures true
 ```
 
-Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file. After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-case-files`, `--camel-case-measures`, `--label-style`, `--min-hierarchies-per-dim`, `--max-hierarchies-per-dim`, `--views-as-tables`, `--column-types`, `--relationships`, `--infer-key-name-joins`) can also be set in an [SML style config file](#sml-style-config-smlstyleyaml). CLI flags take priority over the file (`--column-types` entries are merged over the file's `column-types`). After generation, effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
@@ -492,8 +520,8 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--connection-name` | No | `my_connection` | Connection name to embed in SML files |
 | `--sml-config-file` | No | `sml.style.yaml` | Path to the [SML style config](#sml-style-config-smlstyleyaml) to read settings from |
 | `--catalog-name` | No | `model-name` | Display name for the generated catalog |
-| `--schema` | No | | Filter DDL to only tables in this schema |
-| `--database` | No | | Database name to embed in the SML connection file |
+| `--schema` | No | | Filter DDL to only tables and views in this schema (or comma-separated list of schemas); unqualified objects are always included |
+| `--database` | No | | Database name to embed in the SML connection file(s). Overrides the database part of three-part DDL names |
 | `--dialect` | No | Auto-detected from filename | Database dialect (`snowflake`, `postgresql`). When `snowflake`, dataset table names are uppercased. |
 | `--pii-severity` | No | `MEDIUM` | Minimum PII severity to exclude: `HIGH`, `MEDIUM`, `LOW`, or `none` |
 | `--fact-tables` | No | Auto-detected | Comma-separated table names to treat as facts, overriding automatic classification |
@@ -502,8 +530,12 @@ Style parameters (`--pii-severity`, `--fact-tables`, `--catalog-name`, `--camel-
 | `--label-style` | No | `title-case` | Label style for all SML object labels: `title-case`, `camel-case`, or `none` (raw source names). Overrides `--camel-case-measures`. |
 | `--min-hierarchies-per-dim` | No | `1` | Minimum hierarchies a dimension must have to be included; dimensions with fewer are dropped |
 | `--max-hierarchies-per-dim` | No | `4` | Maximum hierarchies kept per dimension; extras are truncated |
+| `--views-as-tables` | No | `true` | When `true`, `CREATE VIEW` objects are datasets classified as facts / dimensions like tables; when `false`, views are ignored for SML generation |
+| `--column-types` | No | | Column type overrides as `TABLE.COLUMN=TYPE` pairs separated by `,` or `;` (e.g. `VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE`). `SCHEMA.TABLE.COLUMN` keys are also accepted |
+| `--relationships` | No | | Relationships to add, as comma-separated `FROM_TABLE.COLUMN -> TO_TABLE.COLUMN` entries |
+| `--infer-key-name-joins` | No | `true` | Infer a join when a column name matches another table's key column (single-column PK, or first column of a view); only for tables with no declared FKs |
 
-**Output layout:** Same as `generate-sml-from-connection` (including `sml.style.yaml`).
+**Output layout:** Same as `generate-sml-from-connection` (including `sml.style.yaml`), except that `connections/` holds one file per schema when the datasets span several schemas.
 
 ---
 
@@ -2509,6 +2541,14 @@ sample-size: 250              # rows per table for type inference (0 to disable)
                               # note: always 0 for generate-sml-from-ddl
 min-hierarchies-per-dim: 1   # drop dimensions with fewer than this many hierarchies
 max-hierarchies-per-dim: 4   # keep at most this many hierarchies per dimension
+
+# ── generate-sml-from-ddl only ────────────────────────────────────────────────
+views-as-tables: true         # treat CREATE VIEW objects as datasets
+column-types:                 # "TABLE.COLUMN": TYPE overrides (e.g. untyped view columns)
+  VW_CASHFLOW.Amount: NUMBER(38,6)
+relationships:                # extra joins: "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN"
+  - VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow
+infer-key-name-joins: true    # join columns that match another table's key column
 
 # ── generate-metrics-from-model ───────────────────────────────────────────────
 max-suggestions: 25           # maximum suggestions to output

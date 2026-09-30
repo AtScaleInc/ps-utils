@@ -116,9 +116,9 @@ inputs:
     required: false
   schema:
     description: >
-      Database schema to scope SML generation to. For extract-ddl-from-connection,
-      accepts a comma-separated list (e.g. "DIM, SYSTEM") to introspect multiple
-      schemas in one run; other operations accept a single schema name.
+      Database schema to scope SML generation to. For extract-ddl-from-connection
+      and generate-sml-from-ddl, accepts a comma-separated list (e.g. "DIM, SYSTEM")
+      to cover multiple schemas in one run; other operations accept a single schema name.
     required: false
   catalog-name:
     description: Catalog (database) name for the SML project.
@@ -184,6 +184,29 @@ inputs:
   ddl-file:
     description: Path to the DDL SQL file to parse for SML generation.
     required: false
+  views-as-tables:
+    description: >
+      Set to "false" to ignore CREATE VIEW objects; by default views are treated
+      as datasets (facts / dimensions). Used by: generate-sml-from-ddl.
+    required: false
+    default: ''
+  column-types:
+    description: >
+      Column data type overrides as "TABLE.COLUMN=TYPE" pairs separated by commas
+      or semicolons, e.g. "VW_CASHFLOW.Amount=NUMBER(38,6);VW_DATE.Date=DATE".
+      Used by: generate-sml-from-ddl.
+    required: false
+  relationships:
+    description: >
+      Relationships to add, as comma-separated "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN"
+      entries. Used by: generate-sml-from-ddl.
+    required: false
+  infer-key-name-joins:
+    description: >
+      Set to "false" to disable inferring joins from columns whose name matches
+      another table's key column (default: enabled). Used by: generate-sml-from-ddl.
+    required: false
+    default: ''
 
   # ── generate-sml-from-xml ────────────────────────────────────────────────
   xml-file:
@@ -955,6 +978,10 @@ runs:
         [[ -n "${{ inputs.label-style }}" ]] && ARGS+=(--label-style "${{ inputs.label-style }}")
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
+        [[ -n "${{ inputs.views-as-tables }}" ]]      && ARGS+=(--views-as-tables      "${{ inputs.views-as-tables }}")
+        [[ -n "${{ inputs.column-types }}" ]]         && ARGS+=(--column-types         "${{ inputs.column-types }}")
+        [[ -n "${{ inputs.relationships }}" ]]        && ARGS+=(--relationships        "${{ inputs.relationships }}")
+        [[ -n "${{ inputs.infer-key-name-joins }}" ]] && ARGS+=(--infer-key-name-joins "${{ inputs.infer-key-name-joins }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
       shell: bash
 

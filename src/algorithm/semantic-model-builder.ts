@@ -74,8 +74,11 @@ async function readMetadata(
   db: DatabaseMetaData,
   schemaPattern?: string,
 ): Promise<RawMetadata> {
+  // VIEW entries are only returned by metadata sources that expose views as
+  // datasets (e.g. DdlDatabaseMetaData in views-as-tables mode); they are then
+  // classified and serialised exactly like tables.
   const tables = (await db.getTables(schemaPattern)).filter(
-    (t) => t.tableType === "TABLE",
+    (t) => t.tableType === "TABLE" || t.tableType === "VIEW",
   );
   const views = await db.getViews(schemaPattern);
 
@@ -194,6 +197,173 @@ function inferNamingConventionFKs(
   }
 
   return inferred;
+}
+
+// ----------------------------------------------------------
+// 1c. Declared relationships and key-name FK inference
+// ----------------------------------------------------------
+
+/** A relationship declared by the caller, e.g. "VW_CASHFLOW.Flow -> VW_FLOW_SNAP.Flow". */
+export interface DeclaredRelationship {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+}
+
+/**
+ * Parse a relationship declaration string of the form
+ * `FROM_TABLE.FROM_COLUMN -> TO_TABLE.TO_COLUMN` (schema qualifiers allowed;
+ * the last two dotted parts are used).  Returns null when malformed.
+ */
+export function parseRelationshipSpec(spec: string): DeclaredRelationship | null {
+  const m = spec.split("->");
+  if (m.length !== 2) return null;
+  const side = (s: string): { table: string; column: string } | null => {
+    const parts = s.trim().split(".").map((p) => p.trim().replace(/^["'`\[]|["'`\]]$/g, "")).filter(Boolean);
+    if (parts.length < 2) return null;
+    return { table: parts[parts.length - 2], column: parts[parts.length - 1] };
+  };
+  const from = side(m[0]);
+  const to = side(m[1]);
+  if (!from || !to) return null;
+  return { fromTable: from.table, fromColumn: from.column, toTable: to.table, toColumn: to.column };
+}
+
+/**
+ * Add caller-declared relationships as FK metadata.  Declared joins are
+ * authoritative: the target column is marked as the target table's primary key
+ * when the table has none (views cannot declare constraints).
+ *
+ * Returns warnings for declarations that do not match the schema.
+ */
+function applyDeclaredRelationships(
+  declared: DeclaredRelationship[],
+  tables: TableMeta[],
+  columnsByTable: Map<string, ColumnMeta[]>,
+  foreignKeysByTable: Map<string, import("./types.js").ForeignKeyMeta[]>,
+): string[] {
+  const warnings: string[] = [];
+  const byName = new Map(tables.map((t) => [t.tableName.toLowerCase(), t.tableName]));
+  const findCol = (table: string, col: string): ColumnMeta | undefined =>
+    (columnsByTable.get(table) ?? []).find((c) => c.columnName.toLowerCase() === col.toLowerCase());
+
+  for (const rel of declared) {
+    const fromTable = byName.get(rel.fromTable.toLowerCase());
+    const toTable = byName.get(rel.toTable.toLowerCase());
+    const fromCol = fromTable ? findCol(fromTable, rel.fromColumn) : undefined;
+    const toCol = toTable ? findCol(toTable, rel.toColumn) : undefined;
+    if (!fromTable || !toTable || !fromCol || !toCol) {
+      warnings.push(
+        `[DECLARED RELATIONSHIP] "${rel.fromTable}.${rel.fromColumn} -> ${rel.toTable}.${rel.toColumn}" ` +
+        `does not match a table/column in the schema — ignored.`,
+      );
+      continue;
+    }
+    const existing = foreignKeysByTable.get(fromTable) ?? [];
+    if (existing.some((fk) => fk.fkColumnName === fromCol.columnName && fk.pkTableName === toTable)) continue;
+
+    const targetCols = columnsByTable.get(toTable) ?? [];
+    if (!targetCols.some((c) => c.isPrimaryKey)) toCol.isPrimaryKey = true;
+
+    foreignKeysByTable.set(fromTable, [
+      ...existing,
+      {
+        fkTableName:    fromTable,
+        fkColumnName:   fromCol.columnName,
+        pkTableName:    toTable,
+        pkColumnName:   toCol.columnName,
+        keySeq:         1,
+        constraintName: `declared_${fromTable}_${fromCol.columnName}`,
+      },
+    ]);
+  }
+  return warnings;
+}
+
+/**
+ * Infer joins from exact key-column name matches.
+ *
+ * Rule: a column in table S whose name exactly matches (case-insensitive) the
+ * key column of exactly one other table T becomes a FK S.col → T.key, where
+ * T's key is its single-column declared primary key or — for a view with no
+ * declared key (views cannot carry constraints) — its first column.
+ *
+ * Only source tables with no declared FKs are considered, so schemas that
+ * declare their relationships are left unchanged.  A table's own key column
+ * is never used as a join source, and ambiguous matches (several candidate
+ * targets) are skipped with a warning.  When the target key was implicit
+ * (first column of a view), it is marked as that view's primary key.
+ */
+function inferKeyNameFKs(
+  tables: TableMeta[],
+  columnsByTable: Map<string, ColumnMeta[]>,
+  foreignKeysByTable: Map<string, import("./types.js").ForeignKeyMeta[]>,
+): { inferred: DeclaredRelationship[]; warnings: string[] } {
+  const inferred: DeclaredRelationship[] = [];
+  const warnings: string[] = [];
+
+  // Key column per table: declared single-column PK, else first column of a keyless view.
+  const keyByTable = new Map<string, ColumnMeta>();
+  const keyIndex = new Map<string, string[]>(); // lower(key column) → table names
+  for (const t of tables) {
+    const cols = columnsByTable.get(t.tableName) ?? [];
+    const pks = cols.filter((c) => c.isPrimaryKey);
+    let key: ColumnMeta | undefined;
+    if (pks.length === 1) key = pks[0];
+    else if (pks.length === 0 && t.tableType === "VIEW") {
+      key = [...cols].sort((a, b) => a.ordinalPosition - b.ordinalPosition)[0];
+    }
+    if (!key) continue;
+    keyByTable.set(t.tableName, key);
+    const k = key.columnName.toLowerCase();
+    keyIndex.set(k, [...(keyIndex.get(k) ?? []), t.tableName]);
+  }
+
+  // Snapshot of declared FKs before this pass adds any.
+  const hadDeclaredFks = new Set(
+    Array.from(foreignKeysByTable.entries()).filter(([, fks]) => fks.length > 0).map(([t]) => t),
+  );
+
+  for (const source of tables) {
+    if (hadDeclaredFks.has(source.tableName)) continue;
+    const cols = columnsByTable.get(source.tableName) ?? [];
+    const ownKey = keyByTable.get(source.tableName);
+    const newFKs: import("./types.js").ForeignKeyMeta[] = [];
+
+    for (const col of cols) {
+      if (ownKey && col.columnName === ownKey.columnName) continue;
+      if (col.isPrimaryKey) continue;
+      const targets = (keyIndex.get(col.columnName.toLowerCase()) ?? []).filter((t) => t !== source.tableName);
+      if (targets.length === 0) continue;
+      if (targets.length > 1) {
+        warnings.push(
+          `[AMBIGUOUS JOIN] "${source.tableName}"."${col.columnName}" matches the key of several tables ` +
+          `(${targets.join(", ")}) — no join inferred; declare it with relationships.`,
+        );
+        continue;
+      }
+      const target = targets[0];
+      const targetKey = keyByTable.get(target)!;
+      targetKey.isPrimaryKey = true;
+      newFKs.push({
+        fkTableName:    source.tableName,
+        fkColumnName:   col.columnName,
+        pkTableName:    target,
+        pkColumnName:   targetKey.columnName,
+        keySeq:         1,
+        constraintName: `inferred_${source.tableName}_${col.columnName}`,
+      });
+      inferred.push({
+        fromTable: source.tableName, fromColumn: col.columnName,
+        toTable: target, toColumn: targetKey.columnName,
+      });
+    }
+    if (newFKs.length > 0) {
+      foreignKeysByTable.set(source.tableName, [...(foreignKeysByTable.get(source.tableName) ?? []), ...newFKs]);
+    }
+  }
+  return { inferred, warnings };
 }
 
 // ----------------------------------------------------------
@@ -403,6 +573,20 @@ export interface ProposeOptions {
    * Default: 4.
    */
   maxHierarchiesPerDim?: number;
+
+  /**
+   * Relationships to add on top of those declared in the schema, as
+   * `DeclaredRelationship` objects or `"FROM_TABLE.COLUMN -> TO_TABLE.COLUMN"`
+   * strings.  The target column becomes the target table's key when it has none.
+   */
+  relationships?: Array<DeclaredRelationship | string>;
+
+  /**
+   * Infer joins where a column name exactly matches another table's key column
+   * (its single-column PK, or the first column of a keyless view).  Only applies
+   * to tables with no declared foreign keys.  Default: true.
+   */
+  inferKeyNameJoins?: boolean;
 }
 
 // ----------------------------------------------------------
@@ -485,6 +669,41 @@ export async function proposeSemanticModel(
       `[INFERRED FK] "${fromTable}"."${fromColumn}" → "${toTable}"."${toColumn}" ` +
       `(naming convention — no constraint declared in schema)`,
     );
+  }
+
+  // ==========================================================================
+  // Phase 1c: Caller-declared relationships, then key-name FK inference.
+  // Declared relationships run first so they count as declared FKs and are
+  // never second-guessed by inference.
+  // ==========================================================================
+  if (opts.relationships?.length) {
+    const declared: DeclaredRelationship[] = [];
+    for (const r of opts.relationships) {
+      if (typeof r !== "string") { declared.push(r); continue; }
+      const parsed = parseRelationshipSpec(r);
+      if (parsed) declared.push(parsed);
+      else warnings.push(`[DECLARED RELATIONSHIP] Could not parse "${r}" — expected "FROM_TABLE.COLUMN -> TO_TABLE.COLUMN".`);
+    }
+    warnings.push(...applyDeclaredRelationships(
+      declared,
+      rawMetadata.tables,
+      rawMetadata.columnsByTable,
+      rawMetadata.foreignKeysByTable,
+    ));
+  }
+  if (opts.inferKeyNameJoins ?? true) {
+    const keyNameResult = inferKeyNameFKs(
+      rawMetadata.tables,
+      rawMetadata.columnsByTable,
+      rawMetadata.foreignKeysByTable,   // mutated in place
+    );
+    warnings.push(...keyNameResult.warnings);
+    for (const { fromTable, fromColumn, toTable, toColumn } of keyNameResult.inferred) {
+      warnings.push(
+        `[INFERRED FK] "${fromTable}"."${fromColumn}" → "${toTable}"."${toColumn}" ` +
+        `(column name matches the key of "${toTable}" — no constraint declared in schema)`,
+      );
+    }
   }
 
   // ==========================================================================
@@ -1052,11 +1271,23 @@ export async function proposeSemanticModel(
   // Serialize to AtScale SML if requested
   if (smlOpts) {
     // Pass through the raw column map so dataset files are complete
+    // Per-table schema/database (from qualified DDL names) so the serializer can
+    // emit one connection per schema when tables span several schemas.
+    const tableLocations = new Map<string, { schema?: string; database?: string }>();
+    for (const t of rawMetadata.tables) {
+      if (t.schemaName || t.databaseName) {
+        tableLocations.set(t.tableName, {
+          ...(t.schemaName ? { schema: t.schemaName } : {}),
+          ...(t.databaseName ? { database: t.databaseName } : {}),
+        });
+      }
+    }
     const smlOptsWithCols: SmlSerializerOptions = {
       ...smlOpts,
       columnsByTable:
         smlOpts.columnsByTable ??
         (rawMetadata.columnsByTable as Map<string, import("./types.js").ColumnMeta[]>),
+      tableLocations: smlOpts.tableLocations ?? tableLocations,
     };
     model.sml = serializeToSml(model, smlOptsWithCols);
   }

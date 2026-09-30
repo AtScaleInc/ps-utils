@@ -51,6 +51,13 @@ export interface TableMeta {
   tableName: string;
   tableType: "TABLE" | "VIEW" | "SYSTEM TABLE";
   remarks?: string;
+  /**
+   * Schema the table lives in, when known (e.g. from a qualified DDL name).
+   * Used to emit one SML connection per schema when tables span schemas.
+   */
+  schemaName?: string;
+  /** Database (catalog) the table lives in, when known (three-part DDL names). */
+  databaseName?: string;
 }
 
 /** Mirror of java.sql.DatabaseMetaData — implemented by the caller. */
@@ -281,9 +288,14 @@ export function isIntegerType(jdbcType: string): boolean {
 }
 
 export function toTitleCase(s: string): string {
+  // Split words on underscores and on case boundaries (fooBar → foo Bar,
+  // HTTPServer → HTTP Server) but keep runs of capitals together, so
+  // all-caps names such as VW_FLOW_SNAP become "VW FLOW SNAP" rather than
+  // one letter per word.
   return s
     .replace(/_/g, " ")
-    .replace(/([A-Z])/g, " $1")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
