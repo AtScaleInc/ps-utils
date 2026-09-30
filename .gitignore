@@ -16,9 +16,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
+# Internal docs (build plan, ps-utils handoffs) stay local
 docs/
-lib64/
+/lib64/
 parts/
 sdist/
 var/
