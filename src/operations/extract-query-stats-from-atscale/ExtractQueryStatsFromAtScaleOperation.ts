@@ -116,6 +116,43 @@ function parsePairKey(key: PairKey): [string | null, string | null] {
 }
 
 // ---------------------------------------------------------------------------
+// Query history REST API
+// ---------------------------------------------------------------------------
+
+/**
+ * Base URL of the engine's query history list route.
+ *
+ * The engine mounts it as `"queries" -> ActivityMonitorRest()` and the list is
+ * `(get & pathEnd)`: there is no `orgId/{org}` segment on container builds, so
+ * `/engine/queries/orgId/default` is a 404. Container nginx strips `/engine`
+ * before forwarding. Installer deployments keep their org-scoped path.
+ */
+export function queryHistoryBaseUrl(
+  installer: boolean,
+  atscaleUrl: string,
+  organizationId: string | undefined,
+): string {
+  return installer
+    ? `${atscaleUrl}:10502/queries/orgId/${organizationId}`
+    : `${atscaleUrl}/engine/queries`;
+}
+
+/** One page request against the query history list route. */
+export function queryHistoryPageUrl(
+  baseUrl: string,
+  filters: { catalogId: string; modelId: string; startTime: string; endTime: string },
+  offset: number,
+  limit: number,
+): string {
+  return (
+    `${baseUrl}?querySource=user&status=success` +
+    `&projectId=${filters.catalogId}&cubeId=${filters.modelId}` +
+    `&queryDateTimeStart=${filters.startTime}&queryDateTimeEnd=${filters.endTime}` +
+    `&offset=${offset}&limit=${limit}`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Operation
 // ---------------------------------------------------------------------------
 
@@ -375,19 +412,13 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       'Authorization': `Bearer ${token}`
     }
 
-    const baseUrl = installer
-      ? `${atscaleUrl}:10502/queries/orgId/${organizationId}`
-      : `${atscaleUrl}/engine/queries/orgId/${organizationId}`;
+    const baseUrl = queryHistoryBaseUrl(installer, atscaleUrl, organizationId);
 
     let offset = 0;
     let done = false;
 
     while (!done) {
-      const url =
-        `${baseUrl}?querySource=user&status=success` +
-        `&projectId=${catalogId}&cubeId=${modelId}` +
-        `&queryDateTimeStart=${startTime}&queryDateTimeEnd=${endTime}` +
-        `&offset=${offset}&limit=${limit}`;
+      const url = queryHistoryPageUrl(baseUrl, { catalogId, modelId, startTime, endTime }, offset, limit);
 
       this.logger.verbose(`Fetching query page at offset ${offset}: ${url}`);
       const response = await axios.get(url, config);
