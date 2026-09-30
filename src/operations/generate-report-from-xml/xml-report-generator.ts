@@ -709,6 +709,13 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       collectUsedAttrIds();
     }
   }
+  // Snapshot the pre-growth set — every dataset a cube's own data-set-ref names directly —
+  // before the loop below adds dimension-backing datasets too. This is the "Fact" side of
+  // the Datasets section's role tag; anything the loop below adds that isn't already here
+  // is a "Dimension" table instead (mirrors generate-report-from-sml's factDatasets/
+  // dimDatasets split, which reads the same fact-vs-dimension distinction off the SML side).
+  const factDatasetNames = new Set(usedDatasetNames);
+
   // Schema-level dimensions never appear in a cube's own data-set-ref list (they're pulled
   // in via keyed-attribute key-refs instead, resolved through keyMap below), so a dataset
   // that only backs a dimension level — never a cube's fact table — still counts as used;
@@ -859,7 +866,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // ── Datasets ────────────────────────────────────────────────────────────────
 
   out.push("## Datasets", "");
-  for (const ds of datasets) renderDataset(out, ds);
+  for (const ds of datasets) {
+    const role = factDatasetNames.has(ds.name) ? "Fact" : usedDatasetNames.has(ds.name) ? "Dimension" : undefined;
+    renderDataset(out, ds, role);
+  }
 
   // ── Attribute Library ────────────────────────────────────────────────────────
 
@@ -940,8 +950,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // Section renderers (closures over the phase-1..5 maps above)
   // ============================================================
 
-  function renderDataset(o: string[], ds: DatasetDef): void {
-    o.push(`### ${ds.name}`, "");
+  function renderDataset(o: string[], ds: DatasetDef, role: string | undefined): void {
+    o.push(`### ${ds.name}${role ? `  \`${role}\`` : ""}`, "");
     const meta: string[] = [];
     if (ds.connectionId) meta.push(`- Connection: \`${cell(ds.connectionId)}\``);
     if (ds.table) meta.push(`- Table: \`${cell([ds.table.database, ds.table.schema, ds.table.name].filter(Boolean).join("."))}\``);
@@ -1037,6 +1047,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           cell(def?.caption),
           code(bindingLabel(bindings)),
           cell(levelType),
+          flag(bindings.some((b) => b.unique)),
           flag(!visible) ? "hidden" : "",
           cell(def?.folder),
           def?.allowedCalcTypes.join(", ") ?? "",
@@ -1064,7 +1075,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       }
 
       if (levelRows.length) {
-        o.push(...table(["Level (primary attribute)", "Caption", "Bound to (dataset.column)", "Level type", "Hidden", "Folder", "Allowed DMA calcs"], levelRows));
+        o.push(...table(["Level (primary attribute)", "Caption", "Bound to (dataset.column)", "Level type", "Unique key", "Hidden", "Folder", "Allowed DMA calcs"], levelRows));
       }
       if (secondaryRows.length) {
         o.push("Level attributes (name/sort overrides and secondary attributes):", "");
