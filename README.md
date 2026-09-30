@@ -4,7 +4,6 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
 
   Upcoming features:
 - Google Sheets
-- Rudy's aggregate util
 - Perspectives
 - -- apply plan should show command
 - graphql output not going to output
