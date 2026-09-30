@@ -22,6 +22,7 @@ module only quotes it into SQL.
 
 from __future__ import annotations
 
+import json
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -39,6 +40,49 @@ _ALIAS = re.compile(r"^t\d{1,3}$")
 
 class PreviewError(ValueError):
     """A request the SQL can't be built from (-> 400)."""
+
+
+class InvalidSourceError(PreviewError):
+    """The picked data source doesn't have the canvas's tables - usually the
+    Source panel was switched to another warehouse after the tables were
+    added (-> 422, `invalidSource`)."""
+
+
+# How warehouses word "no such table", as the engine passes it through:
+# Postgres / Redshift `relation "s.t" does not exist`, Snowflake `Object 'X'
+# does not exist or not authorized`, Databricks / Spark `Table or view not
+# found` / TABLE_OR_VIEW_NOT_FOUND, BigQuery `Not found: Table`, SQL Server
+# `Invalid object name`, generic `... doesn't exist` / `unknown table`.
+_MISSING_TABLE = re.compile(
+    r"does not exist|doesn't exist|not found|TABLE_OR_VIEW_NOT_FOUND|Invalid object name|unknown table|no such table",
+    re.I)
+_ENGINE_MESSAGE = re.compile(r'"message"\s*:\s*"((?:[^"\\]|\\.)*)"')
+
+
+def _engine_message(e: Exception) -> str:
+    """The warehouse's own words from an AtScale error, not the whole JSON
+    envelope + Node stack trace (AtScaleApiError.body)."""
+    body = getattr(e, "body", None) or str(e)
+    m = _ENGINE_MESSAGE.search(body)
+    try:
+        text = json.loads(f'"{m.group(1)}"') if m else str(e)
+    except ValueError:
+        text = m.group(1)
+    text = text.removeprefix("Problem getting query sample data: ")
+    return " ".join(text.split())[:400]
+
+
+def _query(api, connection_id: str, sql: str, tables: list[dict[str, Any]], database: str) -> dict[str, Any]:
+    try:
+        return api.query_sample(connection_id, sql)
+    except Exception as e:  # noqa: BLE001 - reworded below
+        msg = _engine_message(e)
+        if _MISSING_TABLE.search(msg):
+            names = ", ".join(sorted({f"{t.get('schema')}.{t['table']}" if t.get("schema") else t["table"] for t in tables}))
+            raise InvalidSourceError(
+                f"Invalid data source: {connection_id} · {database} doesn't have the canvas's tables ({names}). "
+                f"Pick the data source these tables were added from. Warehouse said: {msg}") from None
+        raise PreviewError(f"The warehouse rejected the preview query: {msg}") from None
 
 
 def _nonce() -> str:
@@ -125,8 +169,8 @@ def run(api, connection_id: str, database: str, dialect: str | None, tables: lis
     if mode == "check":
         root_sql, joined_sql = check_sql(tables, database, dialect)
         with ThreadPoolExecutor(max_workers=2) as pool:
-            root_f = pool.submit(api.query_sample, connection_id, root_sql + _nonce())
-            joined_f = pool.submit(api.query_sample, connection_id, joined_sql + _nonce())
+            root_f = pool.submit(_query, api, connection_id, root_sql + _nonce(), tables[:1], database)
+            joined_f = pool.submit(_query, api, connection_id, joined_sql + _nonce(), tables, database)
             root_n = _int((_rows(root_f.result()) or [[None]])[0][0])
             counts = [_int(v) for v in ((_rows(joined_f.result()) or [[]])[0])]
         joined_n = counts[0] if counts else None
@@ -137,7 +181,7 @@ def run(api, connection_id: str, database: str, dialect: str | None, tables: lis
                 "fanOut": root_n is not None and joined_n is not None and joined_n > root_n,
                 "joins": joins, "elapsedMs": int((time.time() - started) * 1000)}
     sql = build_sql(tables, columns, mode, database, dialect)
-    result = api.query_sample(connection_id, sql + _nonce())
+    result = _query(api, connection_id, sql + _nonce(), tables, database)
     rows = [r[: len(columns)] for r in _rows(result)]
     return {"mode": mode, "sql": sql, "rows": rows, "limit": ROW_LIMIT,
             "elapsedMs": int((time.time() - started) * 1000)}

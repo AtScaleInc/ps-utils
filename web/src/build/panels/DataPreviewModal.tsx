@@ -22,6 +22,7 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
   const cfg = useModelStore((s) => s.cfg)
   const sourceId = useModelStore((s) => s.sourceId)
   const dialect = useModelStore((s) => s.sourceMeta?.dialect ?? null)
+  const sourceLabel = useModelStore((s) => (s.sourceMeta ? `${s.sourceMeta.connectionId} · ${s.sourceMeta.database}` : null))
   const calcCount = useModelStore((s) => s.calculations.length)
 
   // Facts first: a preview normally starts where the metrics live.
@@ -55,6 +56,7 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
       const data = await runDataPreview({ source: sourceId, dialect, mode: m, tables: req.tables, columns: req.columns })
       setResult({ data, headers: req.headers })
     } catch (e) {
+      setResult(null)
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
@@ -112,7 +114,7 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
 
         <section className="wizard-main">
           <header className="wizard-head">
-            <span className="eyebrow">First 10 rows · straight from the warehouse</span>
+            <span className="eyebrow">First 10 rows · straight from the warehouse{sourceLabel ? ` · ${sourceLabel}` : ''}</span>
             <span className="headline">{root ? ((root.role === 'fact' ? root.factName : root.dimName) || root.table) : 'Nothing on the canvas'}</span>
             <span className="field-note">
               Tables join the way the canvas says (LEFT JOIN from {root?.table ?? 'the base table'}), so a key with no
@@ -132,7 +134,16 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
           </header>
 
           <div className="wizard-body">
-            {error && <div className="login-error wizard-error">{error}</div>}
+            {error && (
+              <div className="login-error wizard-error">
+                {error}
+                {/^Invalid data source/.test(error) && (
+                  <div className="field-note" style={{ marginTop: 6 }}>
+                    The Data Source panel left of the canvas decides where Preview data runs - switch it back, then Run again.
+                  </div>
+                )}
+              </div>
+            )}
             {busy && !result && <span className="field-note wizard-inline"><span className="spinner" /> Querying the warehouse…</span>}
             {result?.data.mode === 'check' && <CheckView data={result.data} />}
             {result && result.data.mode !== 'check' && <RowsView data={result.data} headers={result.headers} />}

@@ -62,3 +62,20 @@ def test_identifiers_are_quoted():
     sql = data_preview.build_sql([{"alias": "t0", "schema": "s", "table": 'we"ird'}],
                                  [{"alias": "t0", "column": 'a"b'}], "rows", "db", "snowflake")
     assert sql == 'SELECT t0."a""b" AS c0 FROM "db"."s"."we""ird" t0'
+
+
+def test_missing_table_is_an_invalid_source(client):  # noqa: F811
+    # The canvas was built on another warehouse: its table isn't in this one.
+    gone = {"alias": "t0", "schema": "public", "table": "not_here"}
+    r = client.post(URL, json=body("rows", [gone], [{"alias": "t0", "column": "x"}]))
+    assert r.status_code == 422 and r.get_json()["invalidSource"] is True
+    assert r.get_json()["error"].startswith("Invalid data source: PostgresDB · tutorial doesn't have")
+
+
+def test_engine_message_is_extracted():
+    from atscale.client import AtScaleApiError
+
+    body = ('{"statusCode":500,"message":"Problem getting query sample data: ERROR: relation \\"SalesInsights.fact\\" '
+            'does not exist\\n  Position: 150","error":{"stack":"EngineClientException: ..."}}')
+    msg = data_preview._engine_message(AtScaleApiError(500, body, "https://h/wapi/p/..."))
+    assert msg == 'ERROR: relation "SalesInsights.fact" does not exist Position: 150'

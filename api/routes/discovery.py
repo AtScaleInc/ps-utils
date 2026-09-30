@@ -220,6 +220,8 @@ def data_preview_run(host_id: str):
         return jsonify(data_preview.run(registry.source_api(host_id), connection_id, database,
                                         _dialect(host_id, connection_id, b), b.get("tables") or [],
                                         b.get("columns") or [], mode))
+    except data_preview.InvalidSourceError as e:
+        return jsonify({"error": str(e), "invalidSource": True}), 422
     except data_preview.PreviewError as e:
         raise _BadRequest(str(e)) from None
 
