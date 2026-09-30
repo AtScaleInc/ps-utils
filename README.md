@@ -5,32 +5,35 @@ environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
 
 - **build** a semantic model visually, after profiling the warehouse tables it
   uses, and deploy it to one or many hosts,
-- **manage** each host's models and aggregates,
 - **test** that an environment answers the same queries as another, with the
   same model and the same values,
 - **promote** models and system aggregates from one environment to the next,
-  such as Dev → QA → Prod, moving only what's new.
+  such as Dev → QA → Prod, moving only what's new,
+- **manage** each host's models and aggregates,
+- **monitor** a host's query history: how much is served from cache,
+  aggregates or the warehouse, volume, latency and hotspots.
 
 ```
-┌──── Build ─────┐   ┌──── Manage ─────┐   ┌───── Test ──────┐   ┌──── Promote ────┐
-│ discover →     │   │ group → host    │   │ generate queries│   │ source host     │
-│ canvas → SML   │ → │ Models: link,   │ → │ from a model,   │ → │  diff → stage   │
-│ push to Git    │   │  deploy, unlink │   │ run on hosts,   │   │ target host     │
-│ deploy to any  │   │ Aggregates:     │   │ compare model + │   │  promote (Prod  │
-│ hosts          │   │  build, (de)act │   │ results         │   │  asks first)    │
-└────────────────┘   └─────────────────┘   └─────────────────┘   └─────────────────┘
-        Settings: Hosts & Git (credentials, shared Git profile) · Cache & Database
+┌───── Build ──────┐   ┌────── Test ──────┐   ┌──── Promote ─────┐   ┌───── Manage ─────┐   ┌──── Monitor ─────┐
+│ discover →       │   │ generate queries │   │ source host      │   │ group → host     │   │ poll a host's    │
+│ canvas → SML     │ → │ from a model,    │ → │  diff → stage    │ → │ Models: link,    │ → │ query history:   │
+│ push to Git      │   │ run on hosts,    │   │ target host      │   │  deploy, unlink  │   │ cache / agg /    │
+│ deploy to any    │   │ compare model +  │   │  promote (Prod   │   │ Aggregates:      │   │  warehouse mix,  │
+│ hosts            │   │ results          │   │  asks first)     │   │  build, (de)act  │   │ latency, hotspots│
+└──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
+          Settings: Hosts & Git (credentials, shared Git profile) · Cache & Database
 ```
 
-The top tabs are **Build · Manage · Test · Promote**, with **⚙ Settings** on the
-right. The left rail lists the current tab's sections:
+The top tabs are **Build · Test · Promote · Manage · Monitor**, with **⚙ Settings** on the
+right. The app opens on Build. The left rail lists the current tab's sections:
 
 | Tab | Rail sections |
 |---|---|
 | Build | Discovery · Develop · Preview |
-| Manage | Models · Aggregates |
 | Test | Run · Results · Compare results · Compare model |
 | Promote | Models · Aggregates |
+| Manage | Models · Aggregates |
+| Monitor | Overview · History · Hotspots |
 | Settings | Hosts & Git · Cache & Database |
 
 Every tab picks its group and host the same way: the env picker and host
@@ -169,41 +172,6 @@ Build is a quick-start modeler, not a replacement for AtScale's own. A model
 using anything beyond Build's subset opens read-only (see above) rather than
 being partly imported and overwritten.
 
-### Manage → Models
-
-Pick a group, then a host.
-
-| Action | What happens |
-|---|---|
-| **+ Link model** | Registers a GitHub repo on the host, at a branch you pick. The repo list shows only your repos that have a `catalog.yml`. Each branch shows its head commit. |
-| **Deploy…** | For each selected repo, deploys the **branch you pick**. AtScale clones that branch head and compiles the SML itself. A branch other than the current one deploys as its own catalog, tagged with the branch name. |
-| **Undeploy** | Undeploys the whole catalog the selected models belong to, along with its aggregates. The repo stays linked. |
-| **Unlink** | Undeploys the catalog, then detaches the repo from the host. Git isn't touched. |
-
-AtScale deploys and undeploys **whole catalogs** (a repo is one catalog), so the
-confirmation dialogs list every model affected.
-
-**Version = the Git commit** the deployment was built from (for example
-`ef4d8e3 main`). AtScale doesn't record the commit, so:
-
-- if the app deployed it, the app recorded the commit
-- otherwise it's inferred as the last commit on the branch before AtScale's
-  publish time, and shown with a `~`
-
-### Manage → Aggregates
-
-- Pick a deployed model to see its aggregates:
-  - type: `SYSTEM` or `USER`
-  - row count
-  - last build time
-  - status: Built, Building, Stale, Invalid, Error or Inactive. Invalid and
-    Error show AtScale's reason when you hover.
-- **Full build** or **Incremental build** covers every active aggregate of the
-  model. Building rows update to Built on their own.
-- **Deactivate** or **Reactivate** works on one row or on a multi-selection.
-- System aggregates have UUIDs for names, so the app shows a readable label
-  built from their grain, such as `Product Category · Product Line · 24 measures`.
-
 ### Test: prove an environment matches before promoting
 
 Test is ps-utils' *Testing / Query Processing* group, run on several hosts at
@@ -334,6 +302,41 @@ everything is matched by **name**, and then the target's id is looked up.
    skipped and the missing names are listed.
 5. **Re-check at promote time.** The target's current state is re-read before
    importing, in case it changed since the diff was shown.
+
+### Manage → Models
+
+Pick a group, then a host.
+
+| Action | What happens |
+|---|---|
+| **+ Link model** | Registers a GitHub repo on the host, at a branch you pick. The repo list shows only your repos that have a `catalog.yml`. Each branch shows its head commit. |
+| **Deploy…** | For each selected repo, deploys the **branch you pick**. AtScale clones that branch head and compiles the SML itself. A branch other than the current one deploys as its own catalog, tagged with the branch name. |
+| **Undeploy** | Undeploys the whole catalog the selected models belong to, along with its aggregates. The repo stays linked. |
+| **Unlink** | Undeploys the catalog, then detaches the repo from the host. Git isn't touched. |
+
+AtScale deploys and undeploys **whole catalogs** (a repo is one catalog), so the
+confirmation dialogs list every model affected.
+
+**Version = the Git commit** the deployment was built from (for example
+`ef4d8e3 main`). AtScale doesn't record the commit, so:
+
+- if the app deployed it, the app recorded the commit
+- otherwise it's inferred as the last commit on the branch before AtScale's
+  publish time, and shown with a `~`
+
+### Manage → Aggregates
+
+- Pick a deployed model to see its aggregates:
+  - type: `SYSTEM` or `USER`
+  - row count
+  - last build time
+  - status: Built, Building, Stale, Invalid, Error or Inactive. Invalid and
+    Error show AtScale's reason when you hover.
+- **Full build** or **Incremental build** covers every active aggregate of the
+  model. Building rows update to Built on their own.
+- **Deactivate** or **Reactivate** works on one row or on a multi-selection.
+- System aggregates have UUIDs for names, so the app shows a readable label
+  built from their grain, such as `Product Category · Product Line · 24 measures`.
 
 ### Settings
 

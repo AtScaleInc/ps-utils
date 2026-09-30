@@ -37,9 +37,9 @@ export default function App() {
 
 const TABS: { id: Exclude<View, 'settings'>; label: string; note: string }[] = [
   { id: 'build', label: 'Build', note: 'Model SML, deploy to hosts' },
-  { id: 'manage', label: 'Manage', note: 'Objects on one host' },
   { id: 'test', label: 'Test', note: 'Generate + run model queries on hosts' },
   { id: 'promote', label: 'Promote', note: 'Move objects between hosts' },
+  { id: 'manage', label: 'Manage', note: 'Objects on one host' },
   { id: 'monitor', label: 'Monitor', note: 'Query history, cache / aggregate use, latency' },
 ]
 

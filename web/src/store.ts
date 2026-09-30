@@ -98,7 +98,7 @@ interface UiState {
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 export const useUi = create<UiState>((set) => ({
-  view: 'manage',
+  view: 'build',
   section: 'models',
   buildSection: 'discover',
   build: { env: 'dev', hostId: null },
