@@ -3318,6 +3318,14 @@
           "default": null
         },
         {
+          "name": "metrics-per-level-query",
+          "description": "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) or \"each\" (one query per level and metric, so a metric not defined over a dimension fails only its own query)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "all"
+        },
+        {
           "name": "xmla-output-file",
           "description": "Path to write the XMLA (MDX) query JSON file",
           "type": "string",
@@ -3368,6 +3376,14 @@
           "role": "scalar",
           "required": false,
           "default": null
+        },
+        {
+          "name": "metrics-per-level-query",
+          "description": "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) or \"each\" (one query per level and metric, so a metric not defined over a dimension fails only its own query)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "all"
         },
         {
           "name": "xmla-output-file",

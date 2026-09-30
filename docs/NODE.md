@@ -1117,6 +1117,7 @@ function generateQueriesFromSML(
 | `sqlOutputFile` | `FileOutput` | Yes | | Output path for SQL query JSON, or a `Writable` to receive it |
 | `modelName` | `string` | No | | Model name to use |
 | `cubeName` | `string` | No | | Cube name to use |
+| `metricsPerLevelQuery` | `"all" \| "each"` | No | `"all"` | `"all"`: one level-breakdown query per level selecting every metric. `"each"`: one query per (level, metric), so a metric not defined over a dimension fails only its own query |
 
 ---
 
@@ -1150,6 +1151,7 @@ function generateQueriesFromModel(
 | `sqlOutputFile` | `FileOutput` | Yes | | Output path for SQL query JSON, or a `Writable` to receive it |
 | `modelName` | `string` | No | | Model name to use |
 | `cubeName` | `string` | No | | Cube name to use |
+| `metricsPerLevelQuery` | `"all" \| "each"` | No | `"all"` | `"all"`: one level-breakdown query per level selecting every metric. `"each"`: one query per (level, metric), so a metric not defined over a dimension fails only its own query |
 
 ---
 

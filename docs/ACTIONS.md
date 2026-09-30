@@ -1309,6 +1309,7 @@ Reads an SML directory and generates XMLA (MDX) and SQL query JSON files, both c
 | `sml-dir` | Yes | | Path to the SML directory |
 | `model-name` | No | First model found | Model `label` or `unique_name` to use |
 | `cube-name` | No | Model label | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `metrics-per-level-query` | No | `all` | `all`: one level-breakdown query per level selecting every metric. `each`: one query per (level, metric), named `Dim \| Hierarchy \| Level \| Metric`, so a metric not defined over a dimension (another fact / measure group) fails only its own query instead of every breakdown on that level |
 | `xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
 | `sql-output-file` | Yes | | Path to write the SQL query JSON |
 
@@ -1336,6 +1337,7 @@ Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-mo
 | `model-file` | Yes | | Path to the `model.yaml` file |
 | `model-name` | No | First model found | Top-level model key when the file contains multiple models |
 | `cube-name` | No | Model name | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `metrics-per-level-query` | No | `all` | `all`: one level-breakdown query per level selecting every metric. `each`: one query per (level, metric), named `Dim \| Hierarchy \| Level \| Metric`, so a metric not defined over a dimension (another fact / measure group) fails only its own query instead of every breakdown on that level |
 | `xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
 | `sql-output-file` | Yes | | Path to write the SQL query JSON |
 
@@ -1434,6 +1436,13 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 **Requires:** `CONNECTIONS_FILE` secret containing either a `connections.yaml` file or a `systems.properties` file.
 
+**XMLA authentication (`connections.yaml`, container hosts — `installer: false`)** — two options:
+
+- **XMLA token in the URL** — set `mdx.url` to `https://<host>/engine/xmla/<xmla-token>`. The URL authenticates on its own; no user credentials are needed.
+- **User password** — set `mdx.url` to the host (or `https://<host>/engine/xmla`) and `mdx.user` to a `users:` entry with `username` / `password`. The harness obtains a Keycloak token (password grant, same as `extract-model-from-atscale`) and sends it as a Bearer token.
+
+For SQL on a container host's port 15432, set `sql.ssl: true` — the server requires TLS.
+
 #### Using the composite action
 
 ```yaml
@@ -1479,8 +1488,9 @@ Replays extracted queries against a live AtScale instance, measuring response ti
 
 - **`run_query_uuid`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `annotate-queries: "true"`)
 - **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
-- **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). `0` when no data is returned or on error.
-- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the SOAP `<Body>` content only (the `<Header>` is excluded because it contains per-request session IDs and timestamps). Empty when `row_count = 0` or when the query fails.
+- **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). For XMLA this is a **cell** count (rows × measures), not a row count: a 1124-row breakdown selecting 3 metrics reads `3372` for XMLA and `1124` for SQL. `0` when no data is returned or on error.
+- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the result itself — the `<Axes>` (tuples) and `<CellData>` sections — so per-request and per-response metadata (the SOAP `<Header>` session ID and the `LastDataUpdate` / `LastSchemaUpdate` timestamps in `OlapInfo`) does not affect it, and the same result gives the same checksum across runs and hosts. Empty when `row_count = 0` or when the query fails.
+- **`status`** for XMLA is `FAILED` on a non-200 HTTP status **or** when the response carries a SOAP `<Fault>` (even with HTTP 200); the fault's `faultstring` goes in `error`.
 
 ---
 

@@ -1251,6 +1251,7 @@ curl -X POST http://localhost:4000/graphql \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 | `xmlaOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 
@@ -1292,6 +1293,7 @@ curl -X POST http://localhost:4000/graphql \
 | `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 | `xmlaOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 
@@ -4031,6 +4033,8 @@ input GenerateQueriesFromSmlInput {
   modelName: String
   """Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file."""
   cubeName: String
+  """How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query)"""
+  metricsPerLevelQuery: String
   """Path to write the XMLA (MDX) query JSON file"""
   xmlaOutputFile: String
   """Path to write the SQL query JSON file"""
@@ -4049,6 +4053,8 @@ input GenerateQueriesFromModelInput {
   modelName: String
   """Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key)."""
   cubeName: String
+  """How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query)"""
+  metricsPerLevelQuery: String
   """Path to write the XMLA (MDX) query JSON file"""
   xmlaOutputFile: String
   """Path to write the SQL query JSON file"""

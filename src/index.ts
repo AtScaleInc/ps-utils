@@ -695,6 +695,7 @@ export type GenerateQueriesFromSMLParams = {
   sqlOutputFile: FileOutput;
   modelName?: string;
   cubeName?: string;
+  metricsPerLevelQuery?: "all" | "each";
 };
 
 export async function generateQueriesFromSML(p: GenerateQueriesFromSMLParams, o: LibraryOptions = {}) {
@@ -714,6 +715,7 @@ export type GenerateQueriesFromModelParams = {
   sqlOutputFile: FileOutput;
   modelName?: string;
   cubeName?: string;
+  metricsPerLevelQuery?: "all" | "each";
 };
 
 export async function generateQueriesFromModel(p: GenerateQueriesFromModelParams, o: LibraryOptions = {}) {
