@@ -35,7 +35,7 @@ from typing import Any
 
 import yaml
 
-from .rules import AGG_TO_CALC_METHOD, cased, kebab, sml_data_type, title_case
+from .rules import AGG_TO_CALC_METHOD, cased, join_type_family, kebab, sml_data_type, title_case
 
 
 def _column_key(node_id: str, column: str) -> str:
@@ -135,6 +135,22 @@ def validate_model(nodes: list[dict], joins: list[dict], cfg: dict[str, dict]) -
             level_keys = {lv["key"] for lv in _levels_of(cfg, node_id)}
             if not attach or attach not in level_keys:
                 errors.append(f"Column '{key.split('::', 1)[1]}' is a {c['dimRole']} attribute with no valid level attached.")
+
+    # Join keys must be the same type family - no string-to-int joins.
+    def _col_type(node_id: str, column: str) -> str | None:
+        n = nodes_by_id.get(node_id) or {}
+        return next((c.get("type") for c in n.get("columns") or [] if c.get("name") == column), None)
+
+    for j in joins:
+        ta, tb = _col_type(j["a"]["node"], j["a"]["column"]), _col_type(j["b"]["node"], j["b"]["column"])
+        fa, fb = join_type_family(ta), join_type_family(tb)
+        if fa and fb and fa != fb:
+            na, nb = nodes_by_id.get(j["a"]["node"], {}), nodes_by_id.get(j["b"]["node"], {})
+            errors.append(
+                f"Join {na.get('table', j['a']['node'])}.{j['a']['column']} ({ta}) to "
+                f"{nb.get('table', j['b']['node'])}.{j['b']['column']} ({tb}) joins different types "
+                f"({fa} vs {fb}) - join keys must be the same type."
+            )
 
     # Every dimension must reach a fact, directly or through a chain of dim<->dim joins.
     fact_ids = {n["id"] for n in nodes if n.get("role") == "fact"}

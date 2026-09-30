@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { joinTypeMismatch } from './lib/joinTypes'
 
 // State shape per docs/BUILD_PLAN.md "Dynamic hierarchy model" — replaces the
 // design mockup's fixed L1/L2/L3 with an arbitrary-length, user-ordered chain.
@@ -163,7 +164,8 @@ export interface ModelState {
   setNodeField: (id: string, field: 'dimName' | 'hierName' | 'factName', value: string) => void
   setNodeIsTime: (id: string, isTime: boolean) => void
   setLevelOrder: (nodeId: string, key: ColumnKey, direction: 'up' | 'down') => void
-  addJoin: (a: { node: string; column: string }, b: { node: string; column: string }) => void
+  /** Returns why the join was refused (join keys of different types), else null. */
+  addJoin: (a: { node: string; column: string }, b: { node: string; column: string }) => string | null
   removeJoin: (id: string) => void
   setJoinRolePlay: (id: string, rolePlay: string | undefined) => void
   select: (selection: Selection | null) => void
@@ -399,13 +401,19 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }),
 
   addJoin: (a, b) => {
-    if (a.node === b.node) return
+    if (a.node === b.node) return null
+    const colOf = (end: { node: string; column: string }) => {
+      const n = get().nodes.find((x) => x.id === end.node)
+      return { table: n?.table ?? end.node, column: end.column, type: n?.columns.find((c) => c.name === end.column)?.type }
+    }
+    const mismatch = joinTypeMismatch(colOf(a), colOf(b))
+    if (mismatch) return mismatch
     const exists = get().joins.some(
       (j) =>
         (j.a.node === a.node && j.a.column === a.column && j.b.node === b.node && j.b.column === b.column) ||
         (j.b.node === a.node && j.b.column === a.column && j.a.node === b.node && j.a.column === b.column),
     )
-    if (exists) return
+    if (exists) return null
     set((s) => ({ joins: [...s.joins, { id: `j${seq++}`, a, b }] }))
 
     // Auto-mark the dimension-side join column as a hierarchy level (L1) if
@@ -425,6 +433,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
         get().setColumnDimRole(dimSide.node, key, 'level')
       }
     }
+    return null
   },
 
   removeJoin: (id) => set((s) => ({ joins: s.joins.filter((j) => j.id !== id) })),

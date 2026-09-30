@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useModelStore, joinedColumnKeys, type Join, type Node } from '../modelStore'
 import { fetchTableColumns } from '../client'
+import { joinTypeMismatch } from '../lib/joinTypes'
 
 const NODE_W = 258
 const HEADER_H = 44
@@ -42,6 +43,15 @@ export function Canvas() {
   const [drag, setDrag] = useState<DragState | LinkDragState | null>(null)
   const [linkTo, setLinkTo] = useState<{ x: number; y: number } | null>(null)
   const [zoom, setZoom] = useState(1)
+  const [joinError, setJoinError] = useState<string | null>(null)
+
+  // While a join is being dragged, columns whose type can't join the drag
+  // origin's are greyed out (same check addJoin enforces on drop).
+  const linkFrom = drag?.kind === 'link' ? drag.from : null
+  const linkFromNode = linkFrom ? nodes.find((n) => n.id === linkFrom.node) : undefined
+  const linkFromCol = linkFrom && linkFromNode
+    ? { table: linkFromNode.table, column: linkFrom.column, type: linkFromNode.columns.find((c) => c.name === linkFrom.column)?.type }
+    : null
 
   // Node positions (node.x/y) live in this fixed "world" space; zoom only
   // scales how that world is painted (CSS transform on the wrapper below),
@@ -106,7 +116,7 @@ export function Canvas() {
       if (target) {
         const [tNode, tCol] = target.split('::')
         if (tNode !== drag.from.node) {
-          addJoin(drag.from, { node: tNode, column: tCol })
+          setJoinError(addJoin(drag.from, { node: tNode, column: tCol }))
         }
       }
     }
@@ -170,6 +180,14 @@ export function Canvas() {
           </button>
         </div>
       </div>
+      {joinError && (
+        <div className="join-error" role="alert" onClick={(e) => e.stopPropagation()}>
+          <span>{joinError}</span>
+          <button className="btn btn-ghost zoom-btn" onClick={() => setJoinError(null)}>
+            ✕
+          </button>
+        </div>
+      )}
       {nodes.length === 0 && (
         <div style={{ padding: 16, color: 'var(--as-muted)' }}>
           Drop a fact table here to start the model.
@@ -321,10 +339,14 @@ export function Canvas() {
               const key = `${n.id}::${col.name}`
               const c = cfg[key]
               const selected = selection?.node === n.id && selection.column === col.name
+              const incompatible =
+                !!linkFromCol && linkFrom!.node !== n.id &&
+                !!joinTypeMismatch(linkFromCol, { table: n.table, column: col.name, type: col.type })
               return (
                 <div
                   key={key}
-                  className="canvas-node-row"
+                  className={`canvas-node-row${incompatible ? ' join-incompatible' : ''}`}
+                  title={incompatible ? `Type ${col.type} can't join ${linkFromCol!.type}` : undefined}
                   data-colkey={key}
                   style={{ background: selected ? 'var(--as-selected-row)' : undefined }}
                   onClick={(e) => {

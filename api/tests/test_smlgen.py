@@ -134,6 +134,25 @@ def test_validate_model_passes():
     assert validate_model(PAYLOAD["nodes"], PAYLOAD["joins"], PAYLOAD["cfg"]) == []
 
 
+def test_join_type_mismatch_is_an_error():
+    payload = copy.deepcopy(PAYLOAD)
+    fact = next(n for n in payload["nodes"] if n["id"] == "n3")
+    next(c for c in fact["columns"] if c["name"] == "productkey")["type"] = "String"
+    errors = validate_model(payload["nodes"], payload["joins"], payload["cfg"])
+    assert any("factinternetsales.productkey (String)" in e and "integer" in e for e in errors)
+
+
+def test_join_type_family_widening():
+    from smlgen.rules import join_type_family
+
+    # Int <-> Long and zero-scale decimals are all integer keys; the PAYLOAD's
+    # Int orderdatekey -> Long datekey join must stay valid.
+    assert {join_type_family(t) for t in ("Int", "Long", "BIGINT", "Decimal(38,0)", "NUMBER(10, 0)")} == {"integer"}
+    assert join_type_family("Decimal(10,2)") == "decimal"
+    assert join_type_family("VARCHAR(20)") == "string"
+    assert join_type_family("") is None
+
+
 def test_missing_role_is_an_error():
     nodes = [dict(PAYLOAD["nodes"][0])]
     nodes[0]["role"] = None

@@ -427,6 +427,31 @@
     background: var(--as-hover);
   }
 
+  /* Join-key type guardrail: rows a dragged join can't land on. */
+  .canvas-node-row.join-incompatible {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  /* Floats over the canvas so showing it never shifts the nodes. */
+  .join-error {
+    position: absolute;
+    top: 56px;
+    left: 16px;
+    right: 16px;
+    z-index: 20;
+    background: var(--as-modal);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border: 1px solid var(--as-join);
+    border-radius: 4px;
+    color: var(--as-join);
+    font-size: 12.5px;
+  }
+  .join-error span { flex: 1; }
+
   .col-name {
     flex: 1;
     overflow: hidden;
