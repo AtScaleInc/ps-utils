@@ -18,7 +18,10 @@ and result values - before promoting. Settings registers hosts + a
 shared Git profile; Manage works on one host's
 models (link / deploy / unlink) and aggregates (deactivate / reactivate, full /
 incremental build); Promote diffs a source host against a target and moves models
-(repo attach + deploy) or system aggregates (export → filter → import).
+(repo attach + deploy) or system aggregates (export → filter → import). Aggregates
+match the target model by name; the Target model **Override** (`modelMap`)
+imports into a differently named model deployed from the same SML (same host
+allowed) - the model name is substituted along with the ids, after one warning.
 
 ## Repo layout
 

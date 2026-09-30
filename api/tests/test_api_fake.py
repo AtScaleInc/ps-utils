@@ -193,3 +193,50 @@ def test_promoted_aggregate_gets_the_target_connection(client):
     assert result["promoted"] == [name] and result["connections"] == {"PG_QA → PG_PROD": 1}
     stored = [a for a in fake._inv(tgt)["aggs"] if a["id"] == name]
     assert stored and stored[0]["connectionId"] == "PG_PROD"
+
+
+def _deploy_copy(host, name, copy_of="Internet Sales"):
+    """The same SML deployed a second time under another model name."""
+    from atscale import fake
+
+    inv = fake._inv(host)
+    row = next(m for m in inv["models"] if m["name"] == copy_of)
+    inv["models"].append({**row, "key": f"{row['key']}-copy", "name": name, "modelId": name})
+
+
+def test_aggregates_promoted_into_an_override_model(client):
+    from atscale import fake
+
+    src, tgt, name = "qa-main", "prod-east", "agg_sales_by_product_cat"
+    _deploy_copy(tgt, "Internet Sales EU")
+    # Default: matched by name - the copy is not considered.
+    d = diff(client, "aggs", src, tgt, "Internet Sales")
+    assert {r["name"]: r["diff"]["state"] for r in d["rows"]}[name] == "dup"
+
+    body = {"section": "aggs", "sourceHostId": src, "targetHostId": tgt, "model": "Internet Sales",
+            "modelMap": {"Internet Sales": "Internet Sales EU"}}
+    d = client.post("/api/promote/diff", json=body).get_json()
+    rows = {r["name"]: r for r in d["rows"]}
+    assert rows[name]["diff"]["state"] == "new" and rows[name]["model"] == "Internet Sales"
+    assert d["target"] == []
+
+    job = client.post("/api/promote/aggregates", json={
+        "sourceHostId": src, "targetHostId": tgt, "aggregates": [name],
+        "modelMap": {"Internet Sales": "Internet Sales EU"}}).get_json()
+    result = wait(client, job)["result"]
+    assert result["promoted"] == [name], result
+    stored = [a for a in fake._inv(tgt)["aggs"] if a["id"] == name and a["model"] == "Internet Sales EU"]
+    assert stored and stored[0]["modelId"] == "Internet Sales EU"
+    d = client.post("/api/promote/diff", json=body).get_json()
+    assert {r["name"]: r["diff"]["state"] for r in d["rows"]}[name] == "dup"
+
+
+def test_override_allows_the_same_host(client):
+    _deploy_copy("qa-main", "Internet Sales EU")
+    body = {"section": "aggs", "sourceHostId": "qa-main", "targetHostId": "qa-main", "model": "Internet Sales",
+            "modelMap": {"Internet Sales": "Internet Sales EU"}}
+    d = client.post("/api/promote/diff", json=body).get_json()
+    assert not d.get("sameHost") and any(r["diff"]["state"] == "new" for r in d["rows"])
+    r = client.post("/api/promote/aggregates", json={
+        "sourceHostId": "qa-main", "targetHostId": "qa-main", "aggregates": ["x"]})
+    assert r.status_code == 400  # no override -> still refused

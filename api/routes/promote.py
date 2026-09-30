@@ -18,13 +18,39 @@ def _body() -> dict:
     return request.get_json(force=True, silent=True) or {}
 
 
-def _hosts(b: dict) -> tuple[str, str]:
+def _model_map(b: dict) -> dict[str, str]:
+    """Target-model override: {source model name: target model name}. Models
+    are matched by name by default; a customer who deployed the same SML twice
+    under different names promotes aggregates from one into the other."""
+    raw = b.get("modelMap") or {}
+    if not isinstance(raw, dict):
+        raise ValueError("modelMap must be {sourceModel: targetModel}")
+    return {str(k): str(v) for k, v in raw.items() if k and v}
+
+
+def _hosts(b: dict, model_map: dict[str, str] | None = None) -> tuple[str, str]:
     src, tgt = b.get("sourceHostId"), b.get("targetHostId")
     if not src or not tgt:
         raise ValueError("sourceHostId and targetHostId are required")
-    if src == tgt:
+    # Same host is fine when every override points at a different model.
+    if src == tgt and not (model_map and all(k != v for k, v in model_map.items())):
         raise ValueError("Pick a target different from the source")
     return src, tgt
+
+
+def _as_target(aggs: list[dict], model_map: dict[str, str]) -> list[dict]:
+    """Source aggregates renamed to their target model, so the §5 diff rules
+    (which match by model name) compare them with the override model's."""
+    return [{**a, "model": model_map.get(a["model"], a["model"])} for a in aggs]
+
+
+def _target_aggs(tgt, tgt_models, src_models, model_map: dict[str, str]) -> list[dict]:
+    wanted = {model_map.get(m["name"], m["name"]) for m in src_models}
+    out: list[dict] = []
+    for m in tgt_models:
+        if m["name"] in wanted:
+            out.extend(tgt.list_aggregates(m["catalogId"], m["modelId"]))
+    return out
 
 
 def _oldest(*backends) -> float | None:
@@ -48,7 +74,8 @@ def promote_diff():
     src_id, tgt_id = b.get("sourceHostId"), b.get("targetHostId")
     if not src_id or not tgt_id:
         return jsonify({"error": "sourceHostId and targetHostId are required"}), 400
-    if src_id == tgt_id:
+    model_map = _model_map(b) if section != "models" else {}
+    if src_id == tgt_id and not (model_map and all(k != v for k, v in model_map.items())):
         return jsonify({"rows": [], "target": [], "sameHost": True, "message": "Pick a target different from the source"})
     refresh = bool(b.get("refresh"))
     src, tgt = registry.backend(src_id, refresh), registry.backend(tgt_id, refresh)
@@ -59,19 +86,22 @@ def promote_diff():
         return jsonify({"rows": rows, "target": tgt_rows, "cachedAt": _oldest(src, tgt)})
 
     model = b.get("model") or None
+    if model_map and not model:
+        return jsonify({"error": "A target-model override needs a source model"}), 400
     src_models, src_aggs = _all_aggs(src, model)
     tgt_models = tgt.agg_models()
     tgt_model_names = {m["name"] for m in tgt_models}
-    tgt_aggs: list[dict] = []
-    for m in tgt_models:
-        if m["name"] in {sm["name"] for sm in src_models}:
-            tgt_aggs.extend(tgt.list_aggregates(m["catalogId"], m["modelId"]))
-    dup_ids = D.duplicates_on_target(src_aggs, tgt_aggs)
+    tgt_aggs = _target_aggs(tgt, tgt_models, src_models, model_map)
+    as_tgt = _as_target(src_aggs, model_map)
+    dup_ids = D.duplicates_on_target(as_tgt, tgt_aggs)
+    # Diff on the renamed copies, return rows under their source model's name.
+    rows = [{**a, "diff": d["diff"]} for a, d in zip(src_aggs, D.diff_aggs(as_tgt, tgt_aggs, tgt_model_names))]
     return jsonify({
-        "rows": D.diff_aggs(src_aggs, tgt_aggs, tgt_model_names),
+        "rows": rows,
         "target": [{**t, "duplicate": t["id"] in dup_ids} for t in tgt_aggs],
         "sourceModels": [m["name"] for m in src.agg_models()],
         "targetModels": sorted(tgt_model_names),
+        "modelMap": model_map,
         "cachedAt": _oldest(src, tgt),
     })
 
@@ -131,14 +161,19 @@ def promote_models():
 @promote_bp.post("/promote/aggregates")
 @host_errors
 def promote_aggregates():
-    """Body: {sourceHostId, targetHostId, aggregates: [source definition ids]}.
+    """Body: {sourceHostId, targetHostId, aggregates: [source definition ids],
+    modelMap?: {source model: target model}}.
 
     Rules: system-defined, active + exportable on the source, same model (by
-    name) deployed on the target, no active duplicate there. Export from the
+    name, or the modelMap override) deployed on the target, no active
+    duplicate there. With an override the export is assumed to come from an
+    identical model under another name: the model name is substituted along
+    with the ids. Export from the
     source -> re-check rules -> remap catalog/model/instance/connection ids to
     the target's -> import. An inactive target copy is reactivated instead."""
     b = _body()
-    src_id, tgt_id = _hosts(b)
+    model_map = _model_map(b)
+    src_id, tgt_id = _hosts(b, model_map)
     ids = b.get("aggregates") or []
     if not ids:
         return jsonify({"error": "Nothing staged"}), 400
@@ -146,22 +181,24 @@ def promote_aggregates():
 
     def run() -> dict:
         src_models, src_aggs = _all_aggs(src)
+        if model_map:
+            src_models = [m for m in src_models if m["name"] in model_map]
+            src_aggs = [a for a in src_aggs if a["model"] in model_map]
         tgt_models = {m["name"]: m for m in tgt.agg_models()}
-        tgt_aggs: list[dict] = []
-        for m in tgt_models.values():
-            if m["name"] in {sm["name"] for sm in src_models}:
-                tgt_aggs.extend(tgt.list_aggregates(m["catalogId"], m["modelId"]))
+        tgt_aggs = _target_aggs(tgt, tgt_models.values(), src_models, model_map)
         # §5 rule 6: re-check now - the target may have changed since the diff.
-        promote, skipped = D.partition_for_promote(ids, src_aggs, tgt_aggs, set(tgt_models))
+        promote, skipped = D.partition_for_promote(ids, _as_target(src_aggs, model_map), tgt_aggs, set(tgt_models))
+        src_model_of = {a["id"]: a["model"] for a in src_aggs}
         promoted: list[str] = []
         connections: dict[str, int] = {}  # "source → target" connection -> aggregates remapped
         by_model: dict[str, list[dict]] = {}
         for a in promote:
-            by_model.setdefault(a["model"], []).append(a)
+            by_model.setdefault(src_model_of[a["id"]], []).append(a)
         tgt_by_id = {t["id"]: t for t in tgt_aggs}
         for model_name, aggs in by_model.items():
             sm = next(m for m in src_models if m["name"] == model_name)
-            tm = tgt_models[model_name]  # the same model, matched by name (§5 rule 1)
+            # The same model, matched by name (§5 rule 1) unless overridden.
+            tm = tgt_models[model_map.get(model_name, model_name)]
             payload = src.export_aggregates(sm["catalogId"], sm["modelId"], [a["id"] for a in aggs])
             exported = {v["id"] for v in payload["aggregates"]["values"]}
             for a in aggs:
@@ -185,6 +222,7 @@ def promote_aggregates():
                 target_instances=instances, target_connections=tgt_conns, connections=conn_map,
                 source_names=src_names if src_names else None,
                 target_ids_by_name={n: i for n, i in tgt_by_name.items() if i} if src_names else None,
+                source_model_name=sm["name"], target_model_name=tm["name"],
             )
             by_id = {a["id"]: a for a in aggs}
             skipped.extend({"id": p["id"], "name": by_id.get(p["id"], {}).get("name", p["id"]), "reason": p["reason"]} for p in problems)

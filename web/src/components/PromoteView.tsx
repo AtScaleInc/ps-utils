@@ -10,14 +10,19 @@ interface TgtRow { id: string; name: string; sub: string; ver: string; updated: 
 
 export function PromoteView() {
   const ui = useUi()
-  const { section, src, tgt, setSrc, setTgt, staged, stage, unstage, clearStaged, flash, setAsk, pModel, setPModel, branchFor, setBranch, modeFor, setMode, replaceFor, setReplace } = ui
+  const { section, src, tgt, setSrc, setTgt, staged, stage, unstage, clearStaged, flash, setAsk, pModel, setPModel, tModel, setTModel, branchFor, setBranch, modeFor, setMode, replaceFor, setReplace } = ui
   const qc = useQueryClient()
   const git = useGit()
   const hosts = useHosts().data?.hosts ?? []
   const sh = resolveHost(hosts, src)
   const th = resolveHost(hosts, tgt)
-  const same = !!sh && !!th && sh.id === th.id
   const isM = section === 'models'
+  // Target-model override: pModel's aggregates go into tModel (an identical
+  // model deployed under another name) instead of the same-named model.
+  const ovr = !isM && tModel !== null && !!pModel
+  const modelMap = ovr && tModel ? { [pModel]: tModel } : undefined
+  // One host can promote between two of its own models.
+  const same = !!sh && !!th && sh.id === th.id && !(modelMap && tModel !== pModel)
   const [over, setOver] = useState(false)
 
   const enabled = !!sh && !!th && !same
@@ -26,9 +31,11 @@ export function PromoteView() {
     queryFn: () => api.diffModels(sh!.id, th!.id),
   })
   const aDiff = useQuery({
-    queryKey: ['diff', 'aggs', sh?.id, th?.id], enabled: enabled && !isM,
-    queryFn: () => api.diffAggs(sh!.id, th!.id, ''),
+    queryKey: ['diff', 'aggs', sh?.id, th?.id, modelMap ?? null], enabled: enabled && !isM,
+    queryFn: () => api.diffAggs(sh!.id, th!.id, modelMap ? pModel : '', false, modelMap),
   })
+  // Source models also without a diff: one host promotes between its own models.
+  const srcAggModels = useQuery({ queryKey: ['aggModels', sh?.id], enabled: !!sh && !isM, queryFn: () => api.aggModels(sh!.id) })
   const tgtAggModels = useQuery({ queryKey: ['aggModels', th?.id], enabled: !!th && !isM, queryFn: () => api.aggModels(th!.id) })
   const diffQ = isM ? mDiff : aDiff
   const refreshBoth = async () => {
@@ -36,7 +43,7 @@ export function PromoteView() {
     await Promise.all([refreshHost(qc, sh.id), refreshHost(qc, th.id)])
     await (isM
       ? qc.fetchQuery({ queryKey: ['diff', 'models', sh.id, th.id], queryFn: () => api.diffModels(sh.id, th.id, true), staleTime: 0 })
-      : qc.fetchQuery({ queryKey: ['diff', 'aggs', sh.id, th.id], queryFn: () => api.diffAggs(sh.id, th.id, '', true), staleTime: 0 }))
+      : qc.fetchQuery({ queryKey: ['diff', 'aggs', sh.id, th.id, modelMap ?? null], queryFn: () => api.diffAggs(sh.id, th.id, modelMap ? pModel : '', true, modelMap), staleTime: 0 }))
   }
 
   const stagedNames = staged[section]
@@ -44,6 +51,7 @@ export function PromoteView() {
   let tgtRows: TgtRow[] = []
   let pModelOpts: { name: string; count: number }[] = []
   let targetModels: string[] = []
+  if (!isM && !aDiff.data) pModelOpts = [...new Set((srcAggModels.data?.models ?? []).map((m) => m.name))].map((name) => ({ name, count: 0 }))
   if (isM && mDiff.data) {
     srcRows = mDiff.data.rows.map((r) => ({ key: r.name, name: r.name, sub: r.catalog, ver: r.version ?? '—', diff: r.diff, repoUrl: r.repoUrl, branch: r.branch }))
     tgtRows = mDiff.data.target.map((t) => ({
@@ -56,7 +64,8 @@ export function PromoteView() {
     targetModels = aDiff.data.targetModels
     srcRows = all.filter((a) => !pModel || a.model === pModel)
       .map((a) => ({ key: a.id, name: a.name, sub: a.model, ver: a.type, diff: a.diff }))
-    tgtRows = aDiff.data.target.filter((t) => !pModel || t.model === pModel).map((t) => ({
+    const tName = modelMap ? tModel : pModel
+    tgtRows = aDiff.data.target.filter((t) => !tName || t.model === tName).map((t) => ({
       id: t.id, name: t.name, sub: t.model, ver: t.type, updated: `Built ${fmtDate(t.lastBuild, true)}`,
       dup: t.duplicate, inactive: !t.active, model: t.model,
     }))
@@ -76,7 +85,7 @@ export function PromoteView() {
   const nDup = tgtRows.filter((r) => r.dup).length
   const nSt = stagedRows.length
   const gitBlocked = isM && !git.ready
-  const canPromote = nSt > 0 && !same && !!th && !gitBlocked
+  const canPromote = nSt > 0 && !same && !!th && !gitBlocked && (!ovr || !!modelMap)
   const noun = isM ? 'model' : 'aggregate'
 
   const refresh = () => {
@@ -99,7 +108,7 @@ export function PromoteView() {
           `${r.name}@${r.branch}${r.mode === 'link' ? ' (linked)' : r.commit ? ` ${r.commit.slice(0, 7)}` : ''}${r.replaced?.length ? ' · replaced old branch' : ''}`)
         return { ok: okNames.length, detail: okNames, problems: failed.map((f) => `${f.name}: ${f.error}`) }
       }
-      const res = await waitForJob(await api.promoteAggs(sh!.id, th!.id, validStaged))
+      const res = await waitForJob(await api.promoteAggs(sh!.id, th!.id, validStaged, modelMap))
       // Connection ids differ per environment - say which one the aggregates now use.
       const conns = Object.keys(res.connections ?? {}).filter((c) => { const [a, b] = c.split(' → '); return a !== b })
       return { ok: res.promoted.length, detail: conns.map((c) => `connection ${c}`), problems: res.skipped.map((s) => `${s.name}: ${s.reason}`) }
@@ -130,7 +139,23 @@ export function PromoteView() {
 
   const onPromote = () => {
     if (!canPromote) return
-    if (th!.env === 'prod') {
+    if (modelMap) {
+      // One warning covers the override (and production, when it's the target).
+      setAsk({
+        eyebrow: th!.env === 'prod' ? 'Production · target model override' : 'Target model override',
+        title: `Import into ${tModel}, not ${pModel}?`,
+        note: `${plural(nSt, noun)} exported from ${pModel} on ${sh!.label} will be imported into ${tModel} on ${th!.label}. `
+          + 'Only do this when both models are deployed from the same SML under different names: '
+          + 'the model name and ids are substituted, and an aggregate whose objects are not on the target model is skipped.',
+        label: th!.env === 'prod' ? 'Promote to prod' : 'Promote anyway',
+        tone: th!.env === 'prod' ? 'prod' : 'danger',
+        items: stagedRows.map((r) => {
+          const [bg, fg] = diffColors(r.diff.state)
+          return { name: `${r.name} → ${tModel}`, pill: { label: r.diff.label, bg, fg } }
+        }),
+        go: () => promote.mutate(),
+      })
+    } else if (th!.env === 'prod') {
       setAsk({
         eyebrow: 'Production promotion',
         title: 'This change lands in production.',
@@ -162,9 +187,11 @@ export function PromoteView() {
     if (d.startsWith('stg:')) unstage(d.slice(4))
   }
 
-  const tModelOk = !!pModel && targetModels.includes(pModel)
+  const tgtModelNames = (tgtAggModels.data?.models ?? []).map((m) => m.name)
+  const tModelOk = modelMap ? tgtModelNames.includes(tModel!) : !!pModel && (aDiff.data ? targetModels : tgtModelNames).includes(pModel)
   const srcEmptyMsg = !sh ? 'No host in this group — add one in Settings'
-    : same ? 'Source and target are the same host — pick a different target'
+    : same ? (isM ? 'Source and target are the same host — pick a different target'
+      : 'Source and target are the same host — pick a different target, or a source model and Override its target model')
     : !th ? 'No target host in this group'
     : diffQ.isLoading ? 'Loading…' : 'Nothing on this host'
 
@@ -185,7 +212,7 @@ export function PromoteView() {
             <span className="label">Model</span>
             <select className="select sm" value={pModel} onChange={(e) => setPModel(e.target.value)}>
               <option value="">All models</option>
-              {pModelOpts.map((m) => <option key={m.name} value={m.name}>{m.name} · {m.count}</option>)}
+              {pModelOpts.map((m) => <option key={m.name} value={m.name}>{m.name}{aDiff.data && !modelMap ? ` · ${m.count}` : ''}</option>)}
             </select>
             <button type="button" className="btn solid" style={{ background: 'var(--dev)' }} disabled={!stageable.length}
               onClick={() => { stage(stageable.map((r) => r.key)); flash(`${plural(stageable.length, 'aggregate')} staged${pModel ? ` · ${pModel}` : ''}`) }}>
@@ -238,10 +265,23 @@ export function PromoteView() {
             <HostSelect hosts={hosts} env={tgt.env} value={th?.id ?? null} onChange={(id) => setTgt({ env: tgt.env, hostId: id })} />
             <span className="eyebrow" style={{ marginLeft: 6 }}>Target</span>
             {!isM && (
-              <div className={`tmodel ${pModel && !tModelOk ? 'bad' : ''}`}>
+              <div className={`tmodel ${(ovr ? !modelMap : pModel && !tModelOk) ? 'bad' : ''}`}>
                 <span className="label">Target model</span>
-                <span className="v" style={{ color: !pModel ? 'var(--ink)' : tModelOk ? 'var(--qa)' : 'var(--danger)' }}>{pModel || 'Matched per aggregate'}</span>
-                <span className="hint">{!pModel ? `${targetModels.length} deployed` : tModelOk ? 'Auto-matched' : `Not deployed on ${th?.label ?? 'target'}`}</span>
+                {ovr ? (
+                  <select className="select sm" value={tModel ?? ''} onChange={(e) => setTModel(e.target.value)}>
+                    <option value="">Pick a model…</option>
+                    {tgtModelNames.filter((m) => m !== pModel || sh?.id !== th?.id).map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                ) : (
+                  <span className="v" style={{ color: !pModel ? 'var(--ink)' : tModelOk ? 'var(--qa)' : 'var(--danger)' }}>{pModel || 'Matched per aggregate'}</span>
+                )}
+                <label className="hint" style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: pModel ? 'pointer' : 'default', color: ovr ? 'var(--warn)' : undefined }}
+                  title={pModel ? 'Import into a differently named model deployed from the same SML' : 'Pick a source model first'}>
+                  <input type="checkbox" checked={ovr} disabled={!pModel} onChange={(e) => setTModel(e.target.checked ? '' : null)} />
+                  Override
+                </label>
+                {!ovr && <span className="hint">{!pModel ? `${targetModels.length} deployed` : tModelOk ? 'Auto-matched' : `Not deployed on ${th?.label ?? 'target'}`}</span>}
+                {ovr && !modelMap && <span className="hint" style={{ color: 'var(--danger)' }}>Pick the model to import into</span>}
               </div>
             )}
           </div>
@@ -308,7 +348,7 @@ export function PromoteView() {
             </div>
           )}
 
-          <TargetList host={th} rows={same ? [] : tgtRows} scope={!isM && pModel ? ` · ${pModel}` : ''}
+          <TargetList host={th} rows={same ? [] : tgtRows} scope={!isM && (modelMap ? tModel : pModel) ? ` · ${modelMap ? tModel : pModel}` : ''}
             onDeactivate={(r) => deactivateOnTarget.mutate(r)} busy={deactivateOnTarget.isPending} />
         </div>
       </section>

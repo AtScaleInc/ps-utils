@@ -41,6 +41,8 @@ interface UiState {
   src: HostPick
   tgt: HostPick
   pModel: string
+  /** Target-model override for aggregates (null = matched by name): promote pModel's aggregates into this model. */
+  tModel: string | null
   staged: Record<Section, string[]>
   /** Branch to deploy on the target, per staged model name. */
   branchFor: Record<string, string>
@@ -64,6 +66,7 @@ interface UiState {
   setSrc: (p: HostPick) => void
   setTgt: (p: HostPick) => void
   setPModel: (m: string) => void
+  setTModel: (m: string | null) => void
   stage: (names: string[]) => void
   unstage: (name: string) => void
   setBranch: (name: string, branch: string) => void
@@ -91,6 +94,7 @@ export const useUi = create<UiState>((set) => ({
   src: { env: 'dev', hostId: null },
   tgt: { env: 'qa', hostId: null },
   pModel: '',
+  tModel: null,
   staged: { models: [], aggs: [] },
   branchFor: {},
   modeFor: {},
@@ -112,9 +116,11 @@ export const useUi = create<UiState>((set) => ({
   })),
   setManage: (p) => set((s) => ({ manage: { ...s.manage, ...p } })),
   // Changing the source host or group clears what's staged (§5 other rules).
-  setSrc: (src) => set({ src, staged: { models: [], aggs: [] }, pModel: '', branchFor: {}, modeFor: {}, replaceFor: {} }),
-  setTgt: (tgt) => set({ tgt }),
-  setPModel: (pModel) => set({ pModel }),
+  setSrc: (src) => set({ src, staged: { models: [], aggs: [] }, pModel: '', tModel: null, branchFor: {}, modeFor: {}, replaceFor: {} }),
+  setTgt: (tgt) => set({ tgt, tModel: null }),
+  setPModel: (pModel) => set({ pModel, tModel: null }),
+  // Another target model changes every diff state: drop the staged aggregates.
+  setTModel: (tModel) => set((s) => ({ tModel, staged: { ...s.staged, aggs: [] } })),
   stage: (names) => set((s) => ({
     staged: { ...s.staged, [s.section]: [...s.staged[s.section], ...names.filter((n) => !s.staged[s.section].includes(n))] },
   })),

@@ -6,6 +6,8 @@ the payload is substituted with the target's before POSTing it to
 
   - exportCatalogId / exportModelId and each value's catalogId / modelId, plus
     every occurrence inside planJson -> target catalog / model id
+  - the source model's name -> the target model's (exact-value matches), for a
+    model override: the same SML deployed twice under different model names
   - activeInstanceId / latestInstanceId -> the target counterpart's instance
     (same plan fingerprint); for a new aggregate the source ids are kept. The
     engine's import (AggregateImportHelper) never reads them - it creates new
@@ -83,15 +85,21 @@ def remap_export(
     connections: dict[str, str] | None = None,
     source_names: dict[str, str] | None = None,
     target_ids_by_name: dict[str, str] | None = None,
+    source_model_name: str | None = None,
+    target_model_name: str | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     """(payload for the target, problems). `target_instances` maps a source
     definition id -> the target counterpart's instance id (or None);
-    `connections` is connection_map() for this source / target model pair."""
+    `connections` is connection_map() for this source / target model pair.
+    `source_model_name` / `target_model_name`: set when the aggregates go into
+    a differently named model (Promote's target-model override)."""
     out = copy.deepcopy(payload)
     ids = {
         str(payload.get("exportCatalogId")): target_catalog_id,
         str(payload.get("exportModelId")): target_model_id,
     }
+    if source_model_name and target_model_name and source_model_name != target_model_name:
+        ids[source_model_name] = target_model_name
     conns: dict[str, str] = {}
     problems: list[dict[str, str]] = []
     values = []

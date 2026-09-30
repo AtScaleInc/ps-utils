@@ -79,6 +79,7 @@ export interface AggDiffResponse {
   target: (AggRow & { duplicate: boolean })[]
   sourceModels: string[]
   targetModels: string[]
+  modelMap?: Record<string, string>
   sameHost?: boolean
   cachedAt?: number | null
 }
@@ -176,12 +177,13 @@ export const api = {
 
   diffModels: (src: string, tgt: string, refresh?: boolean) =>
     req<ModelDiffResponse>('POST', '/promote/diff', { section: 'models', sourceHostId: src, targetHostId: tgt, refresh: !!refresh }),
-  diffAggs: (src: string, tgt: string, model: string, refresh?: boolean) =>
-    req<AggDiffResponse>('POST', '/promote/diff', { section: 'aggs', sourceHostId: src, targetHostId: tgt, model: model || null, refresh: !!refresh }),
+  /** modelMap: target-model override {source model: target model}; models match by name without it. */
+  diffAggs: (src: string, tgt: string, model: string, refresh?: boolean, modelMap?: Record<string, string>) =>
+    req<AggDiffResponse>('POST', '/promote/diff', { section: 'aggs', sourceHostId: src, targetHostId: tgt, model: model || null, refresh: !!refresh, modelMap }),
   promoteModels: (src: string, tgt: string, models: { name: string; branch: string; mode: PromoteMode; replaceOld: boolean }[]) =>
     req<Job<{ results: { name: string; ok: boolean; mode?: PromoteMode; branch?: string; commit?: string; replaced?: string[]; error?: string }[] }>>('POST', '/promote/models',
       { sourceHostId: src, targetHostId: tgt, models }),
-  promoteAggs: (src: string, tgt: string, aggregates: string[]) =>
+  promoteAggs: (src: string, tgt: string, aggregates: string[], modelMap?: Record<string, string>) =>
     req<Job<{ promoted: string[]; skipped: { name: string; reason: string }[]; connections?: Record<string, number> }>>('POST', '/promote/aggregates',
-      { sourceHostId: src, targetHostId: tgt, aggregates }),
+      { sourceHostId: src, targetHostId: tgt, aggregates, modelMap }),
 }

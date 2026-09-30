@@ -146,3 +146,24 @@ def test_connection_inside_plan_is_swapped_too():
     assert p1["selection"]["from"]["connection"]["id"] == "PG_PROD"             # string plan
     assert a2["planJson"]["selection"]["from"]["connection"]["id"] == "PG_PROD"  # object plan
     assert p1["notes"] == "Postgres14 is not an exact match here"               # only exact values change
+
+
+def test_model_name_substituted_for_override():
+    """Target-model override: the same SML deployed as another model name."""
+    p = payload(plan_as_str=True)
+    p["aggregates"]["values"][0]["modelName"] = "Internet Sales"
+    body, problems = remap_export(p, target_catalog_id=TGT_CAT, target_model_id=TGT_MODEL,
+                                  target_instances={}, target_connections=["PG_DEV"],
+                                  source_model_name="Internet Sales", target_model_name="Internet Sales EU")
+    assert not problems
+    a1 = body["aggregates"]["values"][0]
+    assert a1["modelName"] == "Internet Sales EU" and a1["modelId"] == TGT_MODEL
+    assert "Internet Sales\"" not in json.dumps(body)
+
+
+def test_same_model_name_is_left_alone():
+    p = payload()
+    p["aggregates"]["values"][0]["modelName"] = "Internet Sales"
+    body, _ = remap_export(p, target_catalog_id=TGT_CAT, target_model_id=TGT_MODEL, target_instances={},
+                           target_connections=["PG_DEV"], source_model_name="Internet Sales", target_model_name="Internet Sales")
+    assert body["aggregates"]["values"][0]["modelName"] == "Internet Sales"
