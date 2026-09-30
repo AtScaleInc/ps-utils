@@ -53,6 +53,9 @@ def delete_host(host_id: str):
     try:
         registry.store().delete_host(host_id)
         registry.forget_host(host_id)
+        from monitor import store as monitor_store
+
+        monitor_store.delete_host(host_id)  # its query history goes with it
     except KeyError:
         return jsonify({"error": "Unknown host"}), 404
     return jsonify({"ok": True})

@@ -1,12 +1,17 @@
 import { create } from 'zustand'
 import type { EnvId, Host, PromoteMode } from './api'
 
-export type View = 'build' | 'manage' | 'promote' | 'test' | 'settings'
+export type View = 'build' | 'manage' | 'promote' | 'test' | 'monitor' | 'settings'
 export type Section = 'models' | 'aggs'
 /** Build's left-rail sections: table discovery / profiling, the wizard canvas, and the cube data preview. */
 export type BuildSection = 'discover' | 'model' | 'preview'
 /** Test's left-rail sections: set up + run, past runs by model, baseline-vs-candidate result and model compares. */
 export type TestSection = 'run' | 'results' | 'compare' | 'model'
+/** Monitor's left-rail sections: charts, the query list, where to act. */
+export type MonitorSection = 'overview' | 'history' | 'hotspots'
+/** Report window: a preset back from now, or a fixed from..to (epoch ms). */
+export type MonitorRange = { preset: '1h' | '24h' | '2d' | '7d' | '30d' } | { preset: 'custom'; fromMs: number; toMs: number }
+export interface MonitorFilters { model: string; user: string; queryType: '' | 'User' | 'System' }
 /** Settings' left-rail sections. */
 export type SettingsSection = 'hosts' | 'storage'
 export interface RunSide { runId: string; hostId: string }
@@ -37,6 +42,13 @@ interface UiState {
   testRunId: string | null
   /** Compare results: baseline vs candidate (run + host each). */
   testCompare: { baseline: RunSide | null; candidate: RunSide | null }
+  monitorSection: MonitorSection
+  /** Monitor's host: whose query history is polled and reported. */
+  monitor: HostPick
+  monitorRange: MonitorRange
+  monitorFilters: MonitorFilters
+  /** Poll the host every 5 minutes while the app is open. */
+  monitorAuto: boolean
   manage: HostPick & { modelKey: string | null; sel: string[]; q: string }
   src: HostPick
   tgt: HostPick
@@ -62,6 +74,11 @@ interface UiState {
   setTest: (p: HostPick) => void
   setTestRunId: (id: string | null) => void
   setTestCompare: (p: Partial<UiState['testCompare']>) => void
+  setMonitorSection: (s: MonitorSection) => void
+  setMonitor: (p: HostPick) => void
+  setMonitorRange: (r: MonitorRange) => void
+  setMonitorFilters: (p: Partial<MonitorFilters>) => void
+  setMonitorAuto: (on: boolean) => void
   setManage: (p: Partial<UiState['manage']>) => void
   setSrc: (p: HostPick) => void
   setTgt: (p: HostPick) => void
@@ -90,6 +107,11 @@ export const useUi = create<UiState>((set) => ({
   test: { env: 'dev', hostId: null },
   testRunId: null,
   testCompare: { baseline: null, candidate: null },
+  monitorSection: 'overview',
+  monitor: { env: 'prod', hostId: null },
+  monitorRange: { preset: '24h' },
+  monitorFilters: { model: '', user: '', queryType: '' },
+  monitorAuto: false,
   manage: { env: 'dev', hostId: null, modelKey: null, sel: [], q: '' },
   src: { env: 'dev', hostId: null },
   tgt: { env: 'qa', hostId: null },
@@ -114,6 +136,12 @@ export const useUi = create<UiState>((set) => ({
   setSection: (section) => set((s) => ({
     section, view: s.view === 'settings' ? 'manage' : s.view, manage: { ...s.manage, sel: [], q: '' },
   })),
+  setMonitorSection: (monitorSection) => set({ monitorSection }),
+  // Model / user names are per host: another host starts unfiltered.
+  setMonitor: (monitor) => set((s) => ({ monitor, monitorFilters: { ...s.monitorFilters, model: '', user: '' } })),
+  setMonitorRange: (monitorRange) => set({ monitorRange }),
+  setMonitorFilters: (p) => set((s) => ({ monitorFilters: { ...s.monitorFilters, ...p } })),
+  setMonitorAuto: (monitorAuto) => set({ monitorAuto }),
   setManage: (p) => set((s) => ({ manage: { ...s.manage, ...p } })),
   // Changing the source host or group clears what's staged (§5 other rules).
   setSrc: (src) => set({ src, staged: { models: [], aggs: [] }, pModel: '', tModel: null, branchFor: {}, modeFor: {}, replaceFor: {} }),

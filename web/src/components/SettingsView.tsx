@@ -5,6 +5,7 @@ import { useUi } from '../store'
 import { CONN, ConnDot, ENVS, errMsg, fmtTime, plural, useGit, useHosts } from './ui'
 import { DatabaseCard } from '../test/DatabaseCard'
 import { DiscoveryStoreCard } from '../build/DiscoveryStoreCard'
+import { MonitorStoreCard } from '../monitor/MonitorStoreCard'
 
 function useInvalidateHosts() {
   const qc = useQueryClient()
@@ -47,6 +48,7 @@ function StorageView() {
       <CacheCard />
       <DatabaseCard />
       <DiscoveryStoreCard />
+      <MonitorStoreCard />
     </div>
   )
 }

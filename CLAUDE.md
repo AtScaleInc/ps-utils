@@ -8,13 +8,15 @@ authoritative).
 ## Project in one paragraph
 
 One console for many AtScale **container** hosts, grouped into Dev / Test-QA /
-Prod. Top tabs: **Build · Manage · Test · Promote** (+ Settings); the left rail
+Prod. Top tabs: **Build · Manage · Test · Promote · Monitor** (+ Settings); the left rail
 shows the current tab's sections (Build: Discovery · Develop · Preview). Build is the SML wizard (merged from the now-deprecated
 sml-wizard repo): browse a host's warehouse, model on a canvas, generate SML, push
 it to Git once and deploy it to one or many hosts. Test generates queries from a
 deployed model (ps-utils generate-queries-from-model), runs them on several hosts
 (execute-atscale-query-harness) and compares baseline vs candidate - model (DMV)
-and result values - before promoting. Settings registers hosts + a
+and result values - before promoting. Monitor pulls a host's AtScale query history
+(on demand, or every 5 min when Auto-poll is ticked) and reports cache / aggregate /
+warehouse mix, user vs system, volume, latency and hotspots. Settings registers hosts + a
 shared Git profile; Manage works on one host's
 models (link / deploy / unlink) and aggregates (deactivate / reactivate, full /
 incremental build); Promote diffs a source host against a target and moves models
@@ -79,12 +81,29 @@ allowed) - the model name is substituted along with the ids, after one warning.
     (demo: `discovery-demo.db`): a profile runs once per table and again only on
     Re-profile; `ENV_MANAGER_DISCOVERY_KEEP` runs per table (20) feed drift.
     Demo mode runs the same SQL on an in-memory SQLite (`fake.FakeSourceApi`).
+  - `monitor/` + `routes/monitor.py` — the Monitor tab. `GET /wapi/p/queries`
+    (ported from PythonAtscaleUtility `queries/query_history_container.py`),
+    newest first, 100 per page. `queries.py` normalises a row and classifies it:
+    cache (`optimization` CACHE, or no subquery sent), agg (AGGS), or raw (no
+    aggregate). `poll.py`: a poll without a range starts at the newest stored
+    query minus 1 h (default window on a new host:
+    `ENV_MANAGER_MONITOR_DEFAULT_DAYS`, 2). A range poll backfills. A poll stops
+    at `ENV_MANAGER_MONITOR_MAX_PAGES` (200) and is then marked truncated. One
+    poll per host runs at a time. `store.py`: SQLite `workspace/monitor.db`
+    (demo: `monitor-demo.db`). Rows are keyed (host, query id) and upserted, so
+    overlapping pulls never duplicate. Text / aggregate definitions are fetched
+    the first time a query is opened, then kept. Pruned past
+    `ENV_MANAGER_MONITOR_MAX_AGE_DAYS` (90). `stats.py` holds the report maths
+    (pure). The attribute × measure candidates port ps-utils
+    `extract-query-stats-from-atscale`.
   - `jobs.py` keeps finished jobs 1 h, at most 500.
   - `atscale/preview.py` — cube preview (MDX/SQL), ported from PythonAtscaleUtility.
     Levels of one hierarchy are Hierarchize'd, never CrossJoined with themselves.
     `atscale/git_ops.py` — create the model's GitHub repo + push (GitPython).
 - `/web` — React 19 + TypeScript + Vite, TanStack Query for server state, zustand
   for UI state. Theme tokens in `web/src/theme.css` (sml-wizard's dark theme).
+  - `web/src/monitor/` — Monitor tab; hand-built SVG charts (`charts.tsx`), no
+    chart dependency. Palette slots in `shared.tsx`, validated on the panel surface.
   - `web/src/build/` — the wizard (panels, `modelStore`, `client.ts`). Its CSS is
     scoped under `.wiz` (`build.css`) so its `.btn` / `.eyebrow` / `.field` don't
     leak into theme.css. `client.ts` resolves the Build host via `setBuildHost`.
@@ -151,4 +170,5 @@ allowed) - the model name is substituted along with the ids, after one warning.
 - `cd web && npm run build`
 - Build's working copies: `workspace/models/<model>` (demo: `workspace/models-demo/`).
 - Test history: `workspace/tests.db` (demo: `tests-demo.db`); Settings → Cache & Database cleans it up.
+- Query history (Monitor): `workspace/monitor.db` (demo: `monitor-demo.db`); Settings → Cache & Database deletes by age / host.
 - Discovery profiles: `workspace/discovery.db` (demo: `discovery-demo.db`); the same Settings page cleans it up (older than N days / beyond newest N per table).

@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 import sqlite3
 import threading
+import time
 import uuid
 from typing import Any
 
@@ -424,6 +425,119 @@ class FakeSourceApi:
         raise ValueError("Preview queries need a live AtScale host - not available in demo mode")
 
     submit_query = run_xmla
+
+    # -- query history (Monitor): same shapes as AtScaleClient.list_queries & co --
+    def list_queries(self, page: int = 1, size: int = 100, start_date: str | None = None,
+                     end_date: str | None = None, query_types: list[str] | None = None,
+                     statuses: list[str] | None = None) -> dict[str, Any]:
+        now = int(time.time() * 1000)
+        start = _parse_ms(start_date) if start_date else now - 86400 * 1000
+        end = _parse_ms(end_date) if end_date else now
+        rows = []
+        slot = now // _Q_SLOT_MS
+        while slot * _Q_SLOT_MS >= start:
+            q = _fake_query(self.host_id, slot, now)
+            if (q and q["startTime"] >= start and q["startTime"] <= end
+                    and (not query_types or q["queryType"] in query_types)):
+                rows.append(q)
+            slot -= 1
+        lo = (page - 1) * size
+        return {"results": rows[lo:lo + size], "totalResults": str(len(rows)), "hasNextPage": len(rows) > lo + size,
+                "currentPage": page, "pageSize": size}
+
+    def get_query_text(self, query_id: str, subquery: bool = False) -> str:
+        q = _fake_query(self.host_id, _slot_of(query_id), int(time.time() * 1000))
+        if not q:
+            raise ValueError(f"Query {query_id} not found")
+        return q["_text"]
+
+    def get_query_aggregates(self, query_id: str) -> list[dict[str, Any]]:
+        q = _fake_query(self.host_id, _slot_of(query_id), int(time.time() * 1000))
+        by_id = {f"def-{name}": (name, kind) for name, _, kind, _ in AGGS}
+        return [{"id": a, "name": by_id[a][0], "type": "system_defined" if by_id[a][1] == "SYSTEM" else "user_defined",
+                 "subType": "demand_defined" if by_id[a][1] == "SYSTEM" else "manual",
+                 "active_instance": {"table_name": f"as_agg_{by_id[a][0]}"}}
+                for a in (q or {}).get("aggregates", []) if a in by_id]
+
+
+# -- fake query history: one possible query per host per 3-minute slot, derived from
+# (host, slot) so every poll and every detail call sees the same history, and new
+# queries keep arriving as time passes (auto-poll has something to show).
+_Q_SLOT_MS = 3 * 60 * 1000
+_Q_USERS = ["ana.lee", "raj.patel", "m.chen", "sofia.garcia", "bi_service"]
+_Q_ATTRS = ["Order Date Year", "Order Date Month", "Product Category", "Product Line", "Customer Country",
+            "Sales Territory", "Customer Segment"]
+_Q_MEASURES = ["Sales Amount", "Order Quantity", "Tax Amount", "Freight", "Distinct Customers"]
+
+
+def _parse_ms(iso: str) -> int:
+    import datetime as dt
+
+    return int(dt.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+
+
+def _slot_of(query_id: str) -> int:
+    try:
+        return int(query_id.rsplit("-", 1)[1])
+    except (IndexError, ValueError):
+        raise ValueError(f"Query {query_id} not found") from None
+
+
+def _fake_query(host_id: str, slot: int, now_ms: int) -> dict[str, Any] | None:
+    rnd = random.Random(f"{host_id}:{slot}")
+    busy = 0.85 if host_id.startswith("prod") else 0.55
+    if rnd.random() > busy:
+        return None
+    models = [m[0] for m in _SEED_MODELS.get(host_id, ([], []))[0] if (m[3] if len(m) > 3 else "Deployed") != "Linked"]
+    if not models:
+        return None
+    model = rnd.choice(models)
+    start = slot * _Q_SLOT_MS + rnd.randrange(_Q_SLOT_MS)
+    system = rnd.random() < 0.18
+    roll = rnd.random()
+    aggs = [f"def-{a[0]}" for a in AGGS if a[1] == model]
+    if system:
+        cls = "raw" if rnd.random() < 0.7 else "agg"
+        attrs, measures = [], []
+    else:
+        cls = "cache" if roll < 0.2 else "agg" if roll < 0.72 and aggs else "raw"
+        attrs = rnd.sample(_Q_ATTRS, rnd.randint(0, 3))
+        measures = rnd.sample(_Q_MEASURES, rnd.randint(1, 2))
+    used = [rnd.choice(aggs)] if cls == "agg" and aggs else []
+    base = {"cache": (15, 180), "agg": (120, 1800), "raw": (1500, 28000)}[cls if used or cls != "agg" else "raw"]
+    duration = rnd.uniform(*base) * (2.5 if host_id.startswith("dev") and cls == "raw" else 1)
+    failed = rnd.random() < 0.035
+    status = "failed" if failed else "running" if start + duration > now_ms else "successful"
+    planning = min(duration * rnd.uniform(0.05, 0.2), duration)
+    subq = [] if cls == "cache" and rnd.random() < 0.5 else [
+        {"name": f"Query {i + 1}", "subqueryId": f"sq-{slot}-{i}", "startTime": start + planning,
+         "duration": (duration - planning) * rnd.uniform(0.6, 0.95)} for i in range(rnd.randint(1, 3))]
+    outbound = max((s["duration"] for s in subq), default=0)
+    mdx = rnd.random() < 0.6
+    cols = ", ".join(f'"{a}"' for a in attrs + measures) or '"Sales Amount"'
+    text = (f"SELECT {{{', '.join(f'[Measures].[{m}]' for m in measures) or '[Measures].[Sales Amount]'}}} ON COLUMNS"
+            + (f",\n  NON EMPTY [{attrs[0]}].[{attrs[0]}].MEMBERS ON ROWS" if attrs else "") + f"\nFROM [{model}]"
+            if mdx else f'SELECT {cols}\nFROM "{model}"' + (f'\nGROUP BY {", ".join(f"{chr(34)}{a}{chr(34)}" for a in attrs)}' if attrs else ""))
+    if system:
+        text = f"/* aggregate build */ INSERT INTO as_agg_{model.lower().replace(' ', '_')} SELECT ..."
+    return {
+        "queryId": f"fq-{slot}", "startTime": start, "duration": None if status == "running" else round(duration, 1),
+        "status": status, "queryType": "System" if system else "User",
+        "userId": "system" if system else rnd.choice(_Q_USERS), "user": "System" if system else None,
+        "catalogId": CATALOG.get(model, "catalog"), "catalogName": CATALOG.get(model, "catalog"),
+        "modelId": model.lower().replace(" ", "_"), "modelName": model,
+        "dialect": "postgresql", "optimization": (["CACHE"] if cls == "cache" else []) + (["AGGS"] if used else []),
+        "aggregates": used, "aggregatesTables": [f"as_agg_{u[4:]}" for u in used],
+        "attributes": attrs, "measures": measures,
+        "events": [{"name": "Inbound Query", "startTime": start, "duration": round(duration, 1)},
+                   {"name": "Planning", "startTime": start, "duration": round(planning, 1)},
+                   {"name": "Outbound", "startTime": start + planning, "duration": round(outbound, 1), "subqueries": subq},
+                   {"name": "Result Processing", "startTime": start + planning + outbound,
+                    "duration": round(max(duration - planning - outbound, 0), 1)}],
+        "failedMessage": "Query timed out waiting for the warehouse" if failed and cls == "raw"
+        else "Level [Customer Segment] not found in cube" if failed else None,
+        "_text": text,
+    }
 
 
 def register_built_model(repo_url: str, model: str, catalog: str) -> None:

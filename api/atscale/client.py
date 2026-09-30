@@ -457,3 +457,41 @@ class AtScaleClient:
 
     def submit_query(self, payload: dict[str, Any], timeout: float | None = None) -> str:
         return self._dispatch("POST", "/engine/query/submit", json=payload, timeout=timeout).text
+
+    # -- query history (Monitor) - PythonAtscaleUtility queries/query_history_container.py ::
+    # QueryHistoryContainer.fetch_query_history. Parameters per SML-develop
+    # apps/api/src/queries/queries.controller.ts :: getQueries (arrays = repeated params).
+    def list_queries(self, page: int = 1, size: int = 100, start_date: str | None = None,
+                     end_date: str | None = None, query_types: list[str] | None = None,
+                     statuses: list[str] | None = None) -> dict[str, Any]:
+        """GET /wapi/p/queries -> {results[], totalResults, hasNextPage, currentPage, pageSize},
+        newest first. The engine clamps a page to 100 rows (PaginationSupport.scala)."""
+        params: dict[str, Any] = {"page": page, "size": size, "showCanaries": "false", "sort": "-startTime"}
+        if start_date:
+            params["startDate"] = start_date
+        if end_date:
+            params["endDate"] = end_date
+        if query_types:
+            params["queryType"] = query_types
+        if statuses:
+            params["status"] = statuses
+        return self._dispatch("GET", "/wapi/p/queries", params=params, timeout=60).json()
+
+    def get_query_text(self, query_id: str, subquery: bool = False) -> str:
+        """GET /wapi/p/queries/{id}/text (queries.controller.ts :: getQuerySql) - inbound
+        text, or a subquery's outbound SQL with isSubquery=true."""
+        params = {"isSubquery": "true"} if subquery else None
+        resp = self._dispatch("GET", f"/wapi/p/queries/{query_id}/text", params=params, timeout=30)
+        try:
+            body = resp.json()  # a JSON string (engine IEngineResponse.response, unwrapped by the SML API)
+        except ValueError:
+            return resp.text
+        if isinstance(body, dict):
+            body = body.get("response", "")
+        return body if isinstance(body, str) else str(body)
+
+    def get_query_aggregates(self, query_id: str) -> list[dict[str, Any]]:
+        """GET /wapi/p/queries/{id}/aggregates (queries.controller.ts :: getQueriesAggregates)
+        -> aggregate definitions used, with type system_defined | user_defined."""
+        body = self._dispatch("GET", f"/wapi/p/queries/{query_id}/aggregates", timeout=30).json()
+        return body.get("data", []) if isinstance(body, dict) else []

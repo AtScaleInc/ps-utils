@@ -6,8 +6,9 @@ import { ManageView } from './components/ManageView'
 import { PromoteView } from './components/PromoteView'
 import { SettingsView } from './components/SettingsView'
 import { TestView } from './test/TestView'
+import { MonitorView } from './monitor/MonitorView'
 import { ENVS, envOf, plural, useHosts } from './components/ui'
-import { resolveHost, useUi, type BuildSection, type Section, type SettingsSection, type TestSection, type View } from './store'
+import { resolveHost, useUi, type BuildSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
 
 export default function App() {
   const { view, linkOpen, manage } = useUi()
@@ -23,6 +24,7 @@ export default function App() {
           {view === 'manage' && <ManageView />}
           {view === 'promote' && <PromoteView />}
           {view === 'test' && <TestView />}
+          {view === 'monitor' && <MonitorView />}
           {view === 'settings' && <SettingsView />}
         </main>
       </div>
@@ -38,6 +40,7 @@ const TABS: { id: Exclude<View, 'settings'>; label: string; note: string }[] = [
   { id: 'manage', label: 'Manage', note: 'Objects on one host' },
   { id: 'test', label: 'Test', note: 'Generate + run model queries on hosts' },
   { id: 'promote', label: 'Promote', note: 'Move objects between hosts' },
+  { id: 'monitor', label: 'Monitor', note: 'Query history, cache / aggregate use, latency' },
 ]
 
 function Header() {
@@ -73,9 +76,10 @@ function Header() {
 
 /** Left rail: the current tab's sections, styled like the top tabs. */
 function Sidebar() {
-  const { view, section, setSection, buildSection, setBuildSection, testSection, setTestSection, settingsSection, setSettingsSection, manage, src, tgt, build, test } = useUi()
+  const { view, section, setSection, buildSection, setBuildSection, testSection, setTestSection, monitorSection, setMonitorSection, settingsSection, setSettingsSection, manage, src, tgt, build, test, monitor } = useUi()
   const hosts = useHosts().data?.hosts ?? []
-  const ctxHost = resolveHost(hosts, view === 'promote' ? src : view === 'build' ? build : view === 'test' ? test : manage)
+  const pick = view === 'promote' ? src : view === 'build' ? build : view === 'test' ? test : view === 'monitor' ? monitor : manage
+  const ctxHost = resolveHost(hosts, pick)
   const th = resolveHost(hosts, tgt)
   const objects = view === 'manage' || view === 'promote'
   const models = useQuery({ queryKey: ['models', ctxHost?.id], queryFn: () => api.models(ctxHost!.id), enabled: !!ctxHost && objects })
@@ -87,9 +91,10 @@ function Sidebar() {
   }
   const context = view === 'promote' ? `${ctxHost?.label ?? '—'} → ${th?.label ?? '—'}`
     : view === 'settings' ? `${plural(hosts.length, 'host')} across 3 groups`
-    : `${envOf((view === 'build' ? build : view === 'test' ? test : manage).env).label} · ${ctxHost?.label ?? 'no host'}`
+    : `${envOf(pick.env).label} · ${ctxHost?.label ?? 'no host'}`
   const hint = view === 'promote' ? 'Drag source → target' : view === 'settings' ? 'Credentials per host'
-    : view === 'build' ? 'Deploy to one or many hosts' : view === 'test' ? 'Same queries, every env' : 'Pick a group, then a host'
+    : view === 'build' ? 'Deploy to one or many hosts' : view === 'test' ? 'Same queries, every env'
+    : view === 'monitor' ? 'Poll on demand or every 5 min' : 'Pick a group, then a host'
 
   return (
     <aside className="sidebar">
@@ -113,6 +118,15 @@ function Sidebar() {
             <span className="t">{s.label}</span><span className="n">{s.note}</span>
           </button>
         ))}
+        {view === 'monitor' && ([
+          { id: 'overview', label: 'Overview', note: 'Cache / aggregate mix, volume, latency' },
+          { id: 'history', label: 'History', note: 'Every query, filter + detail' },
+          { id: 'hotspots', label: 'Hotspots', note: 'Slow, warehouse-heavy, failing' },
+        ] as { id: MonitorSection; label: string; note: string }[]).map((s) => (
+          <button key={s.id} type="button" className={`side-btn ${monitorSection === s.id ? 'on' : ''}`} onClick={() => setMonitorSection(s.id)}>
+            <span className="t">{s.label}</span><span className="n">{s.note}</span>
+          </button>
+        ))}
         {objects && ([
           { id: 'models', label: 'Models', note: view === 'promote' ? 'Repo attach + deploy' : 'Link, deploy, unlink' },
           { id: 'aggs', label: 'Aggregates', note: view === 'promote' ? 'System aggregates only' : 'Activate, build' },
@@ -123,7 +137,7 @@ function Sidebar() {
         ))}
         {view === 'settings' && ([
           { id: 'hosts', label: 'Hosts & Git', note: 'Connections, credentials, Git profile' },
-          { id: 'storage', label: 'Cache & Database', note: 'List cache, test history clean-up' },
+          { id: 'storage', label: 'Cache & Database', note: 'List cache, test + query history clean-up' },
         ] as { id: SettingsSection; label: string; note: string }[]).map((s) => (
           <button key={s.id} type="button" className={`side-btn ${settingsSection === s.id ? 'on' : ''}`} onClick={() => setSettingsSection(s.id)}>
             <span className="t">{s.label}</span><span className="n">{s.note}</span>

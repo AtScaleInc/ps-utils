@@ -35,6 +35,8 @@ engine repo. Reads verified live on docker-atscale (2026-09-26).
 | Build history | `GET /wapi/p/aggregate/batch-history` | ps-utils | ✓ |
 | Export / import | `GET /v1/aggregates/export/…`, `POST /v1/aggregates/import/…` | ps-utils, docs | ✓ export |
 | Branches / commits | GitHub `branches`, `commits`, `compare` | new | ✓ |
+| Query history (Monitor) | `GET /wapi/p/queries?page&size&startDate&endDate&queryType&sort=-startTime` | PythonAtscaleUtility `queries/query_history_container.py`; params SML `queries.controller.ts` | not yet run |
+| Query text / aggregates used | `GET /wapi/p/queries/{id}/text` · `/{id}/aggregates` | SML `queries.controller.ts` | not yet run |
 
 The public `GET /v1/aggregates` ignores page/size on this build (always 10
 rows, no total), hence the internal definition list above.
@@ -80,3 +82,11 @@ rows, no total), hence the internal definition list above.
    undeploy, import (needs a second host for promotion).
 2. Only one real host exists so far (dev-docker and qa-host-2 are the same
    server); verify remap + import across two real hosts once available.
+3. Monitor: run a poll against a real host. Check that `/wapi/p/queries`
+   honours `size=100` and `sort=-startTime`, that `optimization` really carries
+   `CACHE` / `AGGS`, and what `/{id}/text` returns (plain string vs wrapped).
+   The row has no query language (MDX vs SQL) or rows returned; those need
+   engine `/engine/queries` or `/engine/v1/query` (not ported). ps-utils
+   `extract-query-stats-from-atscale` calls `/engine/queries/orgId/{org}`,
+   which current engine code no longer routes (`/engine/queries` only).
+
