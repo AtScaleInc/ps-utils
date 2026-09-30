@@ -65,33 +65,51 @@ export function CompareSection() {
   )
 }
 
+/** Host -> model -> run: the host first (where the results came from), then a
+ * model with runs on it, then which of that model's runs on the host. */
 function RunSidePicker({ label, hint, groups, value, onChange, onOpen }: {
   label: string; hint: string; groups: [string, TestRun[]][]; value: RunSide | null; onChange: (v: RunSide) => void
   /** Opening a picker reloads the run list when it's old (a run finished elsewhere). */
   onOpen: () => void
 }) {
-  const runs = groups.flatMap(([, rs]) => rs)
+  const runs = groups.flatMap(([, rs]) => rs) // newest first within each model
+  const hosts = new Map<string, TestRun['targets'][number]>()
+  for (const r of runs) for (const t of r.targets) if (!hosts.has(t.hostId)) hosts.set(t.hostId, t)
+  const hostId = value?.hostId ?? ''
   const run = runs.find((r) => r.runId === value?.runId)
-  const model = run?.model ?? groups[0]?.[0] ?? ''
-  const modelRuns = groups.find(([m]) => m === model)?.[1] ?? []
+  const onHost = (h: string) => groups
+    .map(([m, rs]) => [m, rs.filter((r) => r.targets.some((t) => t.hostId === h))] as [string, TestRun[]])
+    .filter(([, rs]) => rs.length)
+  const models = onHost(hostId)
+  const model = run?.model ?? models[0]?.[0] ?? ''
+  const modelRuns = models.find(([m]) => m === model)?.[1] ?? []
   return (
     <div className="cmp-picker">
       <span className="eyebrow">{label}</span>
       <span className="hint">{hint}</span>
-      <select className="select" value={model} onMouseDown={onOpen} onFocus={onOpen} onChange={(e) => {
-        const r = groups.find(([m]) => m === e.target.value)?.[1][0]
-        if (r) onChange({ runId: r.runId, hostId: r.targets[0].hostId })
+      <select className="select" value={hostId} onMouseDown={onOpen} onFocus={onOpen} onChange={(e) => {
+        const h = e.target.value
+        const ms = onHost(h)
+        // Same model on the new host when it has runs there, else its newest run.
+        const r = (ms.find(([m]) => m === model) ?? ms[0])?.[1][0]
+        if (r) onChange({ runId: r.runId, hostId: h })
       }}>
-        {groups.map(([m, rs]) => <option key={m} value={m}>{m} · {rs.length} run{rs.length === 1 ? '' : 's'}</option>)}
+        {!hosts.has(hostId) && <option value="">Pick a host…</option>}
+        {[...hosts.values()].map((t) => <option key={t.hostId} value={t.hostId}>{t.label ?? t.hostId} ({t.env})</option>)}
       </select>
-      <select className="select" value={value?.runId ?? ''} onMouseDown={onOpen} onFocus={onOpen} onChange={(e) => {
-        const r = modelRuns.find((x) => x.runId === e.target.value)
-        if (r) onChange({ runId: r.runId, hostId: r.targets.find((t) => t.hostId === value?.hostId)?.hostId ?? r.targets[0].hostId })
+      <select className="select" value={model} onMouseDown={onOpen} onFocus={onOpen} disabled={!models.length} onChange={(e) => {
+        const r = models.find(([m]) => m === e.target.value)?.[1][0]
+        if (r) onChange({ runId: r.runId, hostId })
       }}>
-        {modelRuns.map((r) => <option key={r.runId} value={r.runId}>{fmtDate(r.startedAt, true)} · {r.targets.map((t) => t.label ?? t.hostId).join(', ')}</option>)}
+        {models.map(([m, rs]) => <option key={m} value={m}>{m} · {rs.length} run{rs.length === 1 ? '' : 's'}</option>)}
       </select>
-      <select className="select" value={value?.hostId ?? ''} onChange={(e) => run && onChange({ runId: run.runId, hostId: e.target.value })}>
-        {(run?.targets ?? []).map((t) => <option key={t.hostId} value={t.hostId}>{t.label ?? t.hostId} ({t.env})</option>)}
+      <select className="select" value={value?.runId ?? ''} onMouseDown={onOpen} onFocus={onOpen} disabled={!modelRuns.length}
+        onChange={(e) => onChange({ runId: e.target.value, hostId })}>
+        {modelRuns.map((r) => (
+          <option key={r.runId} value={r.runId}>
+            {fmtDate(r.startedAt, true)}{r.targets.length > 1 ? ` · with ${r.targets.filter((t) => t.hostId !== hostId).map((t) => t.label ?? t.hostId).join(', ')}` : ''}
+          </option>
+        ))}
       </select>
     </div>
   )

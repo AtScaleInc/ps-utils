@@ -7,11 +7,12 @@ import { PromoteView } from './components/PromoteView'
 import { SettingsView } from './components/SettingsView'
 import { TestView } from './test/TestView'
 import { MonitorView } from './monitor/MonitorView'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ENVS, envOf, plural, useHosts } from './components/ui'
 import { resolveHost, useUi, type BuildSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
 
 export default function App() {
-  const { view, linkOpen, manage } = useUi()
+  const { view, linkOpen, manage, section, buildSection, testSection, monitorSection, settingsSection } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const mh = resolveHost(hosts, manage)
   return (
@@ -20,12 +21,14 @@ export default function App() {
       <div className="body">
         <Sidebar />
         <main className="main">
-          {view === 'build' && <BuildView />}
-          {view === 'manage' && <ManageView />}
-          {view === 'promote' && <PromoteView />}
-          {view === 'test' && <TestView />}
-          {view === 'monitor' && <MonitorView />}
-          {view === 'settings' && <SettingsView />}
+          <ErrorBoundary resetKey={`${view}|${section}|${buildSection}|${testSection}|${monitorSection}|${settingsSection}`}>
+            {view === 'build' && <BuildView />}
+            {view === 'manage' && <ManageView />}
+            {view === 'promote' && <PromoteView />}
+            {view === 'test' && <TestView />}
+            {view === 'monitor' && <MonitorView />}
+            {view === 'settings' && <SettingsView />}
+          </ErrorBoundary>
         </main>
       </div>
       <AskDialog />

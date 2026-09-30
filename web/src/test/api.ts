@@ -112,7 +112,15 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  const data = await res.json().catch(() => ({}))
+  // A 200 whose body isn't JSON (e.g. a NaN the API let through) must fail
+  // loudly: returning {} left the caller rendering a half-empty object.
+  const text = await res.text()
+  let data: any = {}
+  try {
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    if (res.ok) throw new Error(`${method} ${path}: the API sent a response that isn't valid JSON`)
+  }
   if (!res.ok) throw new Error(data?.error ?? `${method} ${path} failed with ${res.status}`)
   return data as T
 }

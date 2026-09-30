@@ -281,6 +281,23 @@ def test_duplicate_keys_compared_as_multiset():
     assert compare(a, c)["status"] == "differs"
 
 
+def test_infinite_values_compare_equal_and_stay_json():
+    # A growth % over a zero period comes back as INF on both sides.
+    a = sql_rows(["k", "m"], [["blue", "INF"], ["red", "1"]], ["m"])
+    assert compare(a, a)["status"] == "identical"
+    b = sql_rows(["k", "m"], [["blue", "5"], ["red", "1"]], ["m"])
+    d = compare(a, b)
+    assert d["status"] == "differs" and d["diffs"][0]["delta"] is None and d["maxPct"] is None
+
+    from app import create_app
+
+    with create_app().test_request_context():
+        from flask import jsonify
+
+        assert jsonify({"x": float("nan"), "y": [float("inf"), 1.5]}).get_data(as_text=True).replace(" ", "").strip() \
+            == '{"x":null,"y":[null,1.5]}'
+
+
 def test_select_old_keep_and_age(tmp_path):
     from testing import store
 

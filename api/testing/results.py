@@ -109,11 +109,20 @@ def compare(a: dict[str, Any] | None, b: dict[str, Any] | None, tolerance: float
             va, vb = ra[k]["values"][ia[m]], rb[k]["values"][ib[m]]
             na, nb = _num(va), _num(vb)
             if na is not None and nb is not None:
-                if abs(nb - na) <= tolerance * max(1.0, abs(na), abs(nb)):
+                # INF on both sides (a growth % over a zero period) is equal:
+                # inf - inf is NaN, which isn't <= anything - and NaN isn't JSON.
+                # INF on one side differs (the relative tolerance would be inf too).
+                if na == nb:
                     continue
-                delta = nb - na
-                pct = (delta / abs(na) * 100) if na else None
-                max_pct = max(max_pct, abs(pct) if pct is not None else math.inf)
+                if math.isinf(na) or math.isinf(nb):
+                    delta, pct = None, None
+                    max_pct = math.inf
+                elif abs(nb - na) <= tolerance * max(1.0, abs(na), abs(nb)):
+                    continue
+                else:
+                    delta = nb - na
+                    pct = (delta / abs(na) * 100) if na else None
+                    max_pct = max(max_pct, abs(pct) if pct is not None else math.inf)
             elif (va or "") == (vb or ""):
                 continue
             else:
