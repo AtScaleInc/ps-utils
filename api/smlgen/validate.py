@@ -19,6 +19,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .packages import flatten_packages
+
 
 class SmlCliNotFound(RuntimeError):
     pass
@@ -36,8 +38,17 @@ def _sml_cli() -> list[str]:
     return [npx, "--yes", "sml-cli"]
 
 
-def validate_sml(files: dict[str, str]) -> dict:
+#: sml-cli's global error for a repo without a model - expected for a shared
+#: dimensions package (smlgen/packages.py), which is attached, never deployed.
+_NO_MODEL = "Missing Model files in folder structure"
+
+
+def validate_sml(files: dict[str, str], packages: list[dict] | None = None, shared: bool = False) -> dict:
+    """`packages`: [{ref, files}] resolved from package.yml; `shared`: a shared
+    dimensions package, where sml-cli's no-model error is expected."""
     cli = _sml_cli()
+    if packages:
+        files = flatten_packages(files, packages)
 
     with tempfile.TemporaryDirectory(prefix="env-manager-validate-") as tmp:
         root = Path(tmp)
@@ -53,8 +64,11 @@ def validate_sml(files: dict[str, str]) -> dict:
             timeout=120,
             env={**os.environ, "NO_COLOR": "1", "FORCE_COLOR": "0"},  # plain text for the UI
         )
-        return {
-            "passed": proc.returncode == 0,
-            "returncode": proc.returncode,
-            "output": (proc.stdout or "") + (proc.stderr or ""),
-        }
+        output = (proc.stdout or "") + (proc.stderr or "")
+        passed = proc.returncode == 0
+        if shared and not passed:
+            errors = [ln for ln in output.splitlines() if ln.strip().startswith("[ERROR]")]
+            if errors and all(_NO_MODEL in ln for ln in errors):
+                passed = True
+                output += "\n(No model is expected: this is a shared dimensions package - it is attached, not deployed.)"
+        return {"passed": passed, "returncode": proc.returncode, "output": output}

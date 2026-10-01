@@ -8,11 +8,13 @@ interface Props {
   connectionId: string | null
   /** The Build bar's host, checked by default. */
   defaultHostId: string | null
+  /** A shared dimensions package: hosts only attach the repo (no deploy, so no connection check). */
+  shared?: boolean
   onClose: () => void
   onDeploy: (hostIds: string[]) => Promise<DeployResult>
 }
 
-export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, onDeploy }: Props) {
+export function SmlViewerModal({ files, connectionId, defaultHostId, shared = false, onClose, onDeploy }: Props) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [validating, setValidating] = useState(false)
   const [validation, setValidation] = useState<{ passed: boolean; output: string } | null>(null)
@@ -26,11 +28,11 @@ export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, on
 
   const hostKey = hosts.map((h) => h.id).join(',')
   useEffect(() => {
-    if (!connectionId || !hostKey) return
+    if (shared || !connectionId || !hostKey) return
     deployPreflight(connectionId, hostKey.split(','))
       .then((rows) => setMissing(Object.fromEntries(rows.filter((r) => !r.ok).map((r) => [r.hostId, r.error ?? `No '${connectionId}' connection`]))))
       .catch(() => setMissing({}))
-  }, [connectionId, hostKey])
+  }, [connectionId, hostKey, shared])
 
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
   const targets = picked.filter((id) => !missing[id] && hosts.some((h) => h.id === id))
@@ -39,7 +41,7 @@ export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, on
     setValidating(true)
     setValidation(null)
     try {
-      const result = await validateSml(files)
+      const result = await validateSml(files, shared)
       setValidation(result)
     } catch (err) {
       setValidation({ passed: false, output: err instanceof Error ? err.message : String(err) })
@@ -73,7 +75,7 @@ export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, on
         <div className="sml-modal-header">
           <div>
             <div className="eyebrow" style={{ color: 'var(--as-join)' }}>
-              GENERATED SML
+              {shared ? 'SHARED DIMENSIONS' : 'GENERATED SML'}
             </div>
             <div className="identity-title">{files.length} files</div>
           </div>
@@ -82,7 +84,8 @@ export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, on
               {validating ? 'Validating…' : 'Validate with sml-cli'}
             </button>
             <button className="btn btn-primary" onClick={runDeploy} disabled={deploying || !targets.length}>
-              {deploying ? 'Deploying…' : `Deploy to ${targets.length} host${targets.length === 1 ? '' : 's'}`}
+              {deploying ? (shared ? 'Attaching…' : 'Deploying…')
+                : `${shared ? 'Attach to' : 'Deploy to'} ${targets.length} host${targets.length === 1 ? '' : 's'}`}
             </button>
             <button className="btn btn-ghost" onClick={onClose}>
               Close
@@ -100,7 +103,7 @@ export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, on
         )}
 
         <div className="deploy-targets">
-          <span className="eyebrow">Deploy to</span>
+          <span className="eyebrow">{shared ? 'Attach on' : 'Deploy to'}</span>
           {ENVS.map((e) => {
             const inEnv = hosts.filter((h) => h.env === e.id)
             if (!inEnv.length) return null
@@ -125,7 +128,9 @@ export function SmlViewerModal({ files, connectionId, defaultHostId, onClose, on
         {(deployResult || deployError) && (
           <div className={`validation-banner ${deployError || failed.length ? 'validation-fail' : 'validation-pass'}`}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>
-              {deployError ? 'Deploy failed' : failed.length ? `Deployed to ${deployResult!.results.length - failed.length} of ${deployResult!.results.length} hosts` : 'Deployed'}
+              {deployError ? (shared ? 'Publish failed' : 'Deploy failed')
+                : failed.length ? `${shared ? 'Attached on' : 'Deployed to'} ${deployResult!.results.length - failed.length} of ${deployResult!.results.length} hosts`
+                : shared ? 'Pushed and attached - not deployed. Add these dimensions to a model with Shared dims.' : 'Deployed'}
             </div>
             {deployResult && (
               <>

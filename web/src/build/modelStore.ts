@@ -23,6 +23,15 @@ export interface TableRef {
   columns: ColumnMeta[]
 }
 
+/** An SML package entry (package.yml): where a shared dimension lives. */
+export interface PackageRef {
+  name: string
+  url: string
+  branch: string
+  /** `commit:<sha>` - the branch head when the package was picked. */
+  version: string
+}
+
 export interface Node {
   id: string
   schema: string
@@ -36,6 +45,9 @@ export interface Node {
   factName?: string
   /** Marks this dimension as SML `type: time` with `time_unit` on each level. */
   isTime?: boolean
+  /** A shared dimension from a package repo: read-only here, written by its
+   *  own repo, referenced through package.yml (api/smlgen/packages.py). */
+  package?: PackageRef
 }
 
 export interface Join {
@@ -137,6 +149,8 @@ export interface LoadedFrom {
 
 export interface ModelState {
   modelName: string
+  /** Publish as a shared dimensions package: no model, attached on hosts, not deployed. */
+  shared: boolean
   /** Set by loadModelData from an SML import; null for a model started here. */
   loadedFrom: LoadedFrom | null
   /** Set when the current model was loaded from an AtScale-attached repo, so
@@ -155,6 +169,10 @@ export interface ModelState {
   linkDrag: LinkDrag | null
 
   setModelName: (name: string) => void
+  setShared: (shared: boolean) => void
+  /** Adds a package repo's dimensions (POST /build/shared/load) as read-only
+   *  nodes; picking the same repo again moves its nodes to the new commit. */
+  addSharedDimensions: (data: { nodes: Node[]; joins: Join[]; cfg: Record<ColumnKey, ColumnConfig> }, ref: PackageRef) => number
   setSourceRepo: (repo: SourceRepo | null) => void
   setSourceId: (id: string | null, meta?: SourceMeta | null) => void
   /** Patches sourceMeta in place - for correcting a connection's
@@ -203,6 +221,7 @@ export interface ModelState {
     cfg: Record<ColumnKey, ColumnConfig>
     calculations?: Calculation[]
     loadedFrom?: LoadedFrom | null
+    shared?: boolean
   }) => void
 }
 
@@ -287,8 +306,17 @@ function seededNamesFor(table: string, role: Role) {
 
 let seq = 0
 
+/** Shared dimensions are read-only: their repo owns them. */
+function locked(s: Pick<ModelState, 'nodes'>, nodeId: string): boolean {
+  return !!s.nodes.find((n) => n.id === nodeId)?.package
+}
+
+const sameRepo = (a: string, b: string) =>
+  a.toLowerCase().replace(/\.git$/, '').replace(/\/+$/, '') === b.toLowerCase().replace(/\.git$/, '').replace(/\/+$/, '')
+
 export const useModelStore = create<ModelState>((set, get) => ({
   modelName: '',
+  shared: false,
   loadedFrom: null,
   sourceRepo: null,
   sourceId: null,
@@ -303,6 +331,44 @@ export const useModelStore = create<ModelState>((set, get) => ({
   linkDrag: null,
 
   setModelName: (name) => set({ modelName: name }),
+  setShared: (shared) => set({ shared }),
+
+  addSharedDimensions: (data, ref) => {
+    const s = get()
+    // Same repo again: every node from it moves to this commit (one package entry per repo).
+    const existing = s.nodes.filter((n) => n.package && sameRepo(n.package.url, ref.url))
+    const pkg = existing[0]?.package ? { ...ref, name: existing[0].package.name } : ref
+    const have = new Set(existing.map((n) => n.dimName))
+    const incoming = data.nodes.filter((n) => !have.has(n.dimName))
+    const idMap = new Map<string, string>()
+    const right = Math.max(LAYOUT_MARGIN, ...s.nodes.map((n) => n.x + LAYOUT_NODE_W + LAYOUT_COL_GAP))
+    let y = LAYOUT_MARGIN
+    const added = incoming.map((n) => {
+      const id = `n${seq++}`
+      idMap.set(n.id, id)
+      const node = { ...n, id, x: right, y, package: pkg }
+      y += nodeHeight(node) + LAYOUT_ROW_GAP
+      return node
+    })
+    const remapKey = (key: string) => {
+      const [nodeId, column] = [key.slice(0, key.indexOf('::')), key.slice(key.indexOf('::') + 2)]
+      return idMap.has(nodeId) ? columnKey(idMap.get(nodeId)!, column) : null
+    }
+    const cfg: Record<ColumnKey, ColumnConfig> = {}
+    for (const [key, c] of Object.entries(data.cfg)) {
+      const k = remapKey(key)
+      if (k) cfg[k] = c.attachToKey ? { ...c, attachToKey: remapKey(c.attachToKey) ?? c.attachToKey } : c
+    }
+    const joins = data.joins
+      .filter((j) => idMap.has(j.a.node) && idMap.has(j.b.node))
+      .map((j) => ({ ...j, id: `j${seq++}`, a: { ...j.a, node: idMap.get(j.a.node)! }, b: { ...j.b, node: idMap.get(j.b.node)! } }))
+    set((st) => ({
+      nodes: [...st.nodes.map((n) => (n.package && sameRepo(n.package.url, ref.url) ? { ...n, package: pkg } : n)), ...added],
+      joins: [...st.joins, ...joins],
+      cfg: { ...st.cfg, ...cfg },
+    }))
+    return added.length
+  },
   setSourceRepo: (repo) => set({ sourceRepo: repo }),
 
   // Deliberately does NOT touch nodes/joins/cfg/calculations - picking a
@@ -313,7 +379,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   setSourceId: (id, meta) => set({ sourceId: id, sourceMeta: meta ?? null }),
   updateSourceMeta: (patch) =>
     set((s) => ({ sourceMeta: s.sourceMeta ? { ...s.sourceMeta, ...patch } : s.sourceMeta })),
-  setSchemaForAllNodes: (schema) => set((s) => ({ nodes: s.nodes.map((n) => ({ ...n, schema })) })),
+  setSchemaForAllNodes: (schema) => set((s) => ({ nodes: s.nodes.map((n) => (n.package ? n : { ...n, schema })) })),
   setSearch: (search) => set({ search }),
   toggleSchema: (schema) =>
     set((s) => ({ openSchemas: { ...s.openSchemas, [schema]: !s.openSchemas[schema] } })),
@@ -360,7 +426,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     }),
 
   setNodeRole: (id, role) =>
-    set((s) => ({
+    set((s) => locked(s, id) ? {} : ({
       nodes: s.nodes.map((n) => {
         if (n.id !== id) return n
         const seeded = seededNamesFor(n.table, role)
@@ -375,16 +441,17 @@ export const useModelStore = create<ModelState>((set, get) => ({
     })),
 
   setNodeField: (id, field, value) =>
-    set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, [field]: value } : n)) })),
+    set((s) => locked(s, id) ? {} : ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, [field]: value } : n)) })),
 
   setNodeIsTime: (id, isTime) =>
-    set((s) => ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, isTime } : n)) })),
+    set((s) => locked(s, id) ? {} : ({ nodes: s.nodes.map((n) => (n.id === id ? { ...n, isTime } : n)) })),
 
   setJoinRolePlay: (id, rolePlay) =>
     set((s) => ({ joins: s.joins.map((j) => (j.id === id ? { ...j, rolePlay } : j)) })),
 
   setColumnDimRole: (nodeId, key, dimRole) =>
     set((s) => {
+      if (locked(s, nodeId)) return {}
       const existing = s.cfg[key] ?? {}
       let levelOrder = existing.levelOrder
       if (dimRole === 'level' && existing.dimRole !== 'level') {
@@ -405,6 +472,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
 
   setLevelOrder: (nodeId, key, direction) =>
     set((s) => {
+      if (locked(s, nodeId)) return {}
       const levels = levelsOf(s, nodeId)
       const idx = levels.findIndex((l) => l.key === key)
       const swapIdx = direction === 'up' ? idx - 1 : idx + 1
@@ -446,7 +514,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
     const aNode = state.nodes.find((n) => n.id === a.node)
     const bNode = state.nodes.find((n) => n.id === b.node)
     const dimSide = aNode?.role === 'dimension' ? a : bNode?.role === 'dimension' ? b : null
-    if (dimSide) {
+    if (dimSide && !locked(state, dimSide.node)) {
       const key = columnKey(dimSide.node, dimSide.column)
       const existingCfg = state.cfg[key]
       if (!existingCfg?.dimRole || existingCfg.dimRole === 'none') {
@@ -461,7 +529,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   select: (selection) => set({ selection }),
 
   setColumnConfig: (key, patch) =>
-    set((s) => ({ cfg: { ...s.cfg, [key]: { ...s.cfg[key], ...patch } } })),
+    set((s) => locked(s, key.slice(0, key.indexOf('::'))) ? {} : ({ cfg: { ...s.cfg, [key]: { ...s.cfg[key], ...patch } } })),
 
   addCalculation: () => {
     const id = `calc${seq++}`
@@ -477,7 +545,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
   removeCalculation: (id) => set((s) => ({ calculations: s.calculations.filter((c) => c.id !== id) })),
 
   reset: () =>
-    set({ nodes: [], joins: [], cfg: {}, calculations: [], selection: null, linkDrag: null, sourceRepo: null, loadedFrom: null }),
+    set({ nodes: [], joins: [], cfg: {}, calculations: [], selection: null, linkDrag: null, sourceRepo: null, loadedFrom: null, shared: false }),
 
   loadModelData: (data) => {
     // Imported/loaded ids (n0, j0, ...) come from a separate counter (the
@@ -497,6 +565,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       cfg: data.cfg,
       calculations: data.calculations ?? [],
       loadedFrom: data.loadedFrom ?? null,
+      shared: !!data.shared,
       selection: null,
       linkDrag: null,
     })
@@ -584,4 +653,16 @@ export function readOnlyReason(state: Pick<ModelState, 'loadedFrom'>): string | 
   const n = state.loadedFrom?.unsupported.length ?? 0
   if (!n) return null
   return `Read-only: this model uses SML Build can't write back (${n} item${n === 1 ? '' : 's'}). Saving or deploying from here would remove them - edit it in Design Center.`
+}
+
+/** The distinct packages the canvas's shared dimensions come from. */
+export function packagesOf(state: Pick<ModelState, 'nodes'>): PackageRef[] {
+  const out = new Map<string, PackageRef>()
+  for (const n of state.nodes) if (n.package && !out.has(n.package.name)) out.set(n.package.name, n.package)
+  return [...out.values()]
+}
+
+/** Nodes this repo writes (not shared dimensions from a package). */
+export function localNodes(state: Pick<ModelState, 'nodes'>): Node[] {
+  return state.nodes.filter((n) => !n.package)
 }

@@ -80,6 +80,43 @@ def list_catalog_repos(token: str) -> list[dict[str, Any]]:
     ]
 
 
+def _user_repos(token: str) -> list[dict[str, Any]]:
+    resp = requests.get(
+        f"{API}/user/repos",
+        headers=_headers(token),
+        params={"visibility": "all", "affiliation": "owner,collaborator,organization_member",
+                "sort": "full_name", "per_page": 100},
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        raise GitError(f"GitHub API returned {resp.status_code}: {resp.text[:200]}")
+    return resp.json()
+
+
+def list_shared_repos(token: str, marker: str) -> list[dict[str, Any]]:
+    """Repos usable as a shared-dimensions package (smlgen/packages.py): a root
+    catalog.yml carrying `marker` (tagged), or a catalog with no models/
+    folder. Same discovery as list_catalog_repos, reading catalog.yml's text."""
+    repos = _user_repos(token)
+    raw = {**_headers(token), "Accept": "application/vnd.github.raw+json"}
+
+    def check(repo: dict[str, Any]) -> dict[str, Any] | None:
+        full = repo["full_name"]
+        r = requests.get(f"{API}/repos/{full}/contents/catalog.yml", headers=raw, timeout=12)
+        if r.status_code != 200:
+            return None
+        tagged = marker in r.text
+        if not tagged:
+            m = requests.get(f"{API}/repos/{full}/contents/models", headers=_headers(token), timeout=12)
+            if m.status_code == 200 and m.json():
+                return None
+        return {"fullName": full, "url": repo["html_url"], "defaultBranch": repo.get("default_branch") or "main",
+                "private": repo.get("private", False), "tagged": tagged}
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return [r for r in ex.map(check, repos) if r]
+
+
 def fetch_sml_files(token: str, repo_url: str, branch: str) -> dict[str, str]:
     """{relativePath: content} for every YAML file on `branch`."""
     full = repo_full_name(repo_url)

@@ -49,6 +49,7 @@ from typing import Any
 
 import yaml
 
+from .packages import is_shared_repo
 from .rules import AGG_TO_CALC_METHOD
 from .support import built_here, unsupported_features
 
@@ -116,7 +117,13 @@ def _load_all(files: dict[str, str]) -> dict[str, Any]:
 load_sml_objects = _load_all
 
 
-def parse_sml(files: dict[str, str]) -> dict[str, Any]:
+def parse_sml(files: dict[str, str], packages: list[dict[str, Any]] | None = None,
+              all_package_dims: bool = False) -> dict[str, Any]:
+    """`packages`: [{ref: {name, url, branch, version}, files}] - the repos the
+    root package.yml lists, fetched at their pinned commit. Their dimensions
+    become read-only nodes carrying `package: ref` (smlgen/packages.py): the
+    ones this repo's model / dimensions reference, or every one with
+    `all_package_dims` (the shared-dimension picker)."""
     parsed = _load_all(files)
     datasets = parsed["datasets"]
     dimensions = parsed["dimensions"]
@@ -125,10 +132,34 @@ def parse_sml(files: dict[str, str]) -> dict[str, Any]:
     connections = parsed["connections"]
     model = parsed["model"] or {}
 
+    # Root objects win a name clash, as they do once AtScale merges packages.
+    package_of_dataset: dict[str, dict] = {}
+    package_schema: dict[str, str] = {}
+    package_dims: set[str] = set()
+    for pkg in packages or []:
+        pp = _load_all(pkg.get("files") or {})
+        for name, dim in pp["dimensions"].items():
+            if name not in dimensions and not dim.get("is_degenerate"):
+                dimensions[name] = dim
+                package_dims.add(name)
+        for name, ds in pp["datasets"].items():
+            if name not in datasets:
+                datasets[name] = ds
+                package_of_dataset[name] = pkg["ref"]
+                con = pp["connections"].get(ds.get("connection_id")) or {}
+                package_schema[name] = con.get("schema", "")
+    if package_dims and not all_package_dims:
+        wanted = {r["to"].get("dimension") for r in model.get("relationships") or [] if r.get("to")}
+        for name, dim in list(dimensions.items()):
+            if name not in package_dims:
+                wanted |= {r["to"].get("dimension") for r in dim.get("relationships") or [] if r.get("to")}
+        for name in package_dims - wanted:
+            dimensions.pop(name)
+
     # This wizard only ever authors a model against a single connection (one
     # data source picked in the Data Source panel), so on import just take
     # whichever connection the first dataset points at - not a per-dataset lookup.
-    first_dataset = next(iter(datasets.values()), None)
+    first_dataset = next((d for n, d in datasets.items() if n not in package_of_dataset), None)
     connection = connections.get(first_dataset.get("connection_id")) if first_dataset else None
     source_schema = connection.get("schema", "") if connection else ""
     source = (
@@ -170,13 +201,15 @@ def parse_sml(files: dict[str, str]) -> dict[str, Any]:
         row = seq // 3
         node: dict[str, Any] = {
             "id": node_id,
-            "schema": source_schema,
+            "schema": package_schema.get(dataset_name, source_schema),
             "table": dataset_name,
             "columns": [{"name": c["name"], "type": c.get("data_type", "string")} for c in ds.get("columns", [])],
             "x": 40 + col * 320,
             "y": 40 + row * 300,
             "role": role,
         }
+        if dataset_name in package_of_dataset:
+            node["package"] = package_of_dataset[dataset_name]
         nodes.append(node)
         return node_id
 
@@ -394,7 +427,7 @@ def parse_sml(files: dict[str, str]) -> dict[str, Any]:
     # Anything the canvas can't hold would be dropped by the next Save / Deploy,
     # so the UI opens such a repo read-only (support.py).
     return {"nodes": nodes, "joins": joins, "cfg": cfg, "calculations": calculations, "source": source,
-            "builtHere": built_here(files),
+            "builtHere": built_here(files), "shared": is_shared_repo(files),
             "unsupported": unsupported_features(files, source.get("dialect") if source else None)}
 
 

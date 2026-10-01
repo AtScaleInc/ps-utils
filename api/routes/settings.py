@@ -88,6 +88,7 @@ def put_git():
     body = {k: v for k, v in _body().items() if k in {"username", "email", "token"}}
     raw = registry.store().update_git(body)
     cache.invalidate("host")  # versions + branches depend on the Git token
+    cache.invalidate("git")  # shared-dimension repos (routes/build.py)
     return jsonify(public_git(raw))
 
 

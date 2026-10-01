@@ -166,6 +166,11 @@ class FakeBackend:
         a, b = _num(src["commit"]), _num(tgt["commit"])
         return "identical" if a == b else "ahead" if a > b else "behind"
 
+    def attach_repo(self, repo_url: str, branch: str) -> dict[str, Any]:
+        with _lock:
+            FAKE_REPOS.setdefault(repo_url, [])
+        return {"ok": True, "repoId": repo_url.rsplit("/", 1)[1]}
+
     def link(self, repo_url: str, branch: str, model: str) -> dict[str, Any]:
         if model not in FAKE_REPOS.get(repo_url, []):
             raise ValueError(f"{model} is not in {repo_url}")
@@ -546,6 +551,65 @@ def register_built_model(repo_url: str, model: str, catalog: str) -> None:
     with _lock:
         FAKE_REPOS[repo_url] = [model]
         CATALOG[model] = catalog
+
+
+#: Shared-dimension repos in demo mode: url -> [(sha, files)], newest last.
+#: Seeded from the demo SML's Date / Customer / Product dimensions on first use.
+FAKE_SHARED: dict[str, list[tuple[str, dict[str, str]]]] = {}
+DEMO_SHARED_URL = "https://github.com/corp/atscale-shared-dimensions"
+
+
+def _seed_shared() -> None:
+    if FAKE_SHARED:
+        return
+    from smlgen.packages import SHARED_MARKER
+
+    src = {str(p.relative_to(_DEMO_SML)): p.read_text() for p in sorted(_DEMO_SML.rglob("*.yml"))}
+    keep = {"connections/as_adventure.yml", "datasets/DateCustom.yml", "datasets/dimcustomer.yml",
+            "datasets/dimproduct.yml", "dimensions/Date Dimension.yml", "dimensions/Customer Dimension.yml",
+            "dimensions/Product Dimension.yml"}
+    files = {k: v for k, v in src.items() if k in keep}
+    files["catalog.yml"] = f"{SHARED_MARKER}\nunique_name: shared_dimensions\nobject_type: catalog\nlabel: shared_dimensions\nversion: 1.7\n"
+    FAKE_SHARED[DEMO_SHARED_URL] = [("5ad1e4c0" + "0" * 32, files)]
+
+
+def register_shared_repo(repo_url: str, files: dict[str, str]) -> str:
+    """Build published a shared-dimensions repo: a new fake commit."""
+    import hashlib
+
+    with _lock:
+        _seed_shared()
+        sha = hashlib.sha1(repr(sorted(files.items())).encode() + repo_url.encode()
+                           + str(len(FAKE_SHARED.get(repo_url, []))).encode()).hexdigest()
+        FAKE_SHARED.setdefault(repo_url, []).append((sha, dict(files)))
+        FAKE_REPOS.setdefault(repo_url, [])
+        return sha
+
+
+def shared_repos() -> list[dict[str, Any]]:
+    with _lock:
+        _seed_shared()
+        return [{"fullName": "/".join(u.rsplit("/", 2)[-2:]), "url": u, "defaultBranch": "main", "private": True,
+                 "tagged": True} for u in FAKE_SHARED]
+
+
+def shared_head(repo_url: str) -> dict[str, Any]:
+    with _lock:
+        _seed_shared()
+        commits = FAKE_SHARED.get(repo_url)
+        if not commits:
+            raise ValueError(f"{repo_url} is not a shared dimensions repo")
+        return {"sha": commits[-1][0], "date": now_iso(), "message": "Shared dimensions"}
+
+
+def shared_files(repo_url: str, sha: str | None = None) -> dict[str, str]:
+    with _lock:
+        _seed_shared()
+        commits = FAKE_SHARED.get(repo_url) or []
+        for c_sha, files in reversed(commits):
+            if not sha or c_sha.startswith(sha) or sha.startswith(c_sha):
+                return dict(files)
+        raise ValueError(f"No commit {sha} in {repo_url}")
 
 
 # -- demo SML for Manage › Analyze: AtScale's sml-demo-sales-insights repo, copied

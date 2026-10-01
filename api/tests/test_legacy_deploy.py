@@ -75,3 +75,38 @@ def test_other_errors_do_not_fall_back(monkeypatch):
     api = Api500()
     r = B.RealBackend({"id": "h", "links": []}, Store(), {"token": "t"}, api=api).deploy_branch("https://github.com/me/demo", "main")
     assert not r["ok"] and r["error"].startswith("500") and api.legacy_body is None
+
+
+def test_legacy_deploy_resolves_shared_dimensions(monkeypatch):
+    """No /v1/catalogs/deploy: package.yml's shared dimensions are fetched at
+    their pinned commit and compiled into the catalog XML (resolve_packages)."""
+    from tests.test_packages import REF, SHA, model_payload, shared_payload
+
+    files, pkg = build_sml(model_payload()), build_sml(shared_payload())
+    fetched = []
+    monkeypatch.setattr(B.github, "head_commit", lambda token, url, branch: {"sha": "abc123", "date": "2026-09-29"})
+    monkeypatch.setattr(B.github, "fetch_sml_files", lambda token, url, ref: fetched.append((url, ref)) or pkg)
+    monkeypatch.setattr(legacy_deploy, "read_repo_sml", lambda url, branch, user, token: files)
+    api = Api()
+    r = B.RealBackend({"id": "old-host", "links": []}, Store(), {"username": "me", "token": "t"}, api=api) \
+        .deploy_branch("https://github.com/me/demo", "main")
+    assert r["ok"], r
+    assert fetched == [(REF["url"], SHA)]
+    body = api.legacy_body
+    paths = {f["relativePath"] for f in body["sml_raw_files"]}
+    assert "package.yml" not in paths and "packages/shared/dimensions/Product.yml" in paths
+    assert "packages/shared/catalog.yml" not in paths
+    xml = body["project_xml"]
+    assert '<data-set' in xml and 'name="dimproduct"' in xml and 'name="datecustom"' in xml
+
+
+def test_legacy_deploy_names_an_unreachable_package():
+    import pytest
+
+    from tests.test_packages import model_payload
+
+    def boom(url, sha):
+        raise RuntimeError("404")
+
+    with pytest.raises(ValueError, match="Couldn't fetch package 'shared'"):
+        legacy_deploy.deploy(Api(), Api(), build_sml(model_payload()), "repo-1", "main", fetch_package=boom)

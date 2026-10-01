@@ -85,6 +85,12 @@ class CachedBackend:
         finally:
             self._drop()
 
+    def attach_repo(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return self.inner.attach_repo(*args, **kwargs)
+        finally:
+            self._drop()
+
     def deploy(self, *args: Any, **kwargs: Any) -> Any:
         try:
             return self.inner.deploy(*args, **kwargs)

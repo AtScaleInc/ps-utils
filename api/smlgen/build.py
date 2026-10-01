@@ -27,6 +27,13 @@ important point):
     repo itself was `version: 1` - `sml-cli validate` flags that as a WARNING
     ("different from the latest supported version"), so 1.7 is the correct
     default to emit, not what that one sample happened to have.
+
+Shared dimensions (smlgen/packages.py): `shared: true` writes a package repo -
+catalog (tagged with SHARED_MARKER), connection, datasets and dimensions, no
+model or metrics. A node carrying `package: {name, url, branch, version}`
+came from such a repo: nothing is written for it, the model references its
+dimension and level by their unique_names verbatim, and the package is
+listed in package.yml.
 """
 
 from __future__ import annotations
@@ -36,6 +43,7 @@ from typing import Any
 import yaml
 
 from .rules import AGG_TO_CALC_METHOD, cased, join_type_family, kebab, sml_data_type, title_case
+from .packages import PACKAGE_FILE, SHARED_CONNECTION_SUFFIX, SHARED_MARKER, package_yml, validate_packages
 from .support import BUILT_BY_MARKER
 
 
@@ -93,11 +101,12 @@ def _resolve_key_display_sort(config: dict, own_col: str, dialect: str | None) -
     return key_col, name_col, sort_col
 
 
-def _yaml_dump(obj: Any) -> str:
+def _yaml_dump(obj: Any, extra_marker: str | None = None) -> str:
     # The marker comment tags the repo as built here (support.built_here);
     # AtScale ignores comments, Design Center drops them when it rewrites a file.
     body = yaml.safe_dump(obj, sort_keys=False, default_flow_style=False, allow_unicode=True)
-    return f"{BUILT_BY_MARKER}\n{body}"
+    extra = f"{extra_marker}\n" if extra_marker else ""
+    return f"{BUILT_BY_MARKER}\n{extra}{body}"
 
 
 class ValidationError(Exception):
@@ -106,11 +115,34 @@ class ValidationError(Exception):
         self.errors = errors
 
 
-def validate_model(nodes: list[dict], joins: list[dict], cfg: dict[str, dict]) -> list[str]:
+def _is_package(node: dict | None) -> bool:
+    return bool(node and node.get("package"))
+
+
+def packages_of(nodes: list[dict]) -> list[dict]:
+    """The distinct packages the canvas's shared-dimension nodes come from."""
+    out: dict[str, dict] = {}
+    for n in nodes:
+        if _is_package(n):
+            out.setdefault(n["package"]["name"], n["package"])
+    return list(out.values())
+
+
+def validate_model(nodes: list[dict], joins: list[dict], cfg: dict[str, dict], shared: bool = False) -> list[str]:
     """Validate-before-generate checks from the design README / build plan.
-    Returns a list of human-readable error strings (empty = OK)."""
+    Returns a list of human-readable error strings (empty = OK). `shared`: a
+    shared-dimensions package - dimensions only, no fact to connect to."""
     errors: list[str] = []
     nodes_by_id = {n["id"]: n for n in nodes}
+
+    if shared:
+        if any(n.get("role") == "fact" for n in nodes):
+            errors.append("A shared dimensions repo holds dimensions only - remove the fact tables or deploy it as a model.")
+        if any(_is_package(n) for n in nodes):
+            errors.append("A shared dimensions repo can't use another package's dimensions - remove the shared nodes first.")
+        if not any(n.get("role") == "dimension" for n in nodes):
+            errors.append("Add at least one dimension to publish as shared dimensions.")
+    errors.extend(validate_packages(packages_of(nodes)))
 
     for n in nodes:
         if n.get("role") not in ("fact", "dimension"):
@@ -145,6 +177,29 @@ def validate_model(nodes: list[dict], joins: list[dict], cfg: dict[str, dict]) -
         n = nodes_by_id.get(node_id) or {}
         return next((c.get("type") for c in n.get("columns") or [] if c.get("name") == column), None)
 
+    # A shared dimension is read-only here: a join may only land on one of its
+    # level keys (its key_columns can't be repointed), and a dim->dim join out
+    # of it would have to be written into the package's own file.
+    for j in joins:
+        na, nb = nodes_by_id.get(j["a"]["node"]), nodes_by_id.get(j["b"]["node"])
+        if not na or not nb or (_is_package(na) and _is_package(nb)):
+            continue
+        if _is_package(na) and na.get("role") == "dimension" and nb.get("role") == "dimension":
+            errors.append(
+                f"Join {na.get('table')}.{j['a']['column']} -> {nb.get('table')}.{j['b']['column']} starts at shared "
+                f"dimension '{na.get('dimName')}' - draw it from '{nb.get('dimName') or nb.get('table')}' instead "
+                "(the shared dimension's file can't be changed here)."
+            )
+            continue
+        side = _join_dimension_side(nodes_by_id, j)
+        if side and _is_package(nodes_by_id[side[0]]) and _level_for_column(cfg, *side) is None:
+            pn = nodes_by_id[side[0]]
+            keys = sorted({lv["config"].get("keyColumn") or lv["column"] for lv in _levels_of(cfg, pn["id"])})
+            errors.append(
+                f"Join to shared dimension '{pn.get('dimName')}' lands on '{side[1]}', which isn't a level key - "
+                f"join on one of: {', '.join(keys) or 'none'}."
+            )
+
     for j in joins:
         ta, tb = _col_type(j["a"]["node"], j["a"]["column"]), _col_type(j["b"]["node"], j["b"]["column"])
         fa, fb = join_type_family(ta), join_type_family(tb)
@@ -156,7 +211,11 @@ def validate_model(nodes: list[dict], joins: list[dict], cfg: dict[str, dict]) -
                 f"({fa} vs {fb}) - join keys must be the same type."
             )
 
-    # Every dimension must reach a fact, directly or through a chain of dim<->dim joins.
+    # Every dimension must reach a fact, directly or through a chain of dim<->dim
+    # joins - not in a shared package (no fact), and not for a shared dimension
+    # that is only on the canvas to be joined to.
+    if shared:
+        return errors
     fact_ids = {n["id"] for n in nodes if n.get("role") == "fact"}
     dim_ids = {n["id"] for n in nodes if n.get("role") == "dimension"}
     adjacency: dict[str, set[str]] = {nid: set() for nid in dim_ids}
@@ -181,6 +240,8 @@ def validate_model(nodes: list[dict], joins: list[dict], cfg: dict[str, dict]) -
                 changed = True
     for nid in dim_ids - reaches_fact:
         n = nodes_by_id[nid]
+        if _is_package(n):
+            continue
         errors.append(f"Dimension '{n.get('dimName') or n['table']}' is not connected to any fact table.")
 
     return errors
@@ -212,17 +273,25 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
     joins: list[dict] = payload["joins"]
     cfg: dict[str, dict] = payload.get("cfg", {})
     calculations: list[dict] = payload.get("calculations", [])
+    shared = bool(payload.get("shared"))
     dialect = payload.get("dialect")
     model_name = payload["modelName"]
     catalog_name = payload.get("catalogName") or f"{model_name}_catalog"
     connection_name = payload["connectionName"]
+    if shared and not connection_name.endswith(SHARED_CONNECTION_SUFFIX):
+        # A model using this package names its own connection the same way
+        # (con_<database>_<schema>); AtScale needs every connection name unique.
+        connection_name += SHARED_CONNECTION_SUFFIX
 
-    errors = validate_model(nodes, joins, cfg)
+    errors = validate_model(nodes, joins, cfg, shared)
     if errors:
         raise ValidationError(errors)
 
     nodes_by_id = {n["id"]: n for n in nodes}
     files: dict[str, str] = {}
+    packages = packages_of(nodes)
+    # Shared-dimension nodes: written by their own repo, referenced here.
+    local_nodes = [n for n in nodes if not _is_package(n)]
 
     # -- catalog.yml (Rule 6: version 1.7, catalog unique_name != model unique_name, Rule 8c) --
     files["catalog.yml"] = _yaml_dump(
@@ -233,8 +302,11 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
             "version": 1.7,
             "aggressive_agg_promotion": False,
             "build_speculative_aggs": False,
-        }
+        },
+        extra_marker=SHARED_MARKER if shared else None,
     )
+    if packages:
+        files[PACKAGE_FILE] = package_yml(packages, BUILT_BY_MARKER)
 
     # -- connections/<name>.yml --
     files[f"connections/{kebab(connection_name)}.yml"] = _yaml_dump(
@@ -249,7 +321,7 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
     )
 
     # -- datasets/<table>.yml, one per node --
-    for n in nodes:
+    for n in local_nodes:
         table = cased(n["table"], dialect)
         files[f"datasets/{n['table']}.yml"] = _yaml_dump(
             {
@@ -285,6 +357,8 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
     hidden_levels_needed: dict[str, set[str]] = {n["id"]: set() for n in nodes}
     for j in joins:
         a_node, b_node = nodes_by_id[j["a"]["node"]], nodes_by_id[j["b"]["node"]]
+        if _is_package(a_node) and b_node["role"] == "dimension":  # lives in the package's own file
+            continue
         if a_node["role"] == "dimension" and b_node["role"] == "dimension":
             embedded_by_node[a_node["id"]].append(j)
         else:
@@ -305,6 +379,14 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
         return level_unique_name(levels[-1]["config"], levels[-1]["column"]) if levels else None
 
     def target_level(node_id: str, column: str, dialect: str | None) -> str:
+        if _is_package(nodes_by_id[node_id]):
+            # A shared dimension's level names are whatever its repo says -
+            # never re-cased (validate_model made sure a level backs `column`).
+            matched = _level_for_column(cfg, node_id, column)
+            return (matched["config"].get("query") or matched["column"]) if matched else column
+        return _target_level(node_id, column, dialect)
+
+    def _target_level(node_id: str, column: str, dialect: str | None) -> str:
         """The unique_name a relationship joining `node_id` on `column`
         should reference - the real level backing it if one exists, else the
         dimension's leaf level, whose key_columns the dimension-emission loop
@@ -318,7 +400,7 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
         return leaf_level(node_id) or cased(column, dialect)
 
     # -- dimensions/<dimName>.yml, one per dimension-role node --
-    for n in nodes:
+    for n in local_nodes:
         if n.get("role") != "dimension":
             continue
         levels = _levels_of(cfg, n["id"])
@@ -563,6 +645,9 @@ def build_sml(payload: dict[str, Any]) -> dict[str, str]:
             calc_doc["description"] = calc["description"]
         files[f"calculations/{kebab(unique_name)}.yml"] = _yaml_dump(calc_doc)
         calc_names.append(unique_name)
+
+    if shared:  # a package: no model, no metrics (validate_model refused facts)
+        return files
 
     # -- models/<modelName>.yml --
     relationships = []

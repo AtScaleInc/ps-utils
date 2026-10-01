@@ -44,6 +44,39 @@ export function Inspector() {
   const joinCount = joins.filter((j) => j.a.node === node.id || j.b.node === node.id).length
   const levels = levelsOf(fullState, node.id)
 
+  if (node.package) {
+    // A shared dimension: its package repo owns it (api/smlgen/packages.py).
+    const keys = levels.map((l) => l.config.keyColumn || l.column)
+    return (
+      <aside className="panel-right">
+        <div className="section-label">
+          Column Inspector <span className="status-word">SHARED DIMENSION</span>
+        </div>
+        <div className="identity-path">{node.package.name} / {node.schema} / {node.table}</div>
+        <div className="identity-title">{node.dimName}</div>
+        <div className="identity-chips">
+          <span className="chip chip-neutral">{levels.length} LEVELS</span>
+          <span className="chip chip-neutral">{joinCount} JOINS</span>
+        </div>
+        <div className="field-note" style={{ margin: '10px 0' }}>
+          Read-only - this dimension comes from <a href={node.package.url} target="_blank" rel="noreferrer">{node.package.url}</a>{' '}
+          ({node.package.branch} @ <code>{node.package.version.replace('commit:', '').slice(0, 7)}</code>) and is listed in the
+          model's <code>package.yml</code>. Change it in its own repo, then pick it again in Shared dims to move to the new commit.
+        </div>
+        <div className="section-label">Hierarchy {node.hierName}</div>
+        {[...levels].reverse().map((l) => (
+          <div key={l.key} className="field-note" style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <span>{l.config.display || l.column}</span>
+            <code>{l.config.keyColumn || l.column}</code>
+          </div>
+        ))}
+        <div className="field-note" style={{ marginTop: 10 }}>
+          Join a fact (or one of your dimensions) to a level key: {keys.map((k) => <code key={k}>{k} </code>)}
+        </div>
+      </aside>
+    )
+  }
+
   if (!selection?.column) {
     // 4a. Table selected.
     return (

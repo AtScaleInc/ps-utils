@@ -14,7 +14,7 @@ import {
   type WorkspaceModel,
 } from '../client'
 import { MODEL_NAME_HINT, slugifyModelName } from '../lib/naming'
-import { readOnlyReason, useModelStore } from '../modelStore'
+import { localNodes, readOnlyReason, useModelStore } from '../modelStore'
 
 interface Props {
   onClose: () => void
@@ -58,6 +58,7 @@ export function ManageModelModal({ onClose }: Props) {
   const joins = useModelStore((s) => s.joins)
   const cfg = useModelStore((s) => s.cfg)
   const calculations = useModelStore((s) => s.calculations)
+  const shared = useModelStore((s) => s.shared)
   const loadModelData = useModelStore((s) => s.loadModelData)
   const setSourceId = useModelStore((s) => s.setSourceId)
   const readOnly = useModelStore(readOnlyReason)
@@ -98,9 +99,9 @@ export function ManageModelModal({ onClose }: Props) {
       setError('Select a data source before saving.')
       return
     }
-    const schema = nodes[0]?.schema
+    const schema = localNodes({ nodes })[0]?.schema
     if (!schema) {
-      setError('Add at least one table to the canvas before saving.')
+      setError('Add at least one table from this warehouse to the canvas before saving.')
       return
     }
     if (!modelName.trim()) {
@@ -122,6 +123,7 @@ export function ManageModelModal({ onClose }: Props) {
         joins,
         cfg,
         calculations,
+        shared,
       })
       const result = await saveSml(modelName, files)
       setStatus(`Saved ${result.count} files to ${result.path}`)
@@ -156,7 +158,9 @@ export function ManageModelModal({ onClose }: Props) {
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
         loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
+        shared: !!result.shared,
       })
+      if (result.packageWarnings?.length) window.alert(result.packageWarnings.join('\n'))
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -187,7 +191,9 @@ export function ManageModelModal({ onClose }: Props) {
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
         loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
+        shared: !!result.shared,
       })
+      if (result.packageWarnings?.length) window.alert(result.packageWarnings.join('\n'))
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -239,7 +245,9 @@ export function ManageModelModal({ onClose }: Props) {
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
         loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
+        shared: !!result.shared,
       })
+      if (result.packageWarnings?.length) window.alert(result.packageWarnings.join('\n'))
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -261,7 +269,9 @@ export function ManageModelModal({ onClose }: Props) {
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
         loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
+        shared: !!result.shared,
       })
+      if (result.packageWarnings?.length) window.alert(result.packageWarnings.join('\n'))
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

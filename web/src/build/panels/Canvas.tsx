@@ -307,7 +307,7 @@ export function Canvas() {
       {nodes.map((n) => (
         <div
           key={n.id}
-          className="canvas-node"
+          className={`canvas-node${n.package ? ' canvas-node-shared' : ''}`}
           style={{
             left: n.x,
             top: n.y,
@@ -323,7 +323,9 @@ export function Canvas() {
             onPointerDown={(e) => onNodeGrab(e, n)}
           >
             <div className="canvas-node-meta">
-              {(n.role ?? 'unset').toUpperCase()} · {n.schema}
+              {n.package
+                ? <span title={`${n.package.url} @ ${n.package.version}`}>SHARED · {n.package.name} @ {n.package.version.replace('commit:', '').slice(0, 7)}</span>
+                : <>{(n.role ?? 'unset').toUpperCase()} · {n.schema}</>}
             </div>
             <div className="canvas-node-title">
               <span className="canvas-node-title-text" title={n.table}>

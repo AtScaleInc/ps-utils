@@ -62,13 +62,17 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
       setBusy(false)
     }
   }
-  // Everything picked, and one cheap run (10 rows), on open and per base table,
-  // so the dialog never opens empty.
+  // Nothing picked and nothing run on open or per base table: every picked
+  // column is another join / scan, so the user chooses what to query.
   useEffect(() => {
-    setPicked(new Set(items.map((i) => i.id)))
+    setPicked(new Set())
     setResult(null)
-    if (items.length) void run(mode, items)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setError(null)
+  }, [rootId])
+  // Drop picks whose column left the canvas (a level unmarked, a join removed).
+  useEffect(() => {
+    const ids = new Set(items.map((i) => i.id))
+    setPicked((prev) => (([...prev].every((id) => ids.has(id))) ? prev : new Set([...prev].filter((id) => ids.has(id)))))
   }, [items])
 
   const toggle = (ids: string[], on: boolean) =>
@@ -127,7 +131,8 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
               <span className="field-note">{MODES.find((m) => m.id === mode)?.note}</span>
-              <button type="button" className="btn btn-primary" disabled={busy || !root} onClick={() => run()}>
+              <button type="button" className="btn btn-primary" disabled={busy || !root || (mode !== 'check' && !chosen.length)}
+                title={mode !== 'check' && !chosen.length ? 'Pick at least one metric or attribute' : undefined} onClick={() => run()}>
                 {busy ? 'Running…' : 'Run'}
               </button>
             </div>
@@ -145,6 +150,11 @@ export function DataPreviewModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
             {busy && !result && <span className="field-note wizard-inline"><span className="spinner" /> Querying the warehouse…</span>}
+            {!busy && !result && !error && root && items.length > 0 && (
+              <span className="field-note wizard-inline">
+                Pick the metrics and attributes to look at on the left, then Run. Fewer columns means fewer joins - and a faster preview.
+              </span>
+            )}
             {result?.data.mode === 'check' && <CheckView data={result.data} />}
             {result && result.data.mode !== 'check' && <RowsView data={result.data} headers={result.headers} />}
             {result && (

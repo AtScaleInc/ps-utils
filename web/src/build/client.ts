@@ -109,6 +109,8 @@ export interface GenerateSmlPayload {
    *  slug-derived repo name, which would create an unrelated duplicate repo. */
   gitRepoUrl?: string
   gitBranch?: string
+  /** A shared dimensions package: no model; Deploy only attaches the repo. */
+  shared?: boolean
 }
 
 export interface HostDeployResult {
@@ -119,12 +121,15 @@ export interface HostDeployResult {
   catalogId?: string | null
   warnings?: string[]
   error?: string
+  /** Shared dimensions: the repo was attached (nothing deployed). */
+  attached?: boolean
 }
 
 export interface DeployResult {
   git: { repoUrl: string; branch: string; commit: string; created: boolean; path: string }
   fileCount: number
   results: HostDeployResult[]
+  shared?: boolean
 }
 
 interface Job<T> { id: string; status: 'running' | 'done' | 'failed'; result: T | null; error: string | null }
@@ -181,11 +186,47 @@ export async function generateSml(payload: GenerateSmlPayload) {
   return body as { files: SmlFile[] }
 }
 
-export function validateSml(files: SmlFile[]) {
+/** package.yml's packages are fetched and staged for sml-cli; `shared`
+ *  accepts a package repo's missing model. */
+export function validateSml(files: SmlFile[], shared = false) {
   return request<{ passed: boolean; returncode: number; output: string }>('/sml/validate', {
     method: 'POST',
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ files, shared }),
   })
+}
+
+// -- Shared dimensions (SML packages, api/smlgen/packages.py) ------------------------------
+
+export interface SharedRepo {
+  name: string
+  fullName: string
+  url: string
+  branch: string
+  /** catalog.yml carries the shared-dimensions tag; false = a repo with no model. */
+  tagged: boolean
+  source: 'git' | 'host'
+}
+
+export async function fetchSharedRepos(hostId: string | null, refresh = false) {
+  const qs = new URLSearchParams()
+  if (hostId) qs.set('hostId', hostId)
+  if (refresh) qs.set('refresh', '1')
+  return (await request<{ repos: SharedRepo[] }>(`/build/shared-repos?${qs}`)).repos
+}
+
+export interface LoadedSharedRepo {
+  package: import('./modelStore').PackageRef
+  commit: { sha: string; date: string; message: string }
+  /** The package's connection unique_names - must differ from the model's own. */
+  connections: string[]
+  nodes: import('./modelStore').Node[]
+  joins: import('./modelStore').Join[]
+  cfg: Record<string, import('./modelStore').ColumnConfig>
+}
+
+/** The repo's dimensions at the branch head, pinned as `commit:<sha>`. */
+export function loadSharedRepo(body: { repoUrl: string; branch: string; taken: string[] }) {
+  return request<LoadedSharedRepo>('/build/shared/load', { method: 'POST', body: JSON.stringify(body) })
 }
 
 export interface ImportedSource {
@@ -204,6 +245,10 @@ export interface ImportedModel {
   builtHere?: boolean
   /** Non-empty = open read-only: Save / Deploy would drop these. */
   unsupported?: { feature: string; detail: string; file: string; kind: 'complex' | 'detail' }[]
+  /** A shared dimensions repo (tagged, or no model). */
+  shared?: boolean
+  /** package.yml entries that couldn't be fetched. */
+  packageWarnings?: string[]
 }
 
 export function importSmlPath(path: string) {

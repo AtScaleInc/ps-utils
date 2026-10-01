@@ -35,6 +35,7 @@ class Backend(Protocol):
     def list_repos(self) -> list[dict[str, Any]]: ...
     def branches(self, repo_url: str) -> list[dict[str, Any]]: ...
     def link(self, repo_url: str, branch: str, model: str) -> dict[str, Any]: ...
+    def attach_repo(self, repo_url: str, branch: str) -> dict[str, Any]: ...
     def deploy(self, keys: list[str], branches: dict[str, str] | None = None) -> list[dict[str, Any]]: ...
     def deploy_branch(self, repo_url: str, branch: str, replace_catalogs: list[str] | None = None) -> dict[str, Any]: ...
     def undeploy(self, keys: list[str]) -> dict[str, Any]: ...
@@ -295,6 +296,14 @@ class RealBackend:
                 raise
             return match["id"]
 
+    def attach_repo(self, repo_url: str, branch: str) -> dict[str, Any]:
+        """Attach a repo without deploying it - a shared-dimensions package
+        (sml-wizard publish.py's repo registration: POST /wapi/p/repo)."""
+        try:
+            return {"ok": True, "repoId": self._ensure_repo(repo_url, branch)}
+        except AtScaleApiError as e:
+            return {"ok": False, "error": f"{e.status}: {e.body[:300]}"}
+
     def link(self, repo_url: str, branch: str, model: str) -> dict[str, Any]:
         repo_id = self._ensure_repo(repo_url, branch)
         links = [l for l in (self.host.get("links") or []) if l.get("repoId") != repo_id]
@@ -327,7 +336,8 @@ class RealBackend:
                 from . import legacy_deploy
 
                 files = legacy_deploy.read_repo_sml(repo_url, branch, self.git.get("username"), token)
-                result = legacy_deploy.deploy(self.api, self.api.cookie_client(), files, repo_id, branch)
+                result = legacy_deploy.deploy(self.api, self.api.cookie_client(), files, repo_id, branch,
+                                              fetch_package=lambda url, sha: github.fetch_sml_files(token, url, sha))
                 legacy = True
         except AtScaleApiError as e:
             return {"ok": False, "repoUrl": repo_url, "branch": branch, "error": f"{e.status}: {e.body[:300]}"}

@@ -18,6 +18,11 @@ credentials come from the shared Git profile in Settings.
            uses (RealBackend.deploy_branch: POST /v1/catalogs/deploy, AtScale
            compiles the SML). Replaces sml-wizard routes/publish.py, whose local
            catalog-XML compile + /wapi/git/deploy/catalog path is dropped.
+           With `shared: true` the canvas is a shared-dimensions package: pushed
+           once, then only attached on each host (smlgen/packages.py).
+  shared   GET /build/shared-repos (repos tagged as shared dimensions, or with
+           no model), POST /build/shared/load (a repo's dimensions at its branch
+           head, pinned as `commit:<sha>` for package.yml)
 """
 
 from __future__ import annotations
@@ -40,7 +45,8 @@ from envs import registry
 from routes.objects import host_errors
 from smlgen.build import ValidationError, build_sml
 from smlgen.naming import is_valid_model_name, slugify_model_name
-from smlgen.parse import parse_sml
+from smlgen.packages import SHARED_MARKER, commit_of, package_entry, package_name, read_packages
+from smlgen.parse import load_sml_objects, parse_sml
 from smlgen.support import unsupported_features
 from smlgen.validate import SmlCliNotFound, validate_sml
 
@@ -83,6 +89,130 @@ def write_files(root: Path, files: list[dict[str, str]]) -> int:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f["body"], encoding="utf-8")
     return len(files)
+
+
+# -- shared dimensions (SML packages, smlgen/packages.py) -----------------------------------
+
+def _git_token() -> str:
+    token = registry.git_profile().get("token")
+    if not token:
+        raise ValueError("Git profile has no token - set it in Settings")
+    return token
+
+
+def _repo_head(repo_url: str, branch: str) -> dict[str, Any]:
+    if registry.FAKE:
+        from atscale import fake
+
+        return fake.shared_head(repo_url)
+    from atscale import github
+
+    return github.head_commit(_git_token(), repo_url, branch)
+
+
+def _repo_files(repo_url: str, ref: str) -> dict[str, str]:
+    """The repo's YAML files at a branch or commit."""
+    if registry.FAKE:
+        from atscale import fake
+
+        return fake.shared_files(repo_url, ref)
+    from atscale import github
+
+    return github.fetch_sml_files(_git_token(), repo_url, ref)
+
+
+def _resolve_packages(files: dict[str, str]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Each package the root package.yml lists, fetched at its pinned commit:
+    ([{ref, files}], warnings). A package that can't be fetched is a warning -
+    its dimensions just don't reach the canvas."""
+    out, warnings = [], []
+    for p in read_packages(files):
+        ref = {k: p.get(k) for k in ("name", "url", "branch", "version")}
+        sha = commit_of(p)
+        try:
+            out.append({"ref": ref, "files": _repo_files(p["url"], sha or p.get("branch") or "main")})
+        except Exception as e:  # noqa: BLE001 - reported, the rest still loads
+            warnings.append(f"Package '{p.get('name')}' ({p.get('url')}) couldn't be read: {_strip_credentials(str(e))}")
+    return out, warnings
+
+
+def _parse_with_packages(files: dict[str, str]) -> dict[str, Any]:
+    packages, warnings = _resolve_packages(files)
+    result = parse_sml(files, packages)
+    if warnings:
+        result["packageWarnings"] = warnings
+    return result
+
+
+@build_bp.get("/build/shared-repos")
+def shared_repos():
+    """Repos to pick shared dimensions from: the Git profile's repos whose
+    catalog.yml carries the shared tag, or that have no model; with ?hostId=,
+    also repos attached on that host with nothing deployed from them."""
+    host_id = request.args.get("hostId")
+    out: dict[str, dict[str, Any]] = {}
+    try:
+        if registry.FAKE:
+            from atscale import fake
+
+            found = fake.shared_repos()
+        else:
+            from atscale import github
+
+            token = _git_token()
+            found, _ = cache.get(("git", "shared-repos"), lambda: github.list_shared_repos(token, SHARED_MARKER),
+                                 refresh=_refresh())
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"error": str(e), "repos": []}), 502
+    from atscale.github import normalize_repo_url
+
+    for r in found:
+        out[normalize_repo_url(r["url"])] = {"name": r["fullName"].split("/")[-1], "fullName": r["fullName"],
+                                             "url": r["url"], "branch": r["defaultBranch"], "tagged": r["tagged"],
+                                             "source": "git"}
+    if host_id and not registry.FAKE:
+        try:
+            b = registry.backend(host_id, _refresh())
+            used = {row.get("repoId") for row in b.list_models() if row.get("catalogId")}
+            for r in b.list_repos():
+                key = normalize_repo_url(r.get("url") or "")
+                if r["id"] not in used and key and key not in out:
+                    out[key] = {"name": r.get("name"), "fullName": r.get("name"), "url": r.get("url"),
+                                "branch": r.get("defaultBranch") or "main", "tagged": False, "source": "host"}
+        except Exception:  # noqa: BLE001 - the Git list still helps
+            pass
+    return jsonify({"repos": sorted(out.values(), key=lambda r: (not r["tagged"], r["name"].lower()))})
+
+
+@build_bp.post("/build/shared/load")
+def load_shared():
+    """{repoUrl, branch?, taken?: [package names on the canvas]} -> the repo's
+    dimensions as read-only canvas nodes at the branch head, plus the package
+    entry (version `commit:<sha>`) every node carries."""
+    b = _body()
+    repo_url, branch = b.get("repoUrl"), b.get("branch") or "main"
+    if not repo_url:
+        return jsonify({"error": "Missing 'repoUrl'"}), 400
+    try:
+        head = _repo_head(repo_url, branch)
+        files = _repo_files(repo_url, head["sha"])
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"error": f"Couldn't read {repo_url}@{branch}: {_strip_credentials(str(e))}"}), 502
+    name = b.get("name") or package_name(repo_url, set(b.get("taken") or []))
+    ref = package_entry(name, repo_url, branch, head["sha"])
+    result = parse_sml({}, [{"ref": ref, "files": files}], all_package_dims=True)
+    dims = [n for n in result["nodes"] if n.get("role") == "dimension"]
+    if not dims:
+        return jsonify({"error": f"{repo_url}@{branch} has no dimensions Build can read"}), 422
+    ids = {n["id"] for n in dims}
+    return jsonify({
+        "package": ref, "commit": head,
+        # The UI warns when one matches the model's own connection name (not unique once merged).
+        "connections": sorted(load_sml_objects(files)["connections"]),
+        "nodes": dims,
+        "joins": [j for j in result["joins"] if j["a"]["node"] in ids and j["b"]["node"] in ids],
+        "cfg": {k: v for k, v in result["cfg"].items() if k.split("::", 1)[0] in ids},
+    })
 
 
 def _read_only(root: Path, dialect: str | None = None) -> Any:
@@ -312,8 +442,10 @@ def validate():
     files = _body().get("files")
     if not files:
         return jsonify({"error": "Missing 'files' - pass the array returned by /api/sml/generate"}), 400
+    by_name = {f["name"]: f["body"] for f in files}
+    packages, _ = _resolve_packages(by_name)
     try:
-        return jsonify(validate_sml({f["name"]: f["body"] for f in files}))
+        return jsonify(validate_sml(by_name, packages, shared=bool(_body().get("shared"))))
     except SmlCliNotFound as e:
         return jsonify({"error": str(e)}), 500
 
@@ -384,7 +516,7 @@ def import_files():
     files = _body().get("files")
     if not files:
         return jsonify({"error": "Missing 'files'"}), 400
-    return jsonify(parse_sml({f["name"]: f["body"] for f in files}))
+    return jsonify(_parse_with_packages({f["name"]: f["body"] for f in files}))
 
 
 @build_bp.post("/sml/import-path")
@@ -398,7 +530,7 @@ def import_path():
     files = _read_sml_directory(root)
     if not files:
         return jsonify({"error": f"No .yml/.yaml files found under '{raw_path}'"}), 400
-    return jsonify(parse_sml(files))
+    return jsonify(_parse_with_packages(files))
 
 
 @build_bp.post("/sml/import-git")
@@ -443,7 +575,7 @@ def import_git():
     files = _read_sml_directory(repo_dir)
     if not files:
         return jsonify({"error": f"No .yml/.yaml files found in {repo_url}@{branch}"}), 400
-    return jsonify(parse_sml(files))
+    return jsonify(_parse_with_packages(files))
 
 
 # -- repos attached on a host (sml-wizard routes/sml.py list_attached_repos) -----------------
@@ -577,6 +709,7 @@ def _push(payload: dict, files: dict[str, str], private: bool) -> dict[str, Any]
     routes/publish.py steps 2-3). A model loaded from a repo pushes back to
     that repo/branch; a new one gets github.com/<user>/<model-slug>."""
     model_name = payload["modelName"]
+    shared = bool(payload.get("shared"))
     staging = model_workspace_dir(model_name)
     write_files(staging, [{"name": n, "body": b} for n, b in files.items()])
     git = registry.git_profile()
@@ -586,8 +719,12 @@ def _push(payload: dict, files: dict[str, str], private: bool) -> dict[str, Any]
         from atscale import fake
 
         url = payload.get("gitRepoUrl") or f"https://github.com/{username or 'demo-user'}/{repo_name}"
-        fake.register_built_model(url, model_name, payload.get("catalogName") or model_name)
-        return {"repoUrl": url, "branch": payload.get("gitBranch") or "main", "commit": "demo", "created": False,
+        if shared:
+            commit = fake.register_shared_repo(url, files)
+        else:
+            fake.register_built_model(url, model_name, payload.get("catalogName") or model_name)
+            commit = "demo"
+        return {"repoUrl": url, "branch": payload.get("gitBranch") or "main", "commit": commit, "created": False,
                 "path": str(staging)}
     if not username or not token:
         raise ValueError("Git profile is missing a username or token - set it in Settings")
@@ -595,11 +732,11 @@ def _push(payload: dict, files: dict[str, str], private: bool) -> dict[str, Any]
     if payload.get("gitRepoUrl"):
         url, branch, created = payload["gitRepoUrl"], payload.get("gitBranch") or "main", False
         clone_url = url
-        message = f"Update SML for {model_name}"
+        message = f"Update {'shared dimensions' if shared else 'SML'} for {model_name}"
     else:
         info = ensure_github_repo(username, token, repo_name, private=private)
         url, branch, created, clone_url = info["html_url"], info["default_branch"], info["created"], info["clone_url"]
-        message = f"Generate SML for {model_name}"
+        message = f"Generate {'shared dimensions' if shared else 'SML'} for {model_name}"
     commit = push_sml_to_repo(staging, clone_url, username, token, branch=branch, commit_message=message, author=author)
     return {"repoUrl": url, "branch": branch, "commit": commit, "created": created, "path": str(staging)}
 
@@ -609,7 +746,9 @@ def _push(payload: dict, files: dict[str, str], private: bool) -> dict[str, Any]
 def deploy():
     """Body: the /sml/generate payload + {hostIds: [...], private?}. Pushes the
     SML to Git once, then deploys that branch on each host whose data warehouse
-    list has the model's `asConnection`. Returns a job (poll /api/jobs/<id>)."""
+    list has the model's `asConnection`. With `shared: true` (a shared
+    dimensions package) each host only attaches the repo - nothing deploys.
+    Returns a job (poll /api/jobs/<id>)."""
     payload = _body()
     if (err := _missing(payload)):
         return err
@@ -626,6 +765,7 @@ def deploy():
     except ValidationError as e:
         return jsonify({"errors": e.errors}), 422
     private = payload.get("private", True)
+    shared = bool(payload.get("shared"))
 
     def run() -> dict:
         git = _push(payload, files, private)
@@ -633,6 +773,10 @@ def deploy():
         for host_id, raw in hosts.items():
             row: dict[str, Any] = {"hostId": host_id, "label": raw.get("label") or host_id, "env": raw.get("env")}
             try:
+                if shared:
+                    r = registry.backend(host_id).attach_repo(git["repoUrl"], git["branch"])
+                    results.append({**row, **r, "attached": bool(r.get("ok"))})
+                    continue
                 if not _has_connection(host_id, payload["asConnection"]):
                     results.append({**row, "ok": False, "error":
                                     f"No data warehouse connection '{payload['asConnection']}' on this host"})
@@ -641,7 +785,7 @@ def deploy():
                 results.append({**row, **r})
             except Exception as e:  # noqa: BLE001 - reported per host
                 results.append({**row, "ok": False, "error": str(e)})
-        return {"git": git, "fileCount": len(files), "results": results}
+        return {"git": git, "fileCount": len(files), "results": results, "shared": shared}
 
     return jsonify(jobs.submit("build-deploy", run)), 202
 

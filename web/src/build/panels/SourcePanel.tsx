@@ -202,7 +202,7 @@ export function SourcePanel({ discover }: { discover?: DiscoverPick } = {}) {
           </label>
           <label className="field">
             Schema (applies to every table on the canvas)
-            <input value={nodes[0]?.schema ?? ''} onChange={(e) => setSchemaForAllNodes(e.target.value)} />
+            <input value={nodes.find((n) => !n.package)?.schema ?? ''} onChange={(e) => setSchemaForAllNodes(e.target.value)} />
           </label>
           <span className="link-btn" onClick={() => setEditingConnection(false)}>
             Done

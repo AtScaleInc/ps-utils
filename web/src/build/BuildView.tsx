@@ -4,7 +4,7 @@ import { EnvSegment, HostSelect, useHosts } from '../components/ui'
 import { resolveHost, useUi } from '../store'
 import { deployModel, generateSml, setBuildHost, SmlValidationFailure, type GenerateSmlPayload, type SmlFile } from './client'
 import { MODEL_NAME_HINT, slugifyModelName } from './lib/naming'
-import { counters, readOnlyReason, useModelStore } from './modelStore'
+import { counters, localNodes, readOnlyReason, useModelStore } from './modelStore'
 import { CalculationsModal } from './panels/CalculationsModal'
 import { Canvas } from './panels/Canvas'
 import { DiscoveryTab } from './panels/DiscoveryTab'
@@ -12,6 +12,7 @@ import { Inspector } from './panels/Inspector'
 import { LoadedBanner } from './panels/LoadedBanner'
 import { ManageModelModal } from './panels/ManageModelModal'
 import { PreviewTab } from './panels/PreviewTab'
+import { SharedDimsModal } from './panels/SharedDimsModal'
 import { SmlViewerModal } from './panels/SmlViewerModal'
 import { SourcePanel } from './panels/SourcePanel'
 import { WizardModal } from './panels/WizardModal'
@@ -37,6 +38,7 @@ export function BuildView() {
   const [showManage, setShowManage] = useState(false)
   const [showCalculations, setShowCalculations] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [showShared, setShowShared] = useState(false)
 
   // Reads the store fresh via getState(): the Wizard's "Build & Deploy" writes
   // to the store and calls generate in the same handler (sml-wizard App.tsx).
@@ -53,9 +55,12 @@ export function BuildView() {
       setGenError('Select a data source before generating SML.')
       return null
     }
-    const schema = s.nodes[0]?.schema
+    // Shared dimensions come with their own connection (their package repo).
+    const schema = localNodes(s)[0]?.schema
     if (!schema) {
-      setGenError('Add at least one table to the canvas before generating SML.')
+      setGenError(s.nodes.length
+        ? 'Shared dimensions alone make no model - add a fact table from this warehouse.'
+        : 'Add at least one table to the canvas before generating SML.')
       return null
     }
     return {
@@ -72,7 +77,23 @@ export function BuildView() {
       // A model loaded from an attached repo pushes back to that repo/branch.
       gitRepoUrl: s.sourceRepo?.url,
       gitBranch: s.sourceRepo?.branch,
+      shared: s.shared,
     }
+  }
+
+  /** Dimensions and no fact can't make a model - offer to publish them as a
+   *  shared dimensions repo (attached on hosts, used by other models' package.yml). */
+  function offerShared(): void {
+    const s = useModelStore.getState()
+    const local = localNodes(s)
+    if (s.shared || local.length !== s.nodes.length) return
+    if (!local.some((n) => n.role === 'dimension') || local.some((n) => n.role === 'fact')) return
+    const yes = window.confirm(
+      'This canvas has dimensions but no fact table, so it can\'t be deployed as a model.\n\n' +
+      'Publish the repo as shared dimensions instead? It is pushed to Git and attached on the hosts you pick ' +
+      '(not deployed); other models can then add these dimensions from Shared dimensions.',
+    )
+    if (yes) s.setShared(true)
   }
 
   async function handleGenerate() {
@@ -81,6 +102,7 @@ export function BuildView() {
       setGenError('Enter a model name before generating SML.')
       return
     }
+    offerShared()
     const payload = buildPayload(modelName)
     if (!payload) return
     setGenerating(true)
@@ -135,8 +157,18 @@ export function BuildView() {
             <button type="button" className="btn ghost" onClick={() => setShowManage(true)}>Save / Load</button>
             <button type="button" className="btn ghost" onClick={() => { state.reset(); setGenError(null) }}>Reset</button>
             <button type="button" className="btn ghost" onClick={() => setShowWizard(true)}>Wizard</button>
+            <button type="button" className="btn ghost" onClick={() => setShowShared(true)} disabled={state.shared}
+              title={state.shared ? 'A shared dimensions repo can\'t use another package' : 'Add dimensions from a shared dimensions repo'}>
+              Shared dims
+            </button>
+            {state.shared && (
+              <span className="counter shared-chip" title="Publishes a package repo: pushed to Git and attached on hosts, not deployed">
+                Shared dimensions
+                <button type="button" className="chip-x" onClick={() => state.setShared(false)} title="Deploy as a model instead">✕</button>
+              </span>
+            )}
             <button type="button" className="btn primary" onClick={handleGenerate} disabled={generating || !!readOnly} title={readOnly ?? undefined}>
-              {generating ? 'Generating…' : 'Deploy'}
+              {generating ? 'Generating…' : state.shared ? 'Publish' : 'Deploy'}
             </button>
           </div>
         )}
@@ -173,12 +205,14 @@ export function BuildView() {
           files={files}
           connectionId={useModelStore.getState().sourceMeta?.connectionId ?? null}
           defaultHostId={host?.id ?? null}
+          shared={state.shared}
           onClose={() => setFiles(null)}
           onDeploy={handleDeploy}
         />
       )}
       {showManage && <ManageModelModal onClose={() => setShowManage(false)} />}
       {showCalculations && <CalculationsModal onClose={() => setShowCalculations(false)} />}
+      {showShared && host && <SharedDimsModal hostId={host.id} onClose={() => setShowShared(false)} />}
       {showWizard && host && <WizardModal hostId={host.id} onClose={() => setShowWizard(false)} onGenerate={handleGenerate} onDone={() => setBuildSection('model')} />}
       </div>
     </div>
