@@ -88,7 +88,7 @@ export function MonitorView() {
     enabled: !!host, placeholderData: keepPreviousData,
   })
 
-  if (!host) return <div className="nohost"><div className="flag" /><span className="display" style={{ fontSize: 28 }}>No host in this group</span><span className="muted">Add one in Settings, or pick another group.</span></div>
+  if (!host) return <div className="nohost"><div className="flag" /><span className="display" style={{ fontSize: 28 }}>No hosts in this business unit</span><span className="muted">Add one in Settings › Hosts &amp; Git.</span></div>
 
   return (
     <div className="col monitor">

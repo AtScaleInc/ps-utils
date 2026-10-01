@@ -2,12 +2,23 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { api, type ConnStatus, type DiffState, type EnvId, type Host } from '../api'
 
+/** The four groups every business unit has, in promotion order. */
 export const ENVS: { id: EnvId; label: string; color: string }[] = [
   { id: 'dev', label: 'Dev', color: '#2AA5C7' },
-  { id: 'qa', label: 'Test-QA', color: '#12A594' },
+  { id: 'test', label: 'Test', color: '#9B7BF0' },
+  { id: 'qa', label: 'QA', color: '#12A594' },
   { id: 'prod', label: 'Prod', color: '#F07B29' },
 ]
 export const envOf = (id: EnvId) => ENVS.find((e) => e.id === id) ?? ENVS[0]
+
+/** The groups that have at least one host - the only ones a picker offers
+ * (a business unit may use only some of the four). */
+export const usedEnvs = (hosts: Host[]) => ENVS.filter((e) => hosts.some((h) => h.env === e.id))
+
+/** `env` when it has hosts, else the first group that does: a pick never lands on an empty group. */
+export function effectiveEnv(hosts: Host[], env: EnvId): EnvId {
+  return hosts.some((h) => h.env === env) ? env : usedEnvs(hosts)[0]?.id ?? env
+}
 
 const STAT: Record<string, [string, string]> = {
   Deployed: ['#12A594', '#FFFFFF'], Linked: ['#0E0E0E', '#2AA5C7'], Error: ['#FF3B35', '#FFFFFF'],
@@ -47,10 +58,14 @@ export function Checkbox({ state, onClick }: { state: 'on' | 'off' | 'some'; onC
 }
 
 export function EnvSegment({ value, onPick }: { value: EnvId; onPick: (e: EnvId) => void }) {
+  const hosts = useHosts().data?.hosts ?? []
+  const groups = usedEnvs(hosts)
+  const shown = effectiveEnv(hosts, value)
+  if (!groups.length) return null
   return (
     <div className="seg">
-      {ENVS.map((e) => {
-        const on = e.id === value
+      {groups.map((e) => {
+        const on = e.id === shown
         return (
           <button key={e.id} type="button" className={on ? 'on' : ''} style={{ background: on ? e.color : 'transparent' }} onClick={() => onPick(e.id)}>
             <span className="sq" style={{ width: 7, height: 7, background: on ? '#FFFFFF' : e.color }} />{e.label}
@@ -62,10 +77,11 @@ export function EnvSegment({ value, onPick }: { value: EnvId; onPick: (e: EnvId)
 }
 
 export function HostSelect({ hosts, env, value, onChange }: { hosts: Host[]; env: EnvId; value: string | null; onChange: (id: string) => void }) {
-  const opts = hosts.filter((h) => h.env === env)
+  const shown = effectiveEnv(hosts, env)
+  const opts = hosts.filter((h) => h.env === shown)
   return (
     <select className="select host" value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={!opts.length}>
-      {!opts.length && <option value="">No hosts in group</option>}
+      {!opts.length && <option value="">No hosts yet</option>}
       {opts.map((h) => <option key={h.id} value={h.id}>{h.label} — {h.hostname || 'no host set'}</option>)}
     </select>
   )

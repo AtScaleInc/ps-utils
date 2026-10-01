@@ -56,17 +56,37 @@ _YAML_SUFFIXES = {".yml", ".yaml"}
 _REQUIRED = {"modelName", "connectionName", "asConnection", "database", "schema", "nodes", "joins"}
 
 # One working copy per model (sml-wizard config.model_workspace_dir), next to
-# the list cache in the working folder. Demo mode keeps its own folder.
+# the list cache in the working folder, per business unit:
+# MODELS_ROOT/<bu>/<model>. Demo mode keeps its own folder.
 MODELS_ROOT = Path(os.environ.get("ENV_MANAGER_MODELS_DIR", "")) if os.environ.get("ENV_MANAGER_MODELS_DIR") \
     else cache.WORKSPACE / ("models-demo" if registry.FAKE else "models")
+_BY_BU_MARKER = ".by-bu"
+_layout_lock = threading.Lock()
 
 
 def _body() -> dict:
     return request.get_json(force=True, silent=True) or {}
 
 
+def models_root() -> Path:
+    """The current business unit's working copies. The first call moves a
+    pre-BU folder (MODELS_ROOT/<model>) into the first BU (MODELS_ROOT/<bu>/<model>)."""
+    with _layout_lock:
+        if not (MODELS_ROOT / _BY_BU_MARKER).exists():
+            bus = {b["id"] for b in registry.store().list_bus()}
+            legacy = [c for c in MODELS_ROOT.iterdir() if c.name not in bus] if MODELS_ROOT.is_dir() else []
+            if legacy:
+                into = MODELS_ROOT / registry.store().default_bu()
+                into.mkdir(parents=True, exist_ok=True)
+                for child in legacy:
+                    child.rename(into / child.name)
+            MODELS_ROOT.mkdir(parents=True, exist_ok=True)
+            (MODELS_ROOT / _BY_BU_MARKER).write_text("Working copies are kept per business unit: <bu>/<model>\n")
+    return MODELS_ROOT / registry.bu()
+
+
 def model_workspace_dir(model_name: str) -> Path:
-    root = MODELS_ROOT / slugify_model_name(model_name)
+    root = models_root() / slugify_model_name(model_name)
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -160,7 +180,7 @@ def shared_repos():
             from atscale import github
 
             token = _git_token()
-            found, _ = cache.get(("git", "shared-repos"), lambda: github.list_shared_repos(token, SHARED_MARKER),
+            found, _ = cache.get(("git", registry.bu(), "shared-repos"), lambda: github.list_shared_repos(token, SHARED_MARKER),
                                  refresh=_refresh())
     except Exception as e:  # noqa: BLE001
         return jsonify({"error": str(e), "repos": []}), 502
@@ -498,10 +518,11 @@ def _git_remote_of(path: Path) -> tuple[str, str] | None:
 
 @build_bp.get("/sml/models")
 def list_workspace_models():
-    if not MODELS_ROOT.is_dir():
+    root = models_root()
+    if not root.is_dir():
         return jsonify([])
     out = []
-    for child in sorted(MODELS_ROOT.iterdir()):
+    for child in sorted(root.iterdir()):
         if child.is_dir() and _read_sml_directory(child):
             entry: dict[str, Any] = {"name": child.name, "path": str(child)}
             remote = _git_remote_of(child)
@@ -556,7 +577,7 @@ def import_git():
     if model_name:
         repo_dir = model_workspace_dir(model_name)
     else:
-        repo_dir = MODELS_ROOT / ".git-cache" / "".join(c if c.isalnum() else "_" for c in repo_url)
+        repo_dir = models_root() / ".git-cache" / "".join(c if c.isalnum() else "_" for c in repo_url)
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
     try:
         if (repo_dir / ".git").exists():

@@ -1,4 +1,4 @@
-"""Settings: host registry CRUD + test, shared Git profile."""
+"""Settings: business units, host registry CRUD + test, each BU's Git profile."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import cache
 from atscale import github
 from atscale.backend import now_iso
 from envs import registry
-from envs.store import ENVS, public_git, public_host
+from envs.store import ENVS, public_bu, public_git, public_host
 
 settings_bp = Blueprint("settings", __name__)
 
@@ -19,17 +19,63 @@ def _body() -> dict:
     return request.get_json(force=True, silent=True) or {}
 
 
+# -- business units ---------------------------------------------------------------------
+
+@settings_bp.get("/bus")
+def list_bus():
+    """Every business unit - the header's picker. Not scoped to the request's BU."""
+    s = registry.store()
+    hosts = s.list_hosts_raw()
+    return jsonify({"bus": [public_bu(b, hosts) for b in s.list_bus()], "current": registry.bu(),
+                    "fake": registry.FAKE})
+
+
+@settings_bp.post("/bus")
+def add_bu():
+    try:
+        raw = registry.store().add_bu(_body().get("label", ""))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(public_bu(raw, [])), 201
+
+
+@settings_bp.patch("/bus/<bu_id>")
+def patch_bu(bu_id: str):
+    s = registry.store()
+    try:
+        raw = s.update_bu(bu_id, {k: v for k, v in _body().items() if k == "label"})
+    except KeyError:
+        return jsonify({"error": "Unknown business unit"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(public_bu(raw, s.list_hosts_raw(bu_id)))
+
+
+@settings_bp.delete("/bus/<bu_id>")
+def delete_bu(bu_id: str):
+    try:
+        registry.store().delete_bu(bu_id)
+    except KeyError:
+        return jsonify({"error": "Unknown business unit"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    registry.forget_bu(bu_id)
+    return jsonify({"ok": True})
+
+
+# -- hosts (the request's business unit only) ------------------------------------------------
+
 @settings_bp.get("/hosts")
 def list_hosts():
-    hosts = [public_host(h) for h in registry.store().list_hosts_raw()]
+    hosts = [public_host(h) for h in registry.bu_hosts()]
     return jsonify({"hosts": hosts, "groups": {e: [h["id"] for h in hosts if h["env"] == e] for e in ENVS},
-                    "fake": registry.FAKE})
+                    "bu": registry.bu(), "fake": registry.FAKE})
 
 
 @settings_bp.post("/hosts")
 def add_host():
     try:
-        raw = registry.store().add_host(_body())
+        raw = registry.store().add_host(_body(), registry.bu())
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify(public_host(raw)), 201
@@ -39,6 +85,7 @@ def add_host():
 def patch_host(host_id: str):
     body = {k: v for k, v in _body().items() if k in {"label", "hostname", "username", "password", "apiToken", "insecure", "env"}}
     try:
+        registry.host(host_id)  # another BU's host is not found
         raw = registry.store().update_host(host_id, body)
         registry.forget_host(host_id)
     except KeyError:
@@ -51,6 +98,7 @@ def patch_host(host_id: str):
 @settings_bp.delete("/hosts/<host_id>")
 def delete_host(host_id: str):
     try:
+        registry.host(host_id)
         registry.store().delete_host(host_id)
         registry.forget_host(host_id)
         from monitor import store as monitor_store
@@ -78,17 +126,18 @@ def test_host(host_id: str):
     return jsonify({**public_host(raw), "error": error})
 
 
+# -- Git profile (the request's business unit) -------------------------------------------------
+
 @settings_bp.get("/git")
 def get_git():
-    return jsonify(public_git(registry.store().get_git_raw()))
+    return jsonify(public_git(registry.git_profile()))
 
 
 @settings_bp.put("/git")
 def put_git():
     body = {k: v for k, v in _body().items() if k in {"username", "email", "token"}}
-    raw = registry.store().update_git(body)
-    cache.invalidate("host")  # versions + branches depend on the Git token
-    cache.invalidate("git")  # shared-dimension repos (routes/build.py)
+    raw = registry.store().update_git(registry.bu(), body)
+    registry.forget_bu(registry.bu())  # versions, branches + Git lists depend on the token
     return jsonify(public_git(raw))
 
 
@@ -106,7 +155,7 @@ def test_git():
             status = "connected"
         except Exception as e:  # noqa: BLE001
             status, error = "failed", str(e)
-    raw = registry.store().update_git({"status": status, "lastChecked": now_iso()})
+    raw = registry.store().update_git(registry.bu(), {"status": status, "lastChecked": now_iso()})
     return jsonify({**public_git(raw), "error": error})
 
 

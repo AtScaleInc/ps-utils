@@ -17,9 +17,10 @@ def _building_ttl(rows: list[dict[str, Any]]) -> float:
 
 
 class CachedBackend:
-    def __init__(self, inner: Any, host_id: str, refresh: bool = False):
+    def __init__(self, inner: Any, host_id: str, refresh: bool = False, bu: str | None = None):
         self.inner = inner
         self.host_id = host_id
+        self.bu = bu  # the host's business unit: Git-side entries are kept per BU
         self.refresh = refresh
         self.loaded_at: float | None = None
 
@@ -52,7 +53,7 @@ class CachedBackend:
         if not (src.get("commit") and tgt.get("commit")):
             return self.inner.compare(src, tgt)
         # Commit pairs never change their relationship - safe to keep.
-        key = ("git", "compare", src.get("repoUrl"), tgt.get("repoUrl"), tgt["commit"], src["commit"])
+        key = ("git", self.bu, "compare", src.get("repoUrl"), tgt.get("repoUrl"), tgt["commit"], src["commit"])
         value, _ = cache.get(key, lambda: self.inner.compare(src, tgt))
         return value
 

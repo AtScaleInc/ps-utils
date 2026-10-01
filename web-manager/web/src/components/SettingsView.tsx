@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { api, type EnvId, type Host } from '../api'
 import { useUi } from '../store'
 import { CONN, ConnDot, ENVS, errMsg, fmtTime, plural, useGit, useHosts } from './ui'
+import { BusView, useBus } from './BusinessUnits'
 import { DatabaseCard } from '../test/DatabaseCard'
 import { DiscoveryStoreCard } from '../build/DiscoveryStoreCard'
 import { MonitorStoreCard } from '../monitor/MonitorStoreCard'
@@ -12,6 +13,7 @@ function useInvalidateHosts() {
   return () => {
     qc.invalidateQueries({ queryKey: ['hosts'] })
     qc.invalidateQueries({ queryKey: ['diff'] })
+    qc.invalidateQueries({ queryKey: ['bus'] })  // per-group host counts
   }
 }
 
@@ -31,7 +33,7 @@ function Secret({ value, onChange, onBlur, placeholder }: {
 
 export function SettingsView() {
   const { settingsSection } = useUi()
-  return settingsSection === 'storage' ? <StorageView /> : <HostsView />
+  return settingsSection === 'storage' ? <StorageView /> : settingsSection === 'bus' ? <BusView /> : <HostsView />
 }
 
 /** Cache & Database: the 2 h list cache and the Test history database. */
@@ -54,13 +56,18 @@ function StorageView() {
 }
 
 function HostsView() {
-  const { flash, setAsk } = useUi()
+  const { bu, flash, setAsk } = useUi()
+  const unit = useBus().data?.bus.find((b) => b.id === bu)
   const hostsQ = useHosts()
   const hosts = hostsQ.data?.hosts ?? []
   const invalidate = useInvalidateHosts()
   const qc = useQueryClient()
 
-  const add = useMutation({ mutationFn: (env: EnvId) => api.addHost(env), onSettled: invalidate, onError: (e) => flash(errMsg(e), 'err') })
+  const add = useMutation({
+    mutationFn: (env: EnvId) => api.addHost(env),
+    onSettled: invalidate,
+    onError: (e) => flash(errMsg(e), 'err'),
+  })
   const reset = useMutation({
     mutationFn: api.demoReset,
     onSuccess: () => { qc.invalidateQueries(); flash('Demo data reset') },
@@ -70,10 +77,11 @@ function HostsView() {
     <div className="settings">
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640 }}>
-          <span className="eyebrow" style={{ color: 'var(--dev)' }}>Settings — Environments &amp; credentials</span>
+          <span className="eyebrow" style={{ color: 'var(--dev)' }}>Settings — {unit?.label ?? 'Business unit'} · environments &amp; credentials</span>
           <span className="display" style={{ fontSize: 34 }}>Group the hosts, <em>then</em> promote.</span>
           <span className="muted" style={{ fontSize: 13.5, lineHeight: 1.4 }}>
-            Each host carries its own credentials and token. Assign it to Dev, Test-QA or Prod — the group decides where it appears in Manage and Promote.
+            Each host carries its own credentials and token. Assign it to Dev, Test, QA or Prod — the group decides where it appears in Manage and Promote.
+            Hosts and the Git profile here belong to {unit?.label ?? 'this business unit'} only.
           </span>
         </div>
         {hostsQ.data?.fake && (
@@ -119,7 +127,7 @@ function GitCard() {
 
   const save = useMutation({
     mutationFn: api.putGit,
-    onSuccess: (d) => qc.setQueryData(['git'], d),
+    onSuccess: (d) => { qc.setQueryData(['git'], d); qc.invalidateQueries({ queryKey: ['bus'] }) },
     onError: (e) => flash(errMsg(e), 'err'),
   })
   const test = async () => {
@@ -128,6 +136,7 @@ function GitCard() {
       if (token) { await save.mutateAsync({ token }); setToken('') }
       const res = await api.testGit()
       qc.setQueryData(['git'], res)
+      qc.invalidateQueries({ queryKey: ['bus'] })
       if (res.error) flash(`Git test failed: ${res.error}`, 'err')
     } catch (e) {
       flash(errMsg(e), 'err')
@@ -141,7 +150,7 @@ function GitCard() {
     <div className="card git">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="eyebrow" style={{ color: 'var(--prod)' }}>Git · shared by all hosts</span>
+          <span className="eyebrow" style={{ color: 'var(--prod)' }}>Git · shared by this business unit's hosts</span>
           <span className="muted" style={{ fontSize: 12.5 }}>Used to link, deploy and promote SML repositories. Personal access token needs repo scope.</span>
         </div>
         <ConnDot status={status} />

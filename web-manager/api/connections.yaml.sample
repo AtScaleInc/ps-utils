@@ -2,12 +2,23 @@
 # Copy to api/connections.yaml (gitignored). The Settings screen reads and writes
 # this file; you rarely need to edit it by hand.
 #
-# Each AtScale host is one connection with a ps-utils-style `atscale:` block,
-# plus the group it belongs to (env: dev | qa | prod). Hosts are containers:
-# `url` is always https://<hostname>, no port.
+# Business units are isolated realms: each has its own Git profile and its own
+# hosts. Each AtScale host is one connection with a ps-utils-style `atscale:`
+# block, plus its business unit (bu) and group (env: dev | test | qa | prod).
+# Hosts are containers: `url` is always https://<hostname>, no port.
+
+businessUnits:
+  sales:
+    label: Sales Analytics
+    # This BU's Git profile. PAT needs `repo` scope.
+    git:
+      username: your_github_username
+      email: you@company.com
+      token: ghp_your_personal_access_token
 
 connections:
   dev-east:
+    bu: sales
     env: dev
     label: dev-east
     status: untested
@@ -19,10 +30,3 @@ connections:
       apiToken: ''                    # optional
       insecure: true                  # skip TLS verification (self-signed certs)
     links: []                         # repo/branch/model linked through this app
-
-  # Shared Git profile (same block as sml-wizard's). PAT needs `repo` scope.
-  git:
-    git:
-      username: your_github_username
-      email: you@company.com
-      token: ghp_your_personal_access_token

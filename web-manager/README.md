@@ -1,14 +1,17 @@
 # AtScale Environment Manager
 
-One console for many AtScale **container** hosts, grouped into three
-environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
+One console for many AtScale **container** hosts, organised by **business
+unit**. Each business unit (BU) is an isolated realm, like a Keycloak realm:
+its own Git profile and its own hosts in four environments, **Dev**,
+**Test**, **QA** and **Prod**. Pick the BU under the product name; everything
+below works inside it. From one screen you can:
 
 - **build** a semantic model visually, after profiling the warehouse tables it
   uses, and deploy it to one or many hosts,
 - **test** that an environment answers the same queries as another, with the
   same model and the same values,
 - **promote** models and system aggregates from one environment to the next,
-  such as Dev → QA → Prod, moving only what's new,
+  such as Dev → Test → QA → Prod, moving only what's new,
 - **manage** each host's models and aggregates, and **analyze** a deployed
   model: every object and SML property it uses, with descriptions, YAML
   comments and audit findings,
@@ -24,7 +27,7 @@ environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
 │ hosts            │   │ results          │   │  asks first)     │   │  build, (de)act  │   │ latency, hotspots│
 │                  │   │                  │   │                  │   │ Analyze: audit   │   │                  │
 └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
-          Settings: Hosts & Git (credentials, shared Git profile) · Cache & Database
+  Settings: Hosts & Git (credentials, the BU's Git profile) · Business units · Cache & Database
 ```
 
 The top tabs are **Build · Test · Promote · Manage · Monitor**, with **⚙ Settings** on the
@@ -446,20 +449,33 @@ Each tab opens with a switch that shows one view at a time:
 
 ### Settings
 
-**Hosts & Git**
+**Hosts & Git** (of the business unit picked in the header)
 
 - **Hosts.** Register any number of AtScale container hosts. Each one has a
   label, a hostname (no scheme or port), a Keycloak ID and password, an
-  optional API token, and a group (Dev, Test-QA or Prod).
+  optional API token, and a group (Dev, Test, QA or Prod). A host belongs to
+  the business unit it was added in.
   - **Test connection** logs in and makes one cheap call. On success it records
     the host's ids (models, catalog objects, aggregate instances) in the
     working folder.
   - Secrets are never sent back to the browser. The UI only knows whether a
     password or token has been saved.
 - **Git profile.** One GitHub username, email and personal access token
-  (`repo` scope), shared by all hosts. **Test Git** checks the token. Linking,
-  deploying and promoting models, and Build's deploy, are disabled until it
-  works.
+  (`repo` scope) per business unit, shared by its hosts. **Test Git** checks
+  the token. Linking, deploying and promoting models, and Build's deploy, are
+  disabled until it works.
+
+**Business units**
+
+- Add, rename and remove business units, or switch to one. A BU can only be
+  removed once it has no hosts, and the last one always stays.
+- Nothing crosses a BU boundary: another BU's hosts are "not found" to the
+  API, so you can't promote, test or deploy across BUs. Build keeps its
+  working copies per BU (`workspace/models/<bu>/<model>`), Test lists only the
+  runs on the BU's hosts, and Monitor / Discovery clean-ups without a host
+  touch only the BU's hosts.
+- Switching BU clears the Build canvas (it asks first when tables are on it),
+  since its model belongs to the BU it was loaded in.
 
 **Cache & Database**
 
@@ -556,8 +572,9 @@ API_PORT=5060 WEB_PORT=5184 ./start.sh
 ENV_MANAGER_FAKE=1 ./start.sh
 ```
 
-This runs against an in-memory backend seeded with sample data: five hosts
-across the three groups, seven models, and aggregates with duplicates, stale
+This runs against an in-memory backend seeded with sample data: two business
+units (Sales Analytics with six hosts across the four groups, Finance with
+two), seven models, and aggregates with duplicates, stale
 rows and user-defined rows. Manage and Promote can be tried in full here.
 Each demo environment names its warehouse connection differently (`PG_DEV`,
 `PG_QA`, `PG_PROD`), so promoted aggregates show the connection swap.
@@ -623,10 +640,14 @@ The API tests cover:
 | `workspace/tests-imported/` | Test runs from the earlier JSON layout, left after their one-time import into `tests.db`. Safe to delete. | no |
 | `.logs/` | API and web logs from `start.sh` | no |
 
-`connections.yaml` uses the ps-utils connection layout. Each host is an entry
-with an `atscale:` block, plus `env`, `label`, `status`, `links` (repos linked
-through the app) and `deployments` (the commit this app deployed per catalog).
-The shared Git profile is `connections.git.git`.
+`connections.yaml` keeps business units under `businessUnits.<id>: {label,
+git}`, each with its own Git profile. Hosts use the ps-utils connection
+layout: each is an entry under `connections:` with an `atscale:` block, plus
+`bu`, `env` (`dev` / `test` / `qa` / `prod`), `label`, `status`, `links`
+(repos linked through the app) and `deployments` (the commit this app
+deployed per catalog). A file from before business units (one Git profile at
+`connections.git.git`) is read as one BU, `default`, and saved in the new
+shape; Build's existing working copies move into `workspace/models/default/`.
 
 Environment variables:
 
@@ -671,7 +692,7 @@ calls. To keep switching between hosts, models and views instant:
   - Deploy, undeploy, unlink, link, deactivate/reactivate, build and import
     clear the cache for the host they touched.
   - Editing, re-testing or removing a host clears that host's cache.
-  - Saving the Git profile clears every host's cache.
+  - Saving a business unit's Git profile clears its hosts' cache and its Git lists.
 - **Builds.** Aggregate lists that contain Building rows are cached for only
   5 seconds, so builds show progress.
 - **Not cached:** preview and Test queries, which always go to the host. Model

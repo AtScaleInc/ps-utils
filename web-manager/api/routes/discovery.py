@@ -228,7 +228,8 @@ def data_preview_run(host_id: str):
 
 @discovery_bp.get("/discovery/store")
 def store_info():
-    return jsonify({**store.stats(), "tables": store.tables()})
+    ids = registry.bu_host_ids()
+    return jsonify({**store.stats(), "tables": [t for t in store.tables() if t["hostId"] in ids]})
 
 
 @discovery_bp.post("/discovery/cleanup")
@@ -245,7 +246,12 @@ def cleanup():
     older, keep = num("olderThanDays"), num("keepPerTable")
     if older is None and keep is None:
         return jsonify({"error": "Give olderThanDays and/or keepPerTable"}), 400
-    runs = store.select_old(keep_per_table=keep, older_than_days=older, host_id=b.get("hostId") or None)
+    host_id = b.get("hostId") or None
+    if host_id and host_id not in registry.bu_host_ids():
+        return jsonify({"error": "Unknown host"}), 404
+    # No host = every host of this business unit, never another BU's.
+    runs = [r for h in ([host_id] if host_id else sorted(registry.bu_host_ids()))
+            for r in store.select_old(keep_per_table=keep, older_than_days=older, host_id=h)]
     if b.get("dryRun"):
         return jsonify({"runs": runs, "count": len(runs), "dryRun": True})
     n = store.delete_profiles([r["id"] for r in runs], vacuum=True)

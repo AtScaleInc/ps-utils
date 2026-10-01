@@ -181,7 +181,12 @@ def cleanup():
             return jsonify({"error": "olderThanDays must be a number"}), 400
         if days < 0:
             return jsonify({"error": "olderThanDays must be 0 or more"}), 400
-    n = store.delete_queries(days, body.get("hostId") or None, body.get("model") or None, dry_run=bool(body.get("dryRun")))
+    host_id = body.get("hostId") or None
+    if host_id and host_id not in registry.bu_host_ids():
+        return jsonify({"error": "Unknown host"}), 404
+    # No host = every host of this business unit, never another BU's.
+    n = sum(store.delete_queries(days, h, body.get("model") or None, dry_run=bool(body.get("dryRun")))
+            for h in ([host_id] if host_id else sorted(registry.bu_host_ids())))
     return jsonify({"count": n})
 
 

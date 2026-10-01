@@ -1,7 +1,16 @@
-"""Resolves host ids to backends, and the shared Git token."""
+"""Resolves host ids to backends, and the business unit's Git token.
+
+The business unit a request works in is a context variable (`current_bu`),
+set per request from the `X-BU` header (or `?bu=`) by `app.py`, and carried
+into job threads by `jobs.submit`. Inside one, `host()` only resolves that
+BU's hosts - another BU's host is "not found", so BUs stay isolated like
+Keycloak realms. Outside a request (start-up cache warm, background capture)
+there is no BU and every host resolves.
+"""
 
 from __future__ import annotations
 
+import contextvars
 import os
 from pathlib import Path
 from typing import Any
@@ -18,6 +27,32 @@ FAKE = os.environ.get("ENV_MANAGER_FAKE") == "1"
 
 class HostNotFound(KeyError):
     pass
+
+
+class UnknownBu(KeyError):
+    pass
+
+
+_bu: contextvars.ContextVar[str | None] = contextvars.ContextVar("bu", default=None)
+
+
+def set_bu(bu: str | None) -> str:
+    """Bind the request to business unit `bu` (none or empty: the first BU)."""
+    bu = bu or store().default_bu()
+    if store().get_bu(bu) is None:
+        raise UnknownBu(bu)
+    _bu.set(bu)
+    return bu
+
+
+def current_bu() -> str | None:
+    """The request's business unit, or None outside a request."""
+    return _bu.get()
+
+
+def bu() -> str:
+    """The business unit to work in: the request's, else the first one."""
+    return _bu.get() or store().default_bu()
 
 
 _store: Store | None = None
@@ -46,20 +81,40 @@ def seed_fake(s: Store) -> None:
     from atscale import fake
 
     fake.reset()
+    seeded = {b["id"] for b in s.list_bus()}
+    for unit in fake.SEED_BUS:
+        if unit["id"] not in seeded:
+            # add_bu derives ids from labels, which match SEED_BUS ids.
+            s.add_bu(unit["label"])
+        s.update_git(unit["id"], unit["git"])
+        s.update_git(unit["id"], {"status": "connected"})
+    if fake.SEED_BUS[0]["id"] not in seeded:
+        # A fresh demo file starts with BU "default" (store migration); drop it.
+        for b in seeded - {u["id"] for u in fake.SEED_BUS}:
+            if not s.list_hosts_raw(b):
+                s.delete_bu(b)
     for h in fake.SEED_HOSTS:
         # add_host derives ids from labels, which match the fake inventory keys.
-        s.add_host(h)
+        s.add_host(h, h["bu"])
         if h["id"] != "dev-sandbox":
             s.update_host(h["id"], {"status": "connected", "lastChecked": "2026-09-26T09:12:00Z"})
-    s.update_git({"username": "demo-user", "email": "demo@example.com", "token": "ghp_demo"})
-    s.update_git({"status": "connected"})
 
 
 def host(host_id: str) -> dict[str, Any]:
     raw = store().get_host_raw(host_id)
-    if raw is None:
+    cur = current_bu()
+    if raw is None or (cur is not None and raw.get("bu") != cur):
         raise HostNotFound(host_id)
     return raw
+
+
+def bu_hosts() -> list[dict[str, Any]]:
+    """The current business unit's hosts."""
+    return store().list_hosts_raw(bu())
+
+
+def bu_host_ids() -> set[str]:
+    return {h["id"] for h in bu_hosts()}
 
 
 _clients: dict[str, tuple[tuple, AtScaleClient]] = {}
@@ -87,10 +142,12 @@ def backend(host_id: str, refresh: bool = False) -> CachedBackend:
     if FAKE:
         from atscale.fake import FakeBackend
 
-        return CachedBackend(FakeBackend(raw, store()), host_id, refresh)
+        return CachedBackend(FakeBackend(raw, store()), host_id, refresh, bu=raw["bu"])
     if not profile_to_connection(raw)["atscale"]["url"]:
         raise ValueError("Host has no hostname set")
-    return CachedBackend(RealBackend(raw, store(), store().get_git_raw(), api=_client(raw)), host_id, refresh)
+    # The host's own BU's Git profile - the same as the request's, as host() enforces.
+    git = store().get_git_raw(raw["bu"])
+    return CachedBackend(RealBackend(raw, store(), git, api=_client(raw)), host_id, refresh, bu=raw["bu"])
 
 
 def source_api(host_id: str) -> Any:
@@ -107,7 +164,8 @@ def source_api(host_id: str) -> Any:
 
 
 def git_profile() -> dict[str, Any]:
-    return store().get_git_raw()
+    """The current business unit's Git profile."""
+    return store().get_git_raw(bu())
 
 
 def forget_host(host_id: str) -> None:
@@ -116,12 +174,20 @@ def forget_host(host_id: str) -> None:
     cache.invalidate("host", host_id)
 
 
+def forget_bu(unit: str) -> None:
+    """A BU's Git profile changed: its hosts' versions + branches and its Git
+    lists depend on the token."""
+    for raw in store().list_hosts_raw(unit):
+        cache.invalidate("host", raw["id"])
+    cache.invalidate("git", unit)
+
+
 def git_token() -> str | None:
-    return store().get_git_raw().get("token") or None
+    return git_profile().get("token") or None
 
 
 def git_ready() -> bool:
-    g = store().get_git_raw()
+    g = git_profile()
     return bool(g.get("token")) and g.get("status") != "failed"
 
 

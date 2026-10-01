@@ -11,7 +11,7 @@ export function ManageView() {
   const { section, manage, manageAnalyze, setManage, setView } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const host = resolveHost(hosts, manage)
-  const env = envOf(manage.env)
+  const env = envOf(host?.env ?? manage.env)
   const qc = useQueryClient()
   // Same keys as the section views, so these read the shared cache (no extra fetch).
   const models = useQuery({ queryKey: ['models', host?.id], queryFn: () => api.models(host!.id), enabled: !!host })

@@ -44,17 +44,31 @@ AGGS = [
     ("agg_inventory_daily", "Inventory Snapshot", "SYSTEM", "3.1 GB"),
 ]
 
+# Two business units, each its own realm: Git profile + hosts in dev/test/qa/prod.
+SEED_BUS = [
+    {"id": "sales-analytics", "label": "Sales Analytics",
+     "git": {"username": "demo-user", "email": "demo@example.com", "token": "ghp_demo"}},
+    {"id": "finance", "label": "Finance",
+     "git": {"username": "finance-bot", "email": "finance@example.com", "token": "ghp_demo_finance"}},
+]
+
 SEED_HOSTS = [
-    {"id": "dev-east", "env": "dev", "label": "dev-east", "hostname": "dev-atscale-01.corp.local",
+    {"id": "dev-east", "bu": "sales-analytics", "env": "dev", "label": "dev-east", "hostname": "dev-atscale-01.corp.local",
      "username": "svc_atscale_dev", "password": "dev-secret", "apiToken": "demo-token"},
-    {"id": "dev-sandbox", "env": "dev", "label": "dev-sandbox", "hostname": "dev-atscale-02.corp.local",
+    {"id": "dev-sandbox", "bu": "sales-analytics", "env": "dev", "label": "dev-sandbox", "hostname": "dev-atscale-02.corp.local",
      "username": "svc_atscale_dev", "password": "dev-secret", "apiToken": ""},
-    {"id": "qa-main", "env": "qa", "label": "qa-main", "hostname": "qa-atscale.corp.local",
+    {"id": "test-main", "bu": "sales-analytics", "env": "test", "label": "test-main", "hostname": "test-atscale.corp.local",
+     "username": "svc_atscale_test", "password": "test-secret", "apiToken": "demo-token"},
+    {"id": "qa-main", "bu": "sales-analytics", "env": "qa", "label": "qa-main", "hostname": "qa-atscale.corp.local",
      "username": "svc_atscale_qa", "password": "qa-secret", "apiToken": "demo-token"},
-    {"id": "prod-east", "env": "prod", "label": "prod-east", "hostname": "atscale-east.corp.com",
+    {"id": "prod-east", "bu": "sales-analytics", "env": "prod", "label": "prod-east", "hostname": "atscale-east.corp.com",
      "username": "svc_atscale_prod", "password": "prod-secret", "apiToken": "demo-token"},
-    {"id": "prod-west", "env": "prod", "label": "prod-west", "hostname": "atscale-west.corp.com",
+    {"id": "prod-west", "bu": "sales-analytics", "env": "prod", "label": "prod-west", "hostname": "atscale-west.corp.com",
      "username": "svc_atscale_prod", "password": "prod-secret", "apiToken": "demo-token"},
+    {"id": "fin-dev", "bu": "finance", "env": "dev", "label": "fin-dev", "hostname": "fin-dev-atscale.corp.local",
+     "username": "svc_fin_dev", "password": "fin-secret", "apiToken": "demo-token"},
+    {"id": "fin-prod", "bu": "finance", "env": "prod", "label": "fin-prod", "hostname": "fin-atscale.corp.com",
+     "username": "svc_fin_prod", "password": "fin-secret", "apiToken": "demo-token"},
 ]
 
 _SEED_MODELS: dict[str, tuple[list[tuple], list[str]]] = {
@@ -63,6 +77,10 @@ _SEED_MODELS: dict[str, tuple[list[tuple], list[str]]] = {
                   ("Customer 360", 11, "2026-09-24"), ("Marketing Attribution", 3, "2026-09-25", "Linked"),
                   ("Inventory Snapshot", 5, "2026-09-18")], []),
     "dev-sandbox": ([("Internet Sales", 15, "2026-09-25", "Linked"), ("Customer 360", 12, "2026-09-25", "Linked")], []),
+    "test-main": ([("Internet Sales", 14, "2026-09-24"), ("Reseller Sales", 9, "2026-09-22"),
+                   ("Supply Chain", 4, "2026-09-19"), ("Customer 360", 11, "2026-09-24")], []),
+    "fin-dev": ([("Finance Ledger", 6, "2026-09-23")], []),
+    "fin-prod": ([("Finance Ledger", 5, "2026-09-15")], []),
     "qa-main": ([("Internet Sales", 13, "2026-09-20"), ("Reseller Sales", 9, "2026-09-22"),
                  ("Finance Ledger", 5, "2026-09-12"), ("Supply Chain", 4, "2026-09-19"),
                  ("Customer 360", 10, "2026-09-16")], ["agg_customer_segments"]),

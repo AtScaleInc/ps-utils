@@ -161,10 +161,23 @@ def start_run():
     return jsonify({"runId": run_id, **run}), 202
 
 
+def _in_bu(run: dict[str, Any], ids: set[str] | None = None) -> bool:
+    """A run belongs to the business unit of its hosts (a run never spans two:
+    its hosts all resolve through registry.host)."""
+    ids = registry.bu_host_ids() if ids is None else ids
+    return any(t.get("hostId") in ids for t in run.get("targets") or [])
+
+
+def _bu_run(run_id: str) -> dict[str, Any] | None:
+    run = store.get_run(run_id)
+    return run if run and _in_bu(run) else None
+
+
 @testing_bp.get("/test/runs")
 def list_runs():
     _ensure_imported()
-    return jsonify({"runs": store.list_runs(request.args.get("model") or None)})
+    ids = registry.bu_host_ids()
+    return jsonify({"runs": [r for r in store.list_runs(request.args.get("model") or None) if _in_bu(r, ids)]})
 
 
 @testing_bp.get("/test/history")
@@ -174,7 +187,9 @@ def query_history():
     model, name = request.args.get("model"), request.args.get("query")
     if not model or not name:
         return jsonify({"error": "Missing model or query"}), 400
-    return jsonify({"history": store.history(model, name, request.args.get("protocol") or None)})
+    ids = registry.bu_host_ids()
+    return jsonify({"history": [e for e in store.history(model, name, request.args.get("protocol") or None)
+                                if e["hostId"] in ids]})
 
 
 @testing_bp.get("/test/store")
@@ -205,7 +220,10 @@ def cleanup():
     older, keep = num("olderThanDays"), num("keepPerModel")
     if older is None and keep is None:
         return jsonify({"error": "Give olderThanDays and/or keepPerModel"}), 400
-    runs = store.select_old(keep_per_model=keep, older_than_days=older, model=b.get("model") or None)
+    ids = registry.bu_host_ids()
+    mine = {r["runId"] for r in store.list_runs(b.get("model") or None) if _in_bu(r, ids)}
+    runs = [r for r in store.select_old(keep_per_model=keep, older_than_days=older, model=b.get("model") or None)
+            if r["runId"] in mine]
     if b.get("dryRun"):
         return jsonify({"runs": runs, "count": len(runs), "dryRun": True})
     n = store.delete_runs([r["runId"] for r in runs], vacuum=True)
@@ -214,7 +232,7 @@ def cleanup():
 
 @testing_bp.get("/test/runs/<run_id>.csv")
 def run_csv(run_id: str):
-    run = store.get_run(run_id)
+    run = _bu_run(run_id)
     if not run:
         return jsonify({"error": "Unknown run"}), 404
     return Response(harness.to_csv(run["results"]), mimetype="text/csv",
@@ -223,7 +241,7 @@ def run_csv(run_id: str):
 
 @testing_bp.get("/test/runs/<run_id>")
 def get_run(run_id: str):
-    run = store.get_run(run_id)
+    run = _bu_run(run_id)
     if not run:
         return jsonify({"error": "Unknown run"}), 404
     return jsonify(run)
@@ -231,13 +249,13 @@ def get_run(run_id: str):
 
 @testing_bp.delete("/test/runs/<run_id>")
 def delete_run(run_id: str):
-    if not store.delete_run(run_id):
+    if not _bu_run(run_id) or not store.delete_run(run_id):
         return jsonify({"error": "Unknown run"}), 404
     return jsonify({"ok": True})
 
 
 def _run_side(ref: dict[str, Any], label: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    run = store.get_run(ref.get("runId") or "")
+    run = _bu_run(ref.get("runId") or "")
     if not run:
         raise ValueError(f"{label}: unknown run")
     target = next((t for t in run["targets"] if t["hostId"] == ref.get("hostId")), None)

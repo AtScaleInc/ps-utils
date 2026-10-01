@@ -1,10 +1,15 @@
-"""Host + Git profile store backed by connections.yaml (gitignored).
+"""Business units, hosts and Git profiles, backed by connections.yaml (gitignored).
 
-Same file shape sml-wizard's config.py reads (ps-utils connection
-entries: `connections.<name>.atscale: {url, username, password, apiToken,
-insecure}`), extended per host with `env`, `label`, `status`, `lastChecked`
-and `links` (repo/branch/model the user linked through this app). The shared
-Git profile lives at `connections.git.git`, exactly like sml-wizard's.
+A business unit (BU) is an isolated realm, like a Keycloak realm: its own Git
+profile and its own hosts in the four groups (dev / test / qa / prod). Hosts
+keep the ps-utils connection entry shape (`connections.<name>.atscale: {url,
+username, password, apiToken, insecure}`), extended with `bu`, `env`,
+`label`, `status`, `lastChecked` and `links` (repo/branch/model the user
+linked through this app). Host ids are unique across BUs. BUs and their Git
+profiles live under `businessUnits.<id>: {label, git}`.
+
+Files from before BUs (one Git profile at `connections.git.git`, hosts with
+no `bu`) are read as a single BU, `default`, and written back in the new shape.
 """
 
 from __future__ import annotations
@@ -18,8 +23,10 @@ from typing import Any
 
 import yaml
 
-ENVS = ("dev", "qa", "prod")
-GIT_KEY = "git"
+ENVS = ("dev", "test", "qa", "prod")
+GIT_KEY = "git"  # pre-BU files kept the one Git profile at connections.git.git
+BU_KEY = "businessUnits"
+LEGACY_BU = "default"
 _API_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PATH = Path(os.environ.get("ENV_MANAGER_CONNECTIONS_FILE", _API_DIR / "connections.yaml"))
 
@@ -47,18 +54,20 @@ class Store:
 
     # -- raw file io ---------------------------------------------------------------
     def _read(self) -> dict[str, Any]:
-        if not self.path.exists():
-            return {"connections": {}}
-        with self.path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+        data: dict[str, Any] = {}
+        if self.path.exists():
+            with self.path.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
         data.setdefault("connections", {})
+        _migrate(data)
         return data
 
     def _write(self, data: dict[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".yaml.tmp")
+        ordered = {BU_KEY: data[BU_KEY], **{k: v for k, v in data.items() if k != BU_KEY}}
         with tmp.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+            yaml.safe_dump(ordered, f, sort_keys=False, allow_unicode=True)
         os.chmod(tmp, 0o600)
         tmp.replace(self.path)
 
@@ -66,26 +75,30 @@ class Store:
     def _host_entries(self, data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         return {k: v for k, v in data["connections"].items() if isinstance(v, dict) and "atscale" in v}
 
-    def list_hosts_raw(self) -> list[dict[str, Any]]:
+    def list_hosts_raw(self, bu: str | None = None) -> list[dict[str, Any]]:
+        """Every host, or only those of business unit `bu`."""
         with _lock:
             data = self._read()
-            return [{"id": k, **v} for k, v in self._host_entries(data).items()]
+            return [{"id": k, **v} for k, v in self._host_entries(data).items() if bu is None or v["bu"] == bu]
 
     def get_host_raw(self, host_id: str) -> dict[str, Any] | None:
         with _lock:
             entry = self._host_entries(self._read()).get(host_id)
             return {"id": host_id, **entry} if entry else None
 
-    def add_host(self, body: dict[str, Any]) -> dict[str, Any]:
+    def add_host(self, body: dict[str, Any], bu: str) -> dict[str, Any]:
         env = body.get("env")
         if env not in ENVS:
             raise ValueError(f"env must be one of {ENVS}")
         with _lock:
             data = self._read()
+            if bu not in data[BU_KEY]:
+                raise KeyError(bu)
             label = (body.get("label") or "").strip() or f"{env}-host-{len(self._host_entries(data)) + 1}"
             host_id = _unique_id(label, data["connections"])
             hostname = normalize_hostname(body.get("hostname", ""))
             data["connections"][host_id] = {
+                "bu": bu,
                 "env": env,
                 "label": label,
                 "status": "untested",
@@ -170,17 +183,77 @@ class Store:
                 deps[catalog_id] = record
             self._write(data)
 
-    # -- git ------------------------------------------------------------------------
-    def get_git_raw(self) -> dict[str, Any]:
+    # -- business units ---------------------------------------------------------------
+    def list_bus(self) -> list[dict[str, Any]]:
         with _lock:
-            conn = self._read()["connections"].get(GIT_KEY) or {}
-            return dict(conn.get("git") or {})
+            return [{"id": k, **v} for k, v in self._read()[BU_KEY].items()]
 
-    def update_git(self, patch: dict[str, Any]) -> dict[str, Any]:
+    def get_bu(self, bu: str) -> dict[str, Any] | None:
+        with _lock:
+            entry = self._read()[BU_KEY].get(bu)
+            return {"id": bu, **entry} if entry else None
+
+    def default_bu(self) -> str:
+        """The first business unit - the one a request without a BU works in."""
+        with _lock:
+            return next(iter(self._read()[BU_KEY]))
+
+    def add_bu(self, label: str) -> dict[str, Any]:
+        label = (label or "").strip()
+        if not label:
+            raise ValueError("A business unit needs a name")
         with _lock:
             data = self._read()
-            conn = data["connections"].setdefault(GIT_KEY, {})
-            git = conn.setdefault("git", {})
+            if any(v.get("label", "").lower() == label.lower() for v in data[BU_KEY].values()):
+                raise ValueError(f"A business unit named '{label}' already exists")
+            bu = _unique_id(label, data[BU_KEY], fallback="bu")
+            data[BU_KEY][bu] = {"label": label, "git": {}}
+            self._write(data)
+            return {"id": bu, **data[BU_KEY][bu]}
+
+    def update_bu(self, bu: str, patch: dict[str, Any]) -> dict[str, Any]:
+        with _lock:
+            data = self._read()
+            entry = data[BU_KEY].get(bu)
+            if entry is None:
+                raise KeyError(bu)
+            if "label" in patch:
+                label = (patch["label"] or "").strip()
+                if not label:
+                    raise ValueError("A business unit needs a name")
+                if any(k != bu and v.get("label", "").lower() == label.lower() for k, v in data[BU_KEY].items()):
+                    raise ValueError(f"A business unit named '{label}' already exists")
+                entry["label"] = label
+            self._write(data)
+            return {"id": bu, **entry}
+
+    def delete_bu(self, bu: str) -> None:
+        """Only an empty BU goes, and never the last one: its hosts would be
+        orphaned, and every request needs a BU to work in."""
+        with _lock:
+            data = self._read()
+            if bu not in data[BU_KEY]:
+                raise KeyError(bu)
+            if any(v["bu"] == bu for v in self._host_entries(data).values()):
+                raise ValueError("Remove this business unit's hosts first")
+            if len(data[BU_KEY]) == 1:
+                raise ValueError("The last business unit can't be removed")
+            del data[BU_KEY][bu]
+            self._write(data)
+
+    # -- git (one profile per business unit) ------------------------------------------
+    def get_git_raw(self, bu: str) -> dict[str, Any]:
+        with _lock:
+            entry = self._read()[BU_KEY].get(bu) or {}
+            return dict(entry.get("git") or {})
+
+    def update_git(self, bu: str, patch: dict[str, Any]) -> dict[str, Any]:
+        with _lock:
+            data = self._read()
+            entry = data[BU_KEY].get(bu)
+            if entry is None:
+                raise KeyError(bu)
+            git = entry.setdefault("git", {})
             changed = False
             for field in ("username", "email"):
                 if field in patch and patch[field] is not None:
@@ -199,8 +272,22 @@ class Store:
             return dict(git)
 
 
-def _unique_id(label: str, existing: dict[str, Any]) -> str:
-    base = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or "host"
+def _migrate(data: dict[str, Any]) -> None:
+    """In place: a pre-BU file becomes BU `default` holding its Git profile;
+    a host whose BU is missing or unknown joins the first BU."""
+    legacy = data["connections"].pop(GIT_KEY, None)
+    bus = data.get(BU_KEY)
+    if not isinstance(bus, dict) or not bus:
+        git = dict((legacy or {}).get("git") or {}) if isinstance(legacy, dict) else {}
+        bus = data[BU_KEY] = {LEGACY_BU: {"label": "Default", "git": git}}
+    first = next(iter(bus))
+    for v in data["connections"].values():
+        if isinstance(v, dict) and "atscale" in v and v.get("bu") not in bus:
+            v["bu"] = first
+
+
+def _unique_id(label: str, existing: dict[str, Any], fallback: str = "host") -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-") or fallback
     if base == GIT_KEY:
         base = "host-git"
     candidate = base
@@ -214,6 +301,7 @@ def public_host(raw: dict[str, Any]) -> dict[str, Any]:
     at = raw.get("atscale", {})
     return {
         "id": raw["id"],
+        "bu": raw.get("bu"),
         "env": raw.get("env"),
         "label": raw.get("label") or raw["id"],
         "hostname": hostname_from_url(at.get("url", "")),
@@ -233,6 +321,18 @@ def public_git(raw: dict[str, Any]) -> dict[str, Any]:
         "hasToken": bool(raw.get("token")),
         "status": raw.get("status") or ("untested" if raw.get("token") else "missing"),
         "lastChecked": raw.get("lastChecked"),
+    }
+
+
+def public_bu(raw: dict[str, Any], hosts: list[dict[str, Any]]) -> dict[str, Any]:
+    """API view of a business unit: name, host count per group, Git status (no token)."""
+    mine = [h for h in hosts if h.get("bu") == raw["id"]]
+    return {
+        "id": raw["id"],
+        "label": raw.get("label") or raw["id"],
+        "hosts": len(mine),
+        "groups": {e: sum(1 for h in mine if h.get("env") == e) for e in ENVS},
+        "git": public_git(raw.get("git") or {}),
     }
 
 

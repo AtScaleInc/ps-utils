@@ -1,6 +1,8 @@
 // Test tab API: ps-utils generate-queries-from-model + execute-atscale-query-harness,
 // served by api/routes/testing.py.
 
+import { withBu } from '../bu'
+
 export interface CubeRef { catalog: string; cube: string }
 
 export interface TestQuery {
@@ -148,5 +150,5 @@ export const testApi = {
     req<{ count: number; runs?: { runId: string; model: string; startedAt: string }[] }>('POST', '/test/cleanup', body),
   history: (model: string, query: string, protocol: Protocol) =>
     req<{ history: (TestResult & { startedAt: string })[] }>('GET', `/test/history?model=${encodeURIComponent(model)}&query=${encodeURIComponent(query)}&protocol=${protocol}`),
-  csvUrl: (runId: string) => `/api/test/runs/${encodeURIComponent(runId)}.csv`,
+  csvUrl: (runId: string) => withBu(`/api/test/runs/${encodeURIComponent(runId)}.csv`),
 }

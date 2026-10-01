@@ -93,7 +93,7 @@ def test_deploy_to_several_hosts(client, tmp_path):
     res = {x["hostId"]: x for x in job["result"]["results"]}
     assert res["dev-east"]["ok"] and res["qa-main"]["ok"]
     assert not res["prod-west"]["ok"] and "PostgresDB" in res["prod-west"]["error"]
-    assert (tmp_path / "models" / build.slugify_model_name(PAYLOAD["modelName"]) / "catalog.yml").exists()
+    assert (tmp_path / "models" / "sales-analytics" / build.slugify_model_name(PAYLOAD["modelName"]) / "catalog.yml").exists()
     names = {m["name"] for m in client.get("/api/hosts/qa-main/models").get_json()["models"]}
     assert PAYLOAD["modelName"] in names
 

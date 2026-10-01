@@ -6,7 +6,7 @@ import threading
 from typing import Any
 
 import urllib3
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
@@ -49,6 +49,20 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.json = _StrictJSON(app)
     CORS(app)
+    @app.before_request
+    def bind_business_unit():
+        """Every call works inside one business unit: the `X-BU` header (or
+        `?bu=` for plain links), else the first BU. See envs/registry.py."""
+        bu = request.headers.get("X-BU") or request.args.get("bu")
+        try:
+            registry.set_bu(bu)
+        except registry.UnknownBu as e:
+            if request.method == "GET" and request.path == "/api/bus":
+                # The BU list is how the UI recovers from a removed BU: never refuse it.
+                registry.set_bu(None)
+                return None
+            return jsonify({"error": f"Unknown business unit '{e.args[0]}'", "unknownBu": True}), 400
+
     app.register_blueprint(settings_bp, url_prefix="/api")
     app.register_blueprint(objects_bp, url_prefix="/api")
     app.register_blueprint(promote_bp, url_prefix="/api")

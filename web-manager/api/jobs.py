@@ -3,6 +3,7 @@ Single-user, same as sml-wizard's session store."""
 
 from __future__ import annotations
 
+import contextvars
 import threading
 import time
 import traceback
@@ -50,7 +51,9 @@ def submit(kind: str, fn: Callable[[], Any]) -> dict[str, Any]:
             with _lock:
                 job.update(status="failed", error=str(e), finishedAt=now_iso(), _t=time.time())
 
-    _pool.submit(run)
+    # Run in a copy of the caller's context: the job keeps the request's
+    # business unit (envs.registry.current_bu) after the request has ended.
+    _pool.submit(contextvars.copy_context().run, run)
     return _public(job)
 
 

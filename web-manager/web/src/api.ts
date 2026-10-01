@@ -1,8 +1,10 @@
-export type EnvId = 'dev' | 'qa' | 'prod'
+export type EnvId = 'dev' | 'test' | 'qa' | 'prod'
 export type ConnStatus = 'connected' | 'untested' | 'failed' | 'testing' | 'missing'
 
 export interface Host {
   id: string
+  /** Business unit (BusinessUnit.id) the host belongs to. */
+  bu: string
   env: EnvId
   label: string
   hostname: string
@@ -22,6 +24,15 @@ export interface GitProfile {
   status: ConnStatus
   lastChecked: string | null
   error?: string | null
+}
+
+/** An isolated realm: its own Git profile and hosts in the four groups. */
+export interface BusinessUnit {
+  id: string
+  label: string
+  hosts: number
+  groups: Record<EnvId, number>
+  git: GitProfile
 }
 
 export interface ModelRow {
@@ -244,7 +255,12 @@ export async function waitForJob<T>(job: Job<T>): Promise<T> {
 }
 
 export const api = {
-  hosts: () => req<{ hosts: Host[]; fake: boolean }>('GET', '/hosts'),
+  bus: () => req<{ bus: BusinessUnit[]; current: string; fake: boolean }>('GET', '/bus'),
+  addBu: (label: string) => req<BusinessUnit>('POST', '/bus', { label }),
+  patchBu: (id: string, label: string) => req<BusinessUnit>('PATCH', `/bus/${encodeURIComponent(id)}`, { label }),
+  deleteBu: (id: string) => req('DELETE', `/bus/${encodeURIComponent(id)}`),
+
+  hosts: () => req<{ hosts: Host[]; bu: string; fake: boolean }>('GET', '/hosts'),
   addHost: (env: EnvId) => req<Host>('POST', '/hosts', { env }),
   patchHost: (id: string, patch: Partial<Host> & { password?: string; apiToken?: string }) =>
     req<Host>('PATCH', `/hosts/${id}`, patch),

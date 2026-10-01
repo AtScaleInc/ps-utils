@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, waitForJob, type Diff, type Host } from '../api'
-import { resolveHost, useUi } from '../store'
+import { resolveHost, targetPick, useUi } from '../store'
 import { refreshHost } from './ManageView'
-import { BranchSelect, DiffPill, EnvSegment, HostSelect, RefreshButton, diffColors, envOf, errMsg, fmtDate, plural, useGit, useHosts } from './ui'
+import { BranchSelect, DiffPill, EnvSegment, HostSelect, RefreshButton, diffColors, effectiveEnv, envOf, errMsg, fmtDate, plural, useGit, useHosts } from './ui'
 
 interface SrcRow { key: string; name: string; sub: string; ver: string; diff: Diff; repoUrl?: string; branch?: string }
 interface TgtRow { id: string; name: string; sub: string; ver: string; updated: string; dup: boolean; inactive: boolean; model?: string }
@@ -15,7 +15,9 @@ export function PromoteView() {
   const git = useGit()
   const hosts = useHosts().data?.hosts ?? []
   const sh = resolveHost(hosts, src)
-  const th = resolveHost(hosts, tgt)
+  const srcEnv = effectiveEnv(hosts, src.env)
+  const tgtEnv = targetPick(hosts, src, tgt).env
+  const th = resolveHost(hosts, { ...tgt, env: tgtEnv })
   const isM = section === 'models'
   // Target-model override: pModel's aggregates go into tModel (an identical
   // model deployed under another name) instead of the same-named model.
@@ -189,7 +191,7 @@ export function PromoteView() {
 
   const tgtModelNames = (tgtAggModels.data?.models ?? []).map((m) => m.name)
   const tModelOk = modelMap ? tgtModelNames.includes(tModel!) : !!pModel && (aDiff.data ? targetModels : tgtModelNames).includes(pModel)
-  const srcEmptyMsg = !sh ? 'No host in this group — add one in Settings'
+  const srcEmptyMsg = !sh ? 'No hosts in this business unit — add one in Settings'
     : same ? (isM ? 'Source and target are the same host — pick a different target'
       : 'Source and target are the same host — pick a different target, or a source model and Override its target model')
     : !th ? 'No target host in this group'
@@ -202,7 +204,7 @@ export function PromoteView() {
           {/* Env + host picker first, same place as Build and Manage. */}
           <div className="row">
             <EnvSegment value={src.env} onPick={(env) => setSrc({ env, hostId: null })} />
-            <HostSelect hosts={hosts} env={src.env} value={sh?.id ?? null} onChange={(id) => setSrc({ env: src.env, hostId: id })} />
+            <HostSelect hosts={hosts} env={srcEnv} value={sh?.id ?? null} onChange={(id) => setSrc({ env: srcEnv, hostId: id })} />
             <span className="eyebrow" style={{ marginLeft: 6 }}>Source</span>
             <span className="hint">{same || !diffQ.data ? '' : `${isM ? srcRows.length : aDiff.data?.rows.length ?? 0} on host`}</span>
           </div>
@@ -251,9 +253,9 @@ export function PromoteView() {
         <span className="eyebrow" style={{ color: 'var(--prod)' }}>↓ Drag rows down to stage</span>
         <span className="line" />
         <span className="mono row" style={{ gap: 10 }}>
-          <span className="sq" style={{ background: envOf(src.env).color }} />{sh?.label ?? 'no host'}
+          <span className="sq" style={{ background: envOf(sh?.env ?? src.env).color }} />{sh?.label ?? 'no host'}
           <span className="muted">→</span>
-          <span className="sq" style={{ background: envOf(tgt.env).color }} />{th?.label ?? 'no host'}
+          <span className="sq" style={{ background: envOf(th?.env ?? tgt.env).color }} />{th?.label ?? 'no host'}
         </span>
         {enabled && <RefreshButton cachedAt={diffQ.data?.cachedAt} onRefresh={refreshBoth} />}
       </div>
@@ -261,8 +263,8 @@ export function PromoteView() {
       <section className="pane">
         <div className="bar">
           <div className="row">
-            <EnvSegment value={tgt.env} onPick={(env) => setTgt({ env, hostId: null })} />
-            <HostSelect hosts={hosts} env={tgt.env} value={th?.id ?? null} onChange={(id) => setTgt({ env: tgt.env, hostId: id })} />
+            <EnvSegment value={tgtEnv} onPick={(env) => setTgt({ env, hostId: null })} />
+            <HostSelect hosts={hosts} env={tgtEnv} value={th?.id ?? null} onChange={(id) => setTgt({ env: tgtEnv, hostId: id })} />
             <span className="eyebrow" style={{ marginLeft: 6 }}>Target</span>
             {!isM && (
               <div className={`tmodel ${(ovr ? !modelMap : pModel && !tModelOk) ? 'bad' : ''}`}>
@@ -289,7 +291,7 @@ export function PromoteView() {
             {gitBlocked && <span className="hint" style={{ color: 'var(--warn)' }}>Git profile missing — set it in Settings</span>}
             <button type="button" className="btn lg ghost" onClick={clearStaged}>Clear</button>
             <button type="button" className="btn lg solid" disabled={!canPromote || promote.isPending}
-              style={{ background: canPromote ? envOf(tgt.env).color : undefined }} onClick={onPromote}>
+              style={{ background: canPromote ? envOf(th?.env ?? tgt.env).color : undefined }} onClick={onPromote}>
               {promote.isPending ? 'Promoting…' : nSt ? `Promote ${nSt} to ${th?.label ?? '—'}` : 'Promote'}
             </button>
           </div>

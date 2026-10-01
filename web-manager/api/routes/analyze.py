@@ -50,7 +50,8 @@ def _files(row: dict[str, Any], refresh: bool) -> tuple[dict[str, str], str]:
     token = registry.git_token()
     if not token:
         raise PermissionError("Git profile is missing - set it in Settings")
-    files, _ = cache.get(("git", "sml", github.normalize_repo_url(row["repoUrl"]), ref),
+    # Per BU: another BU's token may not reach this repo, so its files aren't shared.
+    files, _ = cache.get(("git", registry.bu(), "sml", github.normalize_repo_url(row["repoUrl"]), ref),
                          lambda: github.fetch_sml_files(token, row["repoUrl"], ref), refresh)
     return files, ref
 

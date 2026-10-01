@@ -38,7 +38,8 @@ def diff(client, section, src, tgt, model=None):
 
 def test_hosts_grouped_without_secrets(client):
     body = client.get("/api/hosts").get_json()
-    assert body["groups"] == {"dev": ["dev-east", "dev-sandbox"], "qa": ["qa-main"], "prod": ["prod-east", "prod-west"]}
+    assert body["groups"] == {"dev": ["dev-east", "dev-sandbox"], "test": ["test-main"], "qa": ["qa-main"],
+                              "prod": ["prod-east", "prod-west"]}
     assert "secret" not in str(body)
 
 
@@ -107,7 +108,7 @@ def test_unlink_removes_aggregates(client):
 
 
 def test_git_gate_blocks_deploy(client):
-    registry.store().update_git({"status": "failed"})
+    registry.store().update_git(registry.bu(), {"status": "failed"})
     r = client.post("/api/hosts/dev-east/models/deploy", json={"models": ["x"]})
     assert r.status_code == 409 and r.get_json()["needsGit"]
 

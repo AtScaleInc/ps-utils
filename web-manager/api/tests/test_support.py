@@ -50,7 +50,7 @@ def test_complex_features_are_flagged():
 
 
 def test_save_and_deploy_refuse_a_read_only_working_copy(client, tmp_path):  # noqa: F811
-    root = tmp_path / "models" / build.slugify_model_name(PAYLOAD["modelName"])
+    root = tmp_path / "models" / "sales-analytics" / build.slugify_model_name(PAYLOAD["modelName"])
     root.mkdir(parents=True)
     for path, body in build_sml(PAYLOAD).items():
         (root / path).parent.mkdir(parents=True, exist_ok=True)

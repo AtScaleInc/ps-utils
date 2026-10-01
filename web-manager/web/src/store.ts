@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { EnvId, Host, PromoteMode } from './api'
+import { setBu } from './bu'
+import { effectiveEnv, usedEnvs } from './components/ui'
 
 export type View = 'build' | 'manage' | 'promote' | 'test' | 'monitor' | 'settings'
 export type Section = 'models' | 'aggs'
@@ -13,7 +15,7 @@ export type MonitorSection = 'overview' | 'history' | 'hotspots'
 export type MonitorRange = { preset: '1h' | '24h' | '2d' | '7d' | '30d' } | { preset: 'custom'; fromMs: number; toMs: number }
 export interface MonitorFilters { model: string; user: string; queryType: '' | 'User' | 'System' }
 /** Settings' left-rail sections. */
-export type SettingsSection = 'hosts' | 'storage'
+export type SettingsSection = 'hosts' | 'bus' | 'storage'
 export interface RunSide { runId: string; hostId: string }
 
 export interface Ask {
@@ -29,6 +31,8 @@ export interface Ask {
 interface HostPick { env: EnvId; hostId: string | null }
 
 interface UiState {
+  /** Business unit everything below works in (bu.ts sends it as X-BU); null until /bus has loaded. */
+  bu: string | null
   view: View
   section: Section
   buildSection: BuildSection
@@ -68,6 +72,8 @@ interface UiState {
   ask: Ask | null
   linkOpen: boolean
 
+  /** Work in another business unit: every host pick, staged item and run is that BU's own, so they reset. */
+  switchBu: (id: string) => void
   setView: (v: View) => void
   setSection: (s: Section) => void
   setBuildSection: (s: BuildSection) => void
@@ -101,35 +107,45 @@ interface UiState {
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-export const useUi = create<UiState>((set) => ({
-  view: 'build',
-  section: 'models',
-  buildSection: 'discover',
+/** Everything that names a host, model or run - all of it belongs to one business unit. */
+const BU_SCOPED = {
   build: { env: 'dev', hostId: null },
-  testSection: 'run',
-  settingsSection: 'hosts',
   test: { env: 'dev', hostId: null },
   testRunId: null,
   testCompare: { baseline: null, candidate: null },
-  monitorSection: 'overview',
   monitor: { env: 'prod', hostId: null },
-  monitorRange: { preset: '24h' },
   monitorFilters: { model: '', user: '', queryType: '' },
   monitorAuto: false,
   manage: { env: 'dev', hostId: null, modelKey: null, analyzeKey: null, sel: [], q: '' },
-  manageAnalyze: false,
   src: { env: 'dev', hostId: null },
-  tgt: { env: 'qa', hostId: null },
+  tgt: { env: 'test', hostId: null },
   pModel: '',
   tModel: null,
   staged: { models: [], aggs: [] },
   branchFor: {},
   modeFor: {},
   replaceFor: {},
+  linkOpen: false,
+} satisfies Partial<UiState>
+
+export const useUi = create<UiState>((set) => ({
+  ...BU_SCOPED,
+  bu: null,
+  view: 'build',
+  section: 'models',
+  buildSection: 'discover',
+  testSection: 'run',
+  settingsSection: 'hosts',
+  monitorSection: 'overview',
+  monitorRange: { preset: '24h' },
+  manageAnalyze: false,
   toast: null,
   ask: null,
-  linkOpen: false,
 
+  switchBu: (bu) => {
+    setBu(bu)
+    set({ ...BU_SCOPED, bu, ask: null })
+  },
   setView: (view) => set({ view }),
   setBuildSection: (buildSection) => set({ buildSection }),
   setBuild: (build) => set({ build }),
@@ -172,8 +188,20 @@ export const useUi = create<UiState>((set) => ({
   setLinkOpen: (linkOpen) => set({ linkOpen }),
 }))
 
-/** Falls back to the first host in the group when the picked one isn't in it. */
+/** Promote's target group: as picked when it has hosts, else the next group with
+ * hosts after the source's (Dev → Prod in a BU with only those two), not back
+ * onto the source's group. */
+export function targetPick(hosts: Host[], src: HostPick, tgt: HostPick): HostPick {
+  const used = usedEnvs(hosts).map((e) => e.id)
+  if (used.includes(tgt.env)) return tgt
+  const srcEnv = effectiveEnv(hosts, src.env)
+  return { ...tgt, env: used[used.indexOf(srcEnv) + 1] ?? srcEnv }
+}
+
+/** Falls back to the first host in the group when the picked one isn't in it,
+ * and to the first group with hosts when the picked group has none. */
 export function resolveHost(hosts: Host[], pick: HostPick): Host | null {
-  const inEnv = hosts.filter((h) => h.env === pick.env)
+  const env = effectiveEnv(hosts, pick.env)
+  const inEnv = hosts.filter((h) => h.env === env)
   return inEnv.find((h) => h.id === pick.hostId) ?? inEnv[0] ?? null
 }

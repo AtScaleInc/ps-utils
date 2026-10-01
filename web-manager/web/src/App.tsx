@@ -8,8 +8,9 @@ import { SettingsView } from './components/SettingsView'
 import { TestView } from './test/TestView'
 import { MonitorView } from './monitor/MonitorView'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { ENVS, envOf, plural, useHosts } from './components/ui'
-import { resolveHost, useUi, type BuildSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
+import { BuPicker } from './components/BusinessUnits'
+import { ENVS, envOf, plural, useHosts, usedEnvs } from './components/ui'
+import { resolveHost, targetPick, useUi, type BuildSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
 
 export default function App() {
   const { view, linkOpen, manage, section, manageAnalyze, buildSection, testSection, monitorSection, settingsSection } = useUi()
@@ -52,7 +53,10 @@ function Header() {
   return (
     <header className="header">
       <div className="header-brand">
-        <span className="brand">AtScale · Env Manager</span>
+        <div className="brand-stack">
+          <span className="brand">AtScale · Env Manager</span>
+          <BuPicker />
+        </div>
         <nav className="tabs">
           {TABS.map((t) => (
             <button key={t.id} type="button" title={t.note} className={`tab ${view === t.id ? 'on' : ''}`} onClick={() => setView(t.id)}>
@@ -63,7 +67,8 @@ function Header() {
       </div>
       <div className="header-right">
         <div className="env-counts">
-          {ENVS.map((e) => (
+          {!hosts.length && <span className="env-count">No hosts yet</span>}
+          {usedEnvs(hosts).map((e) => (
             <span key={e.id} className="env-count">
               <span className="sq" style={{ background: e.color }} />{e.label} · {plural(hosts.filter((h) => h.env === e.id).length, 'host')}
             </span>
@@ -83,7 +88,7 @@ function Sidebar() {
   const hosts = useHosts().data?.hosts ?? []
   const pick = view === 'promote' ? src : view === 'build' ? build : view === 'test' ? test : view === 'monitor' ? monitor : manage
   const ctxHost = resolveHost(hosts, pick)
-  const th = resolveHost(hosts, tgt)
+  const th = resolveHost(hosts, targetPick(hosts, src, tgt))
   const objects = view === 'manage' || view === 'promote'
   const models = useQuery({ queryKey: ['models', ctxHost?.id], queryFn: () => api.models(ctxHost!.id), enabled: !!ctxHost && objects })
   const aggModels = useQuery({ queryKey: ['aggModels', ctxHost?.id], queryFn: () => api.aggModels(ctxHost!.id), enabled: !!ctxHost && objects })
@@ -93,8 +98,8 @@ function Sidebar() {
     aggs: aggModels.data ? String(aggModels.data.models.length) : '—',
   }
   const context = view === 'promote' ? `${ctxHost?.label ?? '—'} → ${th?.label ?? '—'}`
-    : view === 'settings' ? `${plural(hosts.length, 'host')} across 3 groups`
-    : `${envOf(pick.env).label} · ${ctxHost?.label ?? 'no host'}`
+    : view === 'settings' ? `${plural(hosts.length, 'host')} across ${ENVS.length} groups`
+    : `${envOf(ctxHost?.env ?? pick.env).label} · ${ctxHost?.label ?? 'no host'}`
   const hint = view === 'promote' ? 'Drag source → target' : view === 'settings' ? 'Credentials per host'
     : view === 'build' ? 'Deploy to one or many hosts' : view === 'test' ? 'Same queries, every env'
     : view === 'monitor' ? 'Poll on demand or every 5 min'
@@ -145,7 +150,8 @@ function Sidebar() {
           </button>
         )}
         {view === 'settings' && ([
-          { id: 'hosts', label: 'Hosts & Git', note: 'Connections, credentials, Git profile' },
+          { id: 'hosts', label: 'Hosts & Git', note: "This business unit's hosts + Git profile" },
+          { id: 'bus', label: 'Business units', note: 'Add, rename, remove realms' },
           { id: 'storage', label: 'Cache & Database', note: 'List cache, test + query history clean-up' },
         ] as { id: SettingsSection; label: string; note: string }[]).map((s) => (
           <button key={s.id} type="button" className={`side-btn ${settingsSection === s.id ? 'on' : ''}`} onClick={() => setSettingsSection(s.id)}>
