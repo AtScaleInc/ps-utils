@@ -12,7 +12,7 @@ import { ENVS, envOf, plural, useHosts } from './components/ui'
 import { resolveHost, useUi, type BuildSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
 
 export default function App() {
-  const { view, linkOpen, manage, section, buildSection, testSection, monitorSection, settingsSection } = useUi()
+  const { view, linkOpen, manage, section, manageAnalyze, buildSection, testSection, monitorSection, settingsSection } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const mh = resolveHost(hosts, manage)
   return (
@@ -21,7 +21,7 @@ export default function App() {
       <div className="body">
         <Sidebar />
         <main className="main">
-          <ErrorBoundary resetKey={`${view}|${section}|${buildSection}|${testSection}|${monitorSection}|${settingsSection}`}>
+          <ErrorBoundary resetKey={`${view}|${section}|${manageAnalyze}|${buildSection}|${testSection}|${monitorSection}|${settingsSection}`}>
             {view === 'build' && <BuildView />}
             {view === 'manage' && <ManageView />}
             {view === 'promote' && <PromoteView />}
@@ -79,7 +79,7 @@ function Header() {
 
 /** Left rail: the current tab's sections, styled like the top tabs. */
 function Sidebar() {
-  const { view, section, setSection, buildSection, setBuildSection, testSection, setTestSection, monitorSection, setMonitorSection, settingsSection, setSettingsSection, manage, src, tgt, build, test, monitor } = useUi()
+  const { view, section, setSection, manageAnalyze, setManageAnalyze, buildSection, setBuildSection, testSection, setTestSection, monitorSection, setMonitorSection, settingsSection, setSettingsSection, manage, src, tgt, build, test, monitor } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const pick = view === 'promote' ? src : view === 'build' ? build : view === 'test' ? test : view === 'monitor' ? monitor : manage
   const ctxHost = resolveHost(hosts, pick)
@@ -97,7 +97,8 @@ function Sidebar() {
     : `${envOf(pick.env).label} · ${ctxHost?.label ?? 'no host'}`
   const hint = view === 'promote' ? 'Drag source → target' : view === 'settings' ? 'Credentials per host'
     : view === 'build' ? 'Deploy to one or many hosts' : view === 'test' ? 'Same queries, every env'
-    : view === 'monitor' ? 'Poll on demand or every 5 min' : 'Pick a group, then a host'
+    : view === 'monitor' ? 'Poll on demand or every 5 min'
+    : view === 'manage' && manageAnalyze ? 'Pick a group, host, then a model' : 'Pick a group, then a host'
 
   return (
     <aside className="sidebar">
@@ -134,10 +135,15 @@ function Sidebar() {
           { id: 'models', label: 'Models', note: view === 'promote' ? 'Repo attach + deploy' : 'Link, deploy, unlink' },
           { id: 'aggs', label: 'Aggregates', note: view === 'promote' ? 'System aggregates only' : 'Activate, build' },
         ] as const).map((s) => (
-          <button key={s.id} type="button" className={`side-btn ${section === s.id ? 'on' : ''}`} onClick={() => setSection(s.id)}>
+          <button key={s.id} type="button" className={`side-btn ${section === s.id && !(view === 'manage' && manageAnalyze) ? 'on' : ''}`} onClick={() => setSection(s.id)}>
             <span className="t">{s.label}<span className="c">{counts[s.id]}</span></span><span className="n">{s.note}</span>
           </button>
         ))}
+        {view === 'manage' && (
+          <button type="button" className={`side-btn ${manageAnalyze ? 'on' : ''}`} onClick={() => setManageAnalyze(true)}>
+            <span className="t">Analyze</span><span className="n">Audit a model: objects, joins, comments</span>
+          </button>
+        )}
         {view === 'settings' && ([
           { id: 'hosts', label: 'Hosts & Git', note: 'Connections, credentials, Git profile' },
           { id: 'storage', label: 'Cache & Database', note: 'List cache, test + query history clean-up' },

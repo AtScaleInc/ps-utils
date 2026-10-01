@@ -1,0 +1,68 @@
+unique_name: factinternetsales
+object_type: dataset
+label: factinternetsales
+columns:
+  - name: Calculated Tax
+    data_type: double
+    dialects:
+      - dialect: Postgresql
+        sql: '"salesamount"*0.085'
+      - dialect: Snowflake
+        sql: '"salesamount"*0.085'
+      - dialect: BigQuery
+        sql: salesamount*0.085
+      - dialect: DatabricksSQL
+        sql: salesamount*0.085
+    sql: '"salesamount"*0.085'
+  - name: currencykey
+    data_type: int
+  - name: customerkey
+    data_type: int
+  - name: orderdate
+    data_type: string
+  - name: orderdatekey
+    data_type: int
+  - name: orderquantity
+    data_type: int
+  - name: productkey
+    data_type: int
+  - name: sales_reasons
+    data_type: string
+  - name: salesamount
+    data_type: float
+  - name: salesorderlinenumber
+    data_type: int
+  - name: salesordernumber
+    data_type: string
+  - name: shipdatekey
+    data_type: int
+  - name: taxamt
+    data_type: float
+  - name: unitprice
+    data_type: float
+  - name: product_info
+    map:
+      field_terminator: ','
+      key_terminator: ':'
+      key_type: String
+      value_type: String
+  - name: color
+    data_type: string
+    parent_column: product_info
+  - name: size
+    data_type: string
+    parent_column: product_info
+  - name: style
+    data_type: string
+    parent_column: product_info
+  - name: weight
+    data_type: decimal
+    parent_column: product_info
+connection_id: as_adventure
+model_properties:
+  - create_hinted_aggregate: false
+    model: Internet Sales
+project_properties:
+  aggregate_locality: managed
+  allow_aggregates: true
+table: factinternetsales

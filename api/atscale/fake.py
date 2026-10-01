@@ -12,6 +12,7 @@ import sqlite3
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from .backend import now_iso
@@ -545,3 +546,15 @@ def register_built_model(repo_url: str, model: str, catalog: str) -> None:
     with _lock:
         FAKE_REPOS[repo_url] = [model]
         CATALOG[model] = catalog
+
+
+# -- demo SML for Manage › Analyze: AtScale's sml-demo-sales-insights repo, copied
+# into atscale/demo_sml/. Every demo model analyses this repo, relabelled.
+_DEMO_SML = Path(__file__).resolve().parent / "demo_sml" / "sales-insights"
+
+
+def fake_sml(model: str) -> dict[str, str]:
+    files = {str(p.relative_to(_DEMO_SML)): p.read_text() for p in sorted(_DEMO_SML.rglob("*.yml"))}
+    key = "models/Internet Sales.yml"
+    files[key] = files[key].replace("label: Internet Sales", f"label: {model}", 1)
+    return files

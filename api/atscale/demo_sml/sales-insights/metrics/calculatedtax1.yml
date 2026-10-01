@@ -1,0 +1,8 @@
+unique_name: calculatedtax1
+object_type: metric
+label: Calculated Tax
+calculation_method: sum
+column: Calculated Tax
+dataset: factinternetsales
+format: $#,##0.00
+type: measure

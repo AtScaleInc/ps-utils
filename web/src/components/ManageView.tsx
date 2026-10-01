@@ -3,11 +3,12 @@ import type { ReactNode } from 'react'
 import { api, type Host } from '../api'
 import { resolveHost, useUi } from '../store'
 import { ManageAggregates } from './ManageAggregates'
+import { ManageAnalyze } from './ManageAnalyze'
 import { ManageModels } from './ManageModels'
 import { CONN, EnvSegment, HostSelect, RefreshButton, envOf, useHosts } from './ui'
 
 export function ManageView() {
-  const { section, manage, setManage, setView } = useUi()
+  const { section, manage, manageAnalyze, setManage, setView } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const host = resolveHost(hosts, manage)
   const env = envOf(manage.env)
@@ -15,21 +16,22 @@ export function ManageView() {
   // Same keys as the section views, so these read the shared cache (no extra fetch).
   const models = useQuery({ queryKey: ['models', host?.id], queryFn: () => api.models(host!.id), enabled: !!host })
   const aggModels = useQuery({ queryKey: ['aggModels', host?.id], queryFn: () => api.aggModels(host!.id), enabled: !!host && section === 'aggs' })
-  const cachedAt = section === 'models' ? models.data?.cachedAt : aggModels.data?.cachedAt
+  const cachedAt = manageAnalyze || section === 'models' ? models.data?.cachedAt : aggModels.data?.cachedAt
 
   return (
     <div className="col">
       <div className="bar">
         <div className="row">
-          <EnvSegment value={manage.env} onPick={(e) => setManage({ env: e, hostId: null, sel: [], modelKey: null })} />
-          <HostSelect hosts={hosts} env={manage.env} value={host?.id ?? null} onChange={(id) => setManage({ hostId: id, sel: [], modelKey: null })} />
+          <EnvSegment value={manage.env} onPick={(e) => setManage({ env: e, hostId: null, sel: [], modelKey: null, analyzeKey: null })} />
+          <HostSelect hosts={hosts} env={manage.env} value={host?.id ?? null} onChange={(id) => setManage({ hostId: id, sel: [], modelKey: null, analyzeKey: null })} />
           <input className="input search" value={manage.q} onChange={(e) => setManage({ q: e.target.value })}
-            placeholder={section === 'models' ? 'Search models' : 'Search aggregates'} />
+            placeholder={manageAnalyze ? 'Search objects, descriptions, comments' : section === 'models' ? 'Search models' : 'Search aggregates'} />
           {host && <RefreshButton cachedAt={cachedAt} onRefresh={() => refreshHost(qc, host.id)} />}
         </div>
       </div>
       {host ? (
-        section === 'models' ? <ManageModels key={host.id} host={host} /> : <ManageAggregates key={host.id} host={host} />
+        manageAnalyze ? <ManageAnalyze key={host.id} host={host} />
+        : section === 'models' ? <ManageModels key={host.id} host={host} /> : <ManageAggregates key={host.id} host={host} />
       ) : (
         <div className="nohost">
           <span className="flag" />
@@ -80,6 +82,12 @@ export async function refreshHost(qc: QueryClient, hostId: string) {
       queryKey: q.queryKey, staleTime: 0,
       queryFn: () => api.aggs(hostId, { catalogId, modelId, name: '', catalog: '' }, true),
     }))
+  }
+  // Analyze audits already opened: re-read the SML (a branch ref may have moved) + the host's DMV.
+  for (const q of qc.getQueryCache().findAll({ queryKey: ['analyze', hostId] })) {
+    const key = q.queryKey[2]
+    if (typeof key !== 'string') continue
+    jobs.push(qc.fetchQuery({ queryKey: q.queryKey, staleTime: 0, queryFn: () => api.analyze(hostId, key, true) }))
   }
   await Promise.all(jobs)
   qc.invalidateQueries({ queryKey: ['diff'] })

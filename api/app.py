@@ -13,6 +13,7 @@ from flask_cors import CORS
 import cache
 from envs import registry
 from routes.build import build_bp
+from routes.analyze import analyze_bp
 from routes.discovery import discovery_bp
 from routes.testing import testing_bp
 from routes.monitor import monitor_bp
@@ -55,6 +56,7 @@ def create_app() -> Flask:
     app.register_blueprint(discovery_bp, url_prefix="/api")
     app.register_blueprint(testing_bp, url_prefix="/api")
     app.register_blueprint(monitor_bp, url_prefix="/api")
+    app.register_blueprint(analyze_bp, url_prefix="/api")
 
     @app.get("/api/health")
     def health():

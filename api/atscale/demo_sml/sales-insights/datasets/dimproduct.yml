@@ -1,0 +1,23 @@
+unique_name: dimproduct
+object_type: dataset
+label: dimproduct
+columns:
+  - name: englishproductname
+    data_type: string
+  - name: listprice
+    data_type: float
+  - name: productkey
+    data_type: int
+  - name: productline
+    data_type: string
+  - name: productsubcategorykey
+    data_type: int
+  - name: productsubcategoryname
+    data_type: string
+  - name: startdate
+    data_type: string
+connection_id: as_adventure
+project_properties:
+  aggregate_locality: managed
+  allow_aggregates: true
+table: dimproduct

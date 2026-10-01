@@ -1,0 +1,11 @@
+unique_name: dim_geo_country
+object_type: dataset
+label: dim_geo_country
+columns:
+  - name: country
+    data_type: string
+connection_id: as_adventure
+project_properties:
+  aggregate_locality: managed
+  allow_aggregates: true
+table: dim_geo_country

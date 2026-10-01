@@ -49,7 +49,10 @@ interface UiState {
   monitorFilters: MonitorFilters
   /** Poll the host every 5 minutes while the app is open. */
   monitorAuto: boolean
-  manage: HostPick & { modelKey: string | null; sel: string[]; q: string }
+  /** analyzeKey: the model (ModelRow.key) Manage › Analyze audits. */
+  manage: HostPick & { modelKey: string | null; analyzeKey: string | null; sel: string[]; q: string }
+  /** Manage's Analyze section is open (Models / Aggregates otherwise - `section`, shared with Promote). */
+  manageAnalyze: boolean
   src: HostPick
   tgt: HostPick
   pModel: string
@@ -80,6 +83,7 @@ interface UiState {
   setMonitorFilters: (p: Partial<MonitorFilters>) => void
   setMonitorAuto: (on: boolean) => void
   setManage: (p: Partial<UiState['manage']>) => void
+  setManageAnalyze: (on: boolean) => void
   setSrc: (p: HostPick) => void
   setTgt: (p: HostPick) => void
   setPModel: (m: string) => void
@@ -112,7 +116,8 @@ export const useUi = create<UiState>((set) => ({
   monitorRange: { preset: '24h' },
   monitorFilters: { model: '', user: '', queryType: '' },
   monitorAuto: false,
-  manage: { env: 'dev', hostId: null, modelKey: null, sel: [], q: '' },
+  manage: { env: 'dev', hostId: null, modelKey: null, analyzeKey: null, sel: [], q: '' },
+  manageAnalyze: false,
   src: { env: 'dev', hostId: null },
   tgt: { env: 'qa', hostId: null },
   pModel: '',
@@ -134,8 +139,9 @@ export const useUi = create<UiState>((set) => ({
   setTestRunId: (testRunId) => set({ testRunId }),
   setTestCompare: (p) => set((s) => ({ testCompare: { ...s.testCompare, ...p } })),
   setSection: (section) => set((s) => ({
-    section, view: s.view === 'settings' ? 'manage' : s.view, manage: { ...s.manage, sel: [], q: '' },
+    section, view: s.view === 'settings' ? 'manage' : s.view, manage: { ...s.manage, sel: [], q: '' }, manageAnalyze: false,
   })),
+  setManageAnalyze: (manageAnalyze) => set((s) => ({ manageAnalyze, manage: { ...s.manage, sel: [], q: '' } })),
   setMonitorSection: (monitorSection) => set({ monitorSection }),
   // Model / user names are per host: another host starts unfiltered.
   setMonitor: (monitor) => set((s) => ({ monitor, monitorFilters: { ...s.monitorFilters, model: '', user: '' } })),

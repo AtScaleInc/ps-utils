@@ -1,0 +1,51 @@
+unique_name: User to Country Map
+object_type: dataset
+label: User to Country Map
+columns:
+  - name: country
+    data_type: string
+  - name: username
+    data_type: string
+connection_id: as_adventure
+dialects:
+  - dialect: Postgresql
+    sql: >-
+      select 'France' as "country", 'joe' as "username" union all select 'United
+      States' as "country", 'david' as "username" union all select 'Australia'
+      as "country", 'joe' as "username" union all select 'Canada' as "country",
+      'david' as "username" union all select 'Germany' as "country", 'joe' as
+      "username" union all select 'United Kingdom' as "country", 'joe' as
+      "username"
+  - dialect: Snowflake
+    sql: >-
+      select 'France' as "country", 'joe' as "username" union all select 'United
+      States' as "country", 'david' as "username" union all select 'Australia'
+      as "country", 'joe' as "username" union all select 'Canada' as "country",
+      'david' as "username" union all select 'Germany' as "country", 'joe' as
+      "username" union all select 'United Kingdom' as "country", 'joe' as
+      "username"
+  - dialect: BigQuery
+    sql: >-
+      select 'France' as country, 'joe' as username union all select 'United
+      States' as country, 'david' as username union all select 'Australia' as
+      country, 'joe' as username union all select 'Canada' as country, 'david'
+      as username union all select 'Germany' as country, 'joe' as username union
+      all select 'United Kingdom' as country, 'joe' as username
+  - dialect: DatabricksSQL
+    sql: >-
+      select 'France' as country, 'joe' as username union all select 'United
+      States' as country, 'david' as username union all select 'Australia' as
+      country, 'joe' as username union all select 'Canada' as country, 'david'
+      as username union all select 'Germany' as country, 'joe' as username union
+      all select 'United Kingdom' as country, 'joe' as username
+project_properties:
+  allow_aggregates: true
+  allow_local_aggs: true
+  allow_peer_aggs: true
+  allow_preferred_aggs: true
+sql: >-
+  select 'France' as "country", 'joe' as "username" union all select 'United
+  States' as "country", 'david' as "username" union all select 'Australia' as
+  "country", 'joe' as "username" union all select 'Canada' as "country", 'david'
+  as "username" union all select 'Germany' as "country", 'joe' as "username"
+  union all select 'United Kingdom' as "country", 'joe' as "username"

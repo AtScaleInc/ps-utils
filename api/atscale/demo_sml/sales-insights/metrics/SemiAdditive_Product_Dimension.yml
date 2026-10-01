@@ -1,0 +1,12 @@
+unique_name: SemiAdditive_Product_Dimension
+object_type: metric
+label: SemiAdditive_Product_Dimension
+calculation_method: sum
+column: salesamount
+dataset: factinternetsales
+format: standard
+semi_additive:
+  position: last
+  relationships:
+    - factinternetsales_Product_Dimension
+type: measure

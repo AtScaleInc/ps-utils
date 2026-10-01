@@ -1,0 +1,589 @@
+unique_name: Date Dimension
+object_type: dimension
+label: Date Dimension
+description: Date Dimension that includes Gregorian, ISO8601 and Retail 445 calendars
+calculation_groups:
+  - unique_name: Calculation Group Date Month
+    label: Calculation Group Date Month
+    description: none
+    calculated_members:
+      - unique_name: Current
+        expression: ([Date Dimension].CurrentMember, [Measures].currentMember)
+        format: general number
+      - unique_name: Date Month Hierarchy Current vs Last Year
+        expression: >-
+          (([Date Dimension].CurrentMember, [Measures].currentMember) -
+          (ParallelPeriod([Date Dimension].TimeYear, 1, [Date
+          Dimension].CurrentMember), [Measures].currentMember ))
+        format: fixed
+      - unique_name: Date Month Hierarchy Current vs Last Year Pct
+        expression: >-
+          (([Date Dimension].CurrentMember, [Measures].currentMember) - 
+          (ParallelPeriod([Date Dimension].TimeYear, 1, [Date
+          Dimension].CurrentMember), [Measures].currentMember )) /
+          (ParallelPeriod([Date Dimension].TimeYear, 1, [Date
+          Dimension].CurrentMember), [Measures].currentMember)
+        format: percent
+      - unique_name: Date Month Hierarchy Month Moving Average 3 Month
+        expression: >-
+          Avg(ParallelPeriod([Date Dimension].TimeMonth, 2, [Date
+          Dimension].CurrentMember):[Date Dimension].CurrentMember,
+          [Measures].currentMember)
+        format: standard
+      - unique_name: Date Month Hierarchy Month to Date
+        expression: >-
+          Aggregate(PeriodsToDate([Date Dimension].[Date Month
+          Hierarchy].[Month1], [Date Dimension].[Date Month
+          Hierarchy].CurrentMember),[Measures].currentMember)
+        format: general number
+      - unique_name: Date Month Hierarchy Moving Average 5 Period
+        expression: >-
+          Avg([Date Dimension].[Date Month Hierarchy].CurrentMember.Lag(4):[Date
+          Dimension].[Date Month Hierarchy].CurrentMember,
+          [Measures].currentMember)
+        format: scientific
+      - unique_name: Date Month Hierarchy Pct of Parent
+        expression: >-
+          ([Date Dimension].[Date Month Hierarchy].CurrentMember,
+          [Measures].currentMember) / ([Date Dimension].[Date Month
+          Hierarchy].CurrentMember.parent, [Measures].currentMember)
+        format: percent
+      - unique_name: Date Month Hierarchy Pct of Total
+        expression: >-
+          ([Date Dimension].[Date Month Hierarchy].CurrentMember,
+          [Measures].currentMember) / ([Date Dimension].[Date Month
+          Hierarchy].[All], [Measures].currentMember)
+        format: percent
+    folder: Calculated Groups
+  - unique_name: Retail445 precedence positive
+    label: Retail445 precedence positive
+    description: For testing of the precedence
+    calculated_members:
+      - unique_name: Current
+        template: Current
+        use_input_metric_format: true
+      - unique_name: Parallel Period
+        expression: >-
+          Avg(ParallelPeriod([DateCustom].[Retail445].[Reporting Month], 2,
+          [DateCustom].[Retail445].CurrentMember):[DateCustom].[Retail445].CurrentMember,
+          [Measures].currentMember)
+        use_input_metric_format: true
+      - unique_name: Ancestor, Parent
+        expression: >-
+          ([Product].[Product Categories].CurrentMember,
+          [Measures].currentMember) / ([Product].[Product
+          Categories].CurrentMember.parent, [Measures].currentMember)
+        use_input_metric_format: true
+    precedence: 10.1
+  - unique_name: Retail 445 for testing isHidden
+    label: Retail 445 for testing isHidden member
+    description: PeriodsToDate is currently hidden
+    calculated_members:
+      - unique_name: Current
+        template: Current
+        use_input_metric_format: true
+      - unique_name: PeriodsToDate
+        expression: >-
+          Aggregate(PeriodsToDate([DateCustom].[StandardMonth].[Month],
+          [DateCustom].[StandardMonth].CurrentMember),[Measures].currentMember)
+        is_hidden: true
+        use_input_metric_format: true
+      - unique_name: Lag
+        description: secondary attribute
+        expression: >-
+          ([DateCustom].[Reporting Quarter Of Year].CurrentMember.nextMember,
+          [Measures].currentMember)
+        use_input_metric_format: true
+  - unique_name: Hidden Calculation group
+    label: Hidden Calculation group
+    calculated_members:
+      - unique_name: Current
+        template: Current
+        use_input_metric_format: true
+    is_hidden: true
+  - unique_name: Retail445 precedence negative
+    label: Retail445 precedence negative
+    calculated_members:
+      - unique_name: Current
+        template: Current
+        use_input_metric_format: true
+      - unique_name: Quarter to Date
+        template: Quarter to Date
+        use_input_metric_format: true
+    precedence: -1.1
+hierarchies:
+  - unique_name: CustomPP445
+    label: CustomPP445
+    description: >-
+      A 445 calendar with custom parallel period keys defined for each level. 
+      The underlying data matches the results of the Retail445 hierarchy because
+      the data table contains the standard key assignments generated by the
+      default ParallelPeriod logic.  A real custom ParallelPeriod hierarchy
+      would have different parallel period key assignments to satisfy the
+      reporting business's reporting comparison requirements.
+    filter_empty: 'yes'
+    folder: Date Attributes
+    levels:
+      - unique_name: customyear
+      - unique_name: customquarter
+        parallel_periods:
+          - key_columns:
+              - rpt_quarter_lykey
+            level: customyear
+        secondary_attributes:
+          - unique_name: d_Custom_Quarter_Of_Year
+            label: Custom Quarter Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_quarter_of_year_name
+            name_column: rpt_quarter_of_year_name
+            sort_column: rpt_quarter_of_year_name
+      - unique_name: custommonth
+        parallel_periods:
+          - key_columns:
+              - rpt_month_lykey
+            level: customyear
+        secondary_attributes:
+          - unique_name: d_Custom_Month_Name
+            label: Custom Month Name
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_month_name2
+            name_column: rpt_month_name2
+            sort_column: rpt_month_name2
+          - unique_name: d_Custom_Month_Of_Quarter
+            label: Custom Month Of Quarter
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_month_of_quarter_name
+            name_column: rpt_month_of_quarter_name
+            sort_column: rpt_month_of_quarter_name
+          - unique_name: d_Custom_Month_Of_Year
+            label: Custom Month Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_month_of_year_name
+            name_column: rpt_month_of_year_name
+            sort_column: rpt_month_of_year_name
+      - unique_name: customweek
+        parallel_periods:
+          - key_columns:
+              - rpt_week_lykey
+            level: customyear
+        secondary_attributes:
+          - unique_name: d_Custom_Week_Of_Month
+            label: Custom Week Of Month
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_week_of_month_name
+            name_column: rpt_week_of_month_name
+            sort_column: rpt_week_of_month_name
+          - unique_name: d_Custom_Week_Of_Year
+            label: Custom Week Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_week_of_year_name
+            name_column: rpt_week_of_year_name
+            sort_column: rpt_week_of_year_name
+      - unique_name: customday
+        parallel_periods:
+          - key_columns:
+              - rpt_day_lykey
+            level: customyear
+        secondary_attributes:
+          - unique_name: d_Custom_Day_Of_Month
+            label: Custom Day Of Month
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_day_of_month_name
+            name_column: rpt_day_of_month_name
+            sort_column: rpt_day_of_month_name
+          - unique_name: d_Custom_Day_Of_Week
+            label: Custom Day Of Week
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_day_of_week_name
+            name_column: rpt_day_of_week_name
+            sort_column: rpt_day_of_week_name
+          - unique_name: d_Custom_Day_Of_Year
+            label: Custom Day Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_day_of_year_name
+            name_column: rpt_day_of_year_name
+            sort_column: rpt_day_of_year_name
+  - unique_name: Date Month Hierarchy
+    label: Date Month Hierarchy
+    description: A Gregorian Date Hierarchy.  Organizes time by Year, Quarter, Month, Day.
+    filter_empty: 'yes'
+    folder: Date Attributes
+    levels:
+      - unique_name: YearMonth
+      - unique_name: Quarter
+        secondary_attributes:
+          - unique_name: d_quarter_number
+            label: Quarter Number
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - quarter_of_year
+            name_column: quarter_of_year
+            sort_column: quarter_of_year
+      - unique_name: Month1
+        secondary_attributes:
+          - unique_name: d_month_of_year
+            label: Month Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - month_of_year
+            name_column: month_of_year
+            sort_column: month_of_year
+      - unique_name: DayMonth
+        secondary_attributes:
+          - unique_name: d_day_of_month
+            label: Day Of Month
+            associated_hierarchy: Date Month Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - day_of_month
+            name_column: day_of_month
+            sort_column: day_of_month
+          - unique_name: d_day_of_week_name
+            label: Day Of Week Name
+            associated_hierarchy: Date Month Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - day_of_week_name
+            name_column: day_of_week_name
+            sort_column: day_of_week_name
+          - unique_name: d_day_of_week_number
+            label: Day Of Week Number
+            associated_hierarchy: Date Month Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - day_of_week
+            name_column: day_of_week
+            sort_column: day_of_week
+          - unique_name: Day_Date
+            label: Day Date
+            associated_hierarchy: Date Month Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - pk_date
+            name_column: pk_date
+            sort_column: pk_date
+          - unique_name: W_Day_Date
+            label: W Day Date
+            associated_hierarchy: Date Week Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - pk_date
+            name_column: pk_date
+            sort_column: pk_date
+          - unique_name: w_day_of_week_name
+            label: W Day Of Week Name
+            associated_hierarchy: Date Week Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - day_of_week_name
+            name_column: day_of_week_name
+            sort_column: day_of_week_name
+          - unique_name: w_day_of_week_number
+            label: W Day Of Week Number
+            associated_hierarchy: Date Week Hierarchy
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - day_of_week
+            name_column: day_of_week
+            sort_column: day_of_week
+  - unique_name: Date Week Hierarchy
+    label: Date Week Hierarchy
+    filter_empty: 'yes'
+    folder: Date Attributes
+    levels:
+      - unique_name: YearWeek
+      - unique_name: Week
+        secondary_attributes:
+          - unique_name: d_week_of_year
+            label: Week Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - week_of_year
+            name_column: week_of_year
+            sort_column: week_of_year
+      - unique_name: DayMonth
+  - unique_name: Retail445
+    label: Retail445
+    description: A Retail 4-4-5 calendar
+    filter_empty: 'yes'
+    folder: Date Attributes
+    levels:
+      - unique_name: ReportIng_Year
+      - unique_name: ReportIng_Half_Year
+        secondary_attributes:
+          - unique_name: Reporting_Half_Year_Of_Year
+            label: ReportIng Half Year Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_half_year_of_year
+            name_column: rpt_half_year_of_year_name
+            sort_column: rpt_half_year_of_year_name
+      - unique_name: ReportIng_Quarter
+        secondary_attributes:
+          - unique_name: Reporting_Quarter_Of_Year
+            label: ReportIng Quarter Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_quarter_of_year
+            name_column: rpt_quarter_of_year_name
+            sort_column: rpt_quarter_of_year_name
+      - unique_name: ReportIng_Month
+        secondary_attributes:
+          - unique_name: d_Reporting_Month_Name
+            label: ReportIng Month Name
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_month_name
+            name_column: rpt_month_name2
+            sort_column: rpt_month_name2
+          - unique_name: Reporting_Month_Of_Quarter
+            label: ReportIng Month Of Quarter
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_month_of_quarter
+            name_column: rpt_month_of_quarter_name
+            sort_column: rpt_month_of_quarter_name
+          - unique_name: Reporting_Month_Of_Year
+            label: ReportIng Month Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_month_of_year
+            name_column: rpt_month_of_year_name
+            sort_column: rpt_month_of_year_name
+      - unique_name: ReportIng_Week
+        secondary_attributes:
+          - unique_name: Reporting_Week_Of_Month
+            label: ReportIng Week Of Month
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_week_of_month
+            name_column: rpt_week_of_month_name
+            sort_column: rpt_week_of_month_name
+          - unique_name: Reporting_Week_Of_Year
+            label: ReportIng Week Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_week_of_year
+            name_column: rpt_week_of_year_name
+            sort_column: rpt_week_of_year_name
+      - unique_name: Reporting_Day
+        secondary_attributes:
+          - unique_name: Reporting_Day_Of_Month
+            label: ReportIng Day Of Month
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_day_of_month
+            name_column: rpt_day_of_month_name
+            sort_column: rpt_day_of_month_name
+          - unique_name: Reporting_Day_Of_Week
+            label: ReportIng Day Of Week
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_day_of_week
+            name_column: rpt_day_of_week_name
+            sort_column: rpt_day_of_week_name
+          - unique_name: Reporting_Day_Of_Year
+            label: ReportIng Day Of Year
+            dataset: DateCustom
+            folder: Date Attributes
+            key_columns:
+              - rpt_day_of_year
+            name_column: rpt_day_of_year_name
+            sort_column: rpt_day_of_year_name
+level_attributes:
+  - unique_name: customday
+    label: Custom Day
+    description: >-
+      A 445 calendar with custom parallel period keys defined for each level. 
+      The underlying data matches the results of the Retail445 hierarchy because
+      the data table contains the standard key assignments generated by the
+      default ParallelPeriod logic.  A real custom ParallelPeriod hierarchy
+      would have different parallel period key assignments to satisfy the
+      reporting business's reporting comparison requirements.
+    dataset: DateCustom
+    is_unique_key: true
+    key_columns:
+      - datekey
+    name_column: rpt_day
+    sort_column: datekey
+    time_unit: day
+  - unique_name: custommonth
+    label: Custom Month
+    description: >-
+      Same as [Retail445].[Reporting Month] but has a custom parallel period
+      key.
+    dataset: DateCustom
+    key_columns:
+      - rpt_month
+    name_column: rpt_month_name2
+    sort_column: rpt_month
+    time_unit: month
+  - unique_name: customquarter
+    label: Custom Quarter
+    description: >-
+      Same as [Retail445].[Reporting Quarter] but has a custom parallel period
+      key.
+    dataset: DateCustom
+    key_columns:
+      - rpt_quarter
+    name_column: rpt_quarter_name
+    sort_column: rpt_quarter
+    time_unit: quarter
+  - unique_name: customweek
+    label: Custom Week
+    description: Same as [Retail445].[Reporting Week] but has a custom parallel period key.
+    dataset: DateCustom
+    key_columns:
+      - rpt_week
+    name_column: rpt_week_name
+    sort_column: rpt_week
+    time_unit: week
+  - unique_name: customyear
+    label: Custom Year
+    description: Same as [Retail445].[Reporting Year] but has a custom parallel period key.
+    dataset: DateCustom
+    key_columns:
+      - rpt_year
+    name_column: rpt_year_name
+    sort_column: rpt_year
+    time_unit: year
+  - unique_name: DayMonth
+    label: Day
+    description: Day level of standard calendar Month Hierarchy
+    dataset: DateCustom
+    is_unique_key: true
+    key_columns:
+      - datekey
+    name_column: date_name
+    sort_column: datekey
+    time_unit: day
+  - unique_name: Month1
+    label: Month
+    dataset: DateCustom
+    key_columns:
+      - month
+    name_column: month_name
+    sort_column: month
+    time_unit: month
+  - unique_name: Quarter
+    label: Quarter
+    dataset: DateCustom
+    key_columns:
+      - quarter
+    name_column: quarter_name
+    sort_column: quarter
+    time_unit: quarter
+  - unique_name: Reporting_Day
+    label: Reporting Day
+    description: A Retail 4-4-5 calendar
+    dataset: DateCustom
+    is_unique_key: true
+    key_columns:
+      - datekey
+    name_column: rpt_day
+    sort_column: datekey
+    time_unit: day
+  - unique_name: ReportIng_Half_Year
+    label: ReportIng Half Year
+    dataset: DateCustom
+    key_columns:
+      - rpt_half_year
+    name_column: rpt_half_year_name
+    sort_column: rpt_half_year
+    time_unit: halfyear
+  - unique_name: ReportIng_Month
+    label: ReportIng Month
+    dataset: DateCustom
+    key_columns:
+      - rpt_month
+    name_column: rpt_month_name2
+    sort_column: rpt_month
+    time_unit: month
+  - unique_name: ReportIng_Quarter
+    label: ReportIng Quarter
+    dataset: DateCustom
+    key_columns:
+      - rpt_quarter
+    name_column: rpt_quarter_name
+    sort_column: rpt_quarter
+    time_unit: quarter
+  - unique_name: ReportIng_Week
+    label: ReportIng Week
+    description: Week level of the 4-4-5 calendar
+    dataset: DateCustom
+    key_columns:
+      - rpt_week
+    name_column: rpt_week_name
+    sort_column: rpt_week
+    time_unit: week
+  - unique_name: ReportIng_Year
+    label: ReportIng Year
+    dataset: DateCustom
+    key_columns:
+      - rpt_year
+    name_column: rpt_year_name
+    sort_column: rpt_year
+    time_unit: year
+  - unique_name: Week
+    label: Week
+    dataset: DateCustom
+    key_columns:
+      - week
+    name_column: week_name
+    sort_column: week
+    time_unit: week
+  - unique_name: YearMonth
+    label: Year
+    description: Year level of the Standard Calendar Month Hierarchy.
+    dataset: DateCustom
+    key_columns:
+      - year
+    name_column: year_name
+    sort_column: year
+    time_unit: year
+  - unique_name: YearWeek
+    label: Year
+    dataset: DateCustom
+    key_columns:
+      - year
+    name_column: year_name
+    sort_column: year
+    time_unit: year
+type: time
