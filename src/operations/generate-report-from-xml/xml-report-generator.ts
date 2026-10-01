@@ -722,9 +722,21 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // matches xml-converter.ts, which scans each emitted dimension's own YAML for the
   // datasets it names, in addition to what cubes reference directly, regardless of whether
   // any individual binding happens to be cube-tagged.
+  //
+  // A key-ref id names an abstract key, not a join-specific pairing, so it can be
+  // redeclared by other, unrelated datasets elsewhere in the schema purely by UUID
+  // coincidence — e.g. a legacy/duplicate dataset that reuses the same key-ref id with
+  // complete="false" and no ref-path of its own, wired to nothing. Growing usedDatasetNames
+  // from every such redeclaration (rather than only the one(s) actually reachable) would
+  // mark that dead dataset "used" purely because a live dimension happens to share its
+  // key-ref id. authoritativeBindings() restricts growth to the complete="true"
+  // registration(s) — the same signal pickAuthBinding/resolveEmbeddedDimName already use to
+  // pick the real source out of a group of redeclarations — falling back to the raw set
+  // only when none are complete.
   for (const attrId of usedAttrIds) {
     const keyUuid = attrDef.get(attrId)?.keyUuid;
-    for (const b of keyUuid ? keyMap.get(keyUuid) ?? [] : []) usedDatasetNames.add(b.dataset);
+    const bindings = keyUuid ? keyMap.get(keyUuid) ?? [] : [];
+    for (const b of authoritativeBindings(bindings)) usedDatasetNames.add(b.dataset);
   }
 
   // ── "Used across cubes" tally — usedDatasetNames is now fully grown (direct cube
@@ -993,6 +1005,33 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   }
 
   /**
+   * Restricts a key-ref id's SCHEMA-LEVEL redeclarations (cube undefined — see KeyBinding)
+   * to its complete="true" registration(s), dropping bare complete="false" pointers that
+   * merely defer to (or, if undeclared/dangling, never reach) some other dataset. A
+   * schema-level redeclaration's whole purpose is either to BE the source or to point at
+   * one; it is never an independent binding in its own right, so treating it as one
+   * fabricates a join hop that doesn't exist in the resolved model (e.g. a legacy/duplicate
+   * dataset that reuses another dataset's key-ref id with complete="false" and no ref-path
+   * of its own, wired to nothing). Falls back to the raw schema-level set when none are
+   * complete — keyMap defaults a declaration with no explicit `complete` attribute to
+   * "true", so an empty result here only happens when every schema-level declaration is
+   * explicitly an incomplete pointer.
+   *
+   * Cube-scoped bindings (cube set, from a cube's own <data-set-ref> override — see the
+   * other ingestLogical call site) are always kept regardless of `complete`: a cube-scoped
+   * override is itself the evidence the binding is real and reachable from that cube, the
+   * same "independently cube-tagged" signal `tallyUsageByDataset` relies on elsewhere in
+   * this file, so it is never the dangling kind this filter targets.
+   */
+  function authoritativeBindings(bindings: KeyBinding[]): KeyBinding[] {
+    const schemaLevel = bindings.filter((b) => b.cube === undefined);
+    const completeSchemaLevel = schemaLevel.filter((b) => b.complete === "true");
+    if (!completeSchemaLevel.length) return bindings;
+    const cubeLevel = bindings.filter((b) => b.cube !== undefined);
+    return [...completeSchemaLevel, ...cubeLevel];
+  }
+
+  /**
    * A key-ref id can legitimately be registered more than once and still deserve every
    * registration shown, not collapsed to one:
    *  - under more than one DIFFERENT dataset (e.g. a shared/conformed attribute present in
@@ -1004,10 +1043,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
    * role" on both) are the alternative/override case pickAuthBinding resolves — e.g. one
    * entry from a dataset's own authoritative <logical> section and a stale/incomplete
    * cube-scoped override of the same key.
+   *
+   * Bare complete="false" pointers to a DIFFERENT dataset are filtered out first (via
+   * authoritativeBindings) rather than grouped alongside the real source(s) — such a
+   * pointer either resolves elsewhere (a snowflake embed, rendered by its own dedicated
+   * table) or nowhere (a dangling/orphaned redeclaration), and either way it is not itself
+   * a binding this attribute's value is drawn from.
    */
   function bindingLabel(bindings: KeyBinding[]): string {
     const byDatasetAndRole = new Map<string, KeyBinding[]>();
-    for (const b of bindings) {
+    for (const b of authoritativeBindings(bindings)) {
       const groupKey = `${b.dataset} ${b.rolePlay ?? ""}`;
       const group = byDatasetAndRole.get(groupKey) ?? [];
       group.push(b);
