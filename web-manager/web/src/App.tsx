@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from './api'
 import { BuildView } from './build/BuildView'
+import { CatalogView } from './components/CatalogView'
 import { AskDialog, LinkModelDialog, Toast } from './components/Dialogs'
 import { ManageView } from './components/ManageView'
 import { PromoteView } from './components/PromoteView'
@@ -10,10 +11,10 @@ import { MonitorView } from './monitor/MonitorView'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { BuPicker } from './components/BusinessUnits'
 import { ENVS, envOf, plural, useHosts, usedEnvs } from './components/ui'
-import { resolveHost, targetPick, useUi, type BuildSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
+import { resolveHost, targetPick, useUi, type BuildSection, type CatalogSection, type MonitorSection, type Section, type SettingsSection, type TestSection, type View } from './store'
 
 export default function App() {
-  const { view, linkOpen, manage, section, manageAnalyze, buildSection, testSection, monitorSection, settingsSection } = useUi()
+  const { view, linkOpen, manage, section, manageAnalyze, buildSection, testSection, catalogSection, monitorSection, settingsSection } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const mh = resolveHost(hosts, manage)
   return (
@@ -22,11 +23,12 @@ export default function App() {
       <div className="body">
         <Sidebar />
         <main className="main">
-          <ErrorBoundary resetKey={`${view}|${section}|${manageAnalyze}|${buildSection}|${testSection}|${monitorSection}|${settingsSection}`}>
+          <ErrorBoundary resetKey={`${view}|${section}|${manageAnalyze}|${buildSection}|${testSection}|${catalogSection}|${monitorSection}|${settingsSection}`}>
             {view === 'build' && <BuildView />}
             {view === 'manage' && <ManageView />}
             {view === 'promote' && <PromoteView />}
             {view === 'test' && <TestView />}
+            {view === 'catalog' && <CatalogView />}
             {view === 'monitor' && <MonitorView />}
             {view === 'settings' && <SettingsView />}
           </ErrorBoundary>
@@ -41,9 +43,10 @@ export default function App() {
 
 const TABS: { id: Exclude<View, 'settings'>; label: string; note: string }[] = [
   { id: 'build', label: 'Build', note: 'Model SML, deploy to hosts' },
-  { id: 'test', label: 'Test', note: 'Generate + run model queries on hosts' },
+  { id: 'test', label: 'Validate', note: 'Generate + run model queries on hosts, compare before promoting' },
   { id: 'promote', label: 'Promote', note: 'Move objects between hosts' },
   { id: 'manage', label: 'Manage', note: 'Objects on one host' },
+  { id: 'catalog', label: 'Catalog', note: "Every model of this business unit, on every host - deploy + validate from the model" },
   { id: 'monitor', label: 'Monitor', note: 'Query history, cache / aggregate use, latency' },
 ]
 
@@ -84,7 +87,7 @@ function Header() {
 
 /** Left rail: the current tab's sections, styled like the top tabs. */
 function Sidebar() {
-  const { view, section, setSection, manageAnalyze, setManageAnalyze, buildSection, setBuildSection, testSection, setTestSection, monitorSection, setMonitorSection, settingsSection, setSettingsSection, manage, src, tgt, build, test, monitor } = useUi()
+  const { view, section, setSection, manageAnalyze, setManageAnalyze, buildSection, setBuildSection, testSection, setTestSection, catalogSection, setCatalogSection, monitorSection, setMonitorSection, settingsSection, setSettingsSection, manage, src, tgt, build, test, monitor } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const pick = view === 'promote' ? src : view === 'build' ? build : view === 'test' ? test : view === 'monitor' ? monitor : manage
   const ctxHost = resolveHost(hosts, pick)
@@ -99,10 +102,12 @@ function Sidebar() {
   }
   const context = view === 'promote' ? `${ctxHost?.label ?? '—'} → ${th?.label ?? '—'}`
     : view === 'settings' ? `${plural(hosts.length, 'host')} across ${ENVS.length} groups`
+    : view === 'catalog' ? `All ${plural(hosts.length, 'host')} · ${usedEnvs(hosts).map((e) => e.label).join(' · ') || 'no groups'}`
     : `${envOf(ctxHost?.env ?? pick.env).label} · ${ctxHost?.label ?? 'no host'}`
   const hint = view === 'promote' ? 'Drag source → target' : view === 'settings' ? 'Credentials per host'
     : view === 'build' ? 'Deploy to one or many hosts' : view === 'test' ? 'Same queries, every env'
     : view === 'monitor' ? 'Poll on demand or every 5 min'
+    : view === 'catalog' ? 'Start from the model, not the host'
     : view === 'manage' && manageAnalyze ? 'Pick a group, host, then a model' : 'Pick a group, then a host'
 
   return (
@@ -124,6 +129,14 @@ function Sidebar() {
           { id: 'model', label: 'Compare model', note: 'DMV metrics + levels diff' },
         ] as { id: TestSection; label: string; note: string }[]).map((s) => (
           <button key={s.id} type="button" className={`side-btn ${testSection === s.id ? 'on' : ''}`} onClick={() => setTestSection(s.id)}>
+            <span className="t">{s.label}</span><span className="n">{s.note}</span>
+          </button>
+        ))}
+        {view === 'catalog' && ([
+          { id: 'models', label: 'Models', note: 'Repo → model → every host · deploy, undeploy' },
+          { id: 'validate', label: 'Validate', note: 'Pick a model, run it where it is deployed' },
+        ] as { id: CatalogSection; label: string; note: string }[]).map((s) => (
+          <button key={s.id} type="button" className={`side-btn ${catalogSection === s.id ? 'on' : ''}`} onClick={() => setCatalogSection(s.id)}>
             <span className="t">{s.label}</span><span className="n">{s.note}</span>
           </button>
         ))}

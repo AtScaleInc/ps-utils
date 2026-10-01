@@ -61,7 +61,7 @@ export function DatabaseCard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="eyebrow" style={{ color: 'var(--prod)' }}>Database · test history</span>
           <span className="muted" style={{ fontSize: 12.5 }}>
-            Test runs, model snapshots and result rows in <span className="mono" style={{ color: 'var(--ink)' }}>{d?.path ?? 'workspace/tests.db'}</span>.
+            Validation runs, model snapshots and result rows in <span className="mono" style={{ color: 'var(--ink)' }}>{d?.path ?? 'workspace/tests.db'}</span>.
             {d && ` Kept automatically: newest ${d.keepPerModel} runs per model, none older than ${d.maxAgeDays} days; ${d.maxActive} runs can execute at once.`}
           </span>
         </div>

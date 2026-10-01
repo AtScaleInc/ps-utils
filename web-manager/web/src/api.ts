@@ -193,6 +193,32 @@ export interface ModelAudit {
   } | null
 }
 
+/** Catalog: one model's copy on one host (api/routes/catalog.py). `atHead`:
+ * deployed commit is its branch's head (null = unknown / not deployed). */
+export interface CatalogDeployment {
+  hostId: string
+  env: EnvId
+  label: string
+  key: string
+  status: ModelRow['status']
+  catalog: string | null
+  branch: string | null
+  commit: string | null
+  version: string | null
+  commitDate: string | null
+  versionInferred: boolean
+  updated: string | null
+  head: string | null
+  atHead: boolean | null
+}
+export interface CatalogModel { name: string; inGit: boolean; deployments: CatalogDeployment[] }
+export interface CatalogRepo { url: string; fullName: string; defaultBranch: string; source: 'git' | 'host'; models: CatalogModel[] }
+export interface CatalogResponse {
+  repos: CatalogRepo[]
+  hosts: { id: string; env: EnvId; label: string; error: string | null }[]
+  gitError: string | null
+}
+
 export interface Job<T = unknown> {
   id: string
   kind: string
@@ -259,6 +285,8 @@ export const api = {
   addBu: (label: string) => req<BusinessUnit>('POST', '/bus', { label }),
   patchBu: (id: string, label: string) => req<BusinessUnit>('PATCH', `/bus/${encodeURIComponent(id)}`, { label }),
   deleteBu: (id: string) => req('DELETE', `/bus/${encodeURIComponent(id)}`),
+
+  catalog: (refresh?: boolean) => req<CatalogResponse>('GET', withQ('/catalog', r(refresh))),
 
   hosts: () => req<{ hosts: Host[]; bu: string; fake: boolean }>('GET', '/hosts'),
   addHost: (env: EnvId) => req<Host>('POST', '/hosts', { env }),

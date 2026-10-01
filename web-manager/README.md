@@ -19,7 +19,7 @@ below works inside it. From one screen you can:
   aggregates or the warehouse, volume, latency and hotspots.
 
 ```
-┌───── Build ──────┐   ┌────── Test ──────┐   ┌──── Promote ─────┐   ┌───── Manage ─────┐   ┌──── Monitor ─────┐
+┌───── Build ──────┐   ┌──── Validate ────┐   ┌──── Promote ─────┐   ┌───── Manage ─────┐   ┌──── Monitor ─────┐
 │ discover →       │   │ generate queries │   │ source host      │   │ group → host     │   │ poll a host's    │
 │ canvas → SML     │ → │ from a model,    │ → │  diff → stage    │ → │ Models: link,    │ → │ query history:   │
 │ push to Git      │   │ run on hosts,    │   │ target host      │   │  deploy, unlink  │   │ cache / agg /    │
@@ -30,20 +30,22 @@ below works inside it. From one screen you can:
   Settings: Hosts & Git (credentials, the BU's Git profile) · Business units · Cache & Database
 ```
 
-The top tabs are **Build · Test · Promote · Manage · Monitor**, with **⚙ Settings** on the
+The top tabs are **Build · Validate · Promote · Manage · Catalog · Monitor**, with **⚙ Settings** on the
 right. The app opens on Build. The left rail lists the current tab's sections:
 
 | Tab | Rail sections |
 |---|---|
 | Build | Discovery · Develop · Preview |
-| Test | Run · Results · Compare results · Compare model |
+| Validate | Run · Results · Compare results · Compare model |
 | Promote | Models · Aggregates |
 | Manage | Models · Aggregates · Analyze |
+| Catalog | Models · Validate |
 | Monitor | Overview · History · Hotspots |
 | Settings | Hosts & Git · Cache & Database |
 
-Every tab picks its group and host the same way: the env picker and host
-dropdown sit at the left of the bar.
+Every host-bound tab picks its group and host the same way: the env picker and host
+dropdown sit at the left of the bar. Catalog is the exception - it starts from
+the model and covers every host of the business unit.
 
 ---
 
@@ -231,9 +233,9 @@ Build is a quick-start modeler, not a replacement for AtScale's own. A model
 using anything beyond Build's subset opens read-only (see above) rather than
 being partly imported and overwritten.
 
-### Test: prove an environment matches before promoting
+### Validate: prove an environment matches before promoting
 
-Test is ps-utils' *Testing / Query Processing* group, run on several hosts at
+Validate is ps-utils' *Testing / Query Processing* group, run on several hosts at
 once. A candidate environment is ready to promote to when its **model** and its
 **query results** match the baseline.
 
@@ -275,7 +277,7 @@ once. A candidate environment is ready to promote to when its **model** and its
 run pickers (Compare results) reload their list when you open them if it's
 more than 30 seconds old, so a model deployed or a run finished a minute ago
 shows up. **↻ Refresh** (Run, Compare results, Compare model) reloads
-everything Test holds: every host's models, the generated queries, runs and
+everything Validate holds: every host's models, the generated queries, runs and
 comparisons. Use it after redeploying a model under the same name, since the
 generated queries for a model already picked are kept until then.
 
@@ -450,6 +452,47 @@ Each tab opens with a switch that shows one view at a time:
 
 **Export JSON** downloads the whole audit.
 
+### Catalog: every model of the business unit, on every host
+
+Manage, Promote and Validate start from a host. Catalog starts from the model:
+it is the business unit's view of what it has and where it runs.
+
+- **Models.** Each repo from the BU's Git profile that has a root
+  `catalog.yml`, its models, and one column per group (Dev, Test, QA, Prod).
+  Every host holding the model gets a chip with its version, coloured:
+  - green: deployed at the branch head
+  - amber: behind it
+  - red: failed
+  - dashed: linked but not deployed
+
+  A repo a host has attached that the Git profile doesn't list still
+  shows, so no deployment is hidden. The Status column gives the model's
+  worst finding: an error, copies behind head, more than one version across
+  hosts, groups it isn't deployed in, or "In sync". **Needs attention**
+  filters to models with a finding.
+- **Open a model** to see every host of the BU with its status, branch,
+  version and deploy date. From there:
+  - **Deploy head** or **Redeploy** at the picked branch.
+  - **Deploy** a model that is only linked.
+  - **Link + deploy** onto a host that doesn't have it yet: attaches the
+    repo, links the model, then deploys.
+  - **Undeploy** the copy on a host. AtScale undeploys the whole catalog, so
+    the confirmation names every other model deployed in it. The repo link
+    stays, so the row drops back to Linked.
+
+  Each one asks first, and a Prod host is flagged. **Analyze** opens
+  Manage › Analyze on that host, and **Promote…** opens Promote with that
+  host as the source.
+- **Validate** is the same table, listing only models deployed somewhere
+  and only their deployed copies. Status says whether those copies run one
+  version or several. Open a model and its deployed hosts are listed by
+  group, all ticked. Tick or untick a whole group, or single hosts, then
+  **Run**. A host where the model's cube can't be found is greyed out with
+  the reason. Queries are generated from the lowest group's host in the run.
+  The query list, options and results are the Validate tab's own, and the
+  run opens in Validate › Results. When the ticked hosts run different
+  versions, that's the check to run before promoting.
+
 ### Settings
 
 **Hosts & Git** (of the business unit picked in the header)
@@ -474,7 +517,7 @@ Each tab opens with a switch that shows one view at a time:
   removed once it has no hosts, and the last one always stays.
 - Nothing crosses a BU boundary: another BU's hosts are "not found" to the
   API, so you can't promote, test or deploy across BUs. Build keeps its
-  working copies per BU (`workspace/models/<bu>/<model>`), Test lists only the
+  working copies per BU (`workspace/models/<bu>/<model>`), Validate lists only the
   runs on the BU's hosts, and Monitor / Discovery clean-ups without a host
   touch only the BU's hosts.
 - Switching BU clears the Build canvas (it asks first when tables are on it),
@@ -485,7 +528,7 @@ Each tab opens with a switch that shows one view at a time:
 - **Cache.** The list cache in the working folder (see *Caching and storage*):
   how many lists, how many are fresh, their size. You can show the contents
   and clear it.
-- **Database.** The Test history in `workspace/tests.db`:
+- **Database.** The Validate history in `workspace/tests.db`:
   - stored runs, executions and result data per model, with the oldest and
     newest run
   - **Delete runs** older than N days and/or beyond the newest N per model, for
@@ -590,7 +633,7 @@ Each demo environment names its warehouse connection differently (`PG_DEV`,
   you can see a deploy skip a host. Deploy doesn't really push to Git.
 - Build's Discovery works in full: the demo warehouse is an in-memory SQLite
   with generated rows, and the real profile SQL runs against it.
-- Build's Preview, Load from Git, and the Test tab run real queries, so they
+- Build's Preview, Load from Git, and the Validate tab run real queries, so they
   need a real host.
 - Manage → Analyze reads AtScale's `sml-demo-sales-insights` repo for every
   demo model, copied into `api/atscale/demo_sml/`. The **Deployed on host**
@@ -622,7 +665,7 @@ The API tests cover:
   warehouse, roles and findings, results served from the store instead of
   re-read, drift between runs, cleanup, and a statistics 404 on older AtScale
   builds
-- Test: query generation (level names, not captions), the harness (checksums
+- Validate: query generation (level names, not captions), the harness (checksums
   ignore per-response timestamps; `<FmtValue>` isn't counted), result variance
   and model diffs, the compare endpoint, the SQLite store (history, retention,
   restart recovery, JSON import), cleanup, the concurrent-run cap and job pruning
@@ -662,7 +705,7 @@ Environment variables:
 | `ENV_MANAGER_WORKSPACE` | `./workspace` | Location of the working folder |
 | `ENV_MANAGER_CACHE_TTL` | `7200` | How long cached lists stay valid, in seconds |
 | `ENV_MANAGER_MODELS_DIR` | `workspace/models` | Where Build keeps each model's working copy |
-| `ENV_MANAGER_TESTS_DB` | `workspace/tests.db` | Location of the Test database |
+| `ENV_MANAGER_TESTS_DB` | `workspace/tests.db` | Location of the Validate database |
 | `ENV_MANAGER_TEST_KEEP` | `100` | Runs kept per model; older ones are pruned after each run |
 | `ENV_MANAGER_TEST_MAX_AGE_DAYS` | `90` | Runs older than this are pruned after each run |
 | `ENV_MANAGER_TEST_MAX_ACTIVE` | `3` | Test runs that can execute at once; more are refused until one finishes |
@@ -698,7 +741,7 @@ calls. To keep switching between hosts, models and views instant:
   - Saving a business unit's Git profile clears its hosts' cache and its Git lists.
 - **Builds.** Aggregate lists that contain Building rows are cached for only
   5 seconds, so builds show progress.
-- **Not cached:** preview and Test queries, which always go to the host. Model
+- **Not cached:** preview and Validate queries, which always go to the host. Model
   metadata can change between one deploy and the next.
 
 Discovery results aren't in the list cache either. They're kept in
@@ -785,6 +828,7 @@ Manage          GET /hosts/:id/models · /repos · /branches?url= · /aggregate-
                 POST /hosts/:id/aggregates/build · deactivate · reactivate · GET /hosts/:id/aggregates/builds
                 GET /hosts/:id/analyze?key=<model key> · /hosts/:id/analyze/file?key=&path=
 Promote         POST /promote/diff · /promote/models · /promote/aggregates
+Catalog         GET /catalog (repos -> models -> each BU host's copy: status, branch, commit, atHead)
 Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)
                 GET /hosts/:id/sources/:sourceId/columns?schema=&table= · POST …/columns {tables} · GET /build/repos
                 GET /hosts/:id/preview/catalogs · /preview/metadata · POST /preview/query · /preview/freehand

@@ -19,6 +19,7 @@ from routes.testing import testing_bp
 from routes.monitor import monitor_bp
 from routes.objects import objects_bp
 from routes.promote import promote_bp
+from routes.catalog import catalog_bp
 from routes.settings import settings_bp
 
 # Container hosts commonly run self-signed certs; `insecure: true` per host
@@ -66,6 +67,7 @@ def create_app() -> Flask:
     app.register_blueprint(settings_bp, url_prefix="/api")
     app.register_blueprint(objects_bp, url_prefix="/api")
     app.register_blueprint(promote_bp, url_prefix="/api")
+    app.register_blueprint(catalog_bp, url_prefix="/api")
     app.register_blueprint(build_bp, url_prefix="/api")
     app.register_blueprint(discovery_bp, url_prefix="/api")
     app.register_blueprint(testing_bp, url_prefix="/api")

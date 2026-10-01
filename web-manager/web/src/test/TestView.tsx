@@ -1,13 +1,13 @@
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { CompareSection, ModelCompareSection } from './Compare'
 import { ResultsSection } from './Results'
 import { ENVS, EnvSegment, HostSelect, RefreshButton, errMsg, plural, useHosts } from '../components/ui'
 import { resolveHost, useUi } from '../store'
-import { testApi, type CubeRef, type Protocol, type TestOptions, type TestQuery } from './api'
+import { testApi, type CubeRef, type Protocol, type TestOptions, type TestQuery, type TestTarget } from './api'
 import { TEST_FRESH_MS, loadedAt, refreshTest, reloadIfOld, useTestCubes } from './shared'
 
-const cubeKey = (c: CubeRef) => `${c.catalog}|${c.cube}`
+export const cubeKey = (c: CubeRef) => `${c.catalog}|${c.cube}`
 
 /** Test: ps-utils "Testing / Query Processing" - generate-queries-from-model
  * builds the queries from a deployed model, execute-atscale-query-harness runs
@@ -21,7 +21,7 @@ export function TestView() {
 }
 
 function RunSetup() {
-  const { test, setTest, setTestRunId, setTestSection, flash } = useUi()
+  const { test, setTest } = useUi()
   const hosts = useHosts().data?.hosts ?? []
   const host = resolveHost(hosts, test)
   const qc = useQueryClient()
@@ -30,13 +30,6 @@ function RunSetup() {
   const cubes = cubesQ.data?.cubes ?? []
   const [modelKey, setModelKey] = useState('')
   const ref = cubes.find((c) => cubeKey(c) === modelKey) ?? cubes[0] ?? null
-
-  const genQ = useQuery({
-    queryKey: ['testQueries', host?.id, ref && cubeKey(ref)],
-    queryFn: () => testApi.generate(host!.id, ref!),
-    enabled: !!host && !!ref,
-  })
-  const queries = useMemo(() => genQ.data?.queries ?? [], [genQ.data])
 
   // Every host's cubes, to show where the picked model exists.
   const allCubes = useQueries({
@@ -64,6 +57,76 @@ function RunSetup() {
   useEffect(() => { if (host && !targets.length) setTargets([host.id]) }, [host, targets.length])
   const runnable = targets.filter((id) => hasModel(id) === true)
 
+  return (
+    <RunBuilder
+      genHostId={host?.id ?? null}
+      model={ref}
+      targets={runnable.map((hostId) => ({ hostId, ...matchOn(hostId)! }))}
+      barLeft={(
+        <>
+          <EnvSegment value={test.env} onPick={(e) => { setTest({ env: e, hostId: null }); setTargets([]) }} />
+          <HostSelect hosts={hosts} env={test.env} value={host?.id ?? null} onChange={(id) => { setTest({ env: test.env, hostId: id }); setTargets([]) }} />
+          <select className="select" style={{ minWidth: 260 }} value={ref ? cubeKey(ref) : ''} onChange={(e) => setModelKey(e.target.value)}
+            onMouseDown={reloadIfOld(cubesQ)} onFocus={reloadIfOld(cubesQ)} disabled={!cubes.length && !cubesQ.isFetching}>
+            {!cubes.length && <option value="">{cubesQ.isLoading ? 'Loading models…' : cubesQ.isError ? 'Could not list models' : 'No deployed models'}</option>}
+            {cubes.map((c) => <option key={cubeKey(c)} value={cubeKey(c)}>{c.cube} — {c.catalog}</option>)}
+          </select>
+        </>
+      )}
+      barRight={<RefreshButton cachedAt={loadedAt(cubesQ.dataUpdatedAt)} cachedFor="30 s" onRefresh={() => refreshTest(qc)} />}
+      error={cubesQ.isError ? errMsg(cubesQ.error) : null}
+      runOn={(
+        <div className="test-hosts">
+          {ENVS.map((e) => {
+            const inEnv = hosts.filter((h) => h.env === e.id)
+            if (!inEnv.length) return null
+            return (
+              <div key={e.id} className="test-env">
+                <span className="test-env-label" style={{ color: e.color }}>{e.label}</span>
+                {inEnv.map((h) => {
+                  const has = hasModel(h.id)
+                  const off = has === false
+                  return (
+                    <label key={h.id} className={`test-host ${off ? 'off' : ''}`}
+                      title={off ? `${ref?.cube ?? 'Model'} isn't deployed on ${h.label}` : h.hostname}>
+                      <input type="checkbox" disabled={off} checked={targets.includes(h.id) && !off}
+                        onChange={() => setTargets((t) => (t.includes(h.id) ? t.filter((x) => x !== h.id) : [...t, h.id]))} />
+                      {h.label}
+                      <span className="hint">{has === null ? '…' : !has ? 'no model' : matchOn(h.id)!.catalog !== ref?.catalog ? matchOn(h.id)!.catalog : ''}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    />
+  )
+}
+
+/** Everything after "which model, on which hosts": the generated queries, the
+ * run options and the Run button. Validate › Run picks a host then a model;
+ * Catalog › Validate picks a model then the hosts it's deployed on - both end here.
+ * `genHostId` + `model`: where the queries are generated from; `targets`:
+ * every host (with its own catalog/cube) the run executes on. */
+export function RunBuilder({ genHostId, model, targets, barLeft, barRight, runOn, error }: {
+  genHostId: string | null
+  model: CubeRef | null
+  targets: TestTarget[]
+  barLeft: ReactNode
+  barRight?: ReactNode
+  runOn: ReactNode
+  error?: string | null
+}) {
+  const { setTestRunId, setTestSection, setView, flash } = useUi()
+  const qc = useQueryClient()
+  const genQ = useQuery({
+    queryKey: ['testQueries', genHostId, model && cubeKey(model)],
+    queryFn: () => testApi.generate(genHostId!, model!),
+    enabled: !!genHostId && !!model,
+  })
+  const queries = useMemo(() => genQ.data?.queries ?? [], [genQ.data])
   const [picked, setPicked] = useState<Set<string> | null>(null) // null = all
   const [kind, setKind] = useState<'all' | 'total' | 'level'>('all')
   const [search, setSearch] = useState('')
@@ -93,19 +156,20 @@ function RunSetup() {
     return next
   })
   const allVisibleOn = visible.length > 0 && visible.every(isPicked)
-  const nRuns = chosen.length * protocols.length * runnable.length
+  const nRuns = chosen.length * protocols.length * targets.length
 
   async function start() {
-    if (!ref) return
+    if (!model) return
     setStarting(true)
     try {
       const run = await testApi.start({
-        targets: runnable.map((hostId) => ({ hostId, ...matchOn(hostId)! })),
+        targets,
         queries: chosen, protocols, concurrency, options: opts, annotate,
       })
       qc.invalidateQueries({ queryKey: ['testRuns'] })
       setTestRunId(run.runId)
       setTestSection('results')
+      setView('test')
     } catch (e) {
       flash(errMsg(e), 'err')
     } finally {
@@ -117,53 +181,24 @@ function RunSetup() {
     <>
       <div className="bar">
         <div className="row">
-          <EnvSegment value={test.env} onPick={(e) => { setTest({ env: e, hostId: null }); setTargets([]) }} />
-          <HostSelect hosts={hosts} env={test.env} value={host?.id ?? null} onChange={(id) => { setTest({ env: test.env, hostId: id }); setTargets([]) }} />
-          <select className="select" style={{ minWidth: 260 }} value={ref ? cubeKey(ref) : ''} onChange={(e) => setModelKey(e.target.value)}
-            onMouseDown={reloadIfOld(cubesQ)} onFocus={reloadIfOld(cubesQ)} disabled={!cubes.length && !cubesQ.isFetching}>
-            {!cubes.length && <option value="">{cubesQ.isLoading ? 'Loading models…' : cubesQ.isError ? 'Could not list models' : 'No deployed models'}</option>}
-            {cubes.map((c) => <option key={cubeKey(c)} value={cubeKey(c)}>{c.cube} — {c.catalog}</option>)}
-          </select>
+          {barLeft}
         </div>
         <div className="row">
-          <RefreshButton cachedAt={loadedAt(cubesQ.dataUpdatedAt)} cachedFor="30 s" onRefresh={() => refreshTest(qc)} />
+          {barRight}
           <span className="hint">{genQ.isFetching ? 'Reading model…' : queries.length ? `${queries.length} ${queries.length === 1 ? 'query' : 'queries'} generated` : ''}</span>
           <button type="button" className="btn primary lg" disabled={!nRuns || starting} onClick={start}>
-            {starting ? 'Starting…' : nRuns ? `Run ${nRuns} on ${plural(runnable.length, 'host')}` : 'Run'}
+            {starting ? 'Starting…' : nRuns ? `Run ${nRuns} on ${plural(targets.length, 'host')}` : 'Run'}
           </button>
         </div>
       </div>
 
-      {cubesQ.isError && <div className="notice err" style={{ marginTop: 12 }}><span className="eyebrow" style={{ color: 'var(--danger)' }}>Error</span>{errMsg(cubesQ.error)}</div>}
+      {error && <div className="notice err" style={{ marginTop: 12 }}><span className="eyebrow" style={{ color: 'var(--danger)' }}>Error</span>{error}</div>}
       {genQ.isError && <div className="notice err" style={{ marginTop: 12 }}><span className="eyebrow" style={{ color: 'var(--danger)' }}>Error</span>{errMsg(genQ.error)}</div>}
 
       <div className="test-setup">
         <div className="test-block">
           <span className="eyebrow">Run on</span>
-          <div className="test-hosts">
-            {ENVS.map((e) => {
-              const inEnv = hosts.filter((h) => h.env === e.id)
-              if (!inEnv.length) return null
-              return (
-                <div key={e.id} className="test-env">
-                  <span className="test-env-label" style={{ color: e.color }}>{e.label}</span>
-                  {inEnv.map((h) => {
-                    const has = hasModel(h.id)
-                    const off = has === false
-                    return (
-                      <label key={h.id} className={`test-host ${off ? 'off' : ''}`}
-                        title={off ? `${ref?.cube ?? 'Model'} isn't deployed on ${h.label}` : h.hostname}>
-                        <input type="checkbox" disabled={off} checked={targets.includes(h.id) && !off}
-                          onChange={() => setTargets((t) => (t.includes(h.id) ? t.filter((x) => x !== h.id) : [...t, h.id]))} />
-                        {h.label}
-                        <span className="hint">{has === null ? '…' : !has ? 'no model' : matchOn(h.id)!.catalog !== ref?.catalog ? matchOn(h.id)!.catalog : ''}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
+          {runOn}
         </div>
         <div className="test-block">
           <span className="eyebrow">Options</span>
@@ -233,7 +268,7 @@ function RunSetup() {
               )}
             </Fragment>
           ))}
-          {!visible.length && <div className="empty">{genQ.isFetching ? 'Reading model…' : ref ? 'No queries match' : 'Pick a deployed model'}</div>}
+          {!visible.length && <div className="empty">{genQ.isFetching ? 'Reading model…' : model ? 'No queries match' : 'Pick a deployed model'}</div>}
         </div>
       </div>
     </>

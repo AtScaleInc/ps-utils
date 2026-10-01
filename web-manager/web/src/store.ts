@@ -3,8 +3,12 @@ import type { EnvId, Host, PromoteMode } from './api'
 import { setBu } from './bu'
 import { effectiveEnv, usedEnvs } from './components/ui'
 
-export type View = 'build' | 'manage' | 'promote' | 'test' | 'monitor' | 'settings'
+export type View = 'catalog' | 'build' | 'manage' | 'promote' | 'test' | 'monitor' | 'settings'
 export type Section = 'models' | 'aggs'
+/** Catalog's left-rail sections: every model across the BU's hosts, and validating one model wherever it's deployed. */
+export type CatalogSection = 'models' | 'validate'
+/** A model in the Catalog: its repo + name (the same model on every host). */
+export interface CatalogPick { repoUrl: string; model: string }
 /** Build's left-rail sections: table discovery / profiling, the wizard canvas, and the cube data preview. */
 export type BuildSection = 'discover' | 'model' | 'preview'
 /** Test's left-rail sections: set up + run, past runs by model, baseline-vs-candidate result and model compares. */
@@ -34,6 +38,9 @@ interface UiState {
   /** Business unit everything below works in (bu.ts sends it as X-BU); null until /bus has loaded. */
   bu: string | null
   view: View
+  catalogSection: CatalogSection
+  /** Catalog's open model - shared by Models and Validate (the expanded row in each). */
+  catalogPick: CatalogPick | null
   section: Section
   buildSection: BuildSection
   /** Build's host: where data sources are browsed and the default deploy target. */
@@ -75,6 +82,8 @@ interface UiState {
   /** Work in another business unit: every host pick, staged item and run is that BU's own, so they reset. */
   switchBu: (id: string) => void
   setView: (v: View) => void
+  setCatalogSection: (s: CatalogSection) => void
+  setCatalogPick: (p: CatalogPick | null) => void
   setSection: (s: Section) => void
   setBuildSection: (s: BuildSection) => void
   setBuild: (p: HostPick) => void
@@ -109,6 +118,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 /** Everything that names a host, model or run - all of it belongs to one business unit. */
 const BU_SCOPED = {
+  catalogPick: null,
   build: { env: 'dev', hostId: null },
   test: { env: 'dev', hostId: null },
   testRunId: null,
@@ -132,6 +142,7 @@ export const useUi = create<UiState>((set) => ({
   ...BU_SCOPED,
   bu: null,
   view: 'build',
+  catalogSection: 'models',
   section: 'models',
   buildSection: 'discover',
   testSection: 'run',
@@ -147,6 +158,8 @@ export const useUi = create<UiState>((set) => ({
     set({ ...BU_SCOPED, bu, ask: null })
   },
   setView: (view) => set({ view }),
+  setCatalogSection: (catalogSection) => set({ catalogSection }),
+  setCatalogPick: (catalogPick) => set({ catalogPick }),
   setBuildSection: (buildSection) => set({ buildSection }),
   setBuild: (build) => set({ build }),
   setTestSection: (testSection) => set({ testSection }),
