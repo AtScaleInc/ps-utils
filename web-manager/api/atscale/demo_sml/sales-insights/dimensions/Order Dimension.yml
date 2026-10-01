@@ -1,0 +1,45 @@
+unique_name: Order Dimension
+object_type: dimension
+label: Order Dimension
+hierarchies:
+  - unique_name: Order Dimension hierarchy
+    label: Order Dimension
+    folder: Orders
+    levels:
+      - unique_name: currency
+      - unique_name: order
+      - unique_name: order_line_item
+        secondary_attributes:
+          - unique_name: typeorder
+            label: Order Type
+            dataset: dimorder
+            folder: Orders
+            key_columns:
+              - type
+            name_column: type
+            sort_column: type
+level_attributes:
+  - unique_name: currency
+    label: Currency
+    dataset: dimorder
+    key_columns:
+      - currencykey
+    name_column: currency_name
+  - unique_name: order
+    label: Order
+    dataset: dimorder
+    key_columns:
+      - salesordernumber
+      - currencykey
+    name_column: salesordernumber
+  - unique_name: order_line_item
+    label: Order Line Item
+    description: Order Line Item
+    dataset: dimorder
+    is_unique_key: true
+    key_columns:
+      - salesorderlinenumber
+      - salesordernumber
+      - currencykey
+    name_column: salesorderlinenumber
+type: standard

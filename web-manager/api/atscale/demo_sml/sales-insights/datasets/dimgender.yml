@@ -1,0 +1,12 @@
+unique_name: dimgender
+object_type: dataset
+label: dimgender
+columns:
+  - name: genderkey
+    data_type: string
+  - name: gendername
+    data_type: string
+connection_id: as_adventure
+project_properties:
+  allow_aggregates: true
+table: dimgender

@@ -1,0 +1,20 @@
+unique_name: Style Dimension
+object_type: dimension
+label: Style Dimension
+description: Product Style
+hierarchies:
+  - unique_name: Style hierarchy
+    label: Style
+    folder: Product Attributes
+    levels:
+      - unique_name: Style
+is_degenerate: true
+level_attributes:
+  - unique_name: Style
+    label: Style
+    description: Product Style
+    dataset: factinternetsales
+    key_columns:
+      - style
+    name_column: style
+type: standard

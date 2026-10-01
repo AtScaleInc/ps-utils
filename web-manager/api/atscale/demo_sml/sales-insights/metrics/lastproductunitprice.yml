@@ -1,0 +1,12 @@
+unique_name: lastproductunitprice
+object_type: metric
+label: Last Product Unit Price
+calculation_method: maximum
+format: "$#,##0.00"
+semi_additive:
+  position: last
+  relationships:
+    - factinternetsales_Product_Dimension
+dataset: factinternetsales
+column: unitprice
+type: measure

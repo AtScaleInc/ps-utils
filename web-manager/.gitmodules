@@ -1,0 +1,6 @@
+[submodule "reference/ps-utils"]
+	path = reference/ps-utils
+	url = https://github.com/AtScaleInc/ps-utils.git
+[submodule "reference/PythonAtscaleUtility"]
+	path = reference/PythonAtscaleUtility
+	url = https://github.com/rwidjaja/PythonAtscaleUtility.git

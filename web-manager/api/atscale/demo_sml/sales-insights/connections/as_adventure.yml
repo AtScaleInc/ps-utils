@@ -1,0 +1,8 @@
+# this connection file works with databricks, postgres and iris
+unique_name: as_adventure
+object_type: connection
+as_connection: con1
+label: as_adventure
+database: atscale
+schema: as_adventure
+override: true
