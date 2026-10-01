@@ -97,8 +97,9 @@ Settings. There's no separate login.
 - **Preview data** (canvas toolbar, after Auto-arrange). Checks joins and
   metrics against real data before anything is generated or deployed. In a
   pop-up like the Wizard's, pick the table to start from (facts first), then
-  the metrics and each dimension's levels and attributes (all ticked by
-  default). Tables join the way the canvas says: fact → dimensions →
+  the metrics and each dimension's levels and attributes. Nothing is ticked
+  when it opens: every ticked column can add a join, so pick only what you
+  want to look at (a group's checkbox ticks the whole group). Tables join the way the canvas says: fact → dimensions →
   snowflaked dimensions, one join per role-play (Order Date / Ship Date), as
   LEFT JOINs so a key with no match shows as NULL instead of vanishing.
   - **Rows**: the joined rows as they are, metrics unaggregated. A dimension
@@ -111,11 +112,58 @@ Settings. There's no separate login.
     dimension row. This one counts every row, so it's a full scan on large
     tables.
 
-  It runs once when opened and again on **Run**; the SQL sent is shown under
-  the result. Rows and Aggregated return the first **10 rows**: the SQL goes
+  Nothing runs until you click **Run** (it stays off until something is
+  ticked, except for Check joins); the SQL sent is shown under the result.
+  Changing the table to start from clears the picks. Rows and Aggregated return the first **10 rows**: the SQL goes
   through the same AtScale interface as Discovery's profile, whose limit is
   fixed by the engine. Calculations are MDX and aren't previewed; they run in
   AtScale after deploy. Nothing is stored.
+- **Shared dimensions (SML packages).** Build common dimensions once and reuse
+  them in many models through the model's `package.yml`
+  ([SML package reference](https://github.com/semanticdatalayer/SML/blob/main/sml-reference/package.md)).
+  - **Publish a shared dimensions repo.** Put only dimensions on the canvas (no
+    fact) and click **Deploy**. Instead of the "not connected to any fact
+    table" errors, Build asks whether to publish the repo as shared
+    dimensions. Say yes and the bar shows a **Shared dimensions** chip (✕
+    turns it back into a model) and the button reads **Publish**. The repo
+    holds the catalog, connection, datasets and dimensions, with no model and
+    no metrics. Its `catalog.yml` carries the tag
+    `# Shared dimensions package (AtScale Environment Manager) - attach, don't deploy`,
+    and its connection is named `<connection>_shared_dim`. A model using the
+    package would otherwise have a connection with the same
+    `con_<database>_<schema>` name, and AtScale requires every name to be
+    unique once the package is merged in. Publishing pushes to Git once, then
+    only **attaches** the repo on each checked host. Nothing is deployed.
+  - **Use shared dimensions in a model.** **Shared dims** in the Build bar
+    lists repos you can pick from: ones carrying the tag, Git profile repos
+    with a catalog but no `models/` folder, and repos attached on the Build
+    host with nothing deployed from them. Picking one reads the head commit
+    of its branch. Choose the dimensions to add. They land on the canvas
+    read-only, with a dashed border and a `SHARED · <package> @ <commit>`
+    badge. The Inspector shows their hierarchy and the level keys a join can
+    land on. Join your fact to them as usual. The generated model writes no
+    files for them. Instead it lists the repo in `package.yml`, pinned to that
+    commit:
+
+    ```yaml
+    version: 1
+    packages:
+      - name: shared
+        url: https://github.com/<owner>/<shared-repo>
+        branch: main
+        version: commit:037fe48ad071c34f455f1be54dbf03ffcf14de1d
+    ```
+
+    The model refers to the shared dimensions and levels by their names in
+    the package, unchanged. Picking the same repo again moves its nodes to the
+    branch's new head commit. Loading a model with a `package.yml` fetches each
+    package at its pinned commit, so the shared dimensions show up again (a
+    package that can't be fetched is reported, and the rest still loads).
+  - **Validate with sml-cli** puts the package's files next to the model, as
+    AtScale does, so the shared dimensions resolve. For a shared repo, the
+    "Missing Model files" error is expected and isn't counted as a failure.
+    A name used both by the model and by a package fails here (and on a
+    legacy deploy) with the same "is not unique" message AtScale gives.
 - **Save / Load.** Saving writes plain SML to `workspace/models/<model>/`.
   Loading reads from there, from a repo already attached on the host, or from
   any path or Git URL.
@@ -133,7 +181,7 @@ Settings. There's no separate login.
   (409) to save or deploy over a working copy that holds such SML. Checked
   against the [SML reference](https://github.com/semanticdatalayer/SML/tree/main/sml-reference):
   - **Complex features** (listed first): row security, composite models,
-    more than one model, packages, semi-additive metrics, calculation groups,
+    more than one model, semi-additive metrics, calculation groups,
     perspectives, user-defined aggregates, partitions, drill-throughs,
     dimensions over several tables (snowflake hierarchies), more than one
     hierarchy per dimension, composite keys and joins, SQL datasets and
@@ -155,7 +203,9 @@ Settings. There's no separate login.
   gets `github.com/<git user>/<model>`, and a loaded one goes back to its own
   repo and branch. Then each checked host attaches the repo and deploys that
   branch, using the same call Promote uses. A host without the model's data
-  warehouse connection is greyed out, and results are reported per host.
+  warehouse connection is greyed out, and results are reported per host. A
+  shared dimensions repo (above) is pushed the same way but only attached on
+  each host, not deployed.
 - **Preview.** Pick a deployed catalog/cube on the Build host, then a mode:
   - **DMV**: drag hierarchies, levels and measures (read from the cube's DMV)
     onto Rows / Measures, and run the query the app builds. Levels of the same
@@ -669,8 +719,8 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 |---|---|
 | Authentication | Keycloak password grant, or `POST /v1/token` to exchange an API token for a JWT |
 | Deployed models | `GET /wapi/p/projects/deployed`, `GET /v1/catalogs` (for `publishedAt`), `GET /wapi/p/catalog/{id}` |
-| Repos | `GET/POST /wapi/p/repo`, `DELETE /wapi/p/repo/{id}` |
-| Deploy repo@branch | `POST /v1/catalogs/deploy` `{repoUrl, gitToken, branch}`; on a 404 (older builds), local catalog-XML compile + `POST /wapi/git/deploy/catalog` |
+| Repos | `GET/POST /wapi/p/repo`, `DELETE /wapi/p/repo/{id}` (publishing shared dimensions only attaches: `POST /wapi/p/repo`) |
+| Deploy repo@branch | `POST /v1/catalogs/deploy` `{repoUrl, gitToken, branch}`; on a 404 (older builds), local catalog-XML compile + `POST /wapi/git/deploy/catalog`, with `package.yml`'s packages fetched at their pinned commit and compiled in |
 | Undeploy catalog | `DELETE /wapi/p/catalog/{catalogId}` |
 | Catalog representation (id ↔ name) | `GET /v1/catalogs/{id}/export` |
 | List aggregates | `GET /wapi/p/aggregate/definition?catalogId&modelId&page&limit` |
@@ -685,7 +735,11 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 | SQL queries (Preview, Test) | `POST /engine/query/submit` |
 
 Analyze also reads the model's SML from GitHub
-(`GET /repos/{owner}/{repo}/tarball/{commit}`).
+(`GET /repos/{owner}/{repo}/tarball/{commit}`), and so does Build for shared
+dimension packages (at the commit pinned in `package.yml`). The Shared dims list
+reads `catalog.yml` and `models/` of the Git profile's repos
+(`GET /repos/{owner}/{repo}/contents/…`) and resolves a branch head with
+`GET /repos/{owner}/{repo}/commits/{branch}`.
 
 Sources: the AtScale Container API docs, ps-utils, and SML's API SDKs. See
 `docs/BUILD_PLAN.md` for which source each call comes from, what has been
@@ -710,7 +764,8 @@ Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (po
                 POST /sml/generate · validate · save · save-path · import · import-path · import-git · GET /sml/models
                   (import returns builtHere + unsupported[]; save / save-path / build/deploy answer 409
                    {readOnly, unsupported} over a working copy Build can't write back)
-                POST /build/deploy {…model, hostIds} · GET /build/preflight?connection=&hostIds=
+                POST /build/deploy {…model, hostIds, shared?} (shared: push, then attach only) · GET /build/preflight?connection=&hostIds=
+                GET /build/shared-repos?hostId= · POST /build/shared/load {repoUrl, branch, taken: [package names]}
 Discovery       GET /hosts/:id/discovery/table · /discovery/profile[?id=] · /discovery/top-values?column=
                   (table args: ?source=<connectionId::database>&schema=&table=)
                 POST /hosts/:id/discovery/join-check {…table, column, toSchema, toTable, toColumn}
@@ -746,6 +801,16 @@ Jobs            GET /jobs/:id
   (semi-additive metrics, row security, several models, composite keys,
   folders, formats, …) is read-only in Build: no Save, no Deploy. Most models
   made in Design Center fall in this group; edit them there.
+- **Shared dimensions are read-only in the model that uses them.** Change them
+  in their own repo (load it in Build, edit, **Publish**), then pick it again
+  in Shared dims to move the model to the new commit. A join to a shared
+  dimension must land on one of its level key columns, since Build can't
+  change its keys. A dimension-to-dimension join can only start from one of
+  your own dimensions. The package's warehouse connection must exist on every
+  host the model deploys to. A model only deploys the commit pinned in
+  `package.yml`, never "latest", which SML's validator rejects. Shared repos
+  published before the `_shared_dim` connection name was added clash with
+  the model's own connection: republish them.
 - **Preview data returns 10 rows,** the engine's fixed limit on `query/sample`.
   **Check joins** scans every row of the joined tables. Calculations (MDX)
   aren't previewed.
