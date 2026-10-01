@@ -1,6 +1,6 @@
 """Host + Git profile store backed by connections.yaml (gitignored).
 
-Same file shape sml-wizard's config.py reads (reference/ps-utils connection
+Same file shape sml-wizard's config.py reads (ps-utils connection
 entries: `connections.<name>.atscale: {url, username, password, apiToken,
 insecure}`), extended per host with `env`, `label`, `status`, `lastChecked`
 and `links` (repo/branch/model the user linked through this app). The shared

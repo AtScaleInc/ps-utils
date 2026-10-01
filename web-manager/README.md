@@ -493,9 +493,12 @@ Each tab opens with a switch that shows one view at a time:
 ### First-time setup
 
 ```bash
-git clone --recurse-submodules <this repo>
-cd Atscale-Environment-Manager
+git clone --recurse-submodules https://github.com/AtScaleInc/ps-utils.git
+cd ps-utils/web-manager
 ```
+
+The Environment Manager lives in `web-manager/` of the ps-utils repo: it is the
+web UI, ps-utils (the repo root) is the CLI it ports from.
 
 If you cloned without submodules:
 
@@ -709,8 +712,8 @@ web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (
                               results.py (result rows + variance) · store.py (SQLite)
                  cache.py     2 h cache + working-folder mirror
                  jobs.py      background jobs for deploy / build / promote (UI polls /api/jobs/:id)
-reference/ps-utils              git submodule, read-only reference for porting
 reference/PythonAtscaleUtility  git submodule, read-only reference for porting
+../  (ps-utils root)            the CLI: src/ is the porting source cited in comments
 ```
 
 ### AtScale calls used (container hosts only)

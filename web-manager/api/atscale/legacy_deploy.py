@@ -1,7 +1,7 @@
 """Deploy for AtScale builds that predate POST /v1/catalogs/deploy.
 
 Ported from sml-wizard api/atscale/deploy.py (itself ported from
-reference/ps-utils/src/operations/atscale-deploy-catalog/
+ps-utils src/operations/atscale-deploy-catalog/
 AtScaleDeployCatalogOperation.ts): read the repo's SML at the branch, compile
 the legacy catalog XML locally (smlgen/catalog_xml.py) and POST both to
 /wapi/git/deploy/catalog with a Design Center session cookie. RealBackend.

@@ -2,10 +2,10 @@
 
 Auth + repo calls copied from sml-wizard api/atscale/client.py. Catalog and
 aggregate calls follow the Container API docs (documentation.atscale.com/
-container-api), cross-checked against reference/ps-utils and SML-develop's
+container-api), cross-checked against ps-utils and SML-develop's
 api-sdk / public-api-sdk. Container hosts only - no installer :10500/:10502.
 
-Ported from reference/ps-utils/src/services/AtScaleRestClientService.ts and
+Ported from ps-utils src/services/AtScaleRestClientService.ts and
 RestClientService.ts, including the cookie-auth flow required specifically by
 `/wapi/git/deploy/catalog` (see AtScaleEnvironment._acquire_session_cookie -
 faithfully ported from acquireSessionCookie() in the TS source, a headless

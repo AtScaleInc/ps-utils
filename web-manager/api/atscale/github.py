@@ -1,7 +1,7 @@
 """GitHub side of link / deploy / promote.
 
 Repo discovery is ported from
-reference/PythonAtscaleUtility/api/git_operations.py :: get_personal_repositories()
+web-manager/reference/PythonAtscaleUtility/api/git_operations.py :: get_personal_repositories()
 + _repo_has_catalog() + get_repos_with_catalog(). Fetching a branch's SML is the
 same job as migration/migration_fromGit.py (walk the contents API), done as a
 single tarball download instead of one request per file.

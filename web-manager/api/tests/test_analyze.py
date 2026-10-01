@@ -74,7 +74,7 @@ def test_analyze_api_demo(client):  # noqa: F811
 
 # -- every documented SML property is in analyze/spec.py ------------------------------------
 
-REF = Path(__file__).resolve().parents[2] / "reference" / "ps-utils" / "resources" / "sml-reference"
+REF = Path(__file__).resolve().parents[3] / "resources" / "sml-reference"
 # Enum values the docs list as "- `value`: explanation" - not properties.
 _ENUM_VALUES = {"standard", "time", "embedded", "snowflake", "yes", "no", "always", "true", "false", "error", "empty",
                 "repeat", "related", "fact", "fact-only", "all", "user", "group", "first", "last", "first_child",
@@ -92,7 +92,7 @@ def _documented(md: str) -> set[str]:
     return props - _ENUM_VALUES
 
 
-@pytest.mark.skipif(not REF.is_dir(), reason="ps-utils submodule not checked out")
+@pytest.mark.skipif(not REF.is_dir(), reason="ps-utils resources/sml-reference missing")
 def test_spec_covers_every_documented_property():
     from analyze.spec import SPEC
 

@@ -1,6 +1,6 @@
 """Runs generated queries against hosts and records a result per query.
 
-Ported from reference/ps-utils
+Ported from ps-utils
 src/operations/execute-atscale-query-harness/ExecuteAtScaleQueryHarnessOperation.ts:
   - buildSoapEnvelope (UseAggregates / GenerateAggregates / UseQueryCache /
     UseAggregateCache, defaults true / false / false / true)

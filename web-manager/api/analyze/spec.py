@@ -1,7 +1,7 @@
 """Every property the SML reference documents, per object kind.
 
 Source: semanticdatalayer/SML sml-reference/ (vendored verbatim in
-reference/ps-utils/resources/sml-reference, pinned 63e1dcb, spec v1.8).
+ps-utils resources/sml-reference, pinned 63e1dcb, spec v1.8).
 tests/test_analyze.py parses those docs and fails if a documented property is
 missing here, so a spec refresh can't silently shrink what Analyze reports.
 

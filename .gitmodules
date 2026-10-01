@@ -1,0 +1,3 @@
+[submodule "web-manager/reference/PythonAtscaleUtility"]
+	path = web-manager/reference/PythonAtscaleUtility
+	url = https://github.com/rwidjaja/PythonAtscaleUtility.git

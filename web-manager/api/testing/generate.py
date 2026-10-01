@@ -1,6 +1,6 @@
 """Query generation for the Test tab.
 
-Ported from reference/ps-utils:
+Ported from ps-utils:
   - src/operations/generate-queries-shared.ts (mdxMetricTotal, mdxLevelQuery,
     sqlMetricTotal, sqlLevelQuery, buildQueryPairs, sha256hex)
   - src/operations/generate-queries-from-model/GenerateQueriesFromModelOperation.ts

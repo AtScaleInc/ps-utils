@@ -10,6 +10,7 @@ export default defineConfig({
     // too and each test runs twice — once from source, once from a stale build —
     // which doubles every failure and reports results for code that may predate
     // the working tree.
-    exclude: ["**/node_modules/**", "dist/**"],
+    // `web-manager/` is the web UI (Flask + React), tested by its own pytest / npm.
+    exclude: ["**/node_modules/**", "dist/**", "web-manager/**"],
   },
 });

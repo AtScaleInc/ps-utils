@@ -6,7 +6,7 @@ AtScale (never deploys it). A model repo lists it in its root `package.yml`
 and references its dimensions by unique_name; AtScale clones the package at
 the pinned commit when the model deploys.
 
-Format per the SML reference (reference/ps-utils/resources/sml-reference/package.md)
+Format per the SML reference (ps-utils resources/sml-reference/package.md)
 and SML-develop's validator (packages/models/src/schemas/package.schema.json):
 `version: 1`, each package {name, url, branch, version}; `name` letters, `-`
 and `_` only; `version` must be `commit:<8-40 hex>` - "latest" fails the

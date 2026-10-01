@@ -285,3 +285,7 @@ tbody tr:last-child { border-bottom: 1px solid #434343; }
 ```
 
 When converting these documents to PDF, keep the same fonts and colors so the Markdown and PDF stay visually identical.
+
+## web-manager/ — the web UI (AtScale Environment Manager)
+
+`web-manager/` is the Environment Manager (Flask API in `web-manager/api`, React + Vite in `web-manager/web`), merged in with its full history: the web UI for what the repo root does as a CLI. It is a separate runtime - not part of `tsc`, `vitest`, `dist/` or the published npm package. Its Python code ports ps-utils operations and cites the source as `ps-utils src/...` (paths relative to this repo root), so when an operation it ports changes here, check the matching port there. Run it with `web-manager/start.sh`; test it with `pytest` in `web-manager/api` and `npm run build` in `web-manager/web`. Its conventions are in `web-manager/README.md`.

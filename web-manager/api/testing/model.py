@@ -1,6 +1,6 @@
 """Model snapshot (DMV) and model compare for the Test tab.
 
-The snapshot uses the DMV statements of reference/ps-utils
+The snapshot uses the DMV statements of ps-utils
 src/operations/extract-model-from-atscale/ExtractAtScaleModelOperation.ts:
   getMetrics    - MDSCHEMA_MEASURES (name, data type, caption, aggregator,
                   folder, format string, description; aggregator 9 -> 1 and

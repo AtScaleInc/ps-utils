@@ -1,4 +1,4 @@
-"""Python port of reference/ps-utils/src/algorithm/catalog-xml-builder.ts.
+"""Python port of ps-utils src/algorithm/catalog-xml-builder.ts.
 
 Restored from sml-wizard api/smlgen/catalog_xml.py (unchanged) for the legacy
 deploy path: AtScale builds without POST /v1/catalogs/deploy (404 - e.g.
