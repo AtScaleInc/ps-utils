@@ -9,7 +9,9 @@ environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
   same model and the same values,
 - **promote** models and system aggregates from one environment to the next,
   such as Dev → QA → Prod, moving only what's new,
-- **manage** each host's models and aggregates,
+- **manage** each host's models and aggregates, and **analyze** a deployed
+  model: every object and SML property it uses, with descriptions, YAML
+  comments and audit findings,
 - **monitor** a host's query history: how much is served from cache,
   aggregates or the warehouse, volume, latency and hotspots.
 
@@ -20,6 +22,7 @@ environments: **Dev**, **Test-QA** and **Prod**. From one screen you can:
 │ push to Git      │   │ run on hosts,    │   │ target host      │   │  deploy, unlink  │   │ cache / agg /    │
 │ deploy to any    │   │ compare model +  │   │  promote (Prod   │   │ Aggregates:      │   │  warehouse mix,  │
 │ hosts            │   │ results          │   │  asks first)     │   │  build, (de)act  │   │ latency, hotspots│
+│                  │   │                  │   │                  │   │ Analyze: audit   │   │                  │
 └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘   └──────────────────┘
           Settings: Hosts & Git (credentials, shared Git profile) · Cache & Database
 ```
@@ -32,7 +35,7 @@ right. The app opens on Build. The left rail lists the current tab's sections:
 | Build | Discovery · Develop · Preview |
 | Test | Run · Results · Compare results · Compare model |
 | Promote | Models · Aggregates |
-| Manage | Models · Aggregates |
+| Manage | Models · Aggregates · Analyze |
 | Monitor | Overview · History · Hotspots |
 | Settings | Hosts & Git · Cache & Database |
 
@@ -338,6 +341,59 @@ confirmation dialogs list every model affected.
 - System aggregates have UUIDs for names, so the app shows a readable label
   built from their grain, such as `Product Category · Product Line · 24 measures`.
 
+### Manage → Analyze
+
+An audit of one model. Pick a group, a host, then a model. Everything the model
+uses is listed with its file, its `description`, and the `#` comments written
+next to it in the YAML.
+
+**Where it reads from.** The model's SML comes from its Git repo at the commit
+that is deployed. If that commit isn't known, it uses the head of the branch,
+and the toolbar says so. When the model is deployed, the host is also asked
+what it actually serves:
+
+- its measures, dimensions, hierarchies and levels, compared with the SML
+- its aggregates, counted by type and status
+
+**What it covers.** Every property the
+[SML reference](https://github.com/semanticdatalayer/SML/tree/main/sml-reference)
+documents (v1.8, 296 properties across 47 object kinds). Keys that the
+reference doesn't document are listed too, marked *undoc*. A test parses the
+reference docs and fails if a documented property isn't covered, so a spec
+update can't go unnoticed.
+
+Each tab opens with a switch that shows one view at a time:
+
+| Tab | Views |
+|---|---|
+| Overview | **Summary** (model, commit, catalog settings, counts) · **Deployed on host** · **Shape** (calculation methods, formats, folders, role plays) · **Findings** |
+| Relationships | **Matrix**: dimensions × fact datasets, laid out like Design Center. Each cell lists the role-played `[Hierarchy].[Level]` the fact joins to, with the key (`orderdatekey → datekey`). Dimensions reached through another one sit under it. · **Diagram** · **Metric reach**: which dimensions each metric can be sliced by |
+| Time & calcs | **Time dimensions** (time unit per level, parallel periods) · **Calculation groups** (every member: template or expression, format, precedence, default) · **Time calculations** (MDX time functions such as ParallelPeriod or PeriodsToDate) · **Semi-additive** |
+| Metrics | All · Metrics · Calculations. Click a row for every property. |
+| Dimensions | All · Standard · Time · Degenerate · With calc groups. Hierarchies, every attribute (level, secondary, alias, metrical) and calculation groups. |
+| Datasets | All · Fact · Dimension · SQL query. Columns (calculated, map, dialects), incremental, alternate, dataset properties. |
+| Joins | Fact → dimension · Snowflake · Embedded · Row security. Keys, levels, role play, many-to-many, constraint translation. |
+| Other | Catalog · Connections · Row security · Perspectives · Drill-throughs · User aggs · Partitions · Overrides · Dataset props · Packages · Unused objects in the repo · Undocumented keys |
+| SML Properties | Every property in the reference, grouped by SML file, with how many objects set it |
+
+**Findings** come in four groups:
+
+- **References.** Things that don't resolve, such as:
+  - a column that isn't in its dataset
+  - a level, relationship, metric or attribute that doesn't exist
+  - an override or `hidden_models` entry with no match
+- **SML reference rules.** Where the model breaks a rule the reference states, such as:
+  - a constraint translation without its rank
+  - partition or distribution ranks that don't run 1, 2, 3…
+  - a percentile metric without quantiles
+  - `m2m` on a relationship that isn't embedded
+  - member-model UDAs in a composite, which are ignored
+- **Design.** Patterns worth a second look, such as many-to-many joins,
+  composite keys, SQL datasets, hidden objects, or levels with no sort column.
+- **Documentation.** Objects with no description.
+
+**Export JSON** downloads the whole audit.
+
 ### Settings
 
 **Hosts & Git**
@@ -463,6 +519,9 @@ Each demo environment names its warehouse connection differently (`PG_DEV`,
   with generated rows, and the real profile SQL runs against it.
 - Build's Preview, Load from Git, and the Test tab run real queries, so they
   need a real host.
+- Manage → Analyze reads AtScale's `sml-demo-sales-insights` repo for every
+  demo model, copied into `api/atscale/demo_sml/`. The **Deployed on host**
+  view needs a real host.
 - **Settings → Hosts & Git → Reset demo data** restores the seed.
 
 ### Tests and build
@@ -581,11 +640,12 @@ memory: finished jobs for an hour, at most 500.
 ```
 web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (UI state)
   src/build/        Build: discovery, wizard panels, SML model store, preview (DMV / Freehand)
-  src/components/   Manage, Promote, Settings
+  src/components/   Manage (incl. ManageAnalyze), Promote, Settings
   src/test/         Test: run setup, results, compare results, compare model, database card
   └─ /api/* ──► api/  Flask
                  routes/      settings (hosts, git, cache) · objects (models, aggregates, jobs) · promote
                               build (sources, SML, preview, multi-host deploy) · discovery · testing (Test)
+                              analyze (Manage → Analyze)
                  envs/        store.py (connections.yaml) · registry.py (host → backend, sessions, warm-up)
                  atscale/     client.py (AtScale REST) · github.py · git_ops.py (repo create + push)
                               backend.py (real host) · fake.py (demo host) · cached.py (cache wrapper)
@@ -593,6 +653,8 @@ web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (
                  smlgen/      SML build / parse / validate (sml-cli)
                  discovery/   profile.py (profile SQL, top values, join check, roles + findings) · store.py (SQLite)
                  promote/     diff.py (states + rules) · idmap.py (id ↔ name) · remap.py (payload rewrite)
+                 analyze/     model.py (SML audit, fact × dimension reach, time intelligence, findings)
+                              spec.py (every property in the SML reference)
                  testing/     generate.py (queries) · harness.py (execution) · model.py (DMV snapshot + diff)
                               results.py (result rows + variance) · store.py (SQLite)
                  cache.py     2 h cache + working-folder mirror
@@ -619,8 +681,11 @@ reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 | Data warehouses, schema tree (Build) | `GET /wapi/p/data-warehouses`, `/wapi/p/data-sources/conn/{connectionId}/databases/…/tables/{t}/info` |
 | Profile SQL (Discovery), Preview data (Develop) | `POST /wapi/p/data-sources/conn/{connectionId}/query/sample` `{query, udf}`: AtScale runs it on the warehouse, wrapped in `LIMIT 10` |
 | Sample rows, statistics (Discovery) | `GET /engine/v1/datasources/{connectionId}/sample-data/{schema}/{table}`, `/engine/v1/datasources/{connectionId}/statistics` (newer engines only) |
-| DMV metadata, MDX queries (Preview, Test) | `POST /engine/xmla` (`MDSCHEMA_CUBES / DIMENSIONS / HIERARCHIES / LEVELS / MEASURES / PROPERTIES`, and MDX) |
+| DMV metadata, MDX queries (Preview, Test, Analyze) | `POST /engine/xmla` (`MDSCHEMA_CUBES / DIMENSIONS / HIERARCHIES / LEVELS / MEASURES / PROPERTIES`, and MDX) |
 | SQL queries (Preview, Test) | `POST /engine/query/submit` |
+
+Analyze also reads the model's SML from GitHub
+(`GET /repos/{owner}/{repo}/tarball/{commit}`).
 
 Sources: the AtScale Container API docs, ps-utils, and SML's API SDKs. See
 `docs/BUILD_PLAN.md` for which source each call comes from, what has been
@@ -637,6 +702,7 @@ Settings        GET/POST /hosts · PATCH/DELETE /hosts/:id · POST /hosts/:id/te
 Manage          GET /hosts/:id/models · /repos · /branches?url= · /aggregate-models · /aggregates?catalogId&modelId
                 POST /hosts/:id/models/link · deploy · undeploy · unlink
                 POST /hosts/:id/aggregates/build · deactivate · reactivate · GET /hosts/:id/aggregates/builds
+                GET /hosts/:id/analyze?key=<model key> · /hosts/:id/analyze/file?key=&path=
 Promote         POST /promote/diff · /promote/models · /promote/aggregates
 Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)
                 GET /hosts/:id/sources/:sourceId/columns?schema=&table= · POST …/columns {tables} · GET /build/repos
@@ -696,6 +762,11 @@ Jobs            GET /jobs/:id
   aggregate row or a top 10: no median, skew or trend over time. A check a
   warehouse rejects (for example `TRIM` or `CURRENT_DATE`) is left empty rather
   than failing the column.
+- **Analyze reads the SML from Git.** A model with no repo attached can't be
+  analyzed. The live host check matches the model's catalog and cube by
+  name, because the XMLA catalog name is `<catalog>_<branch>`.
+- **Metric reach covers metrics, not calculations.** What a calculation can be
+  sliced by depends on its MDX.
 - **Single process.** Sessions and background jobs live in memory. Test history,
   Discovery results and the list cache are on disk.
 
