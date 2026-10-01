@@ -504,9 +504,13 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     const rels = asArray<Raw>(raw.relationships);
     if (rels.length) {
       o.push("**Snowflake / embedded joins**", "");
+      // For a dimension-embedded relationship, SML's `to.level` is validated by the engine
+      // as a level of THIS (the host) dimension, not of `to.dimension` — the host level that
+      // owns the join's key arity, not a level living on the target dimension. Label the
+      // column accordingly so it doesn't read as though it mis-names the target's level.
       o.push(
         ...table(
-          ["From dataset", "Join columns", "To dimension", "To level", "Type"],
+          ["From dataset", "Join columns", "To dimension", "Host level", "Type"],
           rels.map((rel) => [
             code(normDataset(rel?.from?.dataset)),
             code(asArray(rel?.from?.join_columns).join(", ")),
@@ -541,11 +545,19 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
    * a model's `relationships[]` (see factBindingsByDimLevel above) — matches the XML
    * report's merged "dimension-column, fact-column (cube)" cell instead of showing only
    * the dimension-side half of the join.
+   *
+   * A model can legitimately record a relationship from the level's OWN dataset (e.g. a
+   * cube that joins a dimension to itself from more than one fact table, one of which is
+   * the dimension's own source table) — that relationship's `from.dataset`+`from.join_columns`
+   * is then identical to the level's native binding, and listing it again would print the
+   * same `dataset.column` twice. Drop any fact binding that duplicates the native one.
    */
   function levelBindingLabel(dimUniqueName: unknown, a: Raw): string {
     const own = bindingLabel(a);
+    const ownBindings = new Set(own.split(", ").filter(Boolean));
     const factBindings = factBindingsByDimLevel.get(`${dimUniqueName}::${a?.unique_name}`) ?? [];
-    return [own, ...factBindings].filter(Boolean).join(", ");
+    const extra = factBindings.filter((fb) => !ownBindings.has(fb.replace(/ \([^)]*\)$/, "")));
+    return [own, ...extra].filter(Boolean).join(", ");
   }
 
   /** Every physical dataset a dimension's level attributes bind to, across single- and shared/multi-dataset bindings. */
