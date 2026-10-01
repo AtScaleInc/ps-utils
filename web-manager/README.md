@@ -252,6 +252,22 @@ once. A candidate environment is ready to promote to when its **model** and its
   The queries run like ps-utils `execute-atscale-query-harness`. Each one
   records its status, time, size and checksum, and the result rows are stored
   too. Each host's model (DMV) is snapshotted at the start of the run.
+- **Download CLI script.** Sits next to **Run**, here and in Catalog › Validate.
+  It packs the same picks (queries, hosts, protocols, workers, annotation) into
+  a zip you run by hand, on a schedule or in CI, with the ps-utils CLI. Nothing
+  runs in the app. The zip holds:
+  - `connections.yaml`: every host, catalog and user, with the passwords left
+    as `<fill in>`. No secret from the app goes into the zip.
+  - `queries/*_queries.json`: the picked queries, in the ps-utils query format.
+  - `tasks/<host>.yaml`: an `execute-atscale-query-harness` task-file per host.
+  - `run.sh` / `run.ps1`: run the harness on every host, then compare each host
+    with the first one (status, rows, checksum), using `compare.mjs`. Exits
+    with 1 on any failure or difference.
+  - `README.md` and `validation.json`: what was picked, and how to run it.
+
+  The harness's connections.yaml mode always sends UseAggregates on,
+  GenerateAggregates off, Query cache off and Aggregate cache on. If you picked
+  anything else, the zip's README says so.
 - **Results.** Runs are grouped by model, newest first. A run's detail shows:
   - a **promotion check** for each host against a baseline host you pick:
     whether the model is identical and all results are identical, what failed,
@@ -844,6 +860,7 @@ Discovery       GET /hosts/:id/discovery/table · /discovery/profile[?id=] · /d
                 GET /discovery/store · POST /discovery/cleanup {olderThanDays, keepPerTable, hostId, dryRun}
                 POST /discovery/compact
 Test            GET /hosts/:id/test/cubes · POST /test/generate · /test/runs · /test/compare · /test/model-compare
+                POST /test/script (same body as /test/runs -> zip for the ps-utils CLI)
                 GET /test/runs · /test/runs/:id · /test/runs/:id.csv · /test/history?model=&query=&protocol=
                 GET /test/store · POST /test/cleanup {olderThanDays, keepPerModel, model, dryRun} · /test/compact
 Jobs            GET /jobs/:id

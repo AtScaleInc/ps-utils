@@ -371,3 +371,80 @@ def test_store_stats_per_model_and_compact(client):
     info = client.get("/api/test/store").get_json()
     assert info["models"][0]["model"] == "cube1" and info["models"][0]["runs"] == 1 and info["models"][0]["executions"] == 1
     assert client.post("/api/test/compact").status_code == 200
+
+
+def _script_body(**kw):
+    q = {"id": "q1", "name": "Sales | Total", "kind": "total", "hash": "h",
+         "mdx": "SELECT {[Measures].[sales]} ON COLUMNS\nFROM [Internet Sales]",
+         "sql": 'SELECT "sales"\nFROM "Internet Sales"'}
+    return {"targets": [{"hostId": "dev-east", "catalog": "sales_catalog", "cube": "Internet Sales"},
+                        {"hostId": "qa-main", "catalog": "sales_catalog_main", "cube": "Internet Sales"}],
+            "queries": [q], "protocols": ["mdx", "sql"], "concurrency": 2, "annotate": True,
+            "options": {"useAggregates": True}, **kw}
+
+
+def test_cli_script_bundle(client):  # noqa: F811
+    import io
+    import json
+    import zipfile
+
+    import yaml
+
+    r = client.post("/api/test/script", json=_script_body())
+    assert r.status_code == 200 and r.mimetype == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    root = z.namelist()[0].split("/")[0]
+    read = lambda p: z.read(f"{root}/{p}").decode()  # noqa: E731
+    names = {n.split("/", 1)[1] for n in z.namelist()}
+    assert {"connections.yaml", "run.sh", "run.ps1", "compare.mjs", "README.md", "validation.json",
+            "queries/Internet_Sales_xmla_queries.json", "queries/Internet_Sales_sql_queries.json",
+            "tasks/dev-east.yaml", "tasks/qa-main.yaml"} <= names
+
+    conn = yaml.safe_load(read("connections.yaml"))
+    assert conn["connections"]["qa-main"]["mdx"]["catalog_name"] == "sales_catalog_main"
+    assert conn["connections"]["qa-main"]["sql"]["database"] == "sales_catalog_main"
+    assert conn["connections"]["qa-main"]["sql"]["ssl"] is True and conn["connections"]["qa-main"]["installer"] is False
+    assert all(u["password"] == "<fill in>" for u in conn["users"].values())
+    # No secret from the host config reaches the zip.
+    from envs import registry
+    for h in ("dev-east", "qa-main"):
+        pw = (registry.store().get_host_raw(h).get("atscale") or {}).get("password")
+        assert not pw or all(pw not in z.read(n).decode() for n in z.namelist())
+
+    tasks = yaml.safe_load(read("tasks/dev-east.yaml"))
+    assert [t["runLogFileName"] for t in tasks] == ["dev-east_xmla.log", "dev-east_sql.log"]
+    assert tasks[0]["model"] == "Internet Sales" and "xmla" in tasks[0]["simulationClass"].lower()
+    assert "xmla" not in tasks[1]["simulationClass"].lower() and tasks[0]["injectionSteps"][0]["users"] == 2
+    recs = json.loads(read("queries/Internet_Sales_xmla_queries.json"))
+    assert recs[0]["queryLanguage"] == "analysis" and recs[0]["originalText"].startswith("SELECT {[Measures]")
+    assert json.loads(read("validation.json"))["baseline"] == "dev-east"
+    assert z.getinfo(f"{root}/run.sh").external_attr >> 16 == 0o755
+
+
+def test_cli_script_flags_options_the_cli_ignores(client):  # noqa: F811
+    import io
+    import zipfile
+
+    r = client.post("/api/test/script", json=_script_body(options={"useQueryCache": True}))
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    readme = z.read(next(n for n in z.namelist() if n.endswith("README.md"))).decode()
+    assert "Query cache on" in readme
+
+
+def test_cli_script_rejects_other_bu_host(client):  # noqa: F811
+    body = _script_body()
+    body["targets"][0]["hostId"] = "fin-dev"
+    assert client.post("/api/test/script", json=body).status_code == 404
+    assert client.post("/api/test/script", json={**_script_body(), "queries": []}).status_code == 400
+
+
+def test_cli_script_placeholder_only_where_a_value_goes(client):  # noqa: F811
+    """run.sh refuses to start while the placeholder is in connections.yaml, so
+    it may only sit where the user types a value - never in a comment."""
+    import io
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(client.post("/api/test/script", json=_script_body()).data))
+    conn = z.read(next(n for n in z.namelist() if n.endswith("connections.yaml"))).decode()
+    lines = [ln for ln in conn.splitlines() if "<fill in>" in ln]
+    assert lines and all(ln.strip().startswith("password:") for ln in lines)

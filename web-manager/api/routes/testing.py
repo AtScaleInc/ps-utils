@@ -6,6 +6,8 @@
   POST /test/runs                 {targets: [{hostId, catalog, cube}], queries, protocols,
                                    concurrency, options} -> {runId}  (execute-atscale-query-harness,
                                   testing/harness.py)
+  POST /test/script               same body as /test/runs -> a zip to run it by hand with the ps-utils
+                                  CLI (execute-atscale-query-harness + a baseline compare, testing/cli_bundle.py)
   GET  /test/runs                 run history (newest first, no per-query rows)
   GET  /test/runs/<id>            one run, live while it's running
   GET  /test/runs/<id>.csv        results in the harness's CSV layout
@@ -37,7 +39,7 @@ from atscale.backend import now_iso
 from atscale.preview import list_catalogs_and_cubes, load_cube_metadata
 from envs import registry
 from routes.objects import host_errors
-from testing import harness, store
+from testing import cli_bundle, harness, store
 from testing.model import compare_models, snapshot
 from testing.results import compare as compare_rows
 from testing.generate import build_queries, model_entries
@@ -94,27 +96,47 @@ def _summary(run: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in run.items() if k not in ("results", "queries", "models")}
 
 
+def _run_request(b: dict[str, Any]) -> tuple[Any, ...]:
+    """(queries, protocols, targets, raw hosts by id, options, concurrency) from a
+    /test/runs or /test/script body; raises ValueError (-> 400) on a bad pick and
+    HostNotFound (-> 404) for a host outside the request's business unit."""
+    queries = [q for q in (b.get("queries") or []) if q.get("mdx") and q.get("sql")]
+    protocols = [p for p in (b.get("protocols") or ["mdx"]) if p in ("mdx", "sql")]
+    if not queries:
+        raise ValueError("Pick at least one query")
+    if not protocols:
+        raise ValueError("Pick MDX, SQL or both")
+    targets, raws = [], {}
+    for t in b.get("targets") or []:
+        raw = registry.host(t["hostId"])  # 404 before anything runs
+        if not (t.get("catalog") and t.get("cube")):
+            raise ValueError(f"No model picked for {raw.get('label') or t['hostId']}")
+        raws[t["hostId"]] = raw
+        targets.append({"hostId": t["hostId"], "label": raw.get("label") or t["hostId"], "env": raw.get("env"),
+                        "catalog": t["catalog"], "cube": t["cube"]})
+    if not targets:
+        raise ValueError("Pick at least one host")
+    opts = {**harness.DEFAULT_OPTS, **{k: bool(v) for k, v in (b.get("options") or {}).items() if k in harness.DEFAULT_OPTS}}
+    concurrency = max(1, min(int(b.get("concurrency") or 1), 16))
+    return queries, protocols, targets, raws, opts, concurrency
+
+
+@testing_bp.post("/test/script")
+@host_errors
+def run_script():
+    """The run as a zip for the ps-utils CLI. Nothing runs here and no
+    password goes into the zip (run.sh asks, or reads it from the environment)."""
+    b = _body()
+    queries, protocols, targets, raws, opts, concurrency = _run_request(b)
+    name, data = cli_bundle.build(targets, raws, queries, protocols, concurrency, opts, bool(b.get("annotate", True)))
+    return Response(data, mimetype="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
 @testing_bp.post("/test/runs")
 @host_errors
 def start_run():
     b = _body()
-    queries = [q for q in (b.get("queries") or []) if q.get("mdx") and q.get("sql")]
-    protocols = [p for p in (b.get("protocols") or ["mdx"]) if p in ("mdx", "sql")]
-    if not queries:
-        return jsonify({"error": "Pick at least one query"}), 400
-    if not protocols:
-        return jsonify({"error": "Pick MDX, SQL or both"}), 400
-    targets = []
-    for t in b.get("targets") or []:
-        raw = registry.host(t["hostId"])  # 404 before anything runs
-        if not (t.get("catalog") and t.get("cube")):
-            return jsonify({"error": f"No model picked for {raw.get('label') or t['hostId']}"}), 400
-        targets.append({"hostId": t["hostId"], "label": raw.get("label") or t["hostId"], "env": raw.get("env"),
-                        "catalog": t["catalog"], "cube": t["cube"]})
-    if not targets:
-        return jsonify({"error": "Pick at least one host"}), 400
-    opts = {**harness.DEFAULT_OPTS, **{k: bool(v) for k, v in (b.get("options") or {}).items() if k in harness.DEFAULT_OPTS}}
-    concurrency = max(1, min(int(b.get("concurrency") or 1), 16))
+    queries, protocols, targets, _, opts, concurrency = _run_request(b)
 
     if not _active.acquire(blocking=False):
         return jsonify({"error": f"{MAX_ACTIVE} test runs are already running - wait for one to finish", "busy": True}), 429

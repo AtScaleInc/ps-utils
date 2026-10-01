@@ -158,14 +158,32 @@ export function RunBuilder({ genHostId, model, targets, barLeft, barRight, runOn
   const allVisibleOn = visible.length > 0 && visible.every(isPicked)
   const nRuns = chosen.length * protocols.length * targets.length
 
+  const runBody = () => ({ targets, queries: chosen, protocols, concurrency, options: opts, annotate })
+  const [packing, setPacking] = useState(false)
+  /** Same picks as Run, as a zip the user runs by hand with the ps-utils CLI. */
+  async function downloadScript() {
+    setPacking(true)
+    try {
+      const { name, blob } = await testApi.script(runBody())
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      flash(`${name} downloaded - fill in connections.yaml, then ./run.sh`)
+    } catch (e) {
+      flash(errMsg(e), 'err')
+    } finally {
+      setPacking(false)
+    }
+  }
+
   async function start() {
     if (!model) return
     setStarting(true)
     try {
-      const run = await testApi.start({
-        targets,
-        queries: chosen, protocols, concurrency, options: opts, annotate,
-      })
+      const run = await testApi.start(runBody())
       qc.invalidateQueries({ queryKey: ['testRuns'] })
       setTestRunId(run.runId)
       setTestSection('results')
@@ -186,6 +204,10 @@ export function RunBuilder({ genHostId, model, targets, barLeft, barRight, runOn
         <div className="row">
           {barRight}
           <span className="hint">{genQ.isFetching ? 'Reading model…' : queries.length ? `${queries.length} ${queries.length === 1 ? 'query' : 'queries'} generated` : ''}</span>
+          <button type="button" className="btn info lg" disabled={!nRuns || packing} onClick={downloadScript}
+            title="The same queries, hosts and options as a zip: run it by hand or on a schedule with the ps-utils CLI (execute-atscale-query-harness)">
+            {packing ? 'Packing…' : 'Download CLI script'}
+          </button>
           <button type="button" className="btn primary lg" disabled={!nRuns || starting} onClick={start}>
             {starting ? 'Starting…' : nRuns ? `Run ${nRuns} on ${plural(targets.length, 'host')}` : 'Run'}
           </button>

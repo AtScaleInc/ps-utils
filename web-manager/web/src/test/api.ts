@@ -134,6 +134,16 @@ export const testApi = {
       'POST', '/test/generate', { hostId, ...ref }),
   start: (body: { targets: TestTarget[]; queries: TestQuery[]; protocols: Protocol[]; concurrency: number; options: TestOptions; annotate: boolean }) =>
     req<TestRun>('POST', '/test/runs', body),
+  /** The run as a zip for the ps-utils CLI (api/testing/cli_bundle.py): same body as `start`. */
+  script: async (body: { targets: TestTarget[]; queries: TestQuery[]; protocols: Protocol[]; concurrency: number; options: TestOptions; annotate: boolean }) => {
+    const res = await fetch('/api/test/script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data?.error ?? `Couldn't build the script (${res.status})`)
+    }
+    const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'validate.zip'
+    return { name, blob: await res.blob() }
+  },
   run: (runId: string) => req<TestRun>('GET', `/test/runs/${encodeURIComponent(runId)}`),
   runs: () => req<{ runs: TestRun[] }>('GET', '/test/runs'),
   remove: (runId: string) => req<{ ok: boolean }>('DELETE', `/test/runs/${encodeURIComponent(runId)}`),
