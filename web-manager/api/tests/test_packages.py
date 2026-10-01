@@ -189,3 +189,53 @@ def test_shared_connection_name_never_clashes_with_the_model():
            for n, b in pkg.items()}
     clashes = package_conflicts(flatten_packages(build_sml(model_payload()), [{"ref": REF, "files": old}]))
     assert clashes and 'The "connection" name "con_atscale_data_SalesInsights" is not unique' in clashes[0]
+
+
+class _Resp:
+    def __init__(self, status: int, text: str = "", body=None):
+        self.status_code, self.text, self._body = status, text, body
+
+    def json(self):
+        return self._body
+
+
+def _fake_github(monkeypatch, repos: dict[str, dict[str, _Resp]]):
+    """requests.get stand-in: repos = {owner/name: {"catalog.yml"|"models": resp}}."""
+    from atscale import github
+
+    def get(url, **_):
+        full, _, path = url.removeprefix(f"{github.API}/repos/").partition("/contents/")
+        return repos.get(full, {}).get(path, _Resp(404))
+
+    monkeypatch.setattr(github.requests, "get", get)
+
+
+def test_shared_repo_check_requires_catalog(monkeypatch):
+    from atscale import github
+
+    _fake_github(monkeypatch, {
+        "corp/tagged": {"catalog.yml": _Resp(200, f"x\n{SHARED_MARKER}\n"), "models": _Resp(200, body=[{}])},
+        "corp/dims": {"catalog.yml": _Resp(200, "unique_name: dims\n")},
+        "corp/model": {"catalog.yml": _Resp(200, "unique_name: m\n"), "models": _Resp(200, body=[{}])},
+        "corp/no-catalog": {},
+    })
+    assert github.shared_repo_check("t", "corp/tagged", SHARED_MARKER) is True
+    assert github.shared_repo_check("t", "corp/dims", SHARED_MARKER) is False
+    assert github.shared_repo_check("t", "corp/model", SHARED_MARKER) is None
+    assert github.shared_repo_check("t", "corp/no-catalog", SHARED_MARKER) is None
+
+
+def test_host_repos_without_catalog_are_dropped(monkeypatch):
+    from flask import Flask
+
+    _fake_github(monkeypatch, {"corp/dims": {"catalog.yml": _Resp(200, "unique_name: dims\n")}})
+    monkeypatch.setattr(build, "_git_token", lambda: "t")
+    monkeypatch.setattr(build.cache, "get", lambda key, loader, refresh=False, ttl=None: (loader(), 0))
+    candidates = [
+        ("https://github.com/corp/dims", {"url": "https://github.com/corp/dims", "name": "dims"}),
+        ("https://github.com/corp/junk", {"url": "https://github.com/corp/junk", "name": "junk"}),
+        ("https://gitlab.com/corp/x", {"url": "https://gitlab.com/corp/x", "name": "x"}),
+    ]
+    with Flask(__name__).test_request_context("/api/build/shared-repos?hostId=h"):
+        kept = build._check_host_repos(candidates)
+    assert [(r["name"], tagged) for _, r, tagged in kept] == [("dims", False)]

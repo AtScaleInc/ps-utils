@@ -164,11 +164,39 @@ def _parse_with_packages(files: dict[str, str]) -> dict[str, Any]:
     return result
 
 
+def _check_host_repos(candidates: list[tuple[str, dict[str, Any]]]) -> list[tuple[str, dict[str, Any], bool]]:
+    """(key, repo, tagged) for each host-attached repo that is a valid shared
+    dimensions package on GitHub (github.shared_repo_check)."""
+    if not candidates:
+        return []
+    from concurrent.futures import ThreadPoolExecutor
+
+    from atscale import github
+
+    token, refresh, bu = _git_token(), _refresh(), registry.bu()
+
+    def check(c: tuple[str, dict[str, Any]]) -> tuple[str, dict[str, Any], bool] | None:
+        key, r = c
+        branch = r.get("defaultBranch") or "main"
+        try:
+            full = github.repo_full_name(r.get("url") or "")
+            tagged, _ = cache.get(("git", bu, "shared-repo", key, branch),
+                                  lambda: github.shared_repo_check(token, full, SHARED_MARKER, branch),
+                                  refresh=refresh)
+        except Exception:  # noqa: BLE001 - not on GitHub / not readable: not listed
+            return None
+        return None if tagged is None else (key, r, tagged)
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        return [x for x in ex.map(check, candidates) if x]
+
+
 @build_bp.get("/build/shared-repos")
 def shared_repos():
-    """Repos to pick shared dimensions from: the Git profile's repos whose
-    catalog.yml carries the shared tag, or that have no model; with ?hostId=,
-    also repos attached on that host with nothing deployed from them."""
+    """Repos to pick shared dimensions from: the Git profile's repos with a
+    root catalog.yml that carries the shared tag or has no model; with
+    ?hostId=, also repos attached on that host with nothing deployed from
+    them - held to the same catalog.yml check."""
     host_id = request.args.get("hostId")
     out: dict[str, dict[str, Any]] = {}
     try:
@@ -194,11 +222,17 @@ def shared_repos():
         try:
             b = registry.backend(host_id, _refresh())
             used = {row.get("repoId") for row in b.list_models() if row.get("catalogId")}
+            candidates = []
             for r in b.list_repos():
                 key = normalize_repo_url(r.get("url") or "")
                 if r["id"] not in used and key and key not in out:
-                    out[key] = {"name": r.get("name"), "fullName": r.get("name"), "url": r.get("url"),
-                                "branch": r.get("defaultBranch") or "main", "tagged": False, "source": "host"}
+                    candidates.append((key, r))
+            # Same bar as the Git list: only a repo with a root catalog.yml (and
+            # no models/ unless tagged) is a usable package - checked on GitHub
+            # at the attached branch; one that can't be read is left out.
+            for key, r, tagged in _check_host_repos(candidates):
+                out[key] = {"name": r.get("name"), "fullName": r.get("name"), "url": r.get("url"),
+                            "branch": r.get("defaultBranch") or "main", "tagged": tagged, "source": "host"}
         except Exception:  # noqa: BLE001 - the Git list still helps
             pass
     return jsonify({"repos": sorted(out.values(), key=lambda r: (not r["tagged"], r["name"].lower()))})

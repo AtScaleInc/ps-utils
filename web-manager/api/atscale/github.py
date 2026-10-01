@@ -93,24 +93,35 @@ def _user_repos(token: str) -> list[dict[str, Any]]:
     return resp.json()
 
 
+def shared_repo_check(token: str, full: str, marker: str, ref: str | None = None) -> bool | None:
+    """Whether `full` (owner/name) is a shared-dimensions package at `ref`
+    (default branch when None): None when it has no root catalog.yml or has a
+    models/ folder without carrying `marker`, else whether it carries it."""
+    raw = {**_headers(token), "Accept": "application/vnd.github.raw+json"}
+    params = {"ref": ref} if ref else None
+    r = requests.get(f"{API}/repos/{full}/contents/catalog.yml", headers=raw, params=params, timeout=12)
+    if r.status_code != 200:
+        return None
+    if marker in r.text:
+        return True
+    m = requests.get(f"{API}/repos/{full}/contents/models", headers=_headers(token), params=params, timeout=12)
+    if m.status_code == 200 and m.json():
+        return None
+    return False
+
+
 def list_shared_repos(token: str, marker: str) -> list[dict[str, Any]]:
     """Repos usable as a shared-dimensions package (smlgen/packages.py): a root
     catalog.yml carrying `marker` (tagged), or a catalog with no models/
     folder. Same discovery as list_catalog_repos, reading catalog.yml's text."""
     repos = _user_repos(token)
-    raw = {**_headers(token), "Accept": "application/vnd.github.raw+json"}
 
     def check(repo: dict[str, Any]) -> dict[str, Any] | None:
-        full = repo["full_name"]
-        r = requests.get(f"{API}/repos/{full}/contents/catalog.yml", headers=raw, timeout=12)
-        if r.status_code != 200:
+        tagged = shared_repo_check(token, repo["full_name"], marker)
+        if tagged is None:
             return None
-        tagged = marker in r.text
-        if not tagged:
-            m = requests.get(f"{API}/repos/{full}/contents/models", headers=_headers(token), timeout=12)
-            if m.status_code == 200 and m.json():
-                return None
-        return {"fullName": full, "url": repo["html_url"], "defaultBranch": repo.get("default_branch") or "main",
+        return {"fullName": repo["full_name"], "url": repo["html_url"],
+                "defaultBranch": repo.get("default_branch") or "main",
                 "private": repo.get("private", False), "tagged": tagged}
 
     with ThreadPoolExecutor(max_workers=8) as ex:

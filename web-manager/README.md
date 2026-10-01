@@ -140,7 +140,10 @@ Settings. There's no separate login.
   - **Use shared dimensions in a model.** **Shared dims** in the Build bar
     lists repos you can pick from: ones carrying the tag, Git profile repos
     with a catalog but no `models/` folder, and repos attached on the Build
-    host with nothing deployed from them. Picking one reads the head commit
+    host with nothing deployed from them. Every listed repo must have a root
+    `catalog.yml` on GitHub, so only valid AtScale packages appear; a host
+    repo that lacks one, or that the Git profile can't read, is left out.
+    Picking one reads the head commit
     of its branch. Choose the dimensions to add. They land on the canvas
     read-only, with a dashed border and a `SHARED · <package> @ <commit>`
     badge. The Inspector shows their hierarchy and the level keys a join can
