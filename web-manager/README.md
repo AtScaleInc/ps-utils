@@ -352,6 +352,32 @@ Other rules:
 - Changing the source clears what's staged.
 - **Promoting to Prod always asks for confirmation.**
 
+**Download CLI script.** Sits next to **Promote**, for Models and Aggregates.
+It packs what's staged into a zip you run by hand, on a schedule or in CI,
+with the ps-utils CLI. Nothing is promoted in the app, and the app's Git
+profile isn't needed. Every zip holds a `connections.yaml` with the hosts and
+users and each password left as `<fill in>` (no secret from the app goes into
+the zip), `run.sh` / `run.ps1` (exit 1 on any failure, so they can gate CI),
+`promotion.json` (what was staged, with the hosts' current ids),
+`helpers.mjs` and a `README.md`.
+
+- **Models.** For each staged repo and branch: look the repo up on the target
+  (`atscale-list-repos`) and attach it if it's missing (`atscale-create-repo`;
+  **Link only** stops there), `git clone` the branch with the user's own Git
+  access, then `atscale-deploy-catalog` as `<catalog unique_name>_<branch>`.
+  That's the Design Center deploy (`/wapi/git/deploy/catalog`) the app uses on
+  builds without `/v1/catalogs/deploy`. The CLI has no undeploy and doesn't
+  resolve shared-dimension packages, so **Undeploy `<old branch>` afterwards**
+  and `package.yml` imports are listed in the zip's README instead.
+- **Aggregates.** For each source model: `atscale-export-aggregates`, keep the
+  staged definitions (edit `promotion.json` to change them, or set
+  `ALL_AGGREGATES=1` to keep the whole export), then
+  `atscale-import-aggregates`, which remaps the ids by name and applies the same
+  duplicate and reactivate rules each time it runs. The export, the filtered
+  import and the import's result are kept under `run_results/<run id>/`. With a
+  target-model **Override**, the CLI substitutes ids but not the model name; the
+  zip's README says so.
+
 #### How aggregate promotion works across hosts
 
 Every host that deploys the same SML generates **its own ids**: catalog, model,
@@ -794,6 +820,7 @@ web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (
                  smlgen/      SML build / parse / validate (sml-cli)
                  discovery/   profile.py (profile SQL, top values, join check, roles + findings) · store.py (SQLite)
                  promote/     diff.py (states + rules) · idmap.py (id ↔ name) · remap.py (payload rewrite)
+                              cli_bundle.py (staged promotion -> zip for the ps-utils CLI)
                  analyze/     model.py (SML audit, fact × dimension reach, time intelligence, findings)
                               spec.py (every property in the SML reference)
                  testing/     generate.py (queries) · harness.py (execution) · model.py (DMV snapshot + diff)
@@ -849,6 +876,7 @@ Manage          GET /hosts/:id/models · /repos · /branches?url= · /aggregate-
                 POST /hosts/:id/aggregates/build · deactivate · reactivate · GET /hosts/:id/aggregates/builds
                 GET /hosts/:id/analyze?key=<model key> · /hosts/:id/analyze/file?key=&path=
 Promote         POST /promote/diff · /promote/models · /promote/aggregates
+                POST /promote/models/script · /promote/aggregates/script (same bodies -> zip for the ps-utils CLI)
 Catalog         GET /catalog (repos -> models -> each BU host's copy: status, branch, commit, atHead)
 Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)
                 GET /hosts/:id/sources/:sourceId/columns?schema=&table= · POST …/columns {tables} · GET /build/repos

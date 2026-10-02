@@ -241,3 +241,93 @@ def test_override_allows_the_same_host(client):
     r = client.post("/api/promote/aggregates", json={
         "sourceHostId": "qa-main", "targetHostId": "qa-main", "aggregates": ["x"]})
     assert r.status_code == 400  # no override -> still refused
+
+
+def _unzip(resp):
+    import io
+    import zipfile
+
+    assert resp.status_code == 200 and resp.mimetype == "application/zip", resp.get_data(as_text=True)
+    z = zipfile.ZipFile(io.BytesIO(resp.data))
+    root = z.namelist()[0].split("/")[0]
+    return z, root, (lambda p: z.read(f"{root}/{p}").decode())
+
+
+def _no_secrets(z, *hosts):
+    for h in hosts:
+        pw = (registry.store().get_host_raw(h).get("atscale") or {}).get("password")
+        assert not pw or all(pw not in z.read(n).decode() for n in z.namelist())
+
+
+def test_models_cli_script(client):
+    import json
+
+    import yaml
+
+    r = client.post("/api/promote/models/script", json={
+        "sourceHostId": "qa-main", "targetHostId": "prod-east",
+        "models": [{"name": "Internet Sales", "branch": "develop", "replaceOld": True},
+                   {"name": "Supply Chain", "mode": "link"}]})
+    z, root, read = _unzip(r)
+    assert root.startswith("promote-models-")
+    assert {n.split("/", 1)[1] for n in z.namelist()} == {
+        "connections.yaml", "run.sh", "run.ps1", "helpers.mjs", "promotion.json", "README.md"}
+    assert z.getinfo(f"{root}/run.sh").external_attr >> 16 == 0o755
+    conn = yaml.safe_load(read("connections.yaml"))
+    assert len(conn["connections"]) == 1  # the target only
+    (name, entry), = conn["connections"].items()
+    assert entry["atscale"]["url"].startswith("https://") and entry["atscale"]["user"] == f"u_{name}"
+    assert all(u["password"] == "<fill in>" for u in conn["users"].values())
+    _no_secrets(z, "qa-main", "prod-east")
+
+    plan = json.loads(read("promotion.json"))
+    steps = {s["models"][0]: s for s in plan["steps"]}
+    assert steps["Internet Sales"]["mode"] == "deploy" and steps["Internet Sales"]["branch"] == "develop"
+    assert steps["Supply Chain"]["mode"] == "link"
+    run = read("run.sh")
+    assert "step deploy 1 'https://" in run and "'develop' 'Internet Sales'" in run
+    assert "atscale-deploy-catalog" in run and "step link 2" in run
+    # prod-east runs Internet Sales on main: undeploying it has no CLI operation -> README
+    assert plan["notApplied"]["undeployOldBranch"] and "Undeploy" in read("README.md")
+
+
+def test_aggregates_cli_script(client):
+    import json
+
+    src, tgt, name = "qa-main", "prod-east", "agg_sales_by_product_cat"
+    rows = {r["name"]: r for r in diff(client, "aggs", src, tgt, "Internet Sales")["rows"]}
+    r = client.post("/api/promote/aggregates/script", json={
+        "sourceHostId": src, "targetHostId": tgt, "aggregates": [rows[name]["id"]]})
+    z, root, read = _unzip(r)
+    assert root.startswith("promote-aggregates-")
+    import yaml
+
+    assert len(yaml.safe_load(read("connections.yaml"))["connections"]) == 2
+    _no_secrets(z, src, tgt)
+    plan = json.loads(read("promotion.json"))
+    (m,) = plan["models"]
+    assert m["source"]["name"] == m["target"]["name"] == "Internet Sales"
+    assert m["source"]["catalogId"] and m["target"]["modelId"]
+    assert [a["id"] for a in m["aggregates"]] == [rows[name]["id"]]
+    run = read("run.sh")
+    assert "atscale-export-aggregates" in run and "atscale-import-aggregates" in run
+    assert f"step 'Internet Sales' '{m['source']['catalogId']}'" in run
+
+
+def test_aggregates_cli_script_override_and_errors(client):
+    import json
+
+    _deploy_copy("qa-main", "Internet Sales EU")
+    body = {"sourceHostId": "qa-main", "targetHostId": "qa-main", "aggregates": ["agg_sales_by_product_cat"],
+            "modelMap": {"Internet Sales": "Internet Sales EU"}}
+    z, _, read = _unzip(client.post("/api/promote/aggregates/script", json=body))
+    import yaml
+
+    assert len(yaml.safe_load(read("connections.yaml"))["connections"]) == 1  # one host, both sides
+    assert json.loads(read("promotion.json"))["models"][0]["target"]["name"] == "Internet Sales EU"
+    assert "Target-model override" in read("README.md")
+
+    assert client.post("/api/promote/aggregates/script", json={**body, "aggregates": []}).status_code == 400
+    assert client.post("/api/promote/aggregates/script", json={**body, "aggregates": ["nope"]}).status_code == 400
+    assert client.post("/api/promote/models/script", json={
+        "sourceHostId": "qa-main", "targetHostId": "fin-dev", "models": ["Internet Sales"]}).status_code == 404

@@ -261,6 +261,24 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return data as T
 }
 
+/** A POST answered with a zip (the "Download CLI script" buttons): its file name comes from Content-Disposition. */
+async function zipReq(path: string, body: unknown, fallback: string): Promise<{ name: string; blob: Blob }> {
+  const res = await fetch(`/api${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => ({ error: `Couldn't build the script (${res.status})` })))
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallback
+  return { name, blob: await res.blob() }
+}
+
+/** Hand a downloaded blob to the browser as a file. */
+export function saveBlob(name: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString()
 /** `refresh` bypasses the API's 2 h cache and reloads from AtScale. */
 const r = (refresh?: boolean) => (refresh ? 'refresh=1' : '')
@@ -340,4 +358,9 @@ export const api = {
   promoteAggs: (src: string, tgt: string, aggregates: string[], modelMap?: Record<string, string>) =>
     req<Job<{ promoted: string[]; skipped: { name: string; reason: string }[]; connections?: Record<string, number> }>>('POST', '/promote/aggregates',
       { sourceHostId: src, targetHostId: tgt, aggregates, modelMap }),
+  /** The staged promotion as a zip for the ps-utils CLI (api/promote/cli_bundle.py): same body as promoteModels / promoteAggs. */
+  promoteModelsScript: (src: string, tgt: string, models: { name: string; branch: string; mode: PromoteMode; replaceOld: boolean }[]) =>
+    zipReq('/promote/models/script', { sourceHostId: src, targetHostId: tgt, models }, 'promote-models.zip'),
+  promoteAggsScript: (src: string, tgt: string, aggregates: string[], modelMap?: Record<string, string>) =>
+    zipReq('/promote/aggregates/script', { sourceHostId: src, targetHostId: tgt, aggregates, modelMap }, 'promote-aggregates.zip'),
 }

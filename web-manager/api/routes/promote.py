@@ -1,12 +1,15 @@
-"""Promote: diff source vs target, then promote models or system aggregates."""
+"""Promote: diff source vs target, then promote models or system aggregates -
+or hand the staged ones over as a zip for the ps-utils CLI (POST
+/promote/models/script, /promote/aggregates/script; promote/cli_bundle.py)."""
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 import jobs
 from envs import registry
 from atscale import github
+from promote import cli_bundle
 from promote import diff as D
 from promote.remap import connection_map, remap_export, target_connection
 from routes.objects import host_errors
@@ -253,3 +256,85 @@ def promote_aggregates():
         return {"promoted": promoted, "skipped": skipped, "connections": connections}
 
     return jsonify(jobs.submit("promote-aggregates", run)), 202
+
+
+def _zip(name: str, data: bytes) -> Response:
+    return Response(data, mimetype="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@promote_bp.post("/promote/models/script")
+@host_errors
+def promote_models_script():
+    """Same body as /promote/models -> a zip that deploys the staged models with
+    the ps-utils CLI (promote/cli_bundle.py). Nothing runs here, and the app's
+    Git profile isn't needed: the script clones with the user's own Git access."""
+    b = _body()
+    src_id, tgt_id = _hosts(b)
+    staged = [m if isinstance(m, dict) else {"name": m} for m in (b.get("models") or [])]
+    if not staged:
+        return jsonify({"error": "Nothing staged"}), 400
+    src, tgt = registry.backend(src_id), registry.backend(tgt_id)
+    rows = {r["name"]: r for r in src.list_models()}
+    tgt_rows = tgt.list_models()
+    steps: dict[tuple[str, str, str], dict] = {}
+    replace: list[dict] = []
+    for item in staged:
+        row = rows.get(item["name"])
+        if not row or not row.get("repoUrl"):
+            return jsonify({"error": f"{item['name']}: not on the source (or no repo URL)"}), 400
+        branch = item.get("branch") or row["branch"]
+        mode = "link" if item.get("mode") == "link" else "deploy"
+        steps.setdefault((mode, row["repoUrl"], branch), {"mode": mode, "repoUrl": row["repoUrl"], "branch": branch,
+                                                           "models": []})["models"].append(item["name"])
+        if mode == "deploy" and item.get("replaceOld"):
+            same_repo = github.normalize_repo_url(row["repoUrl"])
+            old = sorted({t.get("catalog") or t["catalogId"] for t in tgt_rows if t.get("catalogId") and t.get("branch") != branch
+                          and github.normalize_repo_url(t.get("repoUrl") or "") == same_repo})
+            if old:
+                replace.append({"model": item["name"], "branch": branch, "catalogs": old})
+    name, data = cli_bundle.build_models((src_id, registry.host(src_id)), (tgt_id, registry.host(tgt_id)),
+                                         list(steps.values()), replace)
+    return _zip(name, data)
+
+
+@promote_bp.post("/promote/aggregates/script")
+@host_errors
+def promote_aggregates_script():
+    """Same body as /promote/aggregates -> a zip that exports the staged
+    aggregates from the source and imports them into the target with the
+    ps-utils CLI (promote/cli_bundle.py). The CLI's import applies the same
+    duplicate / reactivate rules each time the script runs."""
+    b = _body()
+    model_map = _model_map(b)
+    src_id, tgt_id = _hosts(b, model_map)
+    ids = b.get("aggregates") or []
+    if not ids:
+        return jsonify({"error": "Nothing staged"}), 400
+    src, tgt = registry.backend(src_id), registry.backend(tgt_id)
+    src_models, src_aggs = _all_aggs(src)
+    by_id = {a["id"]: a for a in src_aggs}
+    tgt_models = {m["name"]: m for m in tgt.agg_models()}
+    groups: dict[str, dict] = {}
+    for agg_id in ids:
+        a = by_id.get(agg_id)
+        if not a:
+            return jsonify({"error": f"Aggregate {agg_id} is not on the source - refresh and stage again"}), 400
+        model = a["model"]
+        if model_map and model not in model_map:
+            continue
+        if model not in groups:
+            sm = next(m for m in src_models if m["name"] == model)
+            tm = tgt_models.get(model_map.get(model, model))
+            if not tm:
+                return jsonify({"error": f"{model_map.get(model, model)} is not deployed on the target - promote the model first"}), 400
+            groups[model] = {
+                "source": {k: sm[k] for k in ("name", "catalogId", "modelId")},
+                "target": {k: tm[k] for k in ("name", "catalogId", "modelId")},
+                "aggregates": [],
+            }
+        groups[model]["aggregates"].append({"id": a["id"], "name": a["name"], "state": (a.get("diff") or {}).get("state")})
+    if not groups:
+        return jsonify({"error": "Nothing staged"}), 400
+    name, data = cli_bundle.build_aggregates((src_id, registry.host(src_id)), (tgt_id, registry.host(tgt_id)),
+                                             list(groups.values()), model_map)
+    return _zip(name, data)

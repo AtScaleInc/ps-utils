@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, waitForJob, type Diff, type Host } from '../api'
+import { api, saveBlob, waitForJob, type Diff, type Host } from '../api'
 import { resolveHost, targetPick, useUi } from '../store'
 import { refreshHost } from './ManageView'
 import { BranchSelect, DiffPill, EnvSegment, HostSelect, RefreshButton, diffColors, effectiveEnv, envOf, errMsg, fmtDate, plural, useGit, useHosts } from './ui'
@@ -87,7 +87,9 @@ export function PromoteView() {
   const nDup = tgtRows.filter((r) => r.dup).length
   const nSt = stagedRows.length
   const gitBlocked = isM && !git.ready
-  const canPromote = nSt > 0 && !same && !!th && !gitBlocked && (!ovr || !!modelMap)
+  // The script clones with the user's own Git access, so it doesn't need the app's Git profile.
+  const canScript = nSt > 0 && !same && !!th && (!ovr || !!modelMap)
+  const canPromote = canScript && !gitBlocked
   const noun = isM ? 'model' : 'aggregate'
 
   const refresh = () => {
@@ -99,12 +101,24 @@ export function PromoteView() {
     }
   }
 
+  const stagedModels = () => stagedRows.map((r) => ({
+    name: r.name, branch: branchOf(r), mode: modeOf(r), replaceOld: modeOf(r) === 'deploy' && !!replaceFor[r.name] && otherBranchOnTarget(r).length > 0,
+  }))
+
+  /** The staged promotion as a zip the user runs by hand or on a schedule with the ps-utils CLI. Nothing is promoted here. */
+  const script = useMutation({
+    mutationFn: () => isM ? api.promoteModelsScript(sh!.id, th!.id, stagedModels()) : api.promoteAggsScript(sh!.id, th!.id, validStaged, modelMap),
+    onSuccess: ({ name, blob }) => {
+      saveBlob(name, blob)
+      flash(`${name} downloaded - fill in connections.yaml, then ./run.sh`)
+    },
+    onError: (e) => flash(errMsg(e), 'err'),
+  })
+
   const promote = useMutation({
     mutationFn: async () => {
       if (isM) {
-        const res = await waitForJob(await api.promoteModels(sh!.id, th!.id, stagedRows.map((r) => ({
-          name: r.name, branch: branchOf(r), mode: modeOf(r), replaceOld: modeOf(r) === 'deploy' && !!replaceFor[r.name] && otherBranchOnTarget(r).length > 0,
-        }))))
+        const res = await waitForJob(await api.promoteModels(sh!.id, th!.id, stagedModels()))
         const failed = res.results.filter((r) => !r.ok)
         const okNames = res.results.filter((r) => r.ok).map((r) =>
           `${r.name}@${r.branch}${r.mode === 'link' ? ' (linked)' : r.commit ? ` ${r.commit.slice(0, 7)}` : ''}${r.replaced?.length ? ' · replaced old branch' : ''}`)
@@ -290,6 +304,12 @@ export function PromoteView() {
           <div className="row" style={{ gap: 10 }}>
             {gitBlocked && <span className="hint" style={{ color: 'var(--warn)' }}>Git profile missing — set it in Settings</span>}
             <button type="button" className="btn lg ghost" onClick={clearStaged}>Clear</button>
+            <button type="button" className="btn lg info" disabled={!canScript || script.isPending} onClick={() => script.mutate()}
+              title={isM
+                ? 'The staged models as a zip: clone + atscale-deploy-catalog with the ps-utils CLI, to run by hand or on a schedule'
+                : 'The staged aggregates as a zip: atscale-export-aggregates + atscale-import-aggregates with the ps-utils CLI, to run by hand or on a schedule'}>
+              {script.isPending ? 'Packing…' : 'Download CLI script'}
+            </button>
             <button type="button" className="btn lg solid" disabled={!canPromote || promote.isPending}
               style={{ background: canPromote ? envOf(th?.env ?? tgt.env).color : undefined }} onClick={onPromote}>
               {promote.isPending ? 'Promoting…' : nSt ? `Promote ${nSt} to ${th?.label ?? '—'}` : 'Promote'}
