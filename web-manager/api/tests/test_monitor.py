@@ -217,3 +217,58 @@ def test_cleanup_and_bad_range(client):
     assert n > 0
     assert client.post("/api/monitor/cleanup", json={"olderThanDays": 0}).get_json()["count"] == n
     assert client.get("/api/monitor/store").get_json()["queries"] == 0
+
+
+def test_ps_bundle_asks_engine_for_the_ps_parts_only(client):
+    import io
+    import zipfile
+
+    from routes.monitor import PS_BUNDLE_PROVIDERS
+
+    r = client.get("/api/hosts/prod-east/monitor/ps-bundle")
+    assert r.status_code == 200 and r.mimetype == "application/zip"
+    assert 'filename="ps-bundle-prod-east-' in r.headers["Content-Disposition"]
+    names = zipfile.ZipFile(io.BytesIO(r.data)).namelist()
+    assert {n[:-4] for n in names if n.count("/") == 1} == {f"demo-engine/{p}" for p in PS_BUNDLE_PROVIDERS}
+    # the deployed SML, unpacked beside the engine's metadata/<id>/yaml_files.zip
+    assert {n for n in names if "/sml/" in n} == {"demo-engine/sml/sales_catalog_main/catalog.yml",
+                                                  "demo-engine/sml/sales_catalog_main/models/sales.yml"}
+    assert "-LogFiles" in PS_BUNDLE_PROVIDERS and "AggregateData" not in PS_BUNDLE_PROVIDERS
+    # aggregates per deployed model, from the backend rather than the engine
+    agg = sorted(n for n in names if n.startswith("demo-engine/aggregates/"))
+    assert agg and {n.rsplit("/", 1)[1] for n in agg} <= {"aggregates.csv", "aggregates.json", "export.json"}
+    csv_path = next(n for n in agg if n.endswith(".csv"))
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    assert z.read(csv_path).decode().splitlines()[0].startswith("name,type,status,active")
+    assert client.get("/api/hosts/nope/monitor/ps-bundle").status_code == 404
+
+
+def test_ps_bundle_add_sml_reads_after_copying():
+    """Regression: entries copied first must not shift where the source's later reads land."""
+    import io
+    import zipfile
+
+    from monitor.bundle import add_sml
+
+    sml = io.BytesIO()
+    with zipfile.ZipFile(sml, "w") as y:
+        y.writestr("catalog.yml", "object_type: catalog\n")
+    src = io.BytesIO()
+    with zipfile.ZipFile(src, "w") as z:
+        z.writestr("r/engine/settings.json", "x" * 5000)
+        for i in range(2):
+            z.writestr(f"r/metadata/id{i}/project.xml", f'<project name="cat{i}"/>')
+            z.writestr(f"r/metadata/id{i}/yaml_files.zip", sml.getvalue())
+    out = io.BytesIO()
+    assert add_sml(io.BytesIO(src.getvalue()), out) == 2
+    z = zipfile.ZipFile(out)
+    assert z.testzip() is None
+    assert z.read("r/sml/cat1/catalog.yml") == b"object_type: catalog\n"
+
+
+def test_ps_bundle_catalog_names():
+    from monitor.bundle import _catalog_name
+
+    assert _catalog_name(b'<?xml version="1.0" name="x"?><!-- name="y" --><project id="a" name="Sales Insights"/>', "id") == "Sales Insights"
+    assert _catalog_name(b'<project name="a/../b"/>', "id") == "a_.._b"
+    assert _catalog_name(b"", "fallback-id") == "fallback-id"

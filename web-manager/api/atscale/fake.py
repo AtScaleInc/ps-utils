@@ -420,6 +420,35 @@ class FakeSourceApi:
     def get_table_info(self, connection_id: str, database: str, schema: str, table: str) -> dict[str, Any]:
         return {"columns": [{"name": n, "dataType": t} for n, t in _COLS.get(table, [])]}
 
+    def get_support_bundle(self, providers: list[str]) -> Any:
+        """A tiny zip naming the providers asked for, in the response shape the route streams."""
+        import io
+        import zipfile
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            for p in providers:
+                z.writestr(f"demo-engine/{p}.txt", f"{p} (demo host {self.host_id})\n")
+            if "EngineMetadata" in providers:
+                sml = io.BytesIO()
+                with zipfile.ZipFile(sml, "w") as y:
+                    y.writestr("catalog.yml", "unique_name: sales_catalog\nobject_type: catalog\n")
+                    y.writestr("models/sales.yml", "unique_name: sales\nobject_type: model\n")
+                cat = "demo-engine/metadata/0f1e2d3c-0000-4000-8000-000000000001"
+                z.writestr(f"{cat}/project.xml", '<?xml version="1.0"?><project name="sales_catalog_main"/>')
+                z.writestr(f"{cat}/yaml_files.zip", sml.getvalue())
+
+        class _Resp:
+            headers = {"Content-Type": "application/zip"}
+
+            def iter_content(self, chunk_size: int = 0):
+                yield buf.getvalue()
+
+            def close(self) -> None:
+                pass
+
+        return _Resp()
+
     def query_sample(self, connection_id: str, query: str, timeout: float | None = 600) -> dict[str, Any]:
         """Same wrapper the engine applies (DB.scala :: getQuerySampleData)."""
         with _warehouse_lock:

@@ -13,6 +13,10 @@
   POST /monitor/cleanup                        {olderThanDays?, hostId?, model?, dryRun?} -> rows deleted
                                                (every given rule must match; none = everything)
   POST /monitor/compact                        VACUUM
+  GET  /hosts/<id>/monitor/ps-bundle           the engine support zip, cut down to settings,
+                                               system info, hosts and metadata - no logs - plus each
+                                               deployed catalog's SML and each deployed model's
+                                               aggregates (monitor/bundle.py)
 
 Source: GET /wapi/p/queries (PythonAtscaleUtility queries/query_history_container.py),
 stored in workspace/monitor.db (demo: monitor-demo.db) - see monitor/store.py.
@@ -21,16 +25,18 @@ stored in workspace/monitor.db (demo: monitor-demo.db) - see monitor/store.py.
 from __future__ import annotations
 
 import os
+import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 
 import cache
 import jobs
 from envs import registry
+from monitor import bundle
 from monitor import poll as poller
 from monitor import stats, store
 from routes.objects import host_errors
@@ -163,6 +169,45 @@ def hotspots(host_id: str):
     registry.host(host_id)
     f = _filters()
     return jsonify({**stats.hotspots(store.select(host_id, f), user_only=f["queryType"] != "System"), **_lists(host_id, f)})
+
+
+# GET /engine/support?enable=... takes the engine's data-provider names (engine-develop
+# docs/operations/support-bundle.md). The full bundle's settings, system_info, hosts and
+# metadata parts: system_info is RuntimeYaml + BuildData; `host` is every host-scoped
+# provider (those two, config, connection pool, local cache, stack traces) less LogFiles,
+# the bulk of a full bundle. Aggregates are added per deployed model (bundle.aggregate_files)
+# rather than from AggregateData.
+PS_BUNDLE_PROVIDERS = ["EngineSettings", "RuntimeYaml", "BuildData", "host", "-LogFiles", "EngineMetadata"]
+
+
+@monitor_bp.get("/hosts/<host_id>/monitor/ps-bundle")
+@host_errors
+def ps_bundle(host_id: str):
+    registry.host(host_id)
+    r = registry.source_api(host_id).get_support_bundle(PS_BUNDLE_PROVIDERS)
+    name = f"ps-bundle-{host_id}-{time.strftime('%Y-%m-%dT%H%M')}.zip"
+    # Buffered, not streamed: adding the SML rewrites the zip, which needs its central directory.
+    src = tempfile.SpooledTemporaryFile(max_size=64 << 20)
+    out = tempfile.SpooledTemporaryFile(max_size=64 << 20)
+    try:
+        for chunk in r.iter_content(chunk_size=1 << 20):
+            src.write(chunk)
+    finally:
+        r.close()
+    src.seek(0)
+    bundle.add_sml(src, out, bundle.aggregate_files(registry.backend(host_id, refresh=True)))
+    src.close()
+    out.seek(0)
+
+    def body():
+        try:
+            while chunk := out.read(1 << 20):
+                yield chunk
+        finally:
+            out.close()
+
+    return Response(body(), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @monitor_bp.get("/monitor/store")

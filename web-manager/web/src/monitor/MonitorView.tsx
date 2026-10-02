@@ -42,6 +42,25 @@ export function MonitorView() {
   const st = statusQ.data
   const [polling, setPolling] = useState<'poll' | 'range' | null>(null)
   const busy = useRef(false)
+  const [bundling, setBundling] = useState(false)
+
+  async function downloadBundle() {
+    if (!host) return
+    setBundling(true)
+    try {
+      const { blob, filename } = await monitorApi.psBundle(host.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      flash(errMsg(e), 'err')
+    } finally {
+      setBundling(false)
+    }
+  }
 
   async function poll(kind: 'poll' | 'range', quiet = false) {
     if (!host || busy.current) return
@@ -106,6 +125,10 @@ export function MonitorView() {
           <button type="button" className="btn primary" disabled={!!polling} onClick={() => poll('poll')}
             title="Pull the queries AtScale ran since the last poll">
             {polling === 'poll' ? 'Polling…' : 'Poll now'}
+          </button>
+          <button type="button" className="btn" disabled={bundling} onClick={downloadBundle}
+            title="Download a support bundle without logs: settings, system info, hosts, metadata, plus each deployed model's SML and aggregates">
+            {bundling ? 'Collecting…' : 'PS bundle'}
           </button>
         </div>
       </div>

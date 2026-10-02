@@ -293,6 +293,13 @@ class AtScaleClient:
         values = response.get("values", []) if isinstance(response, dict) else []
         return values if isinstance(values, list) else []
 
+    def get_support_bundle(self, providers: list[str]) -> requests.Response:
+        """GET /engine/support?enable=none,<providers> - the engine's own support zip,
+        limited to the named data providers (engine-develop docs/operations/support-bundle.md,
+        rest/engine/SupportRest.scala). Streamed: the caller pipes r.iter_content() on."""
+        return self._dispatch("GET", "/engine/support", params={"enable": ",".join(["none", *providers])},
+                              stream=True, timeout=1800)
+
     # -- repos (git attach)----------------------------------------------------------
     def list_repos(self) -> list[dict[str, Any]]:
         return self._dispatch("GET", "/wapi/p/repo").json()

@@ -141,4 +141,14 @@ export const monitorApi = {
   storeInfo: () => req<{ path: string; bytes: number; queries: number; maxAgeDays: number; hosts: { hostId: string; queries: number; oldestMs: number; newestMs: number; models: { model: string; queries: number; oldestMs: number; newestMs: number }[] }[] }>('GET', '/monitor/store'),
   cleanup: (body: { olderThanDays?: number | null; hostId?: string | null; model?: string | null; dryRun?: boolean }) => req<{ count: number }>('POST', '/monitor/cleanup', body),
   compact: () => req<{ freedBytes: number }>('POST', '/monitor/compact'),
+  /** The engine support zip without logs (settings, system info, hosts, metadata) plus each deployed model's SML and aggregates. */
+  psBundle: async (hostId: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch(`/api${h(hostId)}/ps-bundle`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data?.error ?? `PS bundle failed with ${res.status}`)
+    }
+    const filename = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? `ps-bundle-${hostId}.zip`
+    return { blob: await res.blob(), filename }
+  },
 }

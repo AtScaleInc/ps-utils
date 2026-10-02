@@ -16,7 +16,12 @@ below works inside it. From one screen you can:
   model: every object and SML property it uses, with descriptions, YAML
   comments and audit findings,
 - **monitor** a host's query history: how much is served from cache,
-  aggregates or the warehouse, volume, latency and hotspots.
+  aggregates or the warehouse, volume, latency and hotspots. **PS bundle**
+  downloads the host's engine support zip without logs - settings, system
+  info, hosts and metadata (`GET /engine/support?enable=none,...`) - plus each
+  deployed catalog's SML (`sml/<catalog>/`) and each deployed model's
+  aggregates (`aggregates/<catalog>/<model>/`: a CSV, the rows as JSON, and
+  the system aggregates as an importable `export.json`).
 
 ```
 ┌───── Build ──────┐   ┌──── Validate ────┐   ┌──── Promote ─────┐   ┌───── Manage ─────┐   ┌──── Monitor ─────┐
