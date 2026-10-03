@@ -132,14 +132,18 @@ def run_script():
     return Response(data, mimetype="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
-@testing_bp.post("/test/runs")
-@host_errors
-def start_run():
-    b = _body()
-    queries, protocols, targets, _, opts, concurrency = _run_request(b)
+class Busy(RuntimeError):
+    """MAX_ACTIVE runs are already executing."""
 
+
+def launch_run(targets: list[dict[str, Any]], queries: list[dict[str, Any]], protocols: list[str],
+               opts: dict[str, bool], concurrency: int, annotate: bool = True) -> tuple[dict[str, Any], threading.Thread]:
+    """Start a run in the background: (run, its thread). The first target is
+    the baseline its model check compares with. Shared by POST /test/runs and
+    the pipeline's test step (pipeline/steps.py), which joins the thread.
+    Raises Busy when MAX_ACTIVE runs are executing."""
     if not _active.acquire(blocking=False):
-        return jsonify({"error": f"{MAX_ACTIVE} test runs are already running - wait for one to finish", "busy": True}), 429
+        raise Busy(f"{MAX_ACTIVE} test runs are already running - wait for one to finish")
     run_id = harness.generate_run_id()
     run = {"runId": run_id, "status": "running", "startedAt": now_iso(), "finishedAt": None,
            "targets": targets, "protocols": protocols, "options": opts, "concurrency": concurrency,
@@ -170,7 +174,7 @@ def start_run():
                      if "error" not in base and "error" not in models[t["hostId"]]}
             store.set_model_check(run_id, check)
             harness.run(run_id, targets, queries, protocols, registry.source_api, opts,
-                        concurrency=concurrency, annotate=bool(b.get("annotate", True)), on_result=on_result)
+                        concurrency=concurrency, annotate=annotate, on_result=on_result)
         except Exception as e:  # noqa: BLE001 - surfaced on the run
             status, error = "failed", str(e)
         try:
@@ -179,8 +183,24 @@ def start_run():
         finally:
             _active.release()
 
-    threading.Thread(target=work, daemon=True).start()
-    return jsonify({"runId": run_id, **run}), 202
+    # Same business unit in the thread as in the caller (a pipeline job runs in one).
+    import contextvars
+
+    t = threading.Thread(target=contextvars.copy_context().run, args=(work,), daemon=True)
+    t.start()
+    return run, t
+
+
+@testing_bp.post("/test/runs")
+@host_errors
+def start_run():
+    b = _body()
+    queries, protocols, targets, _, opts, concurrency = _run_request(b)
+    try:
+        run, _ = launch_run(targets, queries, protocols, opts, concurrency, bool(b.get("annotate", True)))
+    except Busy as e:
+        return jsonify({"error": str(e), "busy": True}), 429
+    return jsonify(run), 202
 
 
 def _in_bu(run: dict[str, Any], ids: set[str] | None = None) -> bool:
@@ -290,18 +310,11 @@ def _pct(a: float, b: float) -> float | None:
     return round((b - a) / a * 100, 1) if a else None
 
 
-@testing_bp.post("/test/compare")
-def compare():
-    """Baseline vs candidate: two (run, host) pairs - the same run's two hosts
-    (Dev vs QA), or one host across two runs (before vs after a redeploy).
-    Queries are matched by name + protocol."""
-    b = _body()
-    try:
-        run_a, ta = _run_side(b.get("baseline") or {}, "Baseline")
-        run_b, tb = _run_side(b.get("candidate") or {}, "Candidate")
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    tolerance = float(b.get("tolerance") or 1e-9)
+def compare_sides(run_a: dict[str, Any], ta: dict[str, Any], run_b: dict[str, Any], tb: dict[str, Any],
+                  tolerance: float = 1e-9) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """(model diff, per-query rows) of baseline (run_a, host ta) vs candidate
+    (run_b, host tb), queries matched by name + protocol. Shared by
+    POST /test/compare and the pipeline's test step (pipeline/steps.py)."""
     ma, mb = (run_a.get("models") or {}).get(ta["hostId"]), (run_b.get("models") or {}).get(tb["hostId"])
     model = compare_models(ma, mb) if ma and mb and "error" not in ma and "error" not in mb else None
 
@@ -327,6 +340,22 @@ def compare():
             row["variance"] = diff
             row["timePct"] = _pct(ra["durationMs"], rb["durationMs"])
         rows.append(row)
+    return model, rows
+
+
+@testing_bp.post("/test/compare")
+def compare():
+    """Baseline vs candidate: two (run, host) pairs - the same run's two hosts
+    (Dev vs QA), or one host across two runs (before vs after a redeploy).
+    Queries are matched by name + protocol."""
+    b = _body()
+    try:
+        run_a, ta = _run_side(b.get("baseline") or {}, "Baseline")
+        run_b, tb = _run_side(b.get("candidate") or {}, "Candidate")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    tolerance = float(b.get("tolerance") or 1e-9)
+    model, rows = compare_sides(run_a, ta, run_b, tb, tolerance)
     order = {"failedCandidate": 0, "differs": 1, "missing": 2, "failedBaseline": 3, "failedBoth": 4, "identical": 5}
     rows.sort(key=lambda r: (order.get(r["verdict"], 9), r["name"], r["protocol"]))
     counts: dict[str, int] = {}

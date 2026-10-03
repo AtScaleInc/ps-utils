@@ -181,81 +181,87 @@ def promote_aggregates():
     if not ids:
         return jsonify({"error": "Nothing staged"}), 400
     src, tgt = registry.backend(src_id), registry.backend(tgt_id, refresh=True)
+    return jsonify(jobs.submit("promote-aggregates", lambda: promote_aggregate_ids(src, tgt, ids, model_map))), 202
 
-    def run() -> dict:
-        src_models, src_aggs = _all_aggs(src)
-        if model_map:
-            src_models = [m for m in src_models if m["name"] in model_map]
-            src_aggs = [a for a in src_aggs if a["model"] in model_map]
-        tgt_models = {m["name"]: m for m in tgt.agg_models()}
-        tgt_aggs = _target_aggs(tgt, tgt_models.values(), src_models, model_map)
-        # §5 rule 6: re-check now - the target may have changed since the diff.
-        promote, skipped = D.partition_for_promote(ids, _as_target(src_aggs, model_map), tgt_aggs, set(tgt_models))
-        src_model_of = {a["id"]: a["model"] for a in src_aggs}
-        promoted: list[str] = []
-        connections: dict[str, int] = {}  # "source → target" connection -> aggregates remapped
-        by_model: dict[str, list[dict]] = {}
-        for a in promote:
-            by_model.setdefault(src_model_of[a["id"]], []).append(a)
-        tgt_by_id = {t["id"]: t for t in tgt_aggs}
-        for model_name, aggs in by_model.items():
-            sm = next(m for m in src_models if m["name"] == model_name)
-            # The same model, matched by name (§5 rule 1) unless overridden.
-            tm = tgt_models[model_map.get(model_name, model_name)]
-            payload = src.export_aggregates(sm["catalogId"], sm["modelId"], [a["id"] for a in aggs])
-            exported = {v["id"] for v in payload["aggregates"]["values"]}
-            for a in aggs:
-                if a["id"] not in exported:
-                    skipped.append({"id": a["id"], "name": a["name"], "reason": "Not in export (inactive or not system-defined)"})
-            # Target counterpart (inactive copy) -> its instance id; new aggregates get none.
-            counterpart = {a["id"]: (a["diff"].get("targetIds") or [None])[0] for a in aggs}
-            instances = {sid: (tgt_by_id.get(tid) or {}).get("instanceId") for sid, tid in counterpart.items()}
-            # Ids differ per host: translate the plan's key / reference ids by name.
-            src_names = src.catalog_ids(sm["catalogId"])
-            tgt_names = tgt.catalog_ids(tm["catalogId"])
-            tgt_by_name: dict[str, str] = {}
-            for tid, n in tgt_names.items():
-                tgt_by_name[n] = tid if n not in tgt_by_name else ""  # ambiguous -> unusable
-            # Connection ids differ per environment: pair them through the datasets
-            # both models read (each dataset names its connection).
-            conn_map = connection_map(src.dataset_connections(sm["catalogId"]), tgt.dataset_connections(tm["catalogId"]))
-            tgt_conns = tgt.model_connections(tm["catalogId"], tm["modelId"])
-            body, problems = remap_export(
-                payload, target_catalog_id=tm["catalogId"], target_model_id=tm["modelId"],
-                target_instances=instances, target_connections=tgt_conns, connections=conn_map,
-                source_names=src_names if src_names else None,
-                target_ids_by_name={n: i for n, i in tgt_by_name.items() if i} if src_names else None,
-                source_model_name=sm["name"], target_model_name=tm["name"],
-            )
-            by_id = {a["id"]: a for a in aggs}
-            skipped.extend({"id": p["id"], "name": by_id.get(p["id"], {}).get("name", p["id"]), "reason": p["reason"]} for p in problems)
-            for v in payload["aggregates"]["values"]:
-                sc = v.get("connectionId")
-                tc = target_connection(sc, tgt_conns, conn_map)
-                if sc and tc:
-                    connections[f"{sc} → {tc}"] = connections.get(f"{sc} → {tc}", 0) + 1
-            if not body["aggregates"]["values"]:
+
+
+
+def promote_aggregate_ids(src, tgt, ids: list[str], model_map: dict[str, str]) -> dict:
+    """Export the source aggregates `ids` -> re-check the §5 rules against the
+    target's current state -> remap ids -> import (reactivating an inactive
+    copy). {promoted, skipped, connections}. Shared by POST /promote/aggregates
+    and the pipeline's promote-aggs step (pipeline/steps.py)."""
+    src_models, src_aggs = _all_aggs(src)
+    if model_map:
+        src_models = [m for m in src_models if m["name"] in model_map]
+        src_aggs = [a for a in src_aggs if a["model"] in model_map]
+    tgt_models = {m["name"]: m for m in tgt.agg_models()}
+    tgt_aggs = _target_aggs(tgt, tgt_models.values(), src_models, model_map)
+    # §5 rule 6: re-check now - the target may have changed since the diff.
+    promote, skipped = D.partition_for_promote(ids, _as_target(src_aggs, model_map), tgt_aggs, set(tgt_models))
+    src_model_of = {a["id"]: a["model"] for a in src_aggs}
+    promoted: list[str] = []
+    connections: dict[str, int] = {}  # "source → target" connection -> aggregates remapped
+    by_model: dict[str, list[dict]] = {}
+    for a in promote:
+        by_model.setdefault(src_model_of[a["id"]], []).append(a)
+    tgt_by_id = {t["id"]: t for t in tgt_aggs}
+    for model_name, aggs in by_model.items():
+        sm = next(m for m in src_models if m["name"] == model_name)
+        # The same model, matched by name (§5 rule 1) unless overridden.
+        tm = tgt_models[model_map.get(model_name, model_name)]
+        payload = src.export_aggregates(sm["catalogId"], sm["modelId"], [a["id"] for a in aggs])
+        exported = {v["id"] for v in payload["aggregates"]["values"]}
+        for a in aggs:
+            if a["id"] not in exported:
+                skipped.append({"id": a["id"], "name": a["name"], "reason": "Not in export (inactive or not system-defined)"})
+        # Target counterpart (inactive copy) -> its instance id; new aggregates get none.
+        counterpart = {a["id"]: (a["diff"].get("targetIds") or [None])[0] for a in aggs}
+        instances = {sid: (tgt_by_id.get(tid) or {}).get("instanceId") for sid, tid in counterpart.items()}
+        # Ids differ per host: translate the plan's key / reference ids by name.
+        src_names = src.catalog_ids(sm["catalogId"])
+        tgt_names = tgt.catalog_ids(tm["catalogId"])
+        tgt_by_name: dict[str, str] = {}
+        for tid, n in tgt_names.items():
+            tgt_by_name[n] = tid if n not in tgt_by_name else ""  # ambiguous -> unusable
+        # Connection ids differ per environment: pair them through the datasets
+        # both models read (each dataset names its connection).
+        conn_map = connection_map(src.dataset_connections(sm["catalogId"]), tgt.dataset_connections(tm["catalogId"]))
+        tgt_conns = tgt.model_connections(tm["catalogId"], tm["modelId"])
+        body, problems = remap_export(
+            payload, target_catalog_id=tm["catalogId"], target_model_id=tm["modelId"],
+            target_instances=instances, target_connections=tgt_conns, connections=conn_map,
+            source_names=src_names if src_names else None,
+            target_ids_by_name={n: i for n, i in tgt_by_name.items() if i} if src_names else None,
+            source_model_name=sm["name"], target_model_name=tm["name"],
+        )
+        by_id = {a["id"]: a for a in aggs}
+        skipped.extend({"id": p["id"], "name": by_id.get(p["id"], {}).get("name", p["id"]), "reason": p["reason"]} for p in problems)
+        for v in payload["aggregates"]["values"]:
+            sc = v.get("connectionId")
+            tc = target_connection(sc, tgt_conns, conn_map)
+            if sc and tc:
+                connections[f"{sc} → {tc}"] = connections.get(f"{sc} → {tc}", 0) + 1
+        if not body["aggregates"]["values"]:
+            continue
+        result = tgt.import_aggregates(tm["catalogId"], tm["modelId"], body)
+        for v in (result.get("aggregates") or {}).get("values", []):
+            a = by_id.get(v.get("id"))
+            if not a:
                 continue
-            result = tgt.import_aggregates(tm["catalogId"], tm["modelId"], body)
-            for v in (result.get("aggregates") or {}).get("values", []):
-                a = by_id.get(v.get("id"))
-                if not a:
-                    continue
-                if v.get("imported"):
-                    promoted.append(a["name"])
-                elif counterpart.get(a["id"]):
-                    # "Replaces inactive": AtScale kept the existing (blocked) copy -
-                    # reactivate it so the target ends up active / Built.
-                    r = tgt.set_active(tm["catalogId"], tm["modelId"], [counterpart[a["id"]]], True)
-                    if r and r[0].get("ok"):
-                        promoted.append(f"{a['name']} (reactivated)")
-                    else:
-                        skipped.append({"id": a["id"], "name": a["name"], "reason": (r[0].get("error") if r else None) or v.get("reason") or "Ignored"})
+            if v.get("imported"):
+                promoted.append(a["name"])
+            elif counterpart.get(a["id"]):
+                # "Replaces inactive": AtScale kept the existing (blocked) copy -
+                # reactivate it so the target ends up active / Built.
+                r = tgt.set_active(tm["catalogId"], tm["modelId"], [counterpart[a["id"]]], True)
+                if r and r[0].get("ok"):
+                    promoted.append(f"{a['name']} (reactivated)")
                 else:
-                    skipped.append({"id": a["id"], "name": a["name"], "reason": v.get("reason") or "Ignored by AtScale"})
-        return {"promoted": promoted, "skipped": skipped, "connections": connections}
-
-    return jsonify(jobs.submit("promote-aggregates", run)), 202
+                    skipped.append({"id": a["id"], "name": a["name"], "reason": (r[0].get("error") if r else None) or v.get("reason") or "Ignored"})
+            else:
+                skipped.append({"id": a["id"], "name": a["name"], "reason": v.get("reason") or "Ignored by AtScale"})
+    return {"promoted": promoted, "skipped": skipped, "connections": connections}
 
 
 def _zip(name: str, data: bytes) -> Response:

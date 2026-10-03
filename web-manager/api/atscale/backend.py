@@ -38,6 +38,9 @@ class Backend(Protocol):
     def attach_repo(self, repo_url: str, branch: str) -> dict[str, Any]: ...
     def deploy(self, keys: list[str], branches: dict[str, str] | None = None) -> list[dict[str, Any]]: ...
     def deploy_branch(self, repo_url: str, branch: str, replace_catalogs: list[str] | None = None) -> dict[str, Any]: ...
+    def deploy_commit(self, repo_url: str, branch: str, commit: str, catalog_id: str | None = None) -> dict[str, Any]: ...
+    def previous_commit(self, row: dict[str, Any]) -> dict[str, Any] | None: ...
+    def head_commit(self, repo_url: str, branch: str, model: str | None = None) -> str | None: ...
     def undeploy(self, keys: list[str]) -> dict[str, Any]: ...
     def unlink(self, keys: list[str]) -> dict[str, Any]: ...
     def compare(self, src: dict[str, Any], tgt: dict[str, Any]) -> str | None: ...
@@ -360,6 +363,48 @@ class RealBackend:
         return {"ok": True, "repoUrl": repo_url, "branch": branch, "catalogId": cat_id,
                 "commit": commit["sha"], "replaced": replaced, "warnings": [w for w in warnings if w],
                 **({"method": "legacy (/wapi/git/deploy/catalog)"} if legacy else {})}
+
+    def head_commit(self, repo_url: str, branch: str, model: str | None = None) -> str | None:
+        """The branch's head commit on GitHub - what deploy_branch would build."""
+        return github.head_commit(self._need_token(), repo_url, branch)["sha"]
+
+    def previous_commit(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        """The commit this host's catalog ran before the current one
+        (store.record_deployment history), or None when this app never
+        deployed an earlier one."""
+        rec = (self.host.get("deployments") or {}).get(row.get("catalogId") or "") or {}
+        return next(iter(rec.get("history") or []), None)
+
+    def deploy_commit(self, repo_url: str, branch: str, commit: str, catalog_id: str | None = None) -> dict[str, Any]:
+        """Redeploy an exact commit as the `<catalog>_<branch>` catalog - the
+        pipeline's rollback. AtScale's "Deploy from Git" only builds a branch
+        head, so this compiles the commit's SML here and posts it through the
+        Design Center deploy (/wapi/git/deploy/catalog, atscale/legacy_deploy.py),
+        the same path as builds without /v1/catalogs/deploy."""
+        from . import legacy_deploy
+
+        token = self._need_token()
+        try:
+            repo_id = self._ensure_repo(repo_url, branch)
+            files = github.fetch_sml_files(token, repo_url, commit)
+            result = legacy_deploy.deploy(self.api, self.api.cookie_client(), files, repo_id, branch,
+                                          fetch_package=lambda url, sha: github.fetch_sml_files(token, url, sha))
+        except AtScaleApiError as e:
+            return {"ok": False, "repoUrl": repo_url, "branch": branch, "commit": commit, "error": f"{e.status}: {e.body[:300]}"}
+        except (ValueError, github.GitError) as e:
+            return {"ok": False, "repoUrl": repo_url, "branch": branch, "commit": commit, "error": str(e)}
+        cat_id = result.get("catalogId") or catalog_id
+        if cat_id:
+            old = (self.host.get("deployments") or {}).get(cat_id) or {}
+            history = list(old.get("history") or [])
+            if history and history[0].get("commit") == commit:
+                history = history[1:]  # rolled back to it: it is current again, not history
+            self.store.record_deployment(self.host["id"], cat_id, {
+                "repoUrl": repo_url, "branch": branch, "commit": commit, "commitDate": None,
+                "deployedAt": now_iso(), "history": history,
+            })
+        return {"ok": True, "repoUrl": repo_url, "branch": branch, "catalogId": cat_id, "commit": commit,
+                "method": "legacy (/wapi/git/deploy/catalog)"}
 
     def deploy(self, keys: list[str], branches: dict[str, str] | None = None) -> list[dict[str, Any]]:
         """Deploy the catalogs behind `keys`; `branches` overrides the branch per key."""

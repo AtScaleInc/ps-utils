@@ -283,27 +283,3 @@ button.cmp-check { cursor: pointer; }
 .grid-db { grid-template-columns: minmax(0, 1.6fr) 60px 90px 100px 130px 130px 90px; }
 .grid-disc { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 60px 90px 150px 100px; }
 
-/* -- catalog: every model of the BU across its hosts (components/CatalogView.tsx) ------------- */
-.cat-repo { display: flex; align-items: baseline; gap: 12px; padding: 10px 18px 6px; background: var(--panel); border-top: 1px solid var(--hair); }
-.cat-cell { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-.cat-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 7px; border: 1px solid var(--hair); font-family: var(--font-mono); font-size: 10.5px; }
-.cat-chip.info { border-style: dashed; color: var(--muted); }
-.cat-chip.err { border-color: var(--danger); }
-.cat-chip .v { color: var(--muted); }
-.cat-chip.warn .v { color: var(--warn); }
-.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
-.cat-find { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
-.cat-finds { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-.cat-detail { display: flex; flex-direction: column; gap: 10px; padding: 12px 18px 16px; background: var(--modal); border-top: 1px solid var(--row-line); }
-.cat-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.cat-hosts { display: flex; flex-direction: column; border: 1px solid var(--hair); }
-.cat-hrow { display: grid; grid-template-columns: 56px minmax(0, 1fr) 96px minmax(0, 1.6fr) 70px 370px; gap: 14px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--row-line); font-size: 12.5px; }
-.cat-hrow.th { border-top: 0; background: var(--panel); font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.cat-validate { padding: 0; }
-.cat-validate .test-setup { margin: 12px 18px; }
-.cat-validate .test-queries { margin: 0 18px 14px; }
-.cat-validate .bar { padding: 10px 18px; }
-.cat-vrow { display: grid; grid-template-columns: 16px minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--row-line); font-size: 12.5px; cursor: pointer; }
-.cat-vrow:first-child { border-top: 0; }
-.cat-vrow.env { grid-template-columns: 16px auto minmax(0, 1fr); background: var(--panel); }
-.cat-vrow.off { opacity: .45; cursor: not-allowed; }

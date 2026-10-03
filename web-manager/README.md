@@ -35,7 +35,7 @@ below works inside it. From one screen you can:
   Settings: Hosts & Git (credentials, the BU's Git profile) · Business units · Cache & Database
 ```
 
-The top tabs are **Build · Validate · Promote · Manage · Catalog · Monitor**, with **⚙ Settings** on the
+The top tabs are **Build · Validate · Promote · Manage · Pipeline · Monitor**, with **⚙ Settings** on the
 right. The app opens on Build. The left rail lists the current tab's sections:
 
 | Tab | Rail sections |
@@ -44,13 +44,13 @@ right. The app opens on Build. The left rail lists the current tab's sections:
 | Validate | Run · Results · Compare results · Compare model |
 | Promote | Models · Aggregates |
 | Manage | Models · Aggregates · Analyze |
-| Catalog | Models · Validate |
+| Pipeline | Board · Runs · CI setup |
 | Monitor | Overview · History · Hotspots |
 | Settings | Hosts & Git · Cache & Database |
 
 Every host-bound tab picks its group and host the same way: the env picker and host
-dropdown sit at the left of the bar. Catalog is the exception - it starts from
-the model and covers every host of the business unit.
+dropdown sit at the left of the bar. Pipeline is the exception - it covers every
+host of the business unit, one stage per group.
 
 ---
 
@@ -257,7 +257,7 @@ once. A candidate environment is ready to promote to when its **model** and its
   The queries run like ps-utils `execute-atscale-query-harness`. Each one
   records its status, time, size and checksum, and the result rows are stored
   too. Each host's model (DMV) is snapshotted at the start of the run.
-- **Download CLI script.** Sits next to **Run**, here and in Catalog › Validate.
+- **Download CLI script.** Sits next to **Run**.
   It packs the same picks (queries, hosts, protocols, workers, annotation) into
   a zip you run by hand, on a schedule or in CI, with the ps-utils CLI. Nothing
   runs in the app. The zip holds:
@@ -499,46 +499,90 @@ Each tab opens with a switch that shows one view at a time:
 
 **Export JSON** downloads the whole audit.
 
-### Catalog: every model of the business unit, on every host
+### Pipeline: commits across the business unit's stages
 
-Manage, Promote and Validate start from a host. Catalog starts from the model:
-it is the business unit's view of what it has and where it runs.
+The pipeline's **stages are the business unit's groups that have hosts**, in
+order. A BU with Dev and Prod gets Dev → Prod; one with all four gets
+Dev → Test → QA → Prod. Your CI (GitHub Actions or Jenkins) runs the
+pipeline and Env Manager executes each AtScale step behind an API token. A team
+without CI uses the **built-in gate** and promotes from the Board.
 
-- **Models.** Each repo from the BU's Git profile that has a root
-  `catalog.yml`, its models, and one column per group (Dev, Test, QA, Prod).
-  Every host holding the model gets a chip with its version, coloured:
-  - green: deployed at the branch head
-  - amber: behind it
-  - red: failed
-  - dashed: linked but not deployed
+| Stage | Takes | Gate in front of it |
+|---|---|---|
+| First (Dev) | PR branches. With two stages, main too | — |
+| Second (Test), with 3+ stages | main, after a merge | **Merge**: Dev ahead → "Merge to main" |
+| Middle (QA) | the commit that passed on the stage before | **Promotion** |
+| Last (Prod) | the same, approved | **Promotion** + approval |
 
-  A repo a host has attached that the Git profile doesn't list still
-  shows, so no deployment is hidden. The Status column gives the model's
-  worst finding: an error, copies behind head, more than one version across
-  hosts, groups it isn't deployed in, or "In sync". **Needs attention**
-  filters to models with a finding.
-- **Open a model** to see every host of the BU with its status, branch,
-  version and deploy date. From there:
-  - **Deploy head** or **Redeploy** at the picked branch.
-  - **Deploy** a model that is only linked.
-  - **Link + deploy** onto a host that doesn't have it yet: attaches the
-    repo, links the model, then deploys.
-  - **Undeploy** the copy on a host. AtScale undeploys the whole catalog, so
-    the confirmation names every other model deployed in it. The repo link
-    stays, so the row drops back to Linked.
+A promotion gate reads (PIPELINE_BUILD.md §5): **In sync** / **Prod ahead**;
+**Testing…** while the source commit's test runs; **Blocked · no test** or
+**Blocked · test failed** when the policy requires a passing test; otherwise
+**Gate open**, or **Awaiting approval** on the last gate when approval is
+required. A deploy takes a repo's **whole catalog**, so a gate also stays shut
+while another model of the same repo isn't ready - not on the source stage (it
+would arrive untested), or blocked there: **Blocked · same catalog**, with the
+reason.
 
-  Each one asks first, and a Prod host is flagged. **Analyze** opens
-  Manage › Analyze on that host, and **Promote…** opens Promote with that
-  host as the source.
-- **Validate** is the same table, listing only models deployed somewhere
-  and only their deployed copies. Status says whether those copies run one
-  version or several. Open a model and its deployed hosts are listed by
-  group, all ticked. Tick or untick a whole group, or single hosts, then
-  **Run**. A host where the model's cube can't be found is greyed out with
-  the reason. Queries are generated from the lowest group's host in the run.
-  The query list, options and results are the Validate tab's own, and the
-  run opens in Validate › Results. When the ticked hosts run different
-  versions, that's the check to run before promoting.
+- **Board.** One row per model, one cell per stage: the commit its primary host
+  (the group's first host that has it) runs, the test verdict for that commit on
+  that stage (the last stage shows **Live** or **Host error**), and **≠ drift**
+  when another host of the group runs a different commit or lacks the model.
+  Click a cell to act on that stage's commit: **Run test**, **Rollback**, and
+  **Promote / Approve** into the next stage (re-checked on the server, refused
+  with 409 when the gate isn't open). After a deploy into the last stage, the
+  aggregates bar turns orange: system aggregates are runtime state, not Git -
+  **Move system aggregates →** opens Promote › Aggregates on the last two
+  stages' hosts.
+- **Runs.** Every step run here or reported by CI, newest first: run number and
+  orchestrator (linked to the CI run), stage, model, commit, target, verdict,
+  duration. A test run opens its queries in Validate › Results.
+- **CI setup.** Orchestrator (GitHub Actions · Jenkins · Built-in gate), gate
+  policy (require a passing test, require approval for the last stage, model
+  unchanged except intended edits, result variance threshold - 2% by default),
+  deploy identities (a host whose user doesn't match the service-account
+  pattern `^svc[_-]` is flagged "may be SSO": deploy needs a Keycloak password),
+  the **pipeline template** generated for this BU's stages, and **API tokens**.
+
+**What each step does**
+
+| Step | |
+|---|---|
+| validate | sml-cli over the SML files the CLI sends |
+| deploy | the branch to every host of the stage. Given a commit, the branch head must still be it - AtScale deploys a branch head, never a commit - and a stage behind a promotion gate only takes a commit that passed on the stage before (every model of the repo) |
+| test | queries generated from the stage's primary host (Validate's generator) run there and on a baseline - the last stage by default, or `previous` (this stage's last test) - then Validate's compare. **Pass** = no query failing or missing on the candidate, every result within the variance threshold, and (when required) no unintended model change. A model change is *intended* when the object is declared in an SML file that differs between the two commits (GitHub). The verdict is scored when read, so changing the threshold re-scores every gate. The run itself is a normal Validate run. On a PR it posts a commit status (`atscale/env-manager`) and a comment, with the BU's Git token |
+| promote-aggs | every stageable system aggregate from one stage's primary host to each host of another (Promote's export → remap → import; "replaces inactive" only with `--include-replacements`) |
+| rollback | the commit the stage ran before (this app's deploy history per catalog), redeployed through the Design Center deploy (`/wapi/git/deploy/catalog`) with that commit's SML - AtScale's Git deploy only builds a branch head. Nothing is rebuilt; aggregates stay |
+
+**API tokens** belong to one business unit: a request presenting one works in
+that BU, with its scopes (`deploy`, `test`, `promote`, `monitor`). Only the
+token's sha256 is stored; the token is shown once. Tokens and the policy can't
+be changed with a token. Without a token, only loopback callers (the local UI)
+reach `/api/pipeline/*` - behind a proxy on the same machine the forwarded
+address decides. Set `ENV_MANAGER_PIPELINE_OPEN=all` to open it (trusted
+network only) or `none` to require a token everywhere; set
+`ENV_MANAGER_PUBLIC_URL` to the address CI reaches, for the templates.
+
+**envmgr CLI** (`cli/envmgr.py`, Python standard library only). CI downloads it
+from the Env Manager it calls - `GET /api/pipeline/cli` - so it always matches
+the server; `pip install ./cli` works too. It reads `ENVMGR_URL` and
+`ENVMGR_TOKEN`, starts the step, polls every 10 s, prints the summary, writes
+JUnit with `--junit`, and exits **0 pass · 1 fail · 2 error** (a closed gate is
+a fail). Under GitHub Actions and Jenkins it sends the run number, URL, commit
+and PR along.
+
+```bash
+envmgr validate --path .
+envmgr deploy --env qa --branch main --commit <sha>
+envmgr test --env qa --baseline prod --junit results.xml
+envmgr promote-aggs --from qa --to prod --system-only
+envmgr rollback --model "Internet Sales" --env prod
+envmgr promote --model "Internet Sales" --env prod   # built-in gate
+envmgr status
+```
+
+Runs live in `workspace/pipeline.db` (demo: `pipeline-demo.db`, seeded with the
+mockup's test history; the demo's test step synthesises a result, since the
+fake hosts serve no cube).
 
 ### Settings
 
@@ -809,10 +853,11 @@ web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (
   src/build/        Build: discovery, wizard panels, SML model store, preview (DMV / Freehand)
   src/components/   Manage (incl. ManageAnalyze), Promote, Settings
   src/test/         Test: run setup, results, compare results, compare model, database card
+  src/pipeline/     Pipeline: board, runs, CI setup
   └─ /api/* ──► api/  Flask
                  routes/      settings (hosts, git, cache) · objects (models, aggregates, jobs) · promote
                               build (sources, SML, preview, multi-host deploy) · discovery · testing (Test)
-                              analyze (Manage → Analyze)
+                              analyze (Manage → Analyze) · pipeline
                  envs/        store.py (connections.yaml) · registry.py (host → backend, sessions, warm-up)
                  atscale/     client.py (AtScale REST) · github.py · git_ops.py (repo create + push)
                               backend.py (real host) · fake.py (demo host) · cached.py (cache wrapper)
@@ -825,7 +870,10 @@ web/  React 19 + TypeScript + Vite · TanStack Query (server state) · zustand (
                               spec.py (every property in the SML reference)
                  testing/     generate.py (queries) · harness.py (execution) · model.py (DMV snapshot + diff)
                               results.py (result rows + variance) · store.py (SQLite)
+                 pipeline/    stages.py (stages, gates, verdicts) · steps.py (validate, deploy, test, promote-aggs, rollback)
+                              config.py (orchestrator, policy, tokens) · store.py (SQLite) · templates.py · junit.py
                  cache.py     2 h cache + working-folder mirror
+cli/envmgr.py   the pipeline CLI for CI (stdlib only, served at /api/pipeline/cli)
                  jobs.py      background jobs for deploy / build / promote (UI polls /api/jobs/:id)
 reference/PythonAtscaleUtility  git submodule, read-only reference for porting
 ../  (ps-utils root)            the CLI: src/ is the porting source cited in comments
@@ -877,7 +925,11 @@ Manage          GET /hosts/:id/models · /repos · /branches?url= · /aggregate-
                 GET /hosts/:id/analyze?key=<model key> · /hosts/:id/analyze/file?key=&path=
 Promote         POST /promote/diff · /promote/models · /promote/aggregates
                 POST /promote/models/script · /promote/aggregates/script (same bodies -> zip for the ps-utils CLI)
-Catalog         GET /catalog (repos -> models -> each BU host's copy: status, branch, commit, atHead)
+Pipeline        GET /pipeline/board[?refresh=1] · /pipeline/runs · /pipeline/setup · POST /pipeline/runs (CI reports a step)
+                PUT /pipeline/policy · GET/POST /pipeline/tokens · DELETE /pipeline/tokens/:id
+                POST /pipeline/validate · deploy · test · promote-aggs · rollback · promote -> {jobId}
+                GET /pipeline/jobs/:id · /pipeline/jobs/:id/junit · /pipeline/cli (the envmgr CLI)
+                (bearer API token, or a loopback caller - see Pipeline above)
 Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)
                 GET /hosts/:id/sources/:sourceId/columns?schema=&table= · POST …/columns {tables} · GET /build/repos
                 GET /hosts/:id/preview/catalogs · /preview/metadata · POST /preview/query · /preview/freehand
@@ -903,6 +955,18 @@ Jobs            GET /jobs/:id
 
 ## Known limits
 
+- **Pipeline rollback** redeploys a past commit through the Design Center
+  deploy (`/wapi/git/deploy/catalog`) with SML compiled here, since AtScale's
+  Git deploy only builds a branch head. It knows only commits this app
+  deployed (deploy history per catalog), and hasn't been run against a live
+  container yet.
+- **Pipeline "intended edits"** are matched by name: a model change counts as
+  intended when the object's name appears in an SML file that differs between
+  the baseline's and the candidate's commits. Without the Git diff (no token,
+  or an unknown commit) every change is unintended and flagged.
+- **The pipeline's CI side needs Env Manager reachable from the runner**:
+  the API and Vite bind to 127.0.0.1, so serve it behind a reverse proxy and
+  set `ENV_MANAGER_PUBLIC_URL`. Without a token, a loopback caller is trusted.
 - **Container hosts only.** Installer-style hosts (`:10500`/`:10502` URLs with
   `orgId`) aren't supported.
 - **Older AtScale builds deploy the Design Center way.** Builds without

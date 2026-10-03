@@ -1,0 +1,16 @@
+[project]
+name = "envmgr"
+version = "0.1.0"
+description = "Run AtScale Env Manager pipeline steps from CI (GitHub Actions, Jenkins)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+envmgr = "envmgr:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["envmgr"]

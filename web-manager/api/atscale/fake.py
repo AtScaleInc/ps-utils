@@ -215,6 +215,28 @@ class FakeBackend:
         return {"ok": True, "repoUrl": repo_url, "branch": branch, "catalogId": CATALOG[models[0]] if models else None,
                 "commit": f"v{heads[models[0]]}" if models else None, "replaced": [], "warnings": []}
 
+    def head_commit(self, repo_url: str, branch: str, model: str | None = None) -> str | None:
+        models = [m for m in FAKE_REPOS.get(repo_url, []) if not model or m == model]
+        return f"v{_head(models[0], branch)}" if models else None
+
+    def previous_commit(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        """Fake history: the version before the deployed one."""
+        n = _num(row.get("commit"))
+        return {"commit": f"v{n - 1}", "branch": row.get("branch")} if n > 1 else None
+
+    def deploy_commit(self, repo_url: str, branch: str, commit: str, catalog_id: str | None = None) -> dict[str, Any]:
+        models = list(FAKE_REPOS.get(repo_url, []))
+        with _lock:
+            inv = _inv(self.id)
+            for model in models:
+                if not any(m["name"] == model and m["status"] != "Linked" for m in inv["models"]):
+                    continue  # a rollback only touches what this host runs
+                row = _model_row(model, _num(commit), now_iso()[:10], "Deployed")
+                row["branch"] = branch
+                inv["models"] = [m for m in inv["models"] if m["name"] != model] + [row]
+        return {"ok": True, "repoUrl": repo_url, "branch": branch, "catalogId": catalog_id, "commit": commit,
+                "method": "legacy (/wapi/git/deploy/catalog)"}
+
     def deploy(self, keys: list[str], branches: dict[str, str] | None = None) -> list[dict[str, Any]]:
         results = []
         for m in self.list_models():
@@ -669,3 +691,39 @@ def fake_sml(model: str) -> dict[str, str]:
     key = "models/Internet Sales.yml"
     files[key] = files[key].replace("label: Internet Sales", f"label: {model}", 1)
     return files
+
+
+# -- pipeline (demo) ----------------------------------------------------------------------------
+# The pipeline's test step generates queries from the deployed cube, which the
+# demo can't serve (FakeSourceApi.run_xmla). Its result is synthesised here
+# instead, in the shape pipeline/steps.py stores - deterministic per
+# model@commit@env, with the mockup's one failing model (Reseller Sales v9: 4.2%).
+
+_DEMO_FAILS = {("Reseller Sales", "v9"): 4.2}
+
+
+def pipeline_test_rows(model: str, commit: str | None, env: str) -> list[dict[str, Any]]:
+    rnd = random.Random(f"{model}@{commit}@{env}")
+    worst = _DEMO_FAILS.get((model, commit or ""))
+    rows = []
+    for i in range(24):
+        proto = "mdx"
+        name = f"{model} | Q{i + 1:02d}"
+        if worst is not None and i in (3, 11):
+            rows.append({"name": name, "protocol": proto, "verdict": "differs", "pct": worst if i == 3 else 2.9, "error": None})
+        elif rnd.random() < 0.2:
+            rows.append({"name": name, "protocol": proto, "verdict": "differs", "pct": round(rnd.uniform(0.1, 1.2), 2), "error": None})
+        else:
+            rows.append({"name": name, "protocol": proto, "verdict": "identical", "pct": None, "error": None})
+    return rows
+
+
+#: (model, commit, env, runRef, startedAt) the demo pipeline starts with.
+PIPELINE_SEED = [
+    ("Internet Sales", "v14", "test", "GHA #486", "2026-09-24T16:02:00Z"),
+    ("Internet Sales", "v13", "qa", "GHA #471", "2026-09-21T10:40:00Z"),
+    ("Reseller Sales", "v9", "qa", "GHA #478", "2026-09-22T14:18:00Z"),
+    ("Supply Chain", "v4", "qa", "JNK #212", "2026-09-19T11:05:00Z"),
+    ("Customer 360", "v11", "test", "GHA #484", "2026-09-24T12:20:00Z"),
+    ("Finance Ledger", "v6", "dev", "GHA #452", "2026-09-23T09:20:00Z"),
+]

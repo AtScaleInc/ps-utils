@@ -57,6 +57,12 @@ class CachedBackend:
         value, _ = cache.get(key, lambda: self.inner.compare(src, tgt))
         return value
 
+    def head_commit(self, repo_url: str, branch: str, model: str | None = None) -> str | None:
+        return self.inner.head_commit(repo_url, branch, model)  # never cached: it moves with every merge
+
+    def previous_commit(self, row: dict[str, Any]) -> dict[str, Any] | None:
+        return self.inner.previous_commit(row)
+
     def build_history(self, catalog_id: str, model_id: str) -> list[dict[str, Any]]:
         return self.inner.build_history(catalog_id, model_id)
 
@@ -101,6 +107,12 @@ class CachedBackend:
     def deploy_branch(self, *args: Any, **kwargs: Any) -> Any:
         try:
             return self.inner.deploy_branch(*args, **kwargs)
+        finally:
+            self._drop()
+
+    def deploy_commit(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return self.inner.deploy_commit(*args, **kwargs)
         finally:
             self._drop()
 

@@ -203,3 +203,25 @@ def compare(token: str, repo_url: str, base: str, head: str) -> str | None:
 
 def _commit(c: dict[str, Any]) -> dict[str, Any]:
     return {"sha": c["sha"], "date": c["commit"]["committer"]["date"], "message": c["commit"]["message"].splitlines()[0]}
+
+
+def set_commit_status(token: str, repo_url: str, sha: str, state: str, description: str,
+                      context: str = "atscale/env-manager", target_url: str | None = None) -> None:
+    """POST /repos/{o}/{r}/statuses/{sha} - the pipeline's test verdict on the
+    commit (state: pending | success | failure | error)."""
+    full = repo_full_name(repo_url)
+    body: dict[str, Any] = {"state": state, "description": description[:140], "context": context}
+    if target_url:
+        body["target_url"] = target_url
+    resp = requests.post(f"{API}/repos/{full}/statuses/{sha}", headers=_headers(token), json=body, timeout=20)
+    if resp.status_code >= 300:
+        raise GitError(f"Could not set the commit status on {full}@{sha[:7]} ({resp.status_code})")
+
+
+def comment_on_pr(token: str, repo_url: str, number: int, body: str) -> None:
+    """POST /repos/{o}/{r}/issues/{n}/comments - the pipeline's test summary on a PR."""
+    full = repo_full_name(repo_url)
+    resp = requests.post(f"{API}/repos/{full}/issues/{number}/comments", headers=_headers(token),
+                         json={"body": body}, timeout=20)
+    if resp.status_code >= 300:
+        raise GitError(f"Could not comment on {full}#{number} ({resp.status_code})")

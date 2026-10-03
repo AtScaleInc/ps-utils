@@ -6,7 +6,9 @@ keep the ps-utils connection entry shape (`connections.<name>.atscale: {url,
 username, password, apiToken, insecure}`), extended with `bu`, `env`,
 `label`, `status`, `lastChecked` and `links` (repo/branch/model the user
 linked through this app). Host ids are unique across BUs. BUs and their Git
-profiles live under `businessUnits.<id>: {label, git}`.
+profiles live under `businessUnits.<id>: {label, git}`, and each BU's
+pipeline settings (orchestrator, gate policy, hashed API tokens) under
+`businessUnits.<id>.pipeline` - see pipeline/config.py.
 
 Files from before BUs (one Git profile at `connections.git.git`, hosts with
 no `bu`) are read as a single BU, `default`, and written back in the new shape.
@@ -31,6 +33,8 @@ _API_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PATH = Path(os.environ.get("ENV_MANAGER_CONNECTIONS_FILE", _API_DIR / "connections.yaml"))
 
 _lock = threading.RLock()
+#: Earlier commits kept per deployed catalog (record_deployment).
+DEPLOY_HISTORY = 10
 
 
 def normalize_hostname(raw: str) -> str:
@@ -180,7 +184,14 @@ class Store:
             if record is None:
                 deps.pop(catalog_id, None)
             else:
-                deps[catalog_id] = record
+                # The commits this catalog ran before, newest first - what the
+                # pipeline's rollback redeploys (pipeline/steps.py).
+                # A rollback passes its own history (the commit it left is dropped, not kept).
+                old = deps.get(catalog_id) or {}
+                history = list(record["history"] if "history" in record else old.get("history") or [])
+                if "history" not in record and old.get("commit") and old["commit"] != record.get("commit"):
+                    history.insert(0, {k: old.get(k) for k in ("commit", "commitDate", "branch", "deployedAt")})
+                deps[catalog_id] = {**record, "history": history[:DEPLOY_HISTORY]}
             self._write(data)
 
     # -- business units ---------------------------------------------------------------
@@ -270,6 +281,30 @@ class Store:
                 git["lastChecked"] = None
             self._write(data)
             return dict(git)
+
+
+    # -- pipeline (one per business unit; shape and defaults in pipeline/config.py) ----
+    def get_pipeline_raw(self, bu: str) -> dict[str, Any]:
+        with _lock:
+            entry = self._read()[BU_KEY].get(bu) or {}
+            return dict(entry.get("pipeline") or {})
+
+    def update_pipeline(self, bu: str, fn) -> dict[str, Any]:
+        """Read-modify-write the BU's pipeline settings under the store lock:
+        `fn(settings) -> settings`."""
+        with _lock:
+            data = self._read()
+            entry = data[BU_KEY].get(bu)
+            if entry is None:
+                raise KeyError(bu)
+            entry["pipeline"] = fn(dict(entry.get("pipeline") or {}))
+            self._write(data)
+            return dict(entry["pipeline"])
+
+    def all_pipelines(self) -> list[tuple[str, dict[str, Any]]]:
+        """(bu, settings) for every BU - an API token is looked up across them."""
+        with _lock:
+            return [(k, dict(v.get("pipeline") or {})) for k, v in self._read()[BU_KEY].items()]
 
 
 def _migrate(data: dict[str, Any]) -> None:

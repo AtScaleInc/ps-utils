@@ -15,6 +15,9 @@ export default defineConfig({
       '/api': {
         target: `http://127.0.0.1:${process.env.API_PORT ?? '5000'}`,
         changeOrigin: true,
+        // X-Forwarded-For: the API's pipeline auth judges the browser's address,
+        // not the proxy's (always 127.0.0.1) - api/app.py :: pipeline_auth.
+        xfwd: true,
       },
     },
   },

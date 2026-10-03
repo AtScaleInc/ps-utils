@@ -6,7 +6,7 @@ import threading
 from typing import Any
 
 import urllib3
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
@@ -19,7 +19,7 @@ from routes.testing import testing_bp
 from routes.monitor import monitor_bp
 from routes.objects import objects_bp
 from routes.promote import promote_bp
-from routes.catalog import catalog_bp
+from routes.pipeline import pipeline_bp
 from routes.settings import settings_bp
 
 # Container hosts commonly run self-signed certs; `insecure: true` per host
@@ -46,6 +46,21 @@ class _StrictJSON(DefaultJSONProvider):
         return super().dumps(_finite(obj), **kwargs)
 
 
+_LOOPBACK = ("127.0.0.1", "::1")
+
+
+def _client_ip() -> str | None:
+    """Who is calling. Behind a proxy on this machine (Vite's, or a reverse
+    proxy) every request arrives from loopback, so the last X-Forwarded-For hop
+    - the address that proxy saw - decides. A header is only believed from a
+    local proxy: a remote caller can't claim loopback by sending its own."""
+    addr = request.remote_addr
+    fwd = request.headers.get("X-Forwarded-For")
+    if addr in _LOOPBACK and fwd:
+        return fwd.split(",")[-1].strip()
+    return addr
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.json = _StrictJSON(app)
@@ -64,10 +79,36 @@ def create_app() -> Flask:
                 return None
             return jsonify({"error": f"Unknown business unit '{e.args[0]}'", "unknownBu": True}), 400
 
+    @app.before_request
+    def pipeline_auth():
+        """/api/pipeline/*: a bearer API token (pipeline/config.py) binds the
+        call to the token's business unit and scopes. Without one, only
+        loopback callers - the local UI through Vite's proxy - get in, per
+        ENV_MANAGER_PIPELINE_OPEN: loopback (default) | all | none. The CLI
+        file itself is public."""
+        if not request.path.startswith("/api/pipeline/") or request.method == "OPTIONS":
+            return None
+        from pipeline import config as pconfig
+
+        auth = request.headers.get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            found = pconfig.authenticate(auth[7:].strip())
+            if not found:
+                return jsonify({"error": "Invalid or revoked API token"}), 401
+            registry.set_bu(found[0])
+            g.pipeline_token = found[1]
+            return None
+        if request.path == "/api/pipeline/cli":
+            return None
+        mode = os.environ.get("ENV_MANAGER_PIPELINE_OPEN", "loopback")
+        if mode == "all" or (mode == "loopback" and _client_ip() in _LOOPBACK):
+            return None
+        return jsonify({"error": "An API token is required (Authorization: Bearer emt_...)"}), 401
+
     app.register_blueprint(settings_bp, url_prefix="/api")
     app.register_blueprint(objects_bp, url_prefix="/api")
     app.register_blueprint(promote_bp, url_prefix="/api")
-    app.register_blueprint(catalog_bp, url_prefix="/api")
+    app.register_blueprint(pipeline_bp, url_prefix="/api")
     app.register_blueprint(build_bp, url_prefix="/api")
     app.register_blueprint(discovery_bp, url_prefix="/api")
     app.register_blueprint(testing_bp, url_prefix="/api")

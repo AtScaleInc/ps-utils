@@ -1,0 +1,89 @@
+/* Pipeline tab (pipeline/PipelineView.tsx) - the handoff's Pipeline mode. */
+
+.pl-col { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.pl-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
+.pl-orch { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; background: var(--panel); border: 1px solid var(--hair); color: var(--ink); cursor: pointer; }
+.pl-orch .v { font-size: 12.5px; font-weight: 600; }
+.pl-orch:hover { border-color: var(--strong); }
+
+/* board */
+.pl-board-wrap { flex: 0 0 auto; overflow-x: auto; padding: 18px 24px 16px; }
+.pl-board { display: flex; flex-direction: column; border: 1px solid var(--hair); }
+.pl-row { display: grid; align-items: stretch; min-height: 68px; border-top: 1px solid var(--row-line); cursor: pointer; }
+.pl-row:hover { background: var(--hover); }
+.pl-row.on { background: rgba(42, 165, 199, .10); box-shadow: inset 3px 0 0 var(--dev); }
+.pl-head { min-height: 0; height: 36px; align-items: center; background: var(--panel); border-top: 0; cursor: default; font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.pl-head:hover { background: var(--panel); }
+.pl-head .stg { display: flex; align-items: center; gap: 7px; padding-left: 14px; }
+.pl-model { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 10px 18px; min-width: 0; }
+.pl-model .n { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-model .c { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+.pl-cell { display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 10px 14px; min-width: 0; border-left: 1px solid var(--row-line); }
+.pl-cell.pick { box-shadow: inset 0 -2px 0 var(--dev); }
+.pl-cell .ver { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-mono); font-size: 12px; }
+.pl-cell .meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pl-cell .host { font-family: var(--font-mono); font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-cell .drift { font-family: var(--font-mono); font-size: 9.5px; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-cell .none { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 255, 255, .30); }
+.pl-chip { padding: 3px 8px; border-radius: 8px; font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.pl-gate { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; padding: 8px 10px; text-align: center; }
+.pl-gate .arrow { display: flex; align-items: center; width: 100%; }
+.pl-gate .arrow .l { flex: 1; height: 2px; }
+.pl-gate .arrow .h { width: 0; height: 0; border-left: 7px solid; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.pl-gate .lbl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; line-height: 1.3; }
+.pl-gate .sub { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); }
+
+/* commit path panel */
+.pl-path { flex: 0 0 auto; margin-top: auto; border-top: 1px solid var(--hair); background: #202020; padding: 18px 24px 20px; display: flex; flex-direction: column; gap: 14px; }
+.pl-path-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.pl-path-head .display { font-size: 28px; }
+.pl-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pl-track { display: grid; border: 1px solid var(--hair); background: var(--bg); }
+.pl-stage { display: flex; flex-direction: column; gap: 7px; padding: 12px 14px; border-left: 1px solid var(--row-line); border-top: 3px solid var(--hair); min-width: 0; }
+.pl-stage:first-child { border-left: 0; }
+.pl-stage .trig { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-stage .pl-chip { align-self: flex-start; }
+.pl-stage .run { font-family: var(--font-mono); font-size: 10px; color: var(--dev); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-facts { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 10px 14px; background: var(--panel); border: 1px solid var(--hair); }
+.pl-facts .t { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+.pl-fact { display: flex; align-items: baseline; gap: 7px; }
+.pl-fact .k { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.pl-fact .v { font-family: var(--font-mono); font-size: 12px; }
+.pl-aggs { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--hair); border-left: 3px solid var(--hair); }
+.pl-aggs.live { border-left-color: var(--prod); }
+.pl-aggs .note { flex: 1; font-size: 12.5px; color: var(--ink-soft); }
+
+/* runs */
+.grid-pl-runs { grid-template-columns: 150px minmax(0, 1.4fr) minmax(0, 1fr) 140px 90px 110px 80px 120px; }
+.pl-run-ref { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pl-run-ref .o { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); }
+
+/* CI setup */
+.pl-setup { padding: 26px 24px 40px; display: flex; flex-direction: column; gap: 22px; }
+.pl-hero { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.pl-hero .display { font-size: 34px; }
+.pl-hero .t { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.pl-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 20px; align-items: start; }
+.pl-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.pl-card { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; background: var(--panel); border: 1px solid var(--hair); min-width: 0; }
+.pl-card .eyebrow.hl { color: var(--prod); }
+.pl-card .note { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.pl-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; background: transparent; border: 0; border-top: 1px solid var(--row-line); color: var(--ink); text-align: left; cursor: pointer; }
+.pl-toggle .lt { display: flex; flex-direction: column; gap: 3px; }
+.pl-toggle .lt b { font-size: 13px; font-weight: 600; }
+.pl-toggle .lt span { font-size: 11.5px; color: var(--muted); }
+.pl-switch { flex: 0 0 auto; position: relative; width: 36px; height: 20px; border-radius: 10px; background: #3a3a3a; }
+.pl-switch.on { background: var(--dev); }
+.pl-switch i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+.pl-switch.on i { left: 18px; }
+.pl-num { display: flex; align-items: center; gap: 6px; }
+.pl-num .input { width: 76px; text-align: right; }
+.pl-ident { display: grid; grid-template-columns: 8px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--row-line); font-size: 12.5px; }
+.pl-pre { margin: 0; max-height: 420px; overflow: auto; padding: 12px 14px; background: var(--modal); border: 1px solid var(--hair); font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; color: var(--ink-soft); white-space: pre; }
+.pl-cli { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); }
+.pl-cli .p { color: var(--muted); }
+.pl-tok { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--row-line); font-size: 12.5px; }
+.pl-newtok { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(18, 165, 148, .12); border: 1px solid var(--qa); }
+.pl-newtok .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
+.pl-scopes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pl-scopes label { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
