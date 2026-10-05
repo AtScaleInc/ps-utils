@@ -1,7 +1,7 @@
 // Pipeline tab API (api/routes/pipeline.py): the business unit's stages, the
 // board, runs, CI setup. The step calls are the same ones the envmgr CLI makes.
 
-import { req, type EnvId } from '../api'
+import { req, zipReq, type EnvId } from '../api'
 
 export type Verdict = 'pass' | 'fail' | 'running' | 'none' | 'error'
 export type GateK = 'blank' | 'merge' | 'sync' | 'na' | 'wait' | 'block' | 'open'
@@ -83,6 +83,23 @@ export interface PipelineRun {
   durationS: number | null
   score?: Score
   validateRunId?: string | null
+  /** One line on what the step did - or why it failed (error holds the full reason). */
+  summary?: string | null
+}
+
+/** GET /pipeline/runs/:id - the run with the step's own result. */
+export interface PipelineRunDetail extends PipelineRun {
+  result: {
+    hosts?: { hostId: string; host: string; ok?: boolean; error?: string; commit?: string; promoted?: string[]; skipped?: { name: string; reason: string }[] }[]
+    rows?: { name: string; protocol: string; verdict: string; pct: number | null; error: string | null }[]
+    candidate?: { label: string; version: string }
+    baseline?: { kind: string; label?: string; version?: string }
+    model?: { changes?: { section: string; name: string; kind: string; intended: boolean }[] }
+    output?: string
+    branch?: string
+    repoUrl?: string
+    error?: string
+  } | null
 }
 
 export interface Identity { hostId: string; label: string; env: EnvId; username: string; hasPassword: boolean; serviceAccount: boolean }
@@ -101,14 +118,17 @@ export interface Setup {
 export interface ApiToken { id: string; name: string; scope: string[]; prefix: string; created: string; lastUsed: string | null }
 
 export type ActionKind = 'promote' | 'test' | 'rollback'
-export interface ScriptRequest { action: ActionKind; env: EnvId; model: string; hosts?: string[]; branch?: string; commit?: string }
-export interface ActionScript { filename: string; title: string; sh: string; gha: string; jenkins: string }
+export interface ScriptRequest { action: ActionKind; env: EnvId; model: string; hosts?: string[]; branch?: string }
+/** The action as a ps-utils package (api/pipeline/script_bundle.py): its run.sh, and the
+ *  GitHub Actions job / Jenkins stage that runs it once committed as atscale/<folder>/. */
+export interface ActionScript { folder: string; filename: string; title: string; sh: string; gha: string; jenkins: string }
 
 export interface JobState { id: string; status: 'running' | 'done'; verdict?: Verdict; summary?: string; result?: unknown }
 
 export const pipelineApi = {
   board: (refresh?: boolean) => req<Board>('GET', `/pipeline/board${refresh ? '?refresh=1' : ''}`),
-  runs: () => req<{ runs: PipelineRun[] }>('GET', '/pipeline/runs'),
+  runs: (model?: string) => req<{ runs: PipelineRun[] }>('GET', `/pipeline/runs${model ? `?model=${encodeURIComponent(model)}` : ''}`),
+  run: (id: string) => req<PipelineRunDetail>('GET', `/pipeline/runs/${encodeURIComponent(id)}`),
   setup: () => req<Setup>('GET', `/pipeline/setup?origin=${encodeURIComponent(window.location.origin)}`),
   putPolicy: (patch: { orchestrator?: Orchestrator; policy?: Partial<Policy>; serviceAccountPattern?: string }) =>
     req<{ orchestrator: Orchestrator; policy: Policy }>('PUT', '/pipeline/policy', patch),
@@ -120,8 +140,8 @@ export const pipelineApi = {
     req<{ jobId: string }>('POST', '/pipeline/promote', { env, model, hosts, branch }),
   rollback: (env: EnvId, model: string, hosts?: string[]) => req<{ jobId: string }>('POST', '/pipeline/rollback', { env, model, hosts }),
   /** One Board action as a shell script, a GitHub Actions job and a Jenkins stage. */
-  script: (body: ScriptRequest) =>
-    req<ActionScript>('POST', '/pipeline/script', { ...body, origin: window.location.origin }),
+  script: (body: ScriptRequest) => req<ActionScript>('POST', '/pipeline/script', body),
+  scriptZip: (body: ScriptRequest) => zipReq('/pipeline/script/zip', body, 'pipeline-step.zip'),
   promoteAggs: (from: EnvId, to: EnvId, model: string) => req<{ jobId: string }>('POST', '/pipeline/promote-aggs', { from, to, model }),
   job: (id: string) => req<JobState>('GET', `/pipeline/jobs/${encodeURIComponent(id)}`),
 }

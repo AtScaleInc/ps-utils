@@ -35,6 +35,11 @@ ORCH_LABEL = {"gha": "GitHub Actions", "jenkins": "Jenkins", "builtin": "Built-i
 ORCH_SHORT = {"gha": "GHA", "jenkins": "JNK", "builtin": "ENV", "cli": "CLI"}
 
 
+#: Runs a job's step recorded (routes/pipeline.py :: _submit sets it), so a
+#: step that crashes still ends its runs as failed, with the reason.
+JOB_RUNS: contextvars.ContextVar[list[str] | None] = contextvars.ContextVar("pipeline_job_runs", default=None)
+
+
 class GateClosed(RuntimeError):
     """The built-in promote found the gate not open (-> 409)."""
 
@@ -161,6 +166,9 @@ def _start(kind: str, ci: dict[str, Any], **fields: Any) -> tuple[str, float]:
         "runRef": ci.get("runRef") or f"{ORCH_SHORT[o]} {now_iso()[5:16].replace('T', ' ')}", "url": ci.get("url"),
         "startedAt": now_iso(), "status": "running", **fields,
     })
+    started = JOB_RUNS.get()
+    if started is not None:
+        started.append(run_id)
     return run_id, time.time()
 
 

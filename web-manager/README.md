@@ -128,6 +128,11 @@ Settings. There's no separate login.
   through the same AtScale interface as Discovery's profile, whose limit is
   fixed by the engine. Calculations are MDX and aren't previewed; they run in
   AtScale after deploy. Nothing is stored.
+  A **shared dimension** (from a package) is read where its package connection
+  says: its own table, schema and database. When that is another AtScale
+  connection than the data source picked - or, on Postgres-style warehouses,
+  another database - one query can't join it, and the preview says so
+  instead of claiming the data source is wrong.
 - **Shared dimensions (SML packages).** Build common dimensions once and reuse
   them in many models through the model's `package.yml`
   ([SML package reference](https://github.com/semanticdatalayer/SML/blob/main/sml-reference/package.md)).
@@ -533,18 +538,40 @@ reason.
   of the stage (all by default; the ones left out keep what they run and show as
   drift - a test runs on one host) and, over a merge gate, **which branch** (a
   promotion always deploys the commit the stage before tested, so another branch
-  has to be tested there first). The dialog also gives the same action **as a
-  script** - a shell script pinned to the commit shown, a GitHub Actions job or a
-  Jenkins stage using the run's own commit - to **Copy** into a pipeline or
-  **Download** and run by hand (`POST /pipeline/script`). A deploy into the last
-  stage's script moves the system aggregates after it. The dialog names the
-  other models of the repo, since the whole catalog moves with them. After a deploy into the last stage, the
+  has to be tested there first). The dialog names the other models of the repo,
+  since the whole catalog moves with them. It also gives the same action as a
+  **ps-utils package** (**Download .zip**, `POST /pipeline/script/zip`): a
+  folder whose `run.sh` runs the step with the ps-utils CLI alone - no call to
+  Env Manager - by hand, from cron, or from CI:
+  - **Deploy**: clones the branch (refused when its head isn't the commit the
+    Board showed; `COMMIT=` deploys another, in CI the run's own), then
+    `atscale-deploy-catalog` on each picked host as `<catalog>_<branch>`,
+    attaching the repo first if a host lacks it. Into the last stage it then
+    moves the system aggregates (`atscale-export-aggregates` from the stage
+    before → `atscale-import-aggregates`, target ids looked up with
+    `atscale-list-deployments` after the deploy).
+  - **Rollback**: the same deploy of the exact commit the stage ran before.
+  - **Test**: Validate's own package (`execute-atscale-query-harness` on the
+    baseline + the picked host, `compare.mjs`).
+
+  `connections.yaml` has every host with the passwords left as `<fill in>`.
+  The **GitHub Actions** / **Jenkins** tabs give the job / stage that runs the
+  package once it's committed as `atscale/<folder>/`, with the filled-in
+  connections file as a secret (`ATSCALE_CONNECTIONS` / `atscale-connections`).
+  With `ENVMGR_URL` + `ENVMGR_TOKEN` set, `run.sh` also reports its verdict -
+  and on failure the end of its log - to Pipeline › Runs. After a deploy into the last stage, the
   aggregates bar turns orange: system aggregates are runtime state, not Git -
   **Move system aggregates →** opens Promote › Aggregates on the last two
   stages' hosts.
-- **Runs.** Every step run here or reported by CI, newest first: run number and
-  orchestrator (linked to the CI run), stage, model, commit, target, verdict,
-  duration. A test run opens its queries in Validate › Results.
+- **Runs.** Every step run here or reported by CI or a package's `run.sh`,
+  newest first: run number and orchestrator (linked to the CI run), stage,
+  model, commit, target, verdict, duration - and under a failed one, its
+  reason. Click a run for the stored error in full, its summary, and the
+  step's own result: each host's outcome (deploy, rollback, aggregates), the
+  queries over the limit (test), sml-cli's output (validate). A step that
+  crashes still ends as failed with the exception; one that failed before it
+  started (a host unreachable) is recorded anyway. The Board's commit path
+  shows the model's **last step** the same way, with **Details ↗**.
 - **CI setup.** Orchestrator (GitHub Actions · Jenkins · Built-in gate), gate
   policy (require a passing test, require approval for the last stage, model
   unchanged except intended edits, result variance threshold - 2% by default),
@@ -938,7 +965,8 @@ Pipeline        GET /pipeline/board[?refresh=1] · /pipeline/runs · /pipeline/s
                 PUT /pipeline/policy · GET/POST /pipeline/tokens · DELETE /pipeline/tokens/:id
                 POST /pipeline/validate · deploy · test · promote-aggs · rollback · promote -> {jobId}
                   (deploy / rollback / promote take hosts: [ids], test host: id; promote branch over a merge gate)
-                POST /pipeline/script {action, env, model, hosts?, branch?, commit?} -> {filename, sh, gha, jenkins}
+                POST /pipeline/script {action: promote|rollback|test, env, model, hosts?, branch?} -> {folder, filename, sh, gha, jenkins}
+                POST /pipeline/script/zip (same body) -> the ps-utils package · GET /pipeline/runs/:id (one run in full)
                 GET /pipeline/jobs/:id · /pipeline/jobs/:id/junit · /pipeline/cli (the envmgr CLI)
                 (bearer API token, or a loopback caller - see Pipeline above)
 Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)
@@ -966,9 +994,10 @@ Jobs            GET /jobs/:id
 
 ## Known limits
 
-- **Pipeline rollback** redeploys a past commit through the Design Center
-  deploy (`/wapi/git/deploy/catalog`) with SML compiled here, since AtScale's
-  Git deploy only builds a branch head. It knows only commits this app
+- **Pipeline rollback** redeploys a past commit, in place as the same catalog -
+  it never undeploys. It goes through the Design Center deploy
+  (`/wapi/git/deploy/catalog`) with that commit's SML, since AtScale's Git
+  deploy only builds a branch head. It knows only commits this app
   deployed (deploy history per catalog), and hasn't been run against a live
   container yet.
 - **Pipeline "intended edits"** are matched by name: a model change counts as

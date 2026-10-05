@@ -9,8 +9,9 @@ export interface ActionRun { hosts: string[]; branch?: string }
 
 /** A Board action (deploy into the next stage, test, rollback) with its
  * options: which hosts of the stage, which branch (over a merge gate only - a
- * promotion deploys the tested commit), and the same action as a script to
- * copy into a pipeline or download and run by hand (POST /pipeline/script). */
+ * promotion deploys the tested commit), and the same action as a ps-utils
+ * package - run.sh with the ps-utils CLI only - to download and run by hand,
+ * or to commit and call from a pipeline (POST /pipeline/script[/zip]). */
 export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: {
   kind: ActionKind
   board: Board
@@ -45,12 +46,22 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
     action: kind, env, model: model.name,
     hosts: all && kind !== 'test' ? undefined : hosts,
     branch: kind === 'promote' ? branch : undefined,
-    commit: kind === 'promote' && gateKind === 'promote' ? src?.commit ?? undefined : undefined,
   }
-  const script = useQuery({ queryKey: ['pipeline', 'script', req], queryFn: () => pipelineApi.script(req), enabled: hosts.length > 0 })
+  const script = useQuery({ queryKey: ['pipeline', 'script', req], queryFn: () => pipelineApi.script(req), enabled: hosts.length > 0, retry: false })
   const text = script.data?.[tab] ?? ''
-  const file = !script.data ? '' : tab === 'sh' ? script.data.filename
-    : tab === 'gha' ? script.data.filename.replace(/\.sh$/, '.yml') : script.data.filename.replace(/\.sh$/, '.Jenkinsfile')
+  const [zipping, setZipping] = useState(false)
+  const download = async () => {
+    setZipping(true)
+    try {
+      const { name, blob } = await pipelineApi.scriptZip(req)
+      saveBlob(name, blob)
+      flash(`${name} downloaded - fill in connections.yaml, then ./run.sh`)
+    } catch (e) {
+      flash(errMsg(e), 'err')
+    } finally {
+      setZipping(false)
+    }
+  }
 
   const verb = kind === 'promote' ? `Deploy to ${stage.label}` : kind === 'test' ? `Run test on ${stage.label}` : `Rollback ${stage.label}`
   const title = kind === 'promote'
@@ -60,10 +71,10 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
     ? (gateKind === 'merge'
       ? `${stage.label} deploys the head of the branch you pick.`
       : `${model.name} ${src?.version ?? ''} passed on ${board.stages[fi].label}. That commit deploys - if ${src?.branch ?? 'its branch'} has moved since, the deploy is refused.`)
-      + (final ? ' System aggregates are not in Git: the script moves them after the deploy; from the Board, use Move system aggregates.' : '')
+      + (final ? ' System aggregates are not in Git: the package moves them after the deploy; from the Board, use Move system aggregates.' : '')
     : kind === 'test'
       ? `Queries generated from the model run on the host you pick and on the baseline (${board.stages[board.stages.length - 1].env === env ? 'this stage\'s previous test' : board.stages[board.stages.length - 1].label}), then compare.`
-      : 'Each picked host goes back to the commit it ran before. Nothing is rebuilt; aggregates are left as they are.'
+      : 'Each picked host redeploys the commit it ran before, in place, as the same catalog - nothing is undeployed, nothing is rebuilt, and aggregates are left as they are.'
   const siblings = board.models.filter((x) => x !== model && x.repoUrl === model.repoUrl).map((x) => x.name)
   const catalogNote = kind !== 'test' && siblings.length
     ? `The repo's whole catalog goes with it: ${siblings.join(', ')} ${siblings.length === 1 ? 'moves' : 'move'} to the same commit on the picked hosts.` : ''
@@ -72,7 +83,7 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text)
-      flash(`${tab === 'sh' ? 'Script' : tab === 'gha' ? 'GitHub Actions job' : 'Jenkins stage'} copied`)
+      flash(`${tab === 'sh' ? 'run.sh' : tab === 'gha' ? 'GitHub Actions job' : 'Jenkins stage'} copied`)
     } catch {
       flash('Copy failed - select the text instead', 'err')
     }
@@ -117,7 +128,7 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
 
         <div className="col" style={{ gap: 8, flex: '0 0 auto' }}>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="label">Or run it from your pipeline</span>
+            <span className="label">Or run it with ps-utils, by hand or from your pipeline</span>
             <div className="row" style={{ gap: 8 }}>
               <div className="seg">
                 {([['sh', 'Shell'], ['gha', 'GitHub Actions'], ['jenkins', 'Jenkins']] as const).map(([k, l]) => (
@@ -125,15 +136,17 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
                 ))}
               </div>
               <button type="button" className="btn ghost" disabled={!text} onClick={copy}>Copy</button>
-              <button type="button" className="btn ghost" disabled={!text} onClick={() => saveBlob(file, new Blob([text], { type: 'text/plain' }))}
-                title={file}>Download</button>
+              <button type="button" className="btn ghost" disabled={!script.data || zipping} onClick={download}
+                title={script.data ? `${script.data.filename}: run.sh, connections.yaml, README - the ps-utils package` : undefined}>
+                {zipping ? 'Packing…' : 'Download .zip'}
+              </button>
             </div>
           </div>
           {script.isError ? <div className="err-text">{errMsg(script.error)}</div> : <pre className="pl-pre pl-snippet">{text || ' '}</pre>}
           <span className="hint">
-            {tab === 'sh' ? 'Pinned to what the Board shows · needs ENVMGR_TOKEN (CI setup › API tokens) · exit 0 pass, 1 fail, 2 error'
-              : tab === 'gha' ? 'A job for your workflow · uses the run\'s own commit · ENVMGR_URL variable + ENVMGR_TOKEN secret'
-              : 'A stage for your Jenkinsfile · uses the build\'s own commit · credential envmgr-token'}
+            {tab === 'sh' ? 'run.sh of the package · ps-utils CLI only, no call to Env Manager · fill in connections.yaml · exit 0 pass, 1 fail'
+              : tab === 'gha' ? `Commit the package as atscale/${script.data?.folder ?? '…'}/ · secret ATSCALE_CONNECTIONS = the filled-in connections.yaml`
+              : `Commit the package as atscale/${script.data?.folder ?? '…'}/ · secret file credential atscale-connections`}
           </span>
         </div>
 

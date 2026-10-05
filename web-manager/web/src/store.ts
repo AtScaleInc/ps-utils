@@ -40,6 +40,8 @@ interface UiState {
   view: View
   pipelineSection: PipelineSection
   pipelinePick: PipelinePick | null
+  /** The run opened in Pipeline › Runs (its error, summary and per-host result). */
+  pipelineRunId: string | null
   section: Section
   buildSection: BuildSection
   /** Build's host: where data sources are browsed and the default deploy target. */
@@ -83,6 +85,8 @@ interface UiState {
   setView: (v: View) => void
   setPipelineSection: (s: PipelineSection) => void
   setPipelinePick: (p: PipelinePick | null) => void
+  /** Open a run in Pipeline › Runs (null closes it). */
+  openPipelineRun: (id: string | null) => void
   setSection: (s: Section) => void
   setBuildSection: (s: BuildSection) => void
   setBuild: (p: HostPick) => void
@@ -118,6 +122,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 /** Everything that names a host, model or run - all of it belongs to one business unit. */
 const BU_SCOPED = {
   pipelinePick: null,
+  pipelineRunId: null,
   build: { env: 'dev', hostId: null },
   test: { env: 'dev', hostId: null },
   testRunId: null,
@@ -159,6 +164,7 @@ export const useUi = create<UiState>((set) => ({
   setView: (view) => set({ view }),
   setPipelineSection: (pipelineSection) => set({ pipelineSection }),
   setPipelinePick: (pipelinePick) => set({ pipelinePick }),
+  openPipelineRun: (pipelineRunId) => set(pipelineRunId ? { pipelineRunId, pipelineSection: 'runs' } : { pipelineRunId }),
   setBuildSection: (buildSection) => set({ buildSection }),
   setBuild: (build) => set({ build }),
   setTestSection: (testSection) => set({ testSection }),

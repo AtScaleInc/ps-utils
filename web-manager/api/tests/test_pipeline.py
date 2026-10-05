@@ -358,24 +358,113 @@ def test_test_on_a_picked_host(client):
     assert j["result"]["models"][0]["result"]["candidate"]["hostId"] == "prod-west"
 
 
-def test_action_script(client):
-    import yaml
+def _unzip(resp):
+    import io
+    import zipfile
 
-    body = {"action": "promote", "env": "prod", "model": "Internet Sales", "hosts": ["prod-east"], "branch": "main",
-            "commit": "abc1234def", "origin": "https://envmgr.corp.local"}
+    assert resp.status_code == 200 and resp.mimetype == "application/zip", resp.get_data(as_text=True)
+    z = zipfile.ZipFile(io.BytesIO(resp.data))
+    root = z.namelist()[0].split("/")[0]
+    return root, {n.split("/", 1)[1]: z.read(n).decode() for n in z.namelist()}, z
+
+
+def test_action_script_is_a_ps_utils_package(client):
+    """No Env Manager URL in it: run.sh deploys with the ps-utils CLI."""
+    body = {"action": "promote", "env": "qa", "model": "Customer 360", "hosts": ["qa-main"]}
     s = client.post("/api/pipeline/script", json=body, headers=H).get_json()
-    assert s["filename"] == "envmgr-promote-prod-internet-sales.sh"
-    sh = s["sh"]
-    assert sh.startswith("#!/usr/bin/env bash") and 'ENVMGR_URL:-https://envmgr.corp.local' in sh
-    assert "./envmgr deploy --env prod --branch main --commit abc1234def --model 'Internet Sales' --host prod-east" in sh
-    assert "./envmgr promote-aggs --from qa --to prod --system-only --model 'Internet Sales'" in sh
-    # The CI job uses the run's own commit, and the last stage asks for approval.
-    jobs = yaml.safe_load("jobs:\n" + s["gha"].split("\n", 1)[1])["jobs"]
-    job = jobs["promote-prod-internet-sales"]
-    assert job["environment"] == "production"
-    assert "--commit ${{ github.sha }}" in job["steps"][1]["run"] and "--host prod-east" in job["steps"][1]["run"]
-    assert "input { message" in s["jenkins"] and '"Internet Sales"' in s["jenkins"] and "${GIT_COMMIT}" in s["jenkins"]
-    t = client.post("/api/pipeline/script", json={"action": "test", "env": "qa", "model": "Supply Chain"}, headers=H).get_json()
-    assert "./envmgr test --env qa --model 'Supply Chain' --junit results.xml" in t["sh"] and "environment:" not in t["gha"]
-    assert client.post("/api/pipeline/script", json={"action": "nuke", "env": "qa"}, headers=H).status_code == 400
-    assert client.post("/api/pipeline/script", json={**body, "hosts": ["qa-main"]}, headers=H).status_code == 400
+    assert s["folder"] == "promote-qa-customer-360" and s["filename"] == "promote-qa-customer-360.zip"
+    root, files, z = _unzip(client.post("/api/pipeline/script/zip", json=body, headers=H))
+    assert root == "promote-qa-customer-360" and z.getinfo(f"{root}/run.sh").external_attr >> 16 == 0o755
+    sh = files["run.sh"]
+    assert "atscale-deploy-catalog" in sh and "TARGETS=('qa-main')" in sh and 'BRANCH="main"' in sh
+    assert "localhost" not in sh and "ENVMGR_URL" in sh  # only the opt-in report back
+    assert 'SOURCE=""' in sh  # QA isn't the last stage: no aggregates step
+    assert all(u["password"] == "<fill in>" for u in __import__("yaml").safe_load(files["connections.yaml"])["users"].values())
+    _no_pw = [h for h in ("qa-main",) if (registry.store().get_host_raw(h)["atscale"].get("password") or "x") in "".join(files.values())]
+    assert not _no_pw
+    jobs = __import__("yaml").safe_load("jobs:\n" + s["gha"].split("\n", 2)[2])["jobs"]
+    run = jobs["promote-qa-customer-360"]["steps"][2]["run"]
+    assert "./atscale/promote-qa-customer-360/run.sh" in run and "environment" not in jobs["promote-qa-customer-360"]
+    assert "withCredentials" in s["jenkins"] and "./atscale/promote-qa-customer-360/run.sh" in s["jenkins"]
+
+
+def test_deploy_into_the_last_stage_moves_aggregates(client):
+    fh = {"X-BU": "finance"}
+    s = client.post("/api/pipeline/script", json={"action": "promote", "env": "prod", "model": "Finance Ledger"}, headers=fh).get_json()
+    assert 'SOURCE="fin-dev"' in s["sh"] and "atscale-import-aggregates" in s["sh"]
+    assert '--catalog-id "finance_catalog" --model-id "Finance Ledger"' in s["sh"]
+    assert "environment: production" in s["gha"] and "input {" in s["jenkins"]
+
+
+def test_rollback_script_deploys_the_previous_commit(client, monkeypatch):
+    from atscale.fake import FakeBackend
+
+    monkeypatch.setattr(FakeBackend, "previous_commit", lambda self, row: {"commit": "a1b2c3d4e5f6a7b8", "branch": "main"})
+    s = client.post("/api/pipeline/script", json={"action": "rollback", "env": "prod", "model": "Internet Sales",
+                                                  "hosts": ["prod-east"]}, headers=H).get_json()
+    assert 'COMMIT="${COMMIT:-a1b2c3d4e5f6a7b8}"' in s["sh"] and "EXACT=1" in s["sh"] and "TARGETS=('prod-east')" in s["sh"]
+    # Demo commits aren't SHAs: a script can't fetch them - said, not guessed.
+    monkeypatch.setattr(FakeBackend, "previous_commit", lambda self, row: {"commit": "v11", "branch": "main"})
+    r = client.post("/api/pipeline/script", json={"action": "rollback", "env": "prod", "model": "Internet Sales"}, headers=H)
+    assert r.status_code == 400 and "isn't a Git SHA" in r.get_json()["error"]
+
+
+def test_test_script_is_validates_package(client, monkeypatch):
+    from pipeline import steps
+    from testing.generate import build_queries, model_entries
+    from tests.test_testing import META
+
+    monkeypatch.setattr(steps, "_queries", lambda host_id, row: (
+        {"hostId": host_id, "label": host_id, "env": None, "catalog": "cat", "cube": "cube1"},
+        build_queries(*model_entries(META), "cube1")))
+    root, files, _ = _unzip(client.post("/api/pipeline/script/zip", json={"action": "test", "env": "qa", "model": "Supply Chain"}, headers=H))
+    assert root == "test-qa-supply-chain" and "execute-atscale-query-harness" in files["run.sh"]
+    assert {"compare.mjs", "tasks/prod-east.yaml", "tasks/qa-main.yaml"} <= set(files)
+
+
+def test_action_script_errors(client):
+    assert client.post("/api/pipeline/script", json={"action": "nuke", "env": "qa", "model": "x"}, headers=H).status_code == 400
+    assert client.post("/api/pipeline/script", json={"action": "promote", "env": "qa", "model": "Customer 360",
+                                                     "hosts": ["prod-east"]}, headers=H).status_code == 400
+    assert client.post("/api/pipeline/script", json={"action": "promote", "env": "dev", "model": "Customer 360"},
+                       headers=H).status_code == 400
+
+
+# -- errors are kept ------------------------------------------------------------------------
+
+def test_a_crashing_step_keeps_its_error(client, monkeypatch):
+    from atscale.fake import FakeBackend
+
+    def boom(self, *a, **kw):
+        raise RuntimeError("401: Keycloak said the password is wrong")
+    monkeypatch.setattr(FakeBackend, "deploy_branch", boom)
+    r = client.post("/api/pipeline/deploy", json={"env": "test", "branch": "main", "model": "Internet Sales"}, headers=H)
+    j = wait(client, r.get_json()["jobId"])
+    assert j["verdict"] == "error" and "password is wrong" in j["summary"]
+    run = client.get("/api/pipeline/runs", headers=H).get_json()["runs"][0]
+    assert run["kind"] == "deploy" and run["status"] == "failed" and run["verdict"] == "error"
+    assert "RuntimeError: 401: Keycloak said the password is wrong" in run["error"]
+    detail = client.get(f"/api/pipeline/runs/{run['id']}", headers=H).get_json()
+    assert detail["error"] == run["error"]
+
+
+def test_a_step_failing_before_it_starts_is_still_recorded(client, monkeypatch):
+    from pipeline import steps
+
+    monkeypatch.setattr(steps, "load", lambda refresh=False: (_ for _ in ()).throw(ConnectionError("qa-main unreachable")))
+    r = client.post("/api/pipeline/rollback", json={"env": "prod", "model": "Internet Sales"}, headers=H)
+    assert wait(client, r.get_json()["jobId"])["verdict"] == "error"
+    run = client.get("/api/pipeline/runs", headers=H).get_json()["runs"][0]
+    assert (run["kind"], run["env"], run["model"], run["status"]) == ("rollback", "prod", "Internet Sales", "failed")
+    assert run["error"] == "ConnectionError: qa-main unreachable"
+
+
+def test_summary_and_reported_errors_are_stored(client):
+    r = client.post("/api/pipeline/deploy", json={"env": "test", "branch": "main", "commit": "v13", "model": "Internet Sales"}, headers=H)
+    wait(client, r.get_json()["jobId"])
+    run = client.get("/api/pipeline/runs", headers=H).get_json()["runs"][0]
+    assert "has moved" in run["summary"] and "has moved" in run["error"]
+    client.post("/api/pipeline/runs", headers=H, json={"stage": "Deploy · QA (ps-utils)", "verdict": "fail",
+                                                        "error": "atscale-deploy-catalog: 500 boom", "env": "qa"})
+    rep = client.get("/api/pipeline/runs", headers=H).get_json()["runs"][0]
+    assert rep["kind"] == "report" and rep["error"] == "atscale-deploy-catalog: 500 boom"

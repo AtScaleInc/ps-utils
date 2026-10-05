@@ -262,7 +262,7 @@ export async function req<T>(method: string, path: string, body?: unknown): Prom
 }
 
 /** A POST answered with a zip (the "Download CLI script" buttons): its file name comes from Content-Disposition. */
-async function zipReq(path: string, body: unknown, fallback: string): Promise<{ name: string; blob: Blob }> {
+export async function zipReq(path: string, body: unknown, fallback: string): Promise<{ name: string; blob: Blob }> {
   const res = await fetch(`/api${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => ({ error: `Couldn't build the script (${res.status})` })))
   const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallback

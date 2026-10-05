@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY, bu TEXT NOT NULL, kind TEXT NOT NULL, stage TEXT, model TEXT, commit_sha TEXT,
   version TEXT, env TEXT, orchestrator TEXT, run_ref TEXT, url TEXT, status TEXT NOT NULL,
   verdict TEXT, result TEXT, error TEXT, job_id TEXT, started_at TEXT NOT NULL, finished_at TEXT,
-  duration_s REAL
+  duration_s REAL, summary TEXT
 );
 CREATE INDEX IF NOT EXISTS runs_bu ON runs (bu, started_at);
 CREATE TABLE IF NOT EXISTS tests (
@@ -66,6 +66,8 @@ def _db() -> Iterator[sqlite3.Connection]:
                 if p not in _ready:
                     con.execute("PRAGMA journal_mode = WAL")
                     con.executescript(_SCHEMA)
+                    if "summary" not in {r[1] for r in con.execute("PRAGMA table_info(runs)")}:
+                        con.execute("ALTER TABLE runs ADD COLUMN summary TEXT")  # files from before it
                     # Anything still "running" was cut off by a restart.
                     con.execute("UPDATE runs SET status = 'failed', error = COALESCE(error, 'API restarted during the run') "
                                 "WHERE status = 'running'")
@@ -80,7 +82,7 @@ def _db() -> Iterator[sqlite3.Connection]:
 _COLS = {"kind": "kind", "stage": "stage", "model": "model", "commit": "commit_sha", "version": "version",
          "env": "env", "orchestrator": "orchestrator", "runRef": "run_ref", "url": "url", "status": "status",
          "verdict": "verdict", "error": "error", "jobId": "job_id", "startedAt": "started_at",
-         "finishedAt": "finished_at", "durationS": "duration_s"}
+         "finishedAt": "finished_at", "durationS": "duration_s", "summary": "summary"}
 
 
 def _row(r: sqlite3.Row) -> dict[str, Any]:
@@ -114,6 +116,13 @@ def update_run(run_id: str, **patch: Any) -> None:
         return
     with _lock, _db() as con:
         con.execute(f"UPDATE runs SET {', '.join(sets)} WHERE id = ?", (*vals, run_id))
+
+
+def fail_running(run_id: str, error: str, finished_at: str) -> None:
+    """A step that crashed: its run stops being "running" and keeps why."""
+    with _lock, _db() as con:
+        con.execute("UPDATE runs SET status = 'failed', verdict = 'error', error = ?, summary = COALESCE(summary, ?), "
+                    "finished_at = ? WHERE id = ? AND status = 'running'", (error, error, finished_at, run_id))
 
 
 def get_run(bu: str, run_id: str) -> dict[str, Any] | None:

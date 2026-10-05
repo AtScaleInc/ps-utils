@@ -2,7 +2,8 @@
 
   GET    /pipeline/board               ?refresh=1 - stages, per model a cell per stage + gates
   GET    /pipeline/runs                ?model= - recent pipeline runs, verdicts scored now
-  POST   /pipeline/runs                CI reports a run {stage, model, commit, env, verdict, ...}
+  GET    /pipeline/runs/<id>           one run in full (summary, error, per-host / per-query result)
+  POST   /pipeline/runs                CI reports a run {stage, model, commit, env, verdict, error?, summary?, ...}
   GET    /pipeline/setup               ?origin= - orchestrator, policy, stages, deploy identities, templates
                                        (CI's URL: ENV_MANAGER_PUBLIC_URL, else origin, else this API's)
   PUT    /pipeline/policy              {orchestrator?, policy?: {...}, serviceAccountPattern?}
@@ -16,8 +17,9 @@
   POST   /pipeline/promote-aggs        {from, to, model?, includeReplacements?}       scope promote
   POST   /pipeline/rollback            {env, model, hosts?}                           scope deploy
   POST   /pipeline/promote             {model, env, hosts?, branch?} - built-in gate; 409 if closed  scope promote
-  POST   /pipeline/script              {action, env, model, hosts?, branch?, commit?} -> the action as
-                                       a shell script, a GitHub Actions job and a Jenkins stage
+  POST   /pipeline/script              {action: promote|rollback|test, env, model, hosts?, branch?} -> the
+                                       action as a ps-utils package: run.sh + a GitHub Actions job / Jenkins
+                                       stage that runs it (/pipeline/script/zip: the package)
          each -> 202 {jobId}; every body may carry ci: {orchestrator, runRef, url, stage, sha, pr}
   GET    /pipeline/jobs/<id>           {status: running|done, verdict: pass|fail|error, summary, result}
   GET    /pipeline/jobs/<id>/junit     JUnit XML
@@ -44,7 +46,7 @@ from flask import Blueprint, Response, g, jsonify, request
 import cache
 import jobs
 from envs import registry
-from pipeline import config, junit, stages, steps, templates
+from pipeline import config, junit, script_bundle, stages, steps, templates
 from pipeline import store as pstore
 from routes.objects import host_errors
 
@@ -85,8 +87,36 @@ def _ci(b: dict[str, Any]) -> dict[str, Any]:
     return ci
 
 
-def _submit(kind: str, fn) -> Any:
-    job = jobs.submit(f"pipeline-{kind}", fn)
+def _submit(kind: str, fn, ci: dict[str, Any] | None = None, **fields: Any) -> Any:
+    """Run a step as a job. Whatever happens, the Runs list says it: each run
+    the step recorded gets its summary, and a crash fails the step's running
+    runs with the error - or records one failed run when it crashed before
+    recording any (e.g. a host unreachable while loading)."""
+    def run() -> Any:
+        started: list[str] = []
+        token = steps.JOB_RUNS.set(started)
+        try:
+            res = fn()
+        except Exception as e:
+            msg = str(e) if isinstance(e, (steps.StepError, steps.GateClosed)) else f"{type(e).__name__}: {e}"
+            if started:
+                for rid in started:
+                    pstore.fail_running(rid, msg, steps.now_iso())
+            else:
+                c = ci or {}
+                pstore.create_run(registry.bu(), {
+                    "kind": kind, "stage": c.get("stage") or kind, "orchestrator": steps._orch(c), "runRef": c.get("runRef"),
+                    "url": c.get("url"), "status": "failed", "verdict": "error", "error": msg, "summary": msg,
+                    "startedAt": steps.now_iso(), "finishedAt": steps.now_iso(), **fields})
+            raise
+        finally:
+            steps.JOB_RUNS.reset(token)
+        for r in [res, *((res or {}).get("models") or [])]:
+            if isinstance(r, dict) and r.get("runId") and r.get("summary"):
+                pstore.update_run(r["runId"], summary=r["summary"])
+        return res
+
+    job = jobs.submit(f"pipeline-{kind}", run)
     with _job_lock:
         _job_bu[job["id"]] = (registry.bu(), kind)
     return jsonify({"jobId": job["id"], "status": "running"}), 202
@@ -125,6 +155,17 @@ def runs():
     return jsonify({"runs": [_public_run(r, policy) for r in pstore.list_runs(registry.bu(), model=request.args.get("model") or None)]})
 
 
+@pipeline_bp.get("/pipeline/runs/<run_id>")
+@needs("any")
+def run_detail(run_id: str):
+    """One run in full: summary, error, and the step's result (per host for a
+    deploy / rollback / aggregates, per query for a test)."""
+    r = pstore.get_run(registry.bu(), run_id)
+    if not r:
+        return jsonify({"error": "Unknown run"}), 404
+    return jsonify({**_public_run(r, config.settings()["policy"]), "result": r.get("result")})
+
+
 @pipeline_bp.post("/pipeline/runs")
 @needs("any")
 def report_run():
@@ -139,6 +180,7 @@ def report_run():
         "kind": "report", "stage": b["stage"], "model": b.get("model"), "commit": b.get("commit"),
         "version": (b.get("commit") or "")[:7] or None, "env": b.get("env"), "orchestrator": ci.get("orchestrator") or "cli",
         "runRef": ci.get("runRef"), "url": ci.get("url"), "status": "done", "verdict": verdict,
+        "error": (str(b["error"])[-4000:] if b.get("error") else None), "summary": b.get("summary"),
         "startedAt": b.get("startedAt") or steps.now_iso(), "finishedAt": steps.now_iso(), "durationS": b.get("durationS"),
     })
     return jsonify({"id": run_id}), 201
@@ -248,7 +290,7 @@ def validate():
     b = _body()
     files = {str(k): str(v) for k, v in (b.get("files") or {}).items() if str(k).endswith((".yml", ".yaml"))}
     ci = _ci(b)
-    return _submit("validate", lambda: steps.validate(files, ci))
+    return _submit("validate", lambda: steps.validate(files, ci), ci)
 
 
 @pipeline_bp.post("/pipeline/deploy")
@@ -265,7 +307,8 @@ def deploy():
     steps._pick_hosts(stage, host_ids)
     return _submit("deploy", lambda: steps.deploy(b["env"], b.get("branch"), ci, commit=b.get("commit"),
                                                   repo=b.get("repo"), model=b.get("model"), force=bool(b.get("force")),
-                                                  host_ids=host_ids))
+                                                  host_ids=host_ids), ci, env=b["env"], model=b.get("model"),
+                   commit=b.get("commit"))
 
 
 @pipeline_bp.post("/pipeline/test")
@@ -282,7 +325,7 @@ def test():
     protocols = [p for p in (b.get("protocols") or ["mdx"]) if p in ("mdx", "sql")] or ["mdx"]
     return _submit("test", lambda: steps.test(b["env"], ci, model=b.get("model"), repo=b.get("repo"),
                                               commit=b.get("commit"), baseline=b.get("baseline"), protocols=protocols,
-                                              host_id=host_id))
+                                              host_id=host_id), ci, env=b["env"], model=b.get("model"))
 
 
 @pipeline_bp.post("/pipeline/promote-aggs")
@@ -297,7 +340,8 @@ def promote_aggs():
     steps._stage(st, b["from"])
     steps._stage(st, b["to"])
     return _submit("promote-aggs", lambda: steps.promote_aggs(b["from"], b["to"], ci, model=b.get("model"),
-                                                              include_replacements=bool(b.get("includeReplacements"))))
+                                                              include_replacements=bool(b.get("includeReplacements"))),
+                   ci, env=b["to"], model=b.get("model"))
 
 
 @pipeline_bp.post("/pipeline/rollback")
@@ -311,7 +355,8 @@ def rollback():
     _, stage = steps._stage(stages.stages(registry.bu_hosts()), b["env"])
     host_ids = _hosts(b)
     steps._pick_hosts(stage, host_ids)
-    return _submit("rollback", lambda: steps.rollback(b["env"], b["model"], ci, host_ids=host_ids))
+    return _submit("rollback", lambda: steps.rollback(b["env"], b["model"], ci, host_ids=host_ids), ci,
+                   env=b["env"], model=b["model"])
 
 
 @pipeline_bp.post("/pipeline/promote")
@@ -342,26 +387,36 @@ def promote():
     if kind == "promote" and b.get("branch") and src and b["branch"] != src["branch"]:
         raise steps.StepError(f"A promotion deploys the commit {st[idx - 1]['label']} tested, on {src['branch']} - "
                               f"not {b['branch']}. Deploy {b['branch']} to {st[idx - 1]['label']} and test it there first.")
-    return _submit("promote", lambda: steps.promote(b["model"], b["env"], ci, host_ids=host_ids, branch=b.get("branch")))
+    return _submit("promote", lambda: steps.promote(b["model"], b["env"], ci, host_ids=host_ids, branch=b.get("branch")),
+                   ci, env=b["env"], model=b["model"])
+
+
+def _bundle(b: dict[str, Any]) -> dict[str, Any]:
+    _need(b, "action", "env", "model")
+    return script_bundle.build(b["action"], b["env"], b["model"], _hosts(b), b.get("branch"))
 
 
 @pipeline_bp.post("/pipeline/script")
 @needs("any")
+@host_errors
 @_step_errors
 def action_script():
-    """One Board action as a script to run by hand, or a job / stage to paste
-    into the pipeline: {filename, title, sh, gha, jenkins}. Body: {action:
-    deploy | promote | test | rollback, env, model, hosts?, branch?, commit?, origin?}."""
-    b = _body()
-    _need(b, "action", "env")
-    st = stages.stages(registry.bu_hosts())
-    _, stage = steps._stage(st, b["env"])
-    steps._pick_hosts(stage, _hosts(b))
-    try:
-        out = templates.action_script(b["action"], {**b, "hosts": _hosts(b)}, st, config.settings()["policy"], _ci_url(b.get("origin")))
-    except ValueError as e:
-        raise steps.StepError(str(e)) from None
-    return jsonify(out)
+    """A Board action as a ps-utils package (pipeline/script_bundle.py): its
+    run.sh, plus the GitHub Actions job / Jenkins stage that runs it from the
+    repo. Body: {action: promote | rollback | test, env, model, hosts?, branch?}.
+    POST /pipeline/script/zip -> the package itself."""
+    out = _bundle(_body())
+    return jsonify({k: out[k] for k in ("folder", "filename", "title", "sh", "gha", "jenkins")})
+
+
+@pipeline_bp.post("/pipeline/script/zip")
+@needs("any")
+@host_errors
+@_step_errors
+def action_script_zip():
+    out = _bundle(_body())
+    return Response(script_bundle.zip_bytes(out), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{out["filename"]}"'})
 
 
 # -- jobs -----------------------------------------------------------------------------------

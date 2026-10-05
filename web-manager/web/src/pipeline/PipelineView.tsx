@@ -329,6 +329,8 @@ function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId
         )}
       </div>
 
+      <LastStep model={m.name} />
+
       <div className={`pl-aggs ${live ? 'live' : ''}`}>
         <span className="label">Aggregates</span>
         <span className="note">
@@ -342,10 +344,32 @@ function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId
   )
 }
 
+/** The model's most recent pipeline step - from the Board, CI or a script that
+ *  reported back - with its error in plain view and a link to the full run. */
+function LastStep({ model }: { model: string }) {
+  const { openPipelineRun } = useUi()
+  const q = useQuery({ queryKey: ['pipeline', 'runs', model], queryFn: () => pipelineApi.runs(model) })
+  const r = q.data?.runs[0]
+  if (!r) return null
+  const bad = r.verdict === 'fail' || r.verdict === 'error'
+  return (
+    <div className={`pl-last ${bad ? 'bad' : ''}`}>
+      <span className="label">Last step</span>
+      <span className="mono">{r.stage}</span>
+      <Chip k={runVerdict(r)} />
+      <span className={`ellipsis ${bad ? 'err-text' : 'muted'}`} style={{ flex: 1, minWidth: 0 }} title={r.error ?? r.summary ?? undefined}>
+        {(bad ? r.error ?? r.summary : r.summary) ?? ''}
+      </span>
+      <span className="mono muted">{r.runRef} · {fmtDate(r.startedAt, true)}</span>
+      <button type="button" className="btn xs ghost" onClick={() => openPipelineRun(r.id)}>Details ↗</button>
+    </div>
+  )
+}
+
 // -- Runs -------------------------------------------------------------------------------------
 
 function RunsSection() {
-  const { setView, setTestRunId, setTestSection } = useUi()
+  const { pipelineRunId, openPipelineRun } = useUi()
   const q = useQuery({ queryKey: ['pipeline', 'runs'], queryFn: () => pipelineApi.runs() })
   const runs = q.data?.runs ?? []
   const running = runs.some((r) => r.status === 'running')
@@ -355,7 +379,6 @@ function RunsSection() {
     const t = setInterval(() => qc.invalidateQueries({ queryKey: ['pipeline', 'runs'] }), 2500)
     return () => clearInterval(t)
   }, [running, qc])
-  const dur = (s: number | null) => (s == null ? '—' : s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, '0')}s`)
 
   return (
     <div className="scroll" style={{ paddingTop: 18 }}>
@@ -364,32 +387,114 @@ function RunsSection() {
         <div className="tr th grid-pl-runs">
           <span>Run</span><span>Stage</span><span>Model</span><span>Commit</span><span>Target</span><span>Verdict</span><span>Duration</span><span>Started</span>
         </div>
-        {runs.map((r) => <RunRow key={r.id} r={r} dur={dur} onOpen={r.validateRunId ? () => { setTestRunId(r.validateRunId!); setTestSection('results'); setView('test') } : undefined} />)}
+        {runs.map((r) => (
+          <div key={r.id}>
+            <RunRow r={r} open={pipelineRunId === r.id} onToggle={() => openPipelineRun(pipelineRunId === r.id ? null : r.id)} />
+            {pipelineRunId === r.id && <RunDetail id={r.id} />}
+          </div>
+        ))}
         {!runs.length && !q.isLoading && <div className="empty">No pipeline runs yet - CI reports them through the API, or run a step from the Board</div>}
       </div>
-      <span className="hint" style={{ display: 'block', marginTop: 10 }}>Reported by CI through the Env Manager API · open a run for its logs, a test for its queries</span>
+      <span className="hint" style={{ display: 'block', marginTop: 10 }}>Reported by CI through the Env Manager API · click a run for what it did, or why it failed</span>
     </div>
   )
 }
 
 const ORCH_NAME: Record<string, string> = { gha: 'GitHub Actions', jenkins: 'Jenkins', builtin: 'Built-in gate', cli: 'envmgr CLI' }
+const dur = (s: number | null) => (s == null ? '—' : s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, '0')}s`)
+const runVerdict = (r: PipelineRun): Verdict => (r.status === 'running' ? 'running' : (r.verdict ?? 'none'))
 
-function RunRow({ r, dur, onOpen }: { r: PipelineRun; dur: (s: number | null) => string; onOpen?: () => void }) {
-  const v: Verdict = r.status === 'running' ? 'running' : (r.verdict ?? 'none')
+function RunRow({ r, open, onToggle }: { r: PipelineRun; open: boolean; onToggle: () => void }) {
   const env = r.env ? envOf(r.env) : null
+  const bad = r.verdict === 'fail' || r.verdict === 'error'
   return (
-    <div className="tr grid-pl-runs" style={{ cursor: onOpen ? 'pointer' : 'default' }} onClick={onOpen} title={r.error ?? undefined}>
+    <div className={`tr grid-pl-runs ${open ? 'sel' : ''}`} style={{ cursor: 'pointer' }} onClick={onToggle}>
       <span className="pl-run-ref">
         {r.url ? <a href={r.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mono">{r.runRef} ↗</a> : <span className="mono">{r.runRef ?? '—'}</span>}
         <span className="o">{ORCH_NAME[r.orchestrator ?? ''] ?? r.orchestrator}</span>
       </span>
-      <span className="ellipsis">{r.stage}</span>
+      <span className="pl-run-stage">
+        <span className="ellipsis">{open ? '▾' : '▸'} {r.stage}</span>
+        {bad && (r.error || r.summary) && <span className="err ellipsis">{r.error ?? r.summary}</span>}
+      </span>
       <span className="ellipsis">{r.model ?? '—'}</span>
       <span className="mono">{r.version ?? (r.commit ? r.commit.slice(0, 7) : '—')}</span>
       <span className="row" style={{ gap: 7 }}>{env && <span className="sq" style={{ background: env.color }} />}<span className="mono">{env?.label ?? '—'}</span></span>
-      <span><Chip k={v} /></span>
+      <span><Chip k={runVerdict(r)} /></span>
       <span className="mono">{r.status === 'running' ? '…' : dur(r.durationS)}</span>
       <span className="mono muted">{fmtDate(r.startedAt, true)}</span>
+    </div>
+  )
+}
+
+/** What a run did, or why it failed: the stored error in full, the summary,
+ *  and the step's own result - per host (deploy / rollback / aggregates), per
+ *  query over the limit (test), sml-cli's output (validate). */
+function RunDetail({ id }: { id: string }) {
+  const { setView, setTestRunId, setTestSection } = useUi()
+  const q = useQuery({ queryKey: ['pipeline', 'run', id], queryFn: () => pipelineApi.run(id) })
+  const r = q.data
+  if (q.isLoading) return <div className="pl-detail"><span className="hint">Loading…</span></div>
+  if (q.isError || !r) return <div className="pl-detail"><span className="err-text">{errMsg(q.error)}</span></div>
+  const res = r.result ?? {}
+  const limit = r.score?.limit ?? 0
+  const badRows = (res.rows ?? []).filter((x) => ['failedCandidate', 'missing'].includes(x.verdict) || (x.verdict === 'differs' && (x.pct == null || Math.abs(x.pct) > limit)))
+  const unintended = (res.model?.changes ?? []).filter((c) => !c.intended)
+  return (
+    <div className="pl-detail">
+      {r.error && (
+        <div className="pl-err">
+          <span className="label" style={{ color: 'var(--danger)' }}>{r.verdict === 'error' ? 'Error' : 'Why it failed'}</span>
+          <pre>{r.error}</pre>
+        </div>
+      )}
+      {r.summary && r.summary !== r.error && <div className="pl-sum">{r.summary}</div>}
+      {res.branch && <div className="mono muted">{res.repoUrl?.split('/').pop()} @ {res.branch}{r.commit ? ` · ${r.commit.slice(0, 12)}` : ''}</div>}
+      {!!res.hosts?.length && (
+        <div className="pl-hosts">
+          {res.hosts.map((h) => {
+            const failed = h.ok === false
+            return (
+              <div key={h.hostId} className="pl-hrow">
+                <Chip k={failed ? 'fail' : 'pass'} label={failed ? 'Failed' : 'OK'} />
+                <span>{h.host}</span>
+                <span className={failed ? 'err-text' : 'mono muted'}>
+                  {failed ? h.error : h.promoted ? `${h.promoted.length} promoted · ${h.skipped?.length ?? 0} skipped` : h.commit ? `at ${h.commit.slice(0, 12)}` : ''}
+                </span>
+              </div>
+            )
+          })}
+          {res.hosts.flatMap((h) => (h.skipped ?? []).map((sk) => (
+            <div key={`${h.hostId}${sk.name}`} className="pl-hrow"><Chip k="muted" label="Skipped" /><span>{sk.name}</span><span className="mono muted">{sk.reason}</span></div>
+          )))}
+        </div>
+      )}
+      {r.kind === 'test' && r.score && r.score.verdict !== 'running' && (
+        <div className="pl-facts" style={{ margin: 0 }}>
+          <span className="pl-fact"><span className="k">Matched</span><span className="v">{r.score.matched ?? 0}/{r.score.queries ?? 0}</span></span>
+          <span className="pl-fact"><span className="k">Max variance</span><span className="v">{r.score.unbounded ? '∞' : `${r.score.maxVariance ?? 0}%`} · limit {limit}%</span></span>
+          <span className="pl-fact"><span className="k">Baseline</span><span className="v">{res.baseline?.label ?? res.baseline?.kind ?? '—'} {res.baseline?.version ?? ''}</span></span>
+          {r.validateRunId && (
+            <button type="button" className="btn xs ghost" style={{ marginLeft: 'auto' }}
+              onClick={() => { setTestRunId(r.validateRunId!); setTestSection('results'); setView('test') }}>Queries ↗</button>
+          )}
+        </div>
+      )}
+      {badRows.length > 0 && (
+        <div className="pl-hosts">
+          {badRows.slice(0, 40).map((x) => (
+            <div key={`${x.name}|${x.protocol}`} className="pl-hrow">
+              <Chip k="fail" label={x.verdict === 'differs' ? (x.pct == null ? 'Differs' : `${Math.abs(x.pct).toFixed(2)}%`) : x.verdict === 'missing' ? 'Missing' : 'Failed'} />
+              <span className="ellipsis">{x.name} <span className="muted mono">{x.protocol}</span></span>
+              <span className="err-text">{x.error ?? ''}</span>
+            </div>
+          ))}
+          {badRows.length > 40 && <span className="hint">… {badRows.length - 40} more</span>}
+        </div>
+      )}
+      {unintended.length > 0 && <div className="err-text">Unintended model changes: {unintended.map((c) => `${c.name} (${c.kind})`).join(', ')}</div>}
+      {res.output && <pre className="pl-pre" style={{ maxHeight: 220 }}>{res.output}</pre>}
+      {!r.error && !r.summary && !res.hosts?.length && !res.rows?.length && <span className="hint">Nothing more was recorded for this run</span>}
     </div>
   )
 }

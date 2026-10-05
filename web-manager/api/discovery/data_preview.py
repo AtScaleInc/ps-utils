@@ -14,8 +14,13 @@ The web builds the join tree from the canvas (web/src/build/lib/dataPreview.ts:
 fact -> dimensions -> snowflaked dimensions, one alias per role-play); this
 module only quotes it into SQL.
 
-  tables   [{alias, schema, table, parent?, on: [[parentColumn, column], ...]}]
-           the first entry is the root; every other one joins its parent
+  tables   [{alias, schema, table, parent?, on: [[parentColumn, column], ...],
+            database?, connection?, label?}]
+           the first entry is the root; every other one joins its parent.
+           database / connection: a shared dimension's own (its package
+           connection) - qualified with its database, and refused with the
+           reason when it sits on another AtScale connection, or another
+           database on a dialect that can't query across databases
   columns  [{alias, column, agg?}]  agg (SUM / MIN / MAX / COUNT /
            COUNT DISTINCT / AVG) only in aggregate mode
 """
@@ -28,7 +33,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from .profile import _int, _rows, quote_ident, table_ref
+from .profile import _TWO_PART_DIALECTS, _int, _rows, quote_ident, table_ref
 
 ROW_LIMIT = 10  # the engine's, not ours - see the module docstring
 MODES = ("rows", "aggregate", "check")
@@ -111,15 +116,40 @@ def _check_tree(tables: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return by_alias
 
 
+def _ref(t: dict[str, Any], database: str, dialect: str | None) -> str:
+    """A table's name in the SQL: in its own database when it has one (a
+    shared dimension's package connection), else the source's."""
+    return table_ref(t.get("database") or database, t.get("schema") or "", t["table"], dialect)
+
+
+def check_sources(tables: list[dict[str, Any]], connection_id: str, database: str, dialect: str | None) -> None:
+    """One query reads one AtScale connection: a shared dimension whose
+    package connection is another one can't join in, and neither can one in
+    another database on a dialect that names tables schema.table only."""
+    two_part = any((dialect or "").lower().startswith(p) for p in _TWO_PART_DIALECTS)
+    for t in tables:
+        name = t.get("label") or t.get("table")
+        where = ".".join(x for x in (t.get("database"), t.get("schema"), t.get("table")) if x)
+        if t.get("connection") and t["connection"] != connection_id:
+            raise PreviewError(
+                f"{name} is a shared dimension read through AtScale connection '{t['connection']}' ({where}), "
+                f"and this preview runs on '{connection_id}'. One query can't join two connections - preview "
+                f"without it, or pick '{t['connection']}' as the data source.")
+        if two_part and t.get("database") and t["database"] != database:
+            raise PreviewError(
+                f"{name} is a shared dimension in database '{t['database']}' ({where}), and this preview runs on "
+                f"'{database}'. {dialect} can't join across databases - preview without it.")
+
+
 def _from_clause(tables: list[dict[str, Any]], database: str, dialect: str | None) -> str:
     """Root, then LEFT JOINs: a fact row with no matching dimension row stays
     (NULL attributes) instead of silently vanishing, so orphans show."""
     q = lambda n: quote_ident(n, dialect)  # noqa: E731
     root = tables[0]
-    sql = f"{table_ref(database, root.get('schema') or '', root['table'], dialect)} {root['alias']}"
+    sql = f"{_ref(root, database, dialect)} {root['alias']}"
     for t in tables[1:]:
         on = " AND ".join(f"{t['parent']}.{q(pc)} = {t['alias']}.{q(c)}" for pc, c in t["on"])
-        sql += f" LEFT JOIN {table_ref(database, t.get('schema') or '', t['table'], dialect)} {t['alias']} ON {on}"
+        sql += f" LEFT JOIN {_ref(t, database, dialect)} {t['alias']} ON {on}"
     return sql
 
 
@@ -157,7 +187,7 @@ def check_sql(tables: list[dict[str, Any]], database: str, dialect: str | None) 
     _check_tree(tables)
     q = lambda n: quote_ident(n, dialect)  # noqa: E731
     root = tables[0]
-    root_sql = f"SELECT COUNT(*) FROM {table_ref(database, root.get('schema') or '', root['table'], dialect)}"
+    root_sql = f"SELECT COUNT(*) FROM {_ref(root, database, dialect)}"
     matched = [f"COUNT({t['alias']}.{q(t['on'][0][1])})" for t in tables[1:]]
     joined_sql = f"SELECT {', '.join(['COUNT(*)', *matched])} FROM {_from_clause(tables, database, dialect)}"
     return root_sql, joined_sql
@@ -166,6 +196,7 @@ def check_sql(tables: list[dict[str, Any]], database: str, dialect: str | None) 
 def run(api, connection_id: str, database: str, dialect: str | None, tables: list[dict[str, Any]],
         columns: list[dict[str, Any]], mode: str) -> dict[str, Any]:
     started = time.time()
+    check_sources(tables, connection_id, database, dialect)
     if mode == "check":
         root_sql, joined_sql = check_sql(tables, database, dialect)
         with ThreadPoolExecutor(max_workers=2) as pool:

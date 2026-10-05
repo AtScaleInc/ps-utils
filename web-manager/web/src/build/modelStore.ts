@@ -48,6 +48,11 @@ export interface Node {
   /** A shared dimension from a package repo: read-only here, written by its
    *  own repo, referenced through package.yml (api/smlgen/packages.py). */
   package?: PackageRef
+  /** A shared dimension's own database and AtScale connection (its package
+   *  connection) - Preview data qualifies the table with it, or explains why
+   *  it can't join (discovery/data_preview.py :: check_sources). */
+  database?: string
+  asConnection?: string
 }
 
 export interface Join {

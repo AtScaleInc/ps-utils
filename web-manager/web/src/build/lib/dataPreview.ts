@@ -97,6 +97,10 @@ export interface PreviewTable {
   table: string
   parent?: string
   on?: [string, string][]
+  /** A shared dimension's own database / AtScale connection, and its name for messages. */
+  database?: string
+  connection?: string
+  label?: string
 }
 
 export interface PreviewRequestBody {
@@ -122,6 +126,7 @@ export function buildRequest(tree: Instance[], picked: PreviewItem[], allTables 
     schema: i.node.schema,
     table: i.node.table,
     ...(i.parent && i.on ? { parent: alias.get(i.parent)!, on: [i.on] } : {}),
+    ...(i.node.package ? { database: i.node.database, connection: i.node.asConnection, label: `${i.label} (shared)` } : {}),
   }))
   return {
     tables,

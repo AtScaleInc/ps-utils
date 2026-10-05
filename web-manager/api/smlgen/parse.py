@@ -135,6 +135,9 @@ def parse_sml(files: dict[str, str], packages: list[dict[str, Any]] | None = Non
     # Root objects win a name clash, as they do once AtScale merges packages.
     package_of_dataset: dict[str, dict] = {}
     package_schema: dict[str, str] = {}
+    # Where a package dataset's table really lives - its own connection, which
+    # need not be the model's (Develop's Preview data qualifies or refuses it).
+    package_source: dict[str, dict[str, str]] = {}
     package_dims: set[str] = set()
     for pkg in packages or []:
         pp = _load_all(pkg.get("files") or {})
@@ -148,6 +151,7 @@ def parse_sml(files: dict[str, str], packages: list[dict[str, Any]] | None = Non
                 package_of_dataset[name] = pkg["ref"]
                 con = pp["connections"].get(ds.get("connection_id")) or {}
                 package_schema[name] = con.get("schema", "")
+                package_source[name] = {"database": con.get("database") or "", "asConnection": con.get("as_connection") or ""}
     if package_dims and not all_package_dims:
         wanted = {r["to"].get("dimension") for r in model.get("relationships") or [] if r.get("to")}
         for name, dim in list(dimensions.items()):
@@ -210,6 +214,10 @@ def parse_sml(files: dict[str, str], packages: list[dict[str, Any]] | None = Non
         }
         if dataset_name in package_of_dataset:
             node["package"] = package_of_dataset[dataset_name]
+            # The physical table (a dataset's unique_name needn't be its table)
+            # and the package connection's database / AtScale connection.
+            node["table"] = ds.get("table") or dataset_name
+            node.update({k: v for k, v in package_source.get(dataset_name, {}).items() if v})
         nodes.append(node)
         return node_id
 

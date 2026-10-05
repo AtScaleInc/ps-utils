@@ -79,3 +79,33 @@ def test_engine_message_is_extracted():
             'does not exist\\n  Position: 150","error":{"stack":"EngineClientException: ..."}}')
     msg = data_preview._engine_message(AtScaleApiError(500, body, "https://h/wapi/p/..."))
     assert msg == 'ERROR: relation "SalesInsights.fact" does not exist Position: 150'
+
+
+def test_shared_dimension_from_the_demo_package_joins(client):  # noqa: F811
+    """A shared dimension carries its package connection's table / database /
+    connection (smlgen/parse.py); the demo package points at the demo warehouse."""
+    h = {"X-BU": "sales-analytics"}
+    d = client.post("/api/build/shared/load", headers=h, json={
+        "repoUrl": "https://github.com/corp/atscale-shared-dimensions", "branch": "main", "taken": []}).get_json()
+    cust = next(n for n in d["nodes"] if n["dimName"] == "Customer Dimension")
+    assert (cust["table"], cust["schema"], cust["database"], cust["asConnection"]) == ("dimcustomer", "public", "tutorial", "PostgresDB")
+    shared = {**CUSTOMER, "database": cust["database"], "connection": cust["asConnection"], "label": "Customer Dimension (shared)"}
+    cols = [{"alias": "t1", "column": "lastname"}, {"alias": "t0", "column": "salesamount"}]
+    r = client.post(URL, json=body("rows", [FACT, shared], cols), headers=h)
+    assert r.status_code == 200 and len(r.get_json()["rows"]) == 10
+
+
+@pytest.mark.parametrize("extra,msg", [
+    ({"connection": "con1", "database": "atscale"}, "read through AtScale connection 'con1'"),
+    ({"connection": "PostgresDB", "database": "atscale"}, "can't join across databases"),
+])
+def test_shared_dimension_elsewhere_is_explained(client, extra, msg):  # noqa: F811
+    shared = {**CUSTOMER, "label": "Customer Dimension (shared)", **extra}
+    r = client.post(URL, json={**body("rows", [FACT, shared], [{"alias": "t1", "column": "lastname"}]), "dialect": "postgresql"})
+    assert r.status_code == 400 and msg in r.get_json()["error"] and "Customer Dimension (shared)" in r.get_json()["error"]
+
+
+def test_shared_dimension_in_another_database_is_qualified():
+    shared = {**CUSTOMER, "database": "shared_db"}
+    sql = data_preview.build_sql([FACT, shared], [{"alias": "t1", "column": "lastname"}], "rows", "tutorial", "snowflake")
+    assert '"shared_db"."public"."dimcustomer" t1' in sql and '"tutorial"."public"."factinternetsales" t0' in sql

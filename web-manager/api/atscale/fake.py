@@ -341,7 +341,9 @@ _COLS = {
     "factinternetsales": [("salesordernumber", "String"), ("orderdatekey", "Int"), ("customerkey", "Int"),
                           ("productkey", "Int"), ("salesamount", "Decimal"), ("orderquantity", "Int")],
     "dimcustomer": [("customerkey", "Int"), ("firstname", "String"), ("lastname", "String"),
-                    ("gender", "String"), ("geographykey", "Int")],
+                    ("gender", "String"), ("geographykey", "Int"),
+                    # what the demo shared-dimensions package's Customer Dimension levels on
+                    ("fullname", "String"), ("occupation", "String")],
     "dimgeography": [("geographykey", "Int"), ("city", "String"), ("stateprovincename", "String"),
                      ("countryregioncode", "String")],
     "dimproduct": [("productkey", "Int"), ("englishproductname", "String"), ("color", "String"),
@@ -358,6 +360,7 @@ _WORDS = {
     "firstname": ["Ana", "Ben", "Chen", "Dara", "Eli", "Fatima", "Gus", "Hana"],
     "lastname": ["Lee", "Garcia", "Kim", "Nguyen", "Patel", "Smith"],
     "gender": ["F", "M"],
+    "occupation": ["Clerical", "Management", "Manual", "Professional", "Skilled Manual"],
     "city": ["Austin", "Boston", "Denver", "Paris", "Seattle", "Sydney", "Toronto"],
     "stateprovincename": ["Texas", "Massachusetts", "Colorado", "Ile-de-France", "Washington", "NSW", "Ontario"],
     "countryregioncode": ["US", "FR", "AU", "CA"],
@@ -376,6 +379,8 @@ def _fake_value(rnd: random.Random, table: str, col: str, typ: str, i: int) -> A
             else rnd.randrange(1, _ROW_COUNTS.get(f"dim{fk}", 50) + 1)
     if col in _WORDS:
         return rnd.choice(_WORDS[col])
+    if col == "fullname":
+        return f"{rnd.choice(_WORDS['firstname'])} {rnd.choice(_WORDS['lastname'])}"
     if col == "englishproductname":
         return f"Product {i + 1:03d}"
     if col == "salesordernumber":
@@ -638,6 +643,10 @@ def _seed_shared() -> None:
             "datasets/dimproduct.yml", "dimensions/Date Dimension.yml", "dimensions/Customer Dimension.yml",
             "dimensions/Product Dimension.yml"}
     files = {k: v for k, v in src.items() if k in keep}
+    # Point the package at the demo warehouse (FakeSourceApi: PostgresDB · tutorial · public),
+    # so Develop's Preview data can join a shared dimension in demo mode.
+    files["connections/as_adventure.yml"] = ("unique_name: as_adventure\nobject_type: connection\nas_connection: PostgresDB\n"
+                                             "label: as_adventure\ndatabase: tutorial\nschema: public\n")
     files["catalog.yml"] = f"{SHARED_MARKER}\nunique_name: shared_dimensions\nobject_type: catalog\nlabel: shared_dimensions\nversion: 1.7\n"
     FAKE_SHARED[DEMO_SHARED_URL] = [("5ad1e4c0" + "0" * 32, files)]
 
