@@ -107,6 +107,19 @@ def _stage(st: list[dict[str, Any]], env: str) -> tuple[int, dict[str, Any]]:
     raise StepError(f"No stage '{env}' in this business unit's pipeline (stages: {have})")
 
 
+def _pick_hosts(stage: dict[str, Any], host_ids: list[str] | None) -> dict[str, Any]:
+    """The stage narrowed to `host_ids` (in the stage's order); None or empty
+    = every host of the stage."""
+    if not host_ids:
+        return stage
+    known = {h["id"] for h in stage["hosts"]}
+    unknown = [h for h in host_ids if h not in known]
+    if unknown:
+        raise StepError(f"Not a {stage['label']} host: {', '.join(unknown)} "
+                        f"(its hosts: {', '.join(h['id'] for h in stage['hosts'])})")
+    return {**stage, "hosts": [h for h in stage["hosts"] if h["id"] in host_ids]}
+
+
 def same_commit(a: str | None, b: str | None) -> bool:
     return bool(a and b) and (a.startswith(b) or b.startswith(a))
 
@@ -204,10 +217,13 @@ def _gate_problems(st, idx: int, rows, models: list[str], commit: str | None, po
 
 
 def deploy(env: str, branch: str | None, ci: dict[str, Any], commit: str | None = None, repo: str | None = None,
-           model: str | None = None, force: bool = False) -> dict[str, Any]:
+           model: str | None = None, force: bool = False, host_ids: list[str] | None = None) -> dict[str, Any]:
+    """`host_ids`: deploy to these hosts of the stage only (default: all). The
+    others keep what they run - the Board shows them as drift."""
     hosts, rows, _ = load(refresh=True)
     st = stages.stages(hosts)
     idx, stage = _stage(st, env)
+    stage = _pick_hosts(stage, host_ids)
     repo_url = resolve_repo(rows, repo, model)
     branch = branch or "main"
     first = registry.backend(stage["hosts"][0]["id"])
@@ -354,10 +370,12 @@ def classify(diff: dict[str, Any] | None, changed: set[str] | None) -> dict[str,
 
 
 def test(env: str, ci: dict[str, Any], model: str | None = None, repo: str | None = None, commit: str | None = None,
-         baseline: str | None = None, protocols: list[str] | None = None) -> dict[str, Any]:
+         baseline: str | None = None, protocols: list[str] | None = None, host_id: str | None = None) -> dict[str, Any]:
+    """`host_id`: test on this host of the stage instead of its primary one."""
     hosts, rows, _ = load(refresh=True)
     st = stages.stages(hosts)
     _, stage = _stage(st, env)
+    stage = _pick_hosts(stage, [host_id] if host_id else None)
     if model:
         models = [model]
     else:
@@ -589,13 +607,14 @@ def promote_aggs(src_env: str, tgt_env: str, ci: dict[str, Any], model: str | No
     return {"verdict": "pass", "summary": summary, "runId": run_id, **result}
 
 
-def rollback(env: str, model: str, ci: dict[str, Any]) -> dict[str, Any]:
+def rollback(env: str, model: str, ci: dict[str, Any], host_ids: list[str] | None = None) -> dict[str, Any]:
     """Redeploy the commit the stage's primary host ran before, on every host
-    of the stage that runs the model. A model version is its Git commit -
-    nothing is rebuilt; aggregates are left as they are."""
+    of the stage that runs the model (or the `host_ids` of them). A model
+    version is its Git commit - nothing is rebuilt; aggregates are left as they are."""
     hosts, rows, _ = load(refresh=True)
     st = stages.stages(hosts)
     _, stage = _stage(st, env)
+    stage = _pick_hosts(stage, host_ids)
     c = stages.cell(stage, rows, model)
     if not c:
         raise StepError(f"{model} isn't deployed on {stage['label']}")
@@ -624,11 +643,13 @@ def _catalog_id(rows, host_id: str, model: str) -> str | None:
     return next((r.get("catalogId") for r in rows.get(host_id) or [] if r.get("name") == model and r.get("status") != "Linked"), None)
 
 
-def promote(model: str, env: str, ci: dict[str, Any]) -> dict[str, Any]:
+def promote(model: str, env: str, ci: dict[str, Any], host_ids: list[str] | None = None,
+            branch: str | None = None) -> dict[str, Any]:
     """The built-in gate's Promote: re-check the gate into `env` server-side
-    (raises GateClosed), then deploy. Over a promotion gate it deploys the
-    previous stage's commit (its branch, whose head must still be that commit);
-    over a merge gate, the head of the branch the target stage runs."""
+    (raises GateClosed), then deploy to `host_ids` of the stage (default: all).
+    Over a promotion gate it deploys the previous stage's commit - its branch,
+    whose head must still be that commit, so another branch is refused. Over a
+    merge gate, `branch`'s head (default: the branch the target stage runs)."""
     hosts, rows, _ = load(refresh=True)
     st = stages.stages(hosts)
     idx, stage = _stage(st, env)
@@ -647,5 +668,9 @@ def promote(model: str, env: str, ci: dict[str, Any]) -> dict[str, Any]:
     ci = {**ci, "orchestrator": ci.get("orchestrator") or "builtin", "stage": f"Promote · {st[idx - 1]['label']} → {stage['label']}"}
     if kind == "merge":
         tgt = m["cells"][idx]
-        return deploy(env, (tgt or {}).get("branch") or "main", ci, repo=src["repoUrl"], model=model, force=True)
-    return deploy(env, src["branch"], ci, commit=src["commit"], repo=src["repoUrl"], model=model)
+        return deploy(env, branch or (tgt or {}).get("branch") or "main", ci, repo=src["repoUrl"], model=model,
+                      force=True, host_ids=host_ids)
+    if branch and branch != src["branch"]:
+        raise StepError(f"{st[idx - 1]['label']} tested {stages.short(src)} on {src['branch']}: a promotion deploys that "
+                        f"commit, not {branch}'s head. Deploy {branch} to {st[idx - 1]['label']} and test it there first.")
+    return deploy(env, src["branch"], ci, commit=src["commit"], repo=src["repoUrl"], model=model, host_ids=host_ids)

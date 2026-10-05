@@ -5,8 +5,9 @@ import { useUi } from '../store'
 import { envOf, errMsg, fmtDate, plural } from '../components/ui'
 import {
   pipelineApi, waitPipelineJob,
-  type ApiToken, type Board, type BoardModel, type Cell, type Gate, type GateK, type Orchestrator, type PipelineRun, type Policy, type Score, type Setup, type Verdict,
+  type ActionKind, type ApiToken, type Board, type BoardModel, type Cell, type Gate, type GateK, type Orchestrator, type PipelineRun, type Policy, type Score, type Setup, type Verdict,
 } from './api'
+import { ActionDialog, type ActionRun } from './ActionDialog'
 import './pipeline.css'
 
 /** Verdict chips (PIPELINE_BUILD.md §7): background, text, label. */
@@ -180,7 +181,7 @@ function GateCell({ g }: { g: Gate }) {
 }
 
 function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId; onDone: (msg: string, ok: boolean) => void }) {
-  const { setAsk, setView, setSection, setSrc, setTgt, setPModel, setTestRunId, setTestSection } = useUi()
+  const { setView, setSection, setSrc, setTgt, setPModel, setTestRunId, setTestSection } = useUi()
   const qc = useQueryClient()
   const [busy, setBusy] = useState<string | null>(null)
   const [liveOn, setLiveOn] = useState<string | null>(null) // model just promoted into the last stage
@@ -218,35 +219,19 @@ function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId
     : gate.k === 'open' ? `${gate.approval ? 'Approve · deploy' : 'Deploy'} ${cell ? shortSha(cell) : ''} to ${next.label}`
     : gate.k === 'sync' ? `${next.label} in sync` : gate.k === 'wait' ? 'Waiting on test' : `Promote to ${next.label} blocked`
 
-  const promote = () => {
-    if (!canPromote || !next || !cell) return
-    const final = next.env === last.env
-    setAsk({
-      eyebrow: `${gate?.approval ? 'Approve · ' : ''}${next.label} deploy`,
-      title: gkind?.kind === 'merge' ? `Deploy ${next.label}'s branch head.` : `Deploy ${shortSha(cell)} to ${next.label}.`,
-      note: gkind?.kind === 'merge'
-        ? `${m.name}: ${next.label} redeploys the head of the branch it runs, on ${next.hosts.map((h) => h.label).join(', ')}.`
-        : `${m.name} ${shortSha(cell)} passed on ${stage.label}. The same commit deploys to ${next.hosts.map((h) => h.label).join(', ')} - `
-          + `if its branch has moved since, the deploy is refused.${final ? ' System aggregates are not in Git: move them as a separate step.' : ''}`,
-      label: `Deploy to ${next.label}`,
-      tone: next.env === 'prod' ? 'prod' : undefined,
-      go: () => {
-        run('promote', () => pipelineApi.promote(next.env, m.name), (ok) => { if (ok && final) setLiveOn(m.name) })
-      },
-    })
-  }
-
-  const rollback = () => {
-    if (!cell) return
-    setAsk({
-      eyebrow: `Rollback · ${stage.label}`,
-      title: `Redeploy ${m.name}'s previous commit.`,
-      note: `${m.name} on ${stage.label} goes back to the commit it ran before ${shortSha(cell)}, on every host that runs it. `
-        + 'A model version is its Git commit - nothing is rebuilt, and aggregates are left as they are.',
-      label: 'Rollback',
-      tone: 'danger',
-      go: () => { run('rollback', () => pipelineApi.rollback(stage.env, m.name)) },
-    })
+  const [dialog, setDialog] = useState<{ kind: ActionKind; env: EnvId; from?: EnvId } | null>(null)
+  const some = (hs: string[]) => (hs.length ? hs : undefined) // [] = every host of the stage
+  const onRun = (r: ActionRun) => {
+    if (!dialog) return
+    const { kind, env: target } = dialog
+    if (kind === 'promote') {
+      const final = target === last.env
+      run('promote', () => pipelineApi.promote(target, m.name, some(r.hosts), r.branch), (ok) => { if (ok && final) setLiveOn(m.name) })
+    } else if (kind === 'test') {
+      run('test', () => pipelineApi.test(target, m.name, r.hosts[0]))
+    } else {
+      run('rollback', () => pipelineApi.rollback(target, m.name, some(r.hosts)))
+    }
   }
 
   const moveAggs = () => {
@@ -299,15 +284,15 @@ function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId
           <span className="display">{m.name}</span>
         </div>
         <div className="pl-actions">
-          <button type="button" className="btn lg ghost" disabled={!cell || testing || !!busy} onClick={() => run('test', () => pipelineApi.test(stage.env, m.name))}
+          <button type="button" className="btn lg ghost" disabled={!cell || testing || !!busy} onClick={() => setDialog({ kind: 'test', env: stage.env })}
             title={`Generate queries from ${m.name} on ${stage.label}, run them there and on the baseline, compare`}>
             {testing ? 'Testing…' : `Run test on ${stage.label}`}
           </button>
-          <button type="button" className="btn lg ghost" disabled={!cell || !!busy} onClick={rollback}>
+          <button type="button" className="btn lg ghost" disabled={!cell || !!busy} onClick={() => setDialog({ kind: 'rollback', env: stage.env })}>
             {busy === 'rollback' ? 'Rolling back…' : `Rollback ${stage.label}`}
           </button>
           {next && (
-            <button type="button" className="btn lg solid" disabled={!canPromote || !!busy} onClick={promote}
+            <button type="button" className="btn lg solid" disabled={!canPromote || !!busy} onClick={() => next && setDialog({ kind: 'promote', env: next.env, from: stage.env })}
               style={{ background: canPromote ? envOf(next.env).color : undefined }}>
               {busy === 'promote' ? 'Deploying…' : promoteLabel}
             </button>
@@ -352,6 +337,7 @@ function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId
         </span>
         <button type="button" className="btn ghost" disabled={!preCell || !prodCell} onClick={moveAggs}>Move system aggregates →</button>
       </div>
+      {dialog && <ActionDialog kind={dialog.kind} board={b} model={m} env={dialog.env} from={dialog.from} onRun={onRun} onClose={() => setDialog(null)} />}
     </section>
   )
 }

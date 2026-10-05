@@ -11,11 +11,13 @@
   DELETE /pipeline/tokens/<id>         revoke
 
   POST   /pipeline/validate            {files: {path: content}}                       scope test
-  POST   /pipeline/deploy              {env, branch, commit?, repo?, model?, force?}  scope deploy
-  POST   /pipeline/test                {env, model?, repo?, commit?, baseline?}       scope test
+  POST   /pipeline/deploy              {env, branch, commit?, repo?, model?, force?, hosts?}  scope deploy
+  POST   /pipeline/test                {env, model?, repo?, commit?, baseline?, host?}  scope test
   POST   /pipeline/promote-aggs        {from, to, model?, includeReplacements?}       scope promote
-  POST   /pipeline/rollback            {env, model}                                   scope deploy
-  POST   /pipeline/promote             {model, env} - built-in gate; 409 if closed    scope promote
+  POST   /pipeline/rollback            {env, model, hosts?}                           scope deploy
+  POST   /pipeline/promote             {model, env, hosts?, branch?} - built-in gate; 409 if closed  scope promote
+  POST   /pipeline/script              {action, env, model, hosts?, branch?, commit?} -> the action as
+                                       a shell script, a GitHub Actions job and a Jenkins stage
          each -> 202 {jobId}; every body may carry ci: {orchestrator, runRef, url, stage, sha, pr}
   GET    /pipeline/jobs/<id>           {status: running|done, verdict: pass|fail|error, summary, result}
   GET    /pipeline/jobs/<id>/junit     JUnit XML
@@ -158,12 +160,7 @@ def setup():
                "hasPassword": bool((h.get("atscale") or {}).get("password")),
                "serviceAccount": bool(pat.search((h.get("atscale") or {}).get("username") or ""))}
               for h in sorted(hosts, key=lambda h: (order.get(h.get("env"), 9), h.get("label") or ""))]
-    # The address CI should call: ENV_MANAGER_PUBLIC_URL, else the browser's
-    # origin (its /api proxies here), else this API's own - behind Vite's
-    # proxy that's 127.0.0.1, which no runner can reach.
-    origin = request.args.get("origin") or ""
-    url = (os.environ.get("ENV_MANAGER_PUBLIC_URL") or (origin if re.match(r"^https?://[^/]+$", origin) else "")
-           or request.host_url).rstrip("/")
+    url = _ci_url(request.args.get("origin"))
     return jsonify({
         **cfg, "stages": st, "identities": idents,
         "templates": {"gha": templates.gha(st, cfg["policy"], url), "jenkins": templates.jenkins(st, cfg["policy"], url)},
@@ -207,6 +204,26 @@ def revoke_token(token_id: str):
 
 # -- steps ----------------------------------------------------------------------------------
 
+def _hosts(b: dict[str, Any]) -> list[str] | None:
+    hs = b.get("hosts")
+    if hs is None:
+        return None
+    if not isinstance(hs, list) or not all(isinstance(h, str) for h in hs):
+        raise steps.StepError("hosts must be a list of host ids")
+    if not hs:
+        raise steps.StepError("Pick at least one host")
+    return hs
+
+
+def _ci_url(origin: str | None) -> str:
+    """The address CI should call: ENV_MANAGER_PUBLIC_URL, else the browser's
+    origin (its /api proxies here), else this API's own - behind Vite's
+    proxy that's 127.0.0.1, which no runner can reach."""
+    origin = origin or ""
+    return (os.environ.get("ENV_MANAGER_PUBLIC_URL") or (origin if re.match(r"^https?://[^/]+$", origin) else "")
+            or request.host_url).rstrip("/")
+
+
 def _need(b: dict[str, Any], *keys: str) -> None:
     missing = [k for k in keys if not b.get(k)]
     if missing:
@@ -243,9 +260,12 @@ def deploy():
     _need(b, "env")
     ci = _ci(b)
     st = stages.stages(registry.bu_hosts())
-    steps._stage(st, b["env"])  # 400 before a job starts
+    _, stage = steps._stage(st, b["env"])  # 400 before a job starts
+    host_ids = _hosts(b)
+    steps._pick_hosts(stage, host_ids)
     return _submit("deploy", lambda: steps.deploy(b["env"], b.get("branch"), ci, commit=b.get("commit"),
-                                                  repo=b.get("repo"), model=b.get("model"), force=bool(b.get("force"))))
+                                                  repo=b.get("repo"), model=b.get("model"), force=bool(b.get("force")),
+                                                  host_ids=host_ids))
 
 
 @pipeline_bp.post("/pipeline/test")
@@ -256,10 +276,13 @@ def test():
     b = _body()
     _need(b, "env")
     ci = _ci(b)
-    steps._stage(stages.stages(registry.bu_hosts()), b["env"])
+    _, stage = steps._stage(stages.stages(registry.bu_hosts()), b["env"])
+    host_id = b.get("host") or None
+    steps._pick_hosts(stage, [host_id] if host_id else None)
     protocols = [p for p in (b.get("protocols") or ["mdx"]) if p in ("mdx", "sql")] or ["mdx"]
     return _submit("test", lambda: steps.test(b["env"], ci, model=b.get("model"), repo=b.get("repo"),
-                                              commit=b.get("commit"), baseline=b.get("baseline"), protocols=protocols))
+                                              commit=b.get("commit"), baseline=b.get("baseline"), protocols=protocols,
+                                              host_id=host_id))
 
 
 @pipeline_bp.post("/pipeline/promote-aggs")
@@ -285,8 +308,10 @@ def rollback():
     b = _body()
     _need(b, "env", "model")
     ci = _ci(b)
-    steps._stage(stages.stages(registry.bu_hosts()), b["env"])
-    return _submit("rollback", lambda: steps.rollback(b["env"], b["model"], ci))
+    _, stage = steps._stage(stages.stages(registry.bu_hosts()), b["env"])
+    host_ids = _hosts(b)
+    steps._pick_hosts(stage, host_ids)
+    return _submit("rollback", lambda: steps.rollback(b["env"], b["model"], ci, host_ids=host_ids))
 
 
 @pipeline_bp.post("/pipeline/promote")
@@ -301,7 +326,9 @@ def promote():
     ci = _ci(b)
     hosts, rows, _ = steps.load(refresh=True)
     st = stages.stages(hosts)
-    idx, _ = steps._stage(st, b["env"])
+    idx, stage = steps._stage(st, b["env"])
+    host_ids = _hosts(b)
+    steps._pick_hosts(stage, host_ids)
     if idx == 0:
         raise steps.StepError("The first stage has no gate in front of it")
     bd = stages.board(hosts, rows, steps.compare_fn(hosts), steps.test_lookup(), config.settings()["policy"])
@@ -311,7 +338,30 @@ def promote():
     gate, kind = m["gates"][idx - 1], bd["gates"][idx - 1]["kind"]
     if gate["k"] != ("merge" if kind == "merge" else "open"):
         raise steps.GateClosed(gate["label"] or "Nothing to promote")
-    return _submit("promote", lambda: steps.promote(b["model"], b["env"], ci))
+    src = m["cells"][idx - 1]
+    if kind == "promote" and b.get("branch") and src and b["branch"] != src["branch"]:
+        raise steps.StepError(f"A promotion deploys the commit {st[idx - 1]['label']} tested, on {src['branch']} - "
+                              f"not {b['branch']}. Deploy {b['branch']} to {st[idx - 1]['label']} and test it there first.")
+    return _submit("promote", lambda: steps.promote(b["model"], b["env"], ci, host_ids=host_ids, branch=b.get("branch")))
+
+
+@pipeline_bp.post("/pipeline/script")
+@needs("any")
+@_step_errors
+def action_script():
+    """One Board action as a script to run by hand, or a job / stage to paste
+    into the pipeline: {filename, title, sh, gha, jenkins}. Body: {action:
+    deploy | promote | test | rollback, env, model, hosts?, branch?, commit?, origin?}."""
+    b = _body()
+    _need(b, "action", "env")
+    st = stages.stages(registry.bu_hosts())
+    _, stage = steps._stage(st, b["env"])
+    steps._pick_hosts(stage, _hosts(b))
+    try:
+        out = templates.action_script(b["action"], {**b, "hosts": _hosts(b)}, st, config.settings()["policy"], _ci_url(b.get("origin")))
+    except ValueError as e:
+        raise steps.StepError(str(e)) from None
+    return jsonify(out)
 
 
 # -- jobs -----------------------------------------------------------------------------------

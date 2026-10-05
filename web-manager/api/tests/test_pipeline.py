@@ -326,3 +326,56 @@ def test_cli_exit_codes(client, live, monkeypatch, tmp_path):
     assert _cli(monkeypatch, live, tok, "promote", "--env", "prod", "--model", "Reseller Sales") == 1
     assert _cli(monkeypatch, live, "emt_wrong", "status") == 2
     assert _cli(monkeypatch, live, tok, "status") == 0
+
+
+# -- picking hosts + branch, and the per-action script ------------------------------------------
+
+def test_rollback_one_host_leaves_drift(client):
+    r = client.post("/api/pipeline/rollback", json={"env": "prod", "model": "Internet Sales", "hosts": ["prod-east"]}, headers=H)
+    j = wait(client, r.get_json()["jobId"])
+    assert j["verdict"] == "pass" and [h["hostId"] for h in j["result"]["hosts"]] == ["prod-east"]
+    cell = model(client.get("/api/pipeline/board", headers=H).get_json(), "Internet Sales")["cells"][3]
+    assert cell["version"] == "v11" and cell["drift"] == ["prod-west v12"]
+    bad = client.post("/api/pipeline/rollback", json={"env": "prod", "model": "Internet Sales", "hosts": ["qa-main"]}, headers=H)
+    assert bad.status_code == 400 and "Not a Prod host" in bad.get_json()["error"]
+    assert client.post("/api/pipeline/deploy", json={"env": "prod", "hosts": []}, headers=H).status_code == 400
+
+
+def test_promote_to_picked_hosts_and_branch_rule(client):
+    fh = {"X-BU": "finance"}
+    client.get("/api/pipeline/board", headers=fh)  # the demo's test history is seeded on first view
+    # A promotion deploys the tested commit's branch only.
+    r = client.post("/api/pipeline/promote", json={"model": "Finance Ledger", "env": "prod", "branch": "develop"}, headers=fh)
+    assert r.status_code == 400 and "deploys the commit Dev tested" in r.get_json()["error"]
+    r = client.post("/api/pipeline/promote", json={"model": "Finance Ledger", "env": "prod", "hosts": ["fin-prod"]}, headers=fh)
+    j = wait(client, r.get_json()["jobId"], fh)
+    assert j["verdict"] == "pass" and [h["hostId"] for h in j["result"]["hosts"]] == ["fin-prod"]
+
+
+def test_test_on_a_picked_host(client):
+    r = client.post("/api/pipeline/test", json={"env": "prod", "model": "Internet Sales", "host": "prod-west"}, headers=H)
+    j = wait(client, r.get_json()["jobId"])
+    assert j["result"]["models"][0]["result"]["candidate"]["hostId"] == "prod-west"
+
+
+def test_action_script(client):
+    import yaml
+
+    body = {"action": "promote", "env": "prod", "model": "Internet Sales", "hosts": ["prod-east"], "branch": "main",
+            "commit": "abc1234def", "origin": "https://envmgr.corp.local"}
+    s = client.post("/api/pipeline/script", json=body, headers=H).get_json()
+    assert s["filename"] == "envmgr-promote-prod-internet-sales.sh"
+    sh = s["sh"]
+    assert sh.startswith("#!/usr/bin/env bash") and 'ENVMGR_URL:-https://envmgr.corp.local' in sh
+    assert "./envmgr deploy --env prod --branch main --commit abc1234def --model 'Internet Sales' --host prod-east" in sh
+    assert "./envmgr promote-aggs --from qa --to prod --system-only --model 'Internet Sales'" in sh
+    # The CI job uses the run's own commit, and the last stage asks for approval.
+    jobs = yaml.safe_load("jobs:\n" + s["gha"].split("\n", 1)[1])["jobs"]
+    job = jobs["promote-prod-internet-sales"]
+    assert job["environment"] == "production"
+    assert "--commit ${{ github.sha }}" in job["steps"][1]["run"] and "--host prod-east" in job["steps"][1]["run"]
+    assert "input { message" in s["jenkins"] and '"Internet Sales"' in s["jenkins"] and "${GIT_COMMIT}" in s["jenkins"]
+    t = client.post("/api/pipeline/script", json={"action": "test", "env": "qa", "model": "Supply Chain"}, headers=H).get_json()
+    assert "./envmgr test --env qa --model 'Supply Chain' --junit results.xml" in t["sh"] and "environment:" not in t["gha"]
+    assert client.post("/api/pipeline/script", json={"action": "nuke", "env": "qa"}, headers=H).status_code == 400
+    assert client.post("/api/pipeline/script", json={**body, "hosts": ["qa-main"]}, headers=H).status_code == 400

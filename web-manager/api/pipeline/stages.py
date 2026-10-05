@@ -80,6 +80,8 @@ def cell(stage: dict[str, Any], rows_by_host: dict[str, list[dict[str, Any]]], m
         "commit": top.get("commit"), "version": short(top), "branch": top.get("branch"),
         "repoUrl": top.get("repoUrl"), "catalog": top.get("catalog"), "catalogId": top.get("catalogId"),
         "updated": top.get("updated"), "status": top.get("status"), "error": err, "drift": drift,
+        "perHost": [{"id": h["id"], "label": h["label"], "version": short(r) if r else None,
+                     "commit": (r or {}).get("commit"), "status": (r or {}).get("status")} for h, r in on],
         "row": top,
     }
 

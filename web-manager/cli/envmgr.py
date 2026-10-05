@@ -2,7 +2,7 @@
 """envmgr - run AtScale Env Manager pipeline steps from CI.
 
     envmgr validate --path .
-    envmgr deploy --env qa --branch main --commit <sha> [--repo owner/name | --model "Internet Sales"]
+    envmgr deploy --env qa --branch main --commit <sha> [--repo owner/name | --model "Internet Sales"] [--host qa-1 ...]
     envmgr test --env qa [--baseline prod|previous] [--model ...] [--junit results.xml]
     envmgr promote-aggs --from qa --to prod [--system-only] [--model ...]
     envmgr rollback --model "Internet Sales" --env prod
@@ -165,13 +165,13 @@ def cmd_deploy(a: argparse.Namespace, ci: dict[str, Any]) -> int:
     branch = a.branch or os.environ.get("GITHUB_HEAD_REF") or os.environ.get("CHANGE_BRANCH") \
         or os.environ.get("GITHUB_REF_NAME") or os.environ.get("BRANCH_NAME") or _git("rev-parse", "--abbrev-ref", "HEAD")
     body = {"env": a.env, "branch": branch, "commit": a.commit, "model": a.model,
-            "repo": a.repo or (None if a.model else ci.get("repo")), "force": a.force, "ci": ci}
+            "repo": a.repo or (None if a.model else ci.get("repo")), "force": a.force, "hosts": a.host, "ci": ci}
     return start("/pipeline/deploy", body, a.junit)
 
 
 def cmd_test(a: argparse.Namespace, ci: dict[str, Any]) -> int:
     body = {"env": a.env, "model": a.model, "repo": a.repo or (None if a.model else ci.get("repo")),
-            "commit": a.commit, "baseline": a.baseline, "protocols": a.protocols.split(","), "ci": ci}
+            "commit": a.commit, "baseline": a.baseline, "protocols": a.protocols.split(","), "host": a.host, "ci": ci}
     return start("/pipeline/test", body, a.junit)
 
 
@@ -182,11 +182,11 @@ def cmd_promote_aggs(a: argparse.Namespace, ci: dict[str, Any]) -> int:
 
 
 def cmd_rollback(a: argparse.Namespace, ci: dict[str, Any]) -> int:
-    return start("/pipeline/rollback", {"env": a.env, "model": a.model, "ci": ci}, a.junit)
+    return start("/pipeline/rollback", {"env": a.env, "model": a.model, "hosts": a.host, "ci": ci}, a.junit)
 
 
 def cmd_promote(a: argparse.Namespace, ci: dict[str, Any]) -> int:
-    return start("/pipeline/promote", {"env": a.env, "model": a.model, "ci": ci}, a.junit)
+    return start("/pipeline/promote", {"env": a.env, "model": a.model, "hosts": a.host, "branch": a.branch, "ci": ci}, a.junit)
 
 
 def cmd_report(a: argparse.Namespace, ci: dict[str, Any]) -> int:
@@ -229,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--repo", help="repository URL or owner/name (default: this checkout's)")
     sp.add_argument("--model", help="pick the repository by one of its models")
     sp.add_argument("--force", action="store_true", help="skip the gate check (needs the 'deploy' scope anyway)")
+    sp.add_argument("--host", action="append", help="a host id of the stage (repeat it; default: every host)")
     sp = add("test", cmd_test, "test what a stage runs against a baseline")
     sp.add_argument("--env", required=True)
     sp.add_argument("--model")
@@ -236,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--commit", help="fail unless the stage runs this commit")
     sp.add_argument("--baseline", help="a stage (default: the last one) or 'previous'")
     sp.add_argument("--protocols", default="mdx", help="mdx, sql or mdx,sql")
+    sp.add_argument("--host", help="test on this host of the stage (default: its primary host)")
     sp = add("promote-aggs", cmd_promote_aggs, "move system aggregates between stages")
     sp.add_argument("--from", dest="src", required=True)
     sp.add_argument("--to", required=True)
@@ -245,9 +247,12 @@ def main(argv: list[str] | None = None) -> int:
     sp = add("rollback", cmd_rollback, "redeploy the commit a stage ran before")
     sp.add_argument("--env", required=True)
     sp.add_argument("--model", required=True)
+    sp.add_argument("--host", action="append", help="a host id of the stage (repeat it; default: every host)")
     sp = add("promote", cmd_promote, "built-in gate: promote a model into a stage when its gate is open")
     sp.add_argument("--env", required=True)
     sp.add_argument("--model", required=True)
+    sp.add_argument("--branch", help="over a merge gate: the branch to deploy (a promotion takes the tested commit's)")
+    sp.add_argument("--host", action="append", help="a host id of the stage (repeat it; default: every host)")
     sp = add("report", cmd_report, "report a step Env Manager didn't run")
     sp.add_argument("--verdict", choices=["pass", "fail"], required=True)
     sp.add_argument("--model")

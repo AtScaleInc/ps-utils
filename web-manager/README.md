@@ -529,7 +529,16 @@ reason.
   when another host of the group runs a different commit or lacks the model.
   Click a cell to act on that stage's commit: **Run test**, **Rollback**, and
   **Promote / Approve** into the next stage (re-checked on the server, refused
-  with 409 when the gate isn't open). After a deploy into the last stage, the
+  with 409 when the gate isn't open). Each opens a dialog to pick **which hosts**
+  of the stage (all by default; the ones left out keep what they run and show as
+  drift - a test runs on one host) and, over a merge gate, **which branch** (a
+  promotion always deploys the commit the stage before tested, so another branch
+  has to be tested there first). The dialog also gives the same action **as a
+  script** - a shell script pinned to the commit shown, a GitHub Actions job or a
+  Jenkins stage using the run's own commit - to **Copy** into a pipeline or
+  **Download** and run by hand (`POST /pipeline/script`). A deploy into the last
+  stage's script moves the system aggregates after it. The dialog names the
+  other models of the repo, since the whole catalog moves with them. After a deploy into the last stage, the
   aggregates bar turns orange: system aggregates are runtime state, not Git -
   **Move system aggregates →** opens Promote › Aggregates on the last two
   stages' hosts.
@@ -572,11 +581,11 @@ and PR along.
 
 ```bash
 envmgr validate --path .
-envmgr deploy --env qa --branch main --commit <sha>
-envmgr test --env qa --baseline prod --junit results.xml
+envmgr deploy --env qa --branch main --commit <sha> [--host qa-1 --host qa-2]
+envmgr test --env qa --baseline prod [--host qa-2] --junit results.xml
 envmgr promote-aggs --from qa --to prod --system-only
-envmgr rollback --model "Internet Sales" --env prod
-envmgr promote --model "Internet Sales" --env prod   # built-in gate
+envmgr rollback --model "Internet Sales" --env prod [--host prod-east]
+envmgr promote --model "Internet Sales" --env prod [--host ...] [--branch ...]   # built-in gate
 envmgr status
 ```
 
@@ -928,6 +937,8 @@ Promote         POST /promote/diff · /promote/models · /promote/aggregates
 Pipeline        GET /pipeline/board[?refresh=1] · /pipeline/runs · /pipeline/setup · POST /pipeline/runs (CI reports a step)
                 PUT /pipeline/policy · GET/POST /pipeline/tokens · DELETE /pipeline/tokens/:id
                 POST /pipeline/validate · deploy · test · promote-aggs · rollback · promote -> {jobId}
+                  (deploy / rollback / promote take hosts: [ids], test host: id; promote branch over a merge gate)
+                POST /pipeline/script {action, env, model, hosts?, branch?, commit?} -> {filename, sh, gha, jenkins}
                 GET /pipeline/jobs/:id · /pipeline/jobs/:id/junit · /pipeline/cli (the envmgr CLI)
                 (bearer API token, or a loopback caller - see Pipeline above)
 Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (poll while a schema is `loading`)

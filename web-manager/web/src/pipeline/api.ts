@@ -43,6 +43,8 @@ export interface Cell {
   status: string
   error: string | null
   drift: string[]
+  /** Every host of the stage and what it runs of this model (null: not deployed there). */
+  perHost: { id: string; label: string; version: string | null; commit: string | null; status: string | null }[]
   test: Score
 }
 
@@ -98,6 +100,10 @@ export interface Setup {
 
 export interface ApiToken { id: string; name: string; scope: string[]; prefix: string; created: string; lastUsed: string | null }
 
+export type ActionKind = 'promote' | 'test' | 'rollback'
+export interface ScriptRequest { action: ActionKind; env: EnvId; model: string; hosts?: string[]; branch?: string; commit?: string }
+export interface ActionScript { filename: string; title: string; sh: string; gha: string; jenkins: string }
+
 export interface JobState { id: string; status: 'running' | 'done'; verdict?: Verdict; summary?: string; result?: unknown }
 
 export const pipelineApi = {
@@ -109,9 +115,13 @@ export const pipelineApi = {
   tokens: () => req<{ tokens: ApiToken[]; scopes: string[] }>('GET', '/pipeline/tokens'),
   createToken: (name: string, scope: string[]) => req<ApiToken & { token: string }>('POST', '/pipeline/tokens', { name, scope }),
   revokeToken: (id: string) => req<{ ok: boolean }>('DELETE', `/pipeline/tokens/${encodeURIComponent(id)}`),
-  test: (env: EnvId, model: string) => req<{ jobId: string }>('POST', '/pipeline/test', { env, model }),
-  promote: (env: EnvId, model: string) => req<{ jobId: string }>('POST', '/pipeline/promote', { env, model }),
-  rollback: (env: EnvId, model: string) => req<{ jobId: string }>('POST', '/pipeline/rollback', { env, model }),
+  test: (env: EnvId, model: string, host?: string) => req<{ jobId: string }>('POST', '/pipeline/test', { env, model, host }),
+  promote: (env: EnvId, model: string, hosts?: string[], branch?: string) =>
+    req<{ jobId: string }>('POST', '/pipeline/promote', { env, model, hosts, branch }),
+  rollback: (env: EnvId, model: string, hosts?: string[]) => req<{ jobId: string }>('POST', '/pipeline/rollback', { env, model, hosts }),
+  /** One Board action as a shell script, a GitHub Actions job and a Jenkins stage. */
+  script: (body: ScriptRequest) =>
+    req<ActionScript>('POST', '/pipeline/script', { ...body, origin: window.location.origin }),
   promoteAggs: (from: EnvId, to: EnvId, model: string) => req<{ jobId: string }>('POST', '/pipeline/promote-aggs', { from, to, model }),
   job: (id: string) => req<JobState>('GET', `/pipeline/jobs/${encodeURIComponent(id)}`),
 }

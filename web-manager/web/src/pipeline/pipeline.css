@@ -87,3 +87,9 @@
 .pl-newtok .mono { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
 .pl-scopes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pl-scopes label { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+
+/* Board action dialog (pipeline/ActionDialog.tsx) */
+.modal.pl-modal { width: 780px; }
+.pl-host { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--row-line); font-size: 12.5px; cursor: pointer; }
+.pl-host:last-child { border-bottom: 0; }
+.pl-pre.pl-snippet { max-height: 260px; font-size: 11px; }
