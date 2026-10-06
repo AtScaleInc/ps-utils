@@ -487,7 +487,7 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 
 [↑ Table of Contents](#table-of-contents)
 
-Converts every project inside one or more AtScale support bundles (directories or zips containing a `metadata/` folder) to SML, one repository per project, and writes `summary.csv` / `summary.md`. Uses the `generate-sml-from-xml` converter per project. Exits non-zero if any project failed, after attempting all of them. Pass `model-mode: new` so a query-name collision in one project cannot stall an unattended run.
+Converts every project inside one or more AtScale support bundles to SML, one repository per project, and writes `summary.csv` / `summary.md`. Accepts the engine's own support-bundle zip (projects inside its `metadata.zip`), an unpacked tree with a `metadata/` directory, or a zip of such a tree. Uses the `generate-sml-from-xml` converter per project. Exits non-zero if any project failed, after attempting all of them. Pass `model-mode: new` so a query-name collision in one project cannot stall an unattended run.
 
 **Requires:** No secrets — the bundles must be present in the workspace.
 
@@ -509,7 +509,7 @@ Converts every project inside one or more AtScale support bundles (directories o
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `bundles` | Yes | | Comma-separated support bundle paths (directories or `.zip` files) |
+| `bundles` | Yes | | Comma-separated support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory |
 | `output-dir` | Yes | | Directory for the per-project SML repositories and the summary files |
 | `force` | No | `false` | Re-convert projects whose output already exists |
 | `org` | No | all | Comma-separated organisation folders to include |

@@ -427,7 +427,7 @@ function generateSMLFromBundle(
 
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `bundles` | `string[] \| string` | Yes | | Support bundle paths (directories or `.zip` files); an array or a comma-separated string |
+| `bundles` | `string[] \| string` | Yes | | Support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory; an array or a comma-separated string |
 | `outputDir` | `DirOutput` | Yes | | Directory for the per-project SML repositories and summary files, or a `Writable` to receive a ZIP |
 | `force` | `boolean` | No | `false` | Re-convert projects whose output already exists |
 | `org` | `string` | No | | Comma-separated organisation folders to include (installer bundles) |

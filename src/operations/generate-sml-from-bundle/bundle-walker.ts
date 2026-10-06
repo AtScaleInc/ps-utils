@@ -3,25 +3,32 @@
  *
  * Discovers every AtScale project.xml inside one or more support bundles.
  *
- * A support bundle is a directory (or a zip of one) that contains a
- * `metadata/` folder.  Projects live at either:
- *   metadata/<project-id>/project.xml            (container edition)
- *   metadata/<org>/<project-id>/project.xml      (installer edition)
+ * Two bundle shapes exist in the field:
  *
- * Zips are extracted to a temporary directory; call the returned `cleanup`
- * when done.  Many zips wrap the bundle in one top-level folder, so the walker
- * descends a few levels to find `metadata/` rather than requiring it at the root.
+ *   1. The engine's own "Download support bundle" archive: a zip whose top
+ *      level is MANIFEST.txt plus one zip per area (logs.zip, aggregates.zip,
+ *      metadata.zip, ...).  Projects live inside `metadata.zip` at
+ *      `metadata/<project-id>/project.xml`.
+ *   2. An already-unpacked tree with a `metadata/` directory, either
+ *      `metadata/<project-id>/project.xml` (container edition) or
+ *      `metadata/<org>/<project-id>/project.xml` (installer edition).  This is
+ *      also what you get after someone hand-extracts metadata.zip, and zips of
+ *      such trees often wrap everything in one top-level folder.
+ *
+ * Only the entries that can hold a project are extracted (metadata.zip and
+ * `metadata/**` paths); the log archives, which dominate a real bundle, are
+ * never read.  `__MACOSX` resource-fork trees and dot-directories are skipped.
+ * Call the returned `cleanup` to remove temporary extraction directories.
  */
 import fs from "fs";
 import os from "os";
 import path from "path";
-import JSZip from "jszip";
-import { Parser } from "xml2js";
+import { unzipTo } from "../../lib/streams.js";
 
 export type BundleProject = {
   /** Path the caller supplied for the bundle (directory or zip). */
   bundlePath:  string;
-  /** Filesystem-safe name derived from the bundle's basename. */
+  /** Filesystem-safe name for the bundle, unique within one discovery run. */
   bundleSlug:  string;
   /** Organisation folder name, or "default" when the bundle has no org level. */
   org:         string;
@@ -33,13 +40,17 @@ export type BundleProject = {
   xmlPath:     string;
 };
 
+export type EmptyBundle = { bundlePath: string; bundleSlug: string };
+
 export type DiscoveryResult = {
   projects: BundleProject[];
-  /** Bundles that were given but yielded no metadata folder. */
-  emptyBundles: string[];
+  /** Bundles that were given but held neither a metadata/ directory nor a metadata.zip. */
+  emptyBundles: EmptyBundle[];
   /** Removes any temporary extraction directories. Safe to call more than once. */
   cleanup: () => void;
 };
+
+const SKIP_DIRS = new Set(["__MACOSX", "node_modules"]);
 
 /** Make a string safe for use as a directory name. */
 export function slug(value: string): string {
@@ -57,34 +68,40 @@ export function splitList(value: string | undefined): string[] {
     .filter((s) => s.length > 0);
 }
 
-async function extractZip(zipPath: string, tempRoot: string): Promise<string> {
-  const dest = fs.mkdtempSync(path.join(tempRoot, "bundle-"));
-  const zip = await JSZip.loadAsync(fs.readFileSync(zipPath));
-  const entries = Object.values(zip.files);
-  for (const entry of entries) {
-    const target = path.join(dest, entry.name);
-    // Guard against zip-slip: every entry must stay inside dest.
-    if (!path.resolve(target).startsWith(path.resolve(dest) + path.sep)) {
-      throw new Error(`Zip entry escapes extraction directory: ${entry.name}`);
-    }
-    if (entry.dir) {
-      fs.mkdirSync(target, { recursive: true });
-      continue;
-    }
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, await entry.async("nodebuffer"));
-  }
-  return dest;
+function isSkippable(name: string): boolean {
+  return SKIP_DIRS.has(name) || name.startsWith(".");
 }
 
-/** Find the bundle's metadata directory, descending up to `maxDepth` levels. */
-export function findMetadataDir(root: string, maxDepth = 3): string | undefined {
-  const direct = path.join(root, "metadata");
-  if (fs.existsSync(direct) && fs.statSync(direct).isDirectory()) return direct;
+/** Zip entries worth extracting: metadata.zip itself, or anything under a metadata/ folder. */
+export function isMetadataEntry(entryName: string): boolean {
+  const parts = entryName.split("/").filter(Boolean);
+  if (parts.some(isSkippable)) return false;
+  if (parts[parts.length - 1] === "metadata.zip") return true;
+  const idx = parts.indexOf("metadata");
+  return idx >= 0 && idx < parts.length - 1;
+}
+
+type MetadataSource =
+  | { kind: "dir"; path: string }
+  | { kind: "zip"; path: string };
+
+/**
+ * Find the bundle's metadata: a `metadata/` directory or a `metadata.zip`,
+ * at the root or up to `maxDepth` wrapper folders down.  A directory wins
+ * over a zip at the same level.
+ */
+export function findMetadataSource(root: string, maxDepth = 3): MetadataSource | undefined {
+  const dir = path.join(root, "metadata");
+  if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return { kind: "dir", path: dir };
+  const zip = path.join(root, "metadata.zip");
+  if (fs.existsSync(zip) && fs.statSync(zip).isFile()) return { kind: "zip", path: zip };
   if (maxDepth === 0) return undefined;
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-    const found = findMetadataDir(path.join(root, entry.name), maxDepth - 1);
+  const children = fs.readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !isSkippable(e.name))
+    .map((e) => e.name)
+    .sort();
+  for (const name of children) {
+    const found = findMetadataSource(path.join(root, name), maxDepth - 1);
     if (found) return found;
   }
   return undefined;
@@ -92,6 +109,7 @@ export function findMetadataDir(root: string, maxDepth = 3): string | undefined 
 
 function findProjectXmls(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (isSkippable(entry.name)) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) findProjectXmls(full, out);
     else if (entry.isFile() && entry.name === "project.xml") out.push(full);
@@ -99,16 +117,36 @@ function findProjectXmls(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Read the root element's `name` attribute. Tolerates attributes split across lines. */
-export async function readProjectName(xmlPath: string): Promise<string> {
+/**
+ * Read the root element's `name` attribute without parsing the whole document.
+ * Only the first 64 KiB are scanned; root attributes may span several lines.
+ */
+export function readProjectName(xmlPath: string): string {
+  let fd: number | undefined;
   try {
-    const parser = new Parser({ explicitArray: false, explicitRoot: false, mergeAttrs: false });
-    const parsed = await parser.parseStringPromise(fs.readFileSync(xmlPath, "utf8")) as { $?: { name?: string } };
-    const name = parsed?.$?.name;
-    return typeof name === "string" && name.trim().length > 0 ? name.trim() : "unnamed";
+    fd = fs.openSync(xmlPath, "r");
+    const buffer = Buffer.alloc(64 * 1024);
+    const bytes = fs.readSync(fd, buffer, 0, buffer.length, 0);
+    const head = buffer.subarray(0, bytes).toString("utf8");
+    // First element that is not the XML declaration or a comment/processing instruction.
+    const root = /<(?!\?|!)([A-Za-z_][\w.-]*:)?[A-Za-z_][\w.-]*\b([^>]*)>/s.exec(head);
+    if (!root) return "unnamed";
+    const attr = /(?:^|\s)name\s*=\s*"([^"]*)"/s.exec(root[2]);
+    const name = attr?.[1]?.trim();
+    return name && name.length > 0 ? name : "unnamed";
   } catch {
     return "unnamed";
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
+}
+
+/** Assign a slug that no earlier bundle in this run has taken. */
+function uniqueSlug(base: string, taken: Set<string>): string {
+  let candidate = base;
+  for (let n = 2; taken.has(candidate); n++) candidate = `${base}-${n}`;
+  taken.add(candidate);
+  return candidate;
 }
 
 /**
@@ -116,15 +154,23 @@ export async function readProjectName(xmlPath: string): Promise<string> {
  * bundles in the order given, projects sorted by path within each.
  */
 export async function discoverBundleProjects(bundlePaths: string[]): Promise<DiscoveryResult> {
-  const tempDirs: string[] = [];
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ps-utils-bundles-"));
-  tempDirs.push(tempRoot);
+  let cleaned = false;
   const cleanup = () => {
-    for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+    if (cleaned) return;
+    cleaned = true;
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   };
 
   const projects: BundleProject[] = [];
-  const emptyBundles: string[] = [];
+  const emptyBundles: EmptyBundle[] = [];
+  const takenSlugs = new Set<string>();
+  let extractCount = 0;
+  const nextTemp = () => {
+    const dir = path.join(tempRoot, String(++extractCount));
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  };
 
   try {
     for (const given of bundlePaths) {
@@ -132,24 +178,32 @@ export async function discoverBundleProjects(bundlePaths: string[]): Promise<Dis
       if (!fs.existsSync(bundlePath)) {
         throw new Error(`Bundle not found: ${bundlePath}`);
       }
+
       let root = bundlePath;
-      let bundleSlug = slug(path.basename(bundlePath));
+      let baseName = path.basename(bundlePath);
       if (fs.statSync(bundlePath).isFile()) {
         if (!bundlePath.toLowerCase().endsWith(".zip")) {
           throw new Error(`Bundle must be a directory or a .zip file: ${bundlePath}`);
         }
-        root = await extractZip(bundlePath, tempRoot);
-        bundleSlug = slug(path.basename(bundlePath, path.extname(bundlePath)));
+        root = nextTemp();
+        await unzipTo(fs.readFileSync(bundlePath), root, isMetadataEntry);
+        baseName = path.basename(bundlePath, path.extname(bundlePath));
       }
+      const bundleSlug = uniqueSlug(slug(baseName), takenSlugs);
 
-      const metadataDir = findMetadataDir(root);
-      if (!metadataDir) {
-        emptyBundles.push(bundlePath);
+      let source = findMetadataSource(root);
+      if (source?.kind === "zip") {
+        const inner = nextTemp();
+        await unzipTo(fs.readFileSync(source.path), inner, isMetadataEntry);
+        source = findMetadataSource(inner);
+      }
+      if (!source || source.kind !== "dir") {
+        emptyBundles.push({ bundlePath, bundleSlug });
         continue;
       }
+      const metadataDir = source.path;
 
-      const xmls = findProjectXmls(metadataDir).sort();
-      for (const xmlPath of xmls) {
+      for (const xmlPath of findProjectXmls(metadataDir).sort()) {
         const projectDir = path.dirname(xmlPath);
         const projectId  = path.basename(projectDir);
         const orgDir     = path.dirname(projectDir);
@@ -159,7 +213,7 @@ export async function discoverBundleProjects(bundlePaths: string[]): Promise<Dis
           bundleSlug,
           org,
           projectId,
-          projectName: await readProjectName(xmlPath),
+          projectName: readProjectName(xmlPath),
           xmlPath,
         });
       }

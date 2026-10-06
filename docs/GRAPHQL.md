@@ -2215,7 +2215,7 @@ curl -X POST http://localhost:4000/graphql \
 
 | Input field | GraphQL type | Required | Description |
 |-------------|-------------|----------|-------------|
-| `bundles` | `String` | Yes | Comma-separated support bundle paths (directories or .zip files), each containing a metadata/ folder |
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
 | `outputDir` | `String` | — | *Server-managed output path — do not pass* |
 | `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
 | `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
@@ -3188,7 +3188,7 @@ input GenerateSmlFromXmlInput {
 
 """Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary"""
 input GenerateSmlFromBundleInput {
-  """Comma-separated support bundle paths (directories or .zip files), each containing a metadata/ folder"""
+  """Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory"""
   bundles: String!
   """Directory that receives one SML repository per project plus summary.csv and summary.md"""
   outputDir: String

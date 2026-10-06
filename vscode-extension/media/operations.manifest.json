@@ -750,7 +750,7 @@
       "params": [
         {
           "name": "bundles",
-          "description": "Comma-separated support bundle paths (directories or .zip files), each containing a metadata/ folder",
+          "description": "Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory",
           "type": "string",
           "role": "scalar",
           "required": true,

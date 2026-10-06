@@ -210,8 +210,9 @@ inputs:
   # ── generate-sml-from-bundle ─────────────────────────────────────────────
   bundles:
     description: >
-      Comma-separated AtScale support bundle paths (directories or .zip files),
-      each containing a metadata/ folder. Used by: generate-sml-from-bundle.
+      Comma-separated AtScale support bundle paths: the engine's support-bundle
+      .zip, a directory containing metadata/ or metadata.zip, or a zip of such a
+      directory. Used by: generate-sml-from-bundle.
     required: false
   force:
     description: >

@@ -1776,7 +1776,7 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 
 | Field (JSON key) | Type | Required | Description |
 |-----------------|------|----------|-------------|
-| `bundles` | `String` | Yes | Comma-separated support bundle paths (directories or .zip files), each containing a metadata/ folder |
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
 | `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
 | `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
 | `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
