@@ -13,6 +13,7 @@ inputs:
         extract-model-from-sml
         generate-sml-from-connection
         generate-sml-from-ddl
+        generate-sml-from-bundle
         generate-namespace-from-model
         generate-metrics-from-model
         generate-tableau-from-namespace
@@ -204,6 +205,24 @@ inputs:
   # ── generate-sml-from-ddl ────────────────────────────────────────────────
   ddl-file:
     description: Path to the DDL SQL file to parse for SML generation.
+    required: false
+
+  # ── generate-sml-from-bundle ─────────────────────────────────────────────
+  bundles:
+    description: >
+      Comma-separated AtScale support bundle paths (directories or .zip files),
+      each containing a metadata/ folder. Used by: generate-sml-from-bundle.
+    required: false
+  force:
+    description: >
+      Re-convert projects whose output directory already exists ("true"/"false").
+      Used by: generate-sml-from-bundle.
+    required: false
+    default: "false"
+  org:
+    description: >
+      Comma-separated organisation folder names to include (installer bundles).
+      Used by: generate-sml-from-bundle.
     required: false
 
   # ── generate-sml-from-xml / generate-report-from-xml ────────────────────
@@ -1137,6 +1156,25 @@ runs:
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-bundle ─────────────────────────────────────────────
+    - name: Generate SML from support bundles
+      if: inputs.operation == 'generate-sml-from-bundle'
+      run: |
+        ARGS=(
+          --bundles    "${{ inputs.bundles }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ "${{ inputs.force }}" == "true" ]]       && ARGS+=(--force true)
+        [[ -n "${{ inputs.org }}" ]]                && ARGS+=(--org               "${{ inputs.org }}")
+        [[ -n "${{ inputs.connection-name }}"   ]]  && ARGS+=(--connection-name   "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}"   ]]  && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]]  && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]]  && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.model-mode }}"        ]]  && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-bundle "${ARGS[@]}"
       shell: bash
 
     # ── generate-sml-from-xml ────────────────────────────────────────────────

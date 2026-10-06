@@ -88,6 +88,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromConnection`](#generatesmlfromconnection)
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
+  - [`generateSMLFromBundle`](#generatesmlfrombundle)
   - [`generateSMLFromTabular`](#generatesmlfromtabular)
   - [`analyzePowerBIDaxGaps`](#analyzepowerbidaxgaps)
   - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
@@ -398,6 +399,43 @@ function generateSMLFromXML(
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateSMLFromBundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every project inside one or more AtScale support bundles to SML, one repository per project, and writes `summary.csv` / `summary.md` in the output directory. Throws after attempting every project if any failed.
+
+```typescript
+import { generateSMLFromBundle } from "@atscale-ps/ps-utils";
+
+await generateSMLFromBundle({
+  bundles:   ["./customer-prod.zip", "./customer-dev"],
+  outputDir: "./sml-out",
+  modelMode: "new",
+});
+```
+
+```typescript
+function generateSMLFromBundle(
+  params: GenerateSMLFromBundleParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `bundles` | `string[] \| string` | Yes | | Support bundle paths (directories or `.zip` files); an array or a comma-separated string |
+| `outputDir` | `DirOutput` | Yes | | Directory for the per-project SML repositories and summary files, or a `Writable` to receive a ZIP |
+| `force` | `boolean` | No | `false` | Re-convert projects whose output already exists |
+| `org` | `string` | No | | Comma-separated organisation folders to include (installer bundles) |
+| `connectionName` | `string` | No | | Connection `unique_name` to embed in generated files (auto-detected per XML if omitted) |
+| `connectionType` | `string` | No | | Database dialect written to the connection files |
+| `connectionDb` | `string` | No | | Database name written to the connection files |
+| `connectionSchema` | `string` | No | | Schema name written to the connection files |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy for query-name collisions; pass `new` for unattended runs |
 
 ---
 
