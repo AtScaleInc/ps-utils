@@ -126,13 +126,17 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
   const refDimNames = new Set(relationships.map((r) => r.toDimension).filter(Boolean));
   const factDatasetNames = new Set(relationships.map((r) => r.fromDataset).filter(Boolean));
 
-  // ── Collect keyed-attributes (join targets) ──────────────────────────────────
-  // These are the level attributes in referenced dimensions whose unique_name
-  // matches the `to.level` in a model relationship.
+  // ── Collect keyed-attributes ─────────────────────────────────────────────────
+  // Every level attribute of a referenced dimension becomes a keyed-attribute —
+  // not only the ones named as a relationship's `to.level`. Join keys are rarely
+  // browsable attributes, so keeping just those strips out the descriptive levels
+  // (names, cities, categories) that make a dimension usable.
   type KeyedAttr = {
     laUniqueName:   string;
+    dimName:        string;
     datasetName:    string;
-    columnName:     string;
+    columnName:     string;  // display column (name_column)
+    keyColumn:      string;  // join/key column (key_columns[0]) — often a different type
     label:          string;
     keyId:          string; // UUID of the attribute-key element
     attrId:         string; // UUID of the keyed-attribute element
@@ -141,36 +145,63 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
 
   const keyedAttrs: KeyedAttr[] = [];
   const keyedAttrByLevel = new Map<string, KeyedAttr>();
+  // Subset of the above that a model relationship actually joins on.
+  const joinAttrs: KeyedAttr[] = [];
+  // Secondary attributes hanging off a level, by that level's unique_name.
+  const secondaryByLevel = new Map<string, KeyedAttr[]>();
+  const seenAttr = new Map<string, KeyedAttr>();
+
+  function addAttr(src: any, dimName: string): KeyedAttr | null {
+    if (!src?.unique_name) return null;
+    const dedupeKey = `${dimName}::${src.unique_name}`;
+    const existing = seenAttr.get(dedupeKey);
+    if (existing) return existing;
+    const ka: KeyedAttr = {
+      laUniqueName: src.unique_name,
+      dimName,
+      datasetName:  src.dataset ?? "",
+      columnName:   src.name_column ?? src.key_columns?.[0] ?? src.unique_name,
+      keyColumn:    src.key_columns?.[0] ?? src.name_column ?? src.unique_name,
+      label:        src.label ?? src.unique_name,
+      keyId:        genId(ns, `${dimName}.${src.unique_name}.key`),
+      attrId:       genId(ns, `${dimName}.${src.unique_name}.attr`),
+      datasetId:    genId(ns, src.dataset ?? ""),
+    };
+    seenAttr.set(dedupeKey, ka);
+    keyedAttrs.push(ka);
+    if (!keyedAttrByLevel.has(src.unique_name)) keyedAttrByLevel.set(src.unique_name, ka);
+    return ka;
+  }
+
+  function addSecondary(levelName: string, sa: any, dimName: string): void {
+    const ka = addAttr(sa, dimName);
+    if (!ka) return;
+    if (!secondaryByLevel.has(levelName)) secondaryByLevel.set(levelName, []);
+    const list = secondaryByLevel.get(levelName)!;
+    if (!list.some((x) => x.attrId === ka.attrId)) list.push(ka);
+  }
 
   for (const dimName of refDimNames) {
     const dim = dimensionsMap.get(dimName);
     if (!dim) continue;
 
-    const laMap = new Map<string, any>();
     for (const la of (dim.level_attributes ?? [])) {
-      laMap.set(la.unique_name, la);
+      addAttr(la, dimName);
+      for (const sa of (la?.secondary_attributes ?? [])) addSecondary(la.unique_name, sa, dimName);
+    }
+
+    // Secondary attributes are commonly declared on the hierarchy level rather
+    // than on the level attribute, so both shapes have to be collected.
+    for (const h of (dim.hierarchies ?? [])) {
+      for (const l of (h?.levels ?? [])) {
+        for (const sa of (l?.secondary_attributes ?? [])) addSecondary(l.unique_name, sa, dimName);
+      }
     }
 
     for (const rel of relationships) {
       if (rel.toDimension !== dimName) continue;
-      const la = laMap.get(rel.toLevel);
-      if (!la) continue;
-
-      const keyId  = genId(ns, `${dimName}.${rel.toLevel}.key`);
-      const attrId = genId(ns, `${dimName}.${rel.toLevel}.attr`);
-      const dsId   = genId(ns, la.dataset ?? "");
-
-      const ka: KeyedAttr = {
-        laUniqueName:   la.unique_name,
-        datasetName:    la.dataset ?? "",
-        columnName:     la.name_column ?? la.key_columns?.[0] ?? la.unique_name,
-        label:          la.label ?? la.unique_name,
-        keyId,
-        attrId,
-        datasetId:      dsId,
-      };
-      keyedAttrs.push(ka);
-      keyedAttrByLevel.set(rel.toLevel, ka);
+      const ka = keyedAttrByLevel.get(rel.toLevel);
+      if (ka) joinAttrs.push(ka);
     }
   }
 
@@ -194,7 +225,7 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
       ds,
       dsId,
       metrics: [],
-      joinKeyId:  keyedAttrs[0]?.keyId,
+      joinKeyId:  joinAttrs[0]?.keyId,
       joinColName: relationships.find((r) => r.fromDataset === dsName)?.joinColumns[0],
     });
   }
@@ -220,18 +251,29 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
     datasetName: string;
     ds:          SmlDataset;
     dsId:        string;
-    ka:          KeyedAttr;
+    attrs:       KeyedAttr[];      // every attribute sourced from this dataset
+    joinKa?:     KeyedAttr;        // the attribute a relationship joins on, if any
   };
 
   const dimDatasets: DimDatasetEntry[] = [];
-  const seenDimDs = new Set<string>();
+  const attrsByDataset = new Map<string, KeyedAttr[]>();
 
   for (const ka of keyedAttrs) {
-    if (seenDimDs.has(ka.datasetName)) continue;
-    seenDimDs.add(ka.datasetName);
-    const ds = datasetsMap.get(ka.datasetName);
+    if (!ka.datasetName) continue;
+    if (!attrsByDataset.has(ka.datasetName)) attrsByDataset.set(ka.datasetName, []);
+    attrsByDataset.get(ka.datasetName)!.push(ka);
+  }
+
+  for (const [datasetName, attrs] of attrsByDataset) {
+    const ds = datasetsMap.get(datasetName);
     if (!ds) continue;
-    dimDatasets.push({ datasetName: ka.datasetName, ds, dsId: ka.datasetId, ka });
+    dimDatasets.push({
+      datasetName,
+      ds,
+      dsId:   attrs[0].datasetId,
+      attrs,
+      joinKa: joinAttrs.find((j) => j.datasetName === datasetName) ?? attrs[0],
+    });
   }
 
   // ── Build dimensions XML ─────────────────────────────────────────────────────
@@ -240,29 +282,50 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
     if (!dim) return "";
     const dimId = genId(ns, dimName);
 
-    // Build hierarchies — only include hierarchies whose levels are join targets.
-    const hierarchiesXml = (dim.hierarchies ?? []).map((h: any) => {
-      const hierLevels = (h.levels ?? []).map((l: any) => {
+    const dimAttrs = keyedAttrs.filter((k) => k.dimName === dimName);
+
+    // A dimension that declares no hierarchies still needs one, or it has no
+    // browsable levels and the engine publishes nothing for it. Fall back to a
+    // single hierarchy over the dimension's own level attributes.
+    const declared = (dim.hierarchies ?? []).filter((h: any) => (h?.levels ?? []).length > 0);
+    const hierDefs = declared.length > 0
+      ? declared
+      : dimAttrs.length > 0
+        ? [{
+            unique_name: dimName,
+            label:       dim.label ?? dimName,
+            levels:      dimAttrs.map((k) => ({ unique_name: k.laUniqueName })),
+          }]
+        : [];
+
+    // One <hierarchy> per declared hierarchy, holding every level it declares —
+    // previously each level emitted a whole duplicate <hierarchy> of its own.
+    const hierarchiesXml = hierDefs.map((h: any) => {
+      const levelsXml = (h.levels ?? []).map((l: any) => {
         const ka = keyedAttrByLevel.get(l.unique_name);
         if (!ka) return "";
-        const hierId = genId(ns, `${dimName}.${h.unique_name}`);
+        const secondaryXml = (secondaryByLevel.get(l.unique_name) ?? []).map((s) =>
+          `\n          <keyed-attribute-ref attribute-id="${s.attrId}"></keyed-attribute-ref>`,
+        ).join("");
         return `
+        <level primary-attribute="${ka.attrId}">
+          <properties>
+            <unique-in-parent>false</unique-in-parent>
+            <visible>true</visible>
+          </properties>${secondaryXml}
+        </level>`;
+      }).filter(Boolean).join("");
+      if (!levelsXml) return "";
+      const hierId = genId(ns, `${dimName}.${h.unique_name}`);
+      return `
       <hierarchy id="${hierId}" name="${esc(h.unique_name)}">
         <properties>
           <caption>${esc(h.label ?? h.unique_name)}</caption>
           <visible>true</visible>
           <filter-empty>Always</filter-empty>
           <default-member><all-member></all-member></default-member>
-        </properties>
-        <level primary-attribute="${ka.attrId}">
-          <properties>
-            <unique-in-parent>false</unique-in-parent>
-            <visible>true</visible>
-          </properties>
-        </level>
+        </properties>${levelsXml}
       </hierarchy>`;
-      }).filter(Boolean);
-      return hierLevels.join("");
     }).filter(Boolean).join("");
 
     if (!hierarchiesXml) return "";
@@ -284,7 +347,7 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
     ).join("");
   }
 
-  const dimDatasetsXml = dimDatasets.map(({ datasetName, ds, dsId, ka }) => {
+  const dimDatasetsXml = dimDatasets.map(({ datasetName, ds, dsId, attrs }) => {
     const tableName = ds.table ?? datasetName.replace(/\.dataset$/, "");
     const connId    = asConnectionId(ds.connection_id);
     const database  = defaultDatabase;
@@ -302,13 +365,13 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
       </table>
       <immutable>false</immutable>${columnsXml(ds)}
     </physical>
-    <logical>
-      <key-ref id="${ka.keyId}" unique="false" complete="true">
-        <column>${esc(ka.columnName)}</column>
+    <logical>${attrs.map((a) => `
+      <key-ref id="${a.keyId}" unique="false" complete="true">
+        <column>${esc(a.keyColumn)}</column>
       </key-ref>
-      <attribute-ref id="${ka.attrId}" complete="true">
-        <column>${esc(ka.columnName)}</column>
-      </attribute-ref>
+      <attribute-ref id="${a.attrId}" complete="true">
+        <column>${esc(a.columnName)}</column>
+      </attribute-ref>`).join("")}
     </logical>
   </data-set>`;
   }).join("");
@@ -362,10 +425,17 @@ export function buildCatalogXml(input: CatalogXmlInput): string {
 
   // Cube dataset-refs (one per fact dataset)
   const cubeDsRefsXml = [...factDatasetsMap.values()].map((fde) => {
-    const joinKa  = keyedAttrs[0]; // assume single join key
-    const keyRef  = joinKa
-      ? `\n          <key-ref id="${joinKa.keyId}" unique="false" complete="false"><column>${esc(fde.joinColName ?? "")}</column></key-ref>`
-      : "";
+    // One key-ref per relationship leaving this fact dataset. Emitting only the
+    // first join left every dimension after it unreachable from the cube.
+    const keyRef = relationships
+      .filter((r) => r.fromDataset === fde.datasetName)
+      .map((r) => {
+        const ka = keyedAttrByLevel.get(r.toLevel);
+        if (!ka) return "";
+        return `\n          <key-ref id="${ka.keyId}" unique="false" complete="false"><column>${esc(r.joinColumns[0] ?? "")}</column></key-ref>`;
+      })
+      .filter(Boolean)
+      .join("");
     const attrRefs = fde.metrics.map((m) =>
       `\n          <attribute-ref id="${m.attrId}" complete="true"><column>${esc(m.column)}</column></attribute-ref>`,
     ).join("");
