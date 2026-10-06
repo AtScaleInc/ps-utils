@@ -2205,6 +2205,49 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSmlFromBundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
+
+**CLI name:** `generate-sml-from-bundle`  |  **REST:** `POST /rest/generate-sml-from-bundle`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
+| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
+| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
+| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
+| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
+| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
+| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromBundle(input: {
+    bundles: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromBundle(input:{bundles: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
 ### `generateSmlFromTabular`
 
 [↑ Table of Contents](#table-of-contents)
@@ -3140,6 +3183,28 @@ input GenerateSmlFromXmlInput {
   """Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML"""
   connectionSchema: String
   """Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict."""
+  modelMode: String
+}
+
+"""Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary"""
+input GenerateSmlFromBundleInput {
+  """Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory"""
+  bundles: String!
+  """Directory that receives one SML repository per project plus summary.csv and summary.md"""
+  outputDir: String
+  """Re-convert projects whose output directory already exists"""
+  force: Boolean
+  """Comma-separated organisation folder names to include (installer bundles); default is all"""
+  org: String
+  """SML connection unique_name to embed in generated files (auto-detected from each XML if omitted)"""
+  connectionName: String
+  """Database dialect for the connection files (e.g. "snowflake", "bigquery")"""
+  connectionType: String
+  """Database name written into the connection files; when set, every dataset shares one connection"""
+  connectionDb: String
+  """Schema name written into the connection files; when set, every dataset shares one connection"""
+  connectionSchema: String
+  """Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs."""
   modelMode: String
 }
 
@@ -4105,6 +4170,8 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary"""
+  generateSmlFromBundle(input: GenerateSmlFromBundleInput): OperationResult!
   """Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
   generateSmlFromTabular(input: GenerateSmlFromTabularInput): OperationResult!
   """Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports"""

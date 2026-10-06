@@ -23,6 +23,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    BUNDLE["Support bundles"] --> GB["generate-sml-from-bundle"] --> SMLB["SML repos + summary"]
     TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
@@ -145,6 +146,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
@@ -478,6 +480,44 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 | `connection-schema` | No | | Schema/dataset name written to the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `catalog-name` | No | XML schema name | Override the catalog label |
 | `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
+
+---
+
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every project inside one or more AtScale support bundles to SML, one repository per project, and writes `summary.csv` / `summary.md`. Accepts the engine's own support-bundle zip (projects inside its `metadata.zip`), an unpacked tree with a `metadata/` directory, or a zip of such a tree. Uses the `generate-sml-from-xml` converter per project. Exits non-zero if any project failed, after attempting all of them. Pass `model-mode: new` so a query-name collision in one project cannot stall an unattended run.
+
+**Requires:** No secrets — the bundles must be present in the workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-from-bundle
+    bundles: bundles/customer-prod.zip,bundles/customer-dev   # comma-separated
+    output-dir: sml-out
+    model-mode: new                   # recommended in CI
+    org: default                      # optional — installer bundles only
+    force: "false"                    # optional — re-convert existing output
+    connection-type: snowflake        # optional — written to connection files
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `bundles` | Yes | | Comma-separated support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory |
+| `output-dir` | Yes | | Directory for the per-project SML repositories and the summary files |
+| `force` | No | `false` | Re-convert projects whose output already exists |
+| `org` | No | all | Comma-separated organisation folders to include |
+| `connection-name` | No | Auto-detected | Connection `unique_name` to embed in generated files |
+| `connection-type` | No | | Database dialect written to the connection files |
+| `connection-db` | No | | Database name written to the connection files |
+| `connection-schema` | No | | Schema name written to the connection files |
+| `model-mode` | No | | `new` renames collision members; `existing` marks the project failed for review |
 
 ---
 

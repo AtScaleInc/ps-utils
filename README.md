@@ -38,6 +38,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    BUNDLE["Support bundles"] --> GB["generate-sml-from-bundle"] --> SMLB["SML repos + summary"]
     TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
@@ -163,6 +164,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
@@ -584,6 +586,46 @@ With optional overrides:
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
 ```
+
+---
+
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every AtScale project inside one or more **support bundles** to SML in one run, using the same converter as `generate-sml-from-xml`. Two bundle shapes are accepted: the archive the engine's **Download support bundle** button produces (a zip of per-area zips, with projects inside `metadata.zip` at `metadata/<id>/project.xml`), and an unpacked tree with a `metadata/` directory (`metadata/<id>/project.xml` for the container edition, `metadata/<org>/<id>/project.xml` for the installer edition), or a zip of such a tree, with or without a wrapper folder. Only `metadata.zip` and `metadata/**` entries are extracted, so the log archives that dominate a real bundle are never read. No database connection is required.
+
+Each project becomes its own SML repository under `<output-dir>/<bundle>/<org>/<project>__<id8>/`. Projects are named from the XML root's `name` attribute, with the first eight characters of the project id appended so same-named projects never collide; two bundles with the same basename get `-2`, `-3` suffixes. Re-runs skip projects whose output already exists unless `--force` is given. A conversion is staged beside its destination and only replaces the previous output when it succeeds, so a failing forced re-run never destroys a good repository. Converter output is kept only while a project is failing, under `<output-dir>/.logs/`. `summary.csv` merges with the summary already in the output directory, so a filtered or partial re-run still describes everything on disk. The operation attempts every project before it reports, writes the summary either way, and exits non-zero if any project failed or a bundle held no metadata.
+
+```bash
+./atscale-utils generate-sml-from-bundle \
+  --bundles    "./customer-bundle.zip,./customer-bundle-prod" \
+  --output-dir "./sml-out" \
+  --model-mode new
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--bundles` | Yes | | Comma-separated support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory |
+| `--output-dir` | Yes | | Directory that receives one SML repository per project plus `summary.csv` and `summary.md` |
+| `--force` | No | `false` | Re-convert projects whose output directory already exists |
+| `--org` | No | all | Comma-separated organisation folder names to include (installer bundles) |
+| `--connection-name` | No | Auto-detected per XML | Connection `unique_name` to embed in generated files |
+| `--connection-type` | No | | Database dialect written to the connection files |
+| `--connection-db` | No | | Database name written to the connection files; when set, every dataset shares one connection |
+| `--connection-schema` | No | | Schema name written to the connection files; when set, every dataset shares one connection |
+| `--model-mode` | No | | Compatibility policy applied to every project when query-name collisions occur. Pass `new` for unattended runs; `existing` marks a colliding project as failed for review |
+
+**Output layout:**
+```
+<output-dir>/
+  summary.csv                       one row per project: bundle, org, project, id, status, counts, paths
+  summary.md                        the same table, readable
+  <bundle>/<org>/<project>__<id8>/  catalog.yml, connections/, datasets/, dimensions/, metrics/, calculations/, models/, README.md
+  .logs/<bundle>/<org>/<project>.log   converter transcript, kept only while the project is failing
+```
+
+Statuses: `ok`, `ok-no-model` (the XML had no cube), `skipped` (already present, counts read from disk), `FAILED`, `NO-METADATA` (a bundle with neither `metadata/` nor `metadata.zip`).
 
 ---
 

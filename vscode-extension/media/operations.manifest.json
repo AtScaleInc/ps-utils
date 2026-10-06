@@ -25,6 +25,7 @@
         "generate-sml-from-connection",
         "generate-sml-from-ddl",
         "generate-sml-from-xml",
+        "generate-sml-from-bundle",
         "generate-sml-from-tabular",
         "generate-sml-from-ssas-multidimensional",
         "analyze-powerbi-dax-gaps",
@@ -730,6 +731,90 @@
         {
           "name": "model-mode",
           "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-bundle": {
+      "description": "Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "bundles",
+          "description": "Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory that receives one SML repository per project plus summary.csv and summary.md",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "force",
+          "description": "Re-convert projects whose output directory already exists",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "org",
+          "description": "Comma-separated organisation folder names to include (installer bundles); default is all",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "SML connection unique_name to embed in generated files (auto-detected from each XML if omitted)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-type",
+          "description": "Database dialect for the connection files (e.g. \"snowflake\", \"bigquery\")",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-db",
+          "description": "Database name written into the connection files; when set, every dataset shares one connection",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-schema",
+          "description": "Schema name written into the connection files; when set, every dataset shares one connection",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy applied to every project when query-name collisions occur: \"new\" renames colliding objects; \"existing\" preserves names and marks the project failed for review. Pass \"new\" for unattended runs.",
           "type": "string",
           "role": "scalar",
           "required": false,

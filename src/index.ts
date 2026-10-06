@@ -222,6 +222,29 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
   } finally { cleanup(); }
 }
 
+export type GenerateSMLFromBundleParams = {
+  bundles: string[] | string;
+  outputDir: DirOutput;
+  force?: boolean;
+  org?: string;
+  connectionName?: string;
+  connectionType?: string;
+  connectionDb?: string;
+  connectionSchema?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromBundle(p: GenerateSMLFromBundleParams, o: LibraryOptions = {}) {
+  const normalized = { ...p, bundles: Array.isArray(p.bundles) ? p.bundles.join(",") : p.bundles };
+  const { params, flush, cleanup } = await resolveIO(normalized as Record<string, unknown>, {
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-bundle", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLFromTabularParams = {
   xmlaFile: FileInput;
   warehouse: "Snowflake" | "Databricks" | "BigQuery" | "Postgres";
