@@ -131,6 +131,7 @@ flowchart LR
     ATS --> F["atscale-list-repos"] --> INFO
     ATS --> G["atscale-list-deployments"] --> INFO
     ATS --> H["atscale-list-model-errors"] --> INFO
+    ATS --> I["get-dso-count"] --> INFO
 ```
 
 ### Aggregate Management
@@ -205,6 +206,7 @@ flowchart LR
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+    - [`get-dso-count`](#get-dso-count)
   - Aggregate Management
     - [`atscale-list-aggregates`](#atscale-list-aggregates)
     - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
@@ -2435,6 +2437,33 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 ```
 
 **Output:** JSON with `model`, `problems` array (each entry has `phase`, `severity`, `message`, optional `location`), and `summary` with `errors`/`warnings` counts.
+
+---
+
+### `get-dso-count`
+
+[↑ Table of Contents](#table-of-contents)
+
+Gets the DSO count for a specified model or catalog if supplied, or for the entire system if neither is specified.
+
+**Requires:** a `sql:` block on the named connection pointing at the AtScale SQL endpoint. The operation reads `information_schema` through that endpoint, treating each schema as a catalog and each table as a model; every column of a model counts as one DSO.
+
+```bash
+./atscale-utils get-dso-count \
+  --connection-file "./connections.yaml" \
+  --connection-name "my_atscale" \
+  --catalog "sales" \
+  --model "sales_demo"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Name of the connection entry whose `sql:` block points at the AtScale SQL endpoint |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--catalog` | No | all available catalogs | Count only models from the specified catalog |
+| `--model` | No | all available models | Count only the specified model |
+
+**Output:** Logs the DSO count for each matching model, then the total DSO count and the unique DSO count (distinct column names across the matching models).
 
 ---
 
