@@ -2964,10 +2964,10 @@ connections:
     sql:
       dialect: databricks
       host: adb-1234567890123456.7.azuredatabricks.net
-      path: /sql/1.0/warehouses/abc1234567890def
+      http_path: /sql/1.0/warehouses/abc1234567890def
       catalog: main
       schema: sales
-      databricks_user: databricks_user
+      user: databricks_user
 ```
 
 ---
