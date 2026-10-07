@@ -17,7 +17,7 @@
  *
  * These hooks raise clear "control not installed" diagnostics rather than
  * silently no-op, so a future implementer can discover them.
- * See docs/STATISTICS.md §Security & Compliance Controls for the full list.
+ * See docs/system/STATISTICS.md §Security & Compliance Controls for the full list.
  */
 
 import crypto from "crypto";
@@ -199,7 +199,7 @@ export function assertGeneratedKeyShape(
           `[security] generated-key invariant violated in ${tableName} ` +
           `row ${r} column "${columns[i]}": got ${JSON.stringify(v)} ` +
           `(expected a positive integer allocated in-process). ` +
-          `See docs/STATISTICS.md §Security & Compliance Controls (R-15).`,
+          `See docs/system/STATISTICS.md §Security & Compliance Controls (R-15).`,
         );
       }
     }

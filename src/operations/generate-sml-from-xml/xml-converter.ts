@@ -1,7 +1,7 @@
 /**
  * AtScale XML project (project_2_0 schema) → SML YAML converter.
  *
- * Implements the algorithm documented in CONVERSION.md.
+ * Implements the algorithm documented in docs/workflows/CONVERSION.md.
  *
  * Output keys in the returned Map are relative file paths:
  *   catalog.yml

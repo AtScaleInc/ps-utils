@@ -7,7 +7,7 @@ aggregate level, without divulging any actual data values.
 
 > **Security hardening:** every fingerprint produced by `extract-data-shape-from-connection`
 > and every dataset produced by `generate-data-from-data-shape[-to-connection]` is passed
-> through the controls centralized in [`src/statistics/security.ts`](src/statistics/security.ts).
+> through the controls centralized in [`src/statistics/security.ts`](../../src/statistics/security.ts).
 > The controls are **strictly additive**: existing fields and behavior are preserved, and
 > additional metadata (`coldMemberBucket`, `overlapBucket`, `sensitivity`, `isNearFunctional`,
 > `security`) is attached for downstream auditors. A `_reports/` directory alongside each output
@@ -758,7 +758,7 @@ The fingerprint algorithm is designed to produce a publishable artifact: the out
 files may be checked into source control, shared with partner teams, or used as the
 seed for external synthetic-data environments. To make that publication safe, every
 fingerprint passes through a hardening stage implemented in
-[`src/statistics/security.ts`](src/statistics/security.ts).
+[`src/statistics/security.ts`](../../src/statistics/security.ts).
 
 ### Controls enforced automatically
 
