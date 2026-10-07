@@ -212,7 +212,7 @@ sequenceDiagram
     GH->>CI: Trigger: pull_request
     CI->>CI: Lint SML YAML (schema validation)
     CI->>CI: Run model consistency checks
-    CI->>AS_DEV: deploy-model (DEV instance)
+    CI->>AS_DEV: atscale-deploy-catalog (DEV instance)
     CI->>GH: Post status check results
     CI->>GH: Comment: DEV deploy link
     GH->>MA: Request review notification
@@ -250,7 +250,7 @@ sequenceDiagram
     GH->>CI: Trigger: push to main
     CI->>CI: Await manual approval gate (GitHub Environment protection)
     ADM->>CI: Approve PROD deployment
-    CI->>AS_PROD: deploy-model (PROD instance)
+    CI->>AS_PROD: atscale-deploy-catalog (PROD instance)
     CI->>GH: Post PROD deploy summary
 ```
 
@@ -271,7 +271,7 @@ sequenceDiagram
     MA->>GH: Open PR (hotfix/* → main)
     GH->>CI: Trigger: hotfix-pr.yml
     CI->>CI: Validate SML schema
-    CI->>AS_DEV: deploy-model (DEV instance for spot-check)
+    CI->>AS_DEV: atscale-deploy-catalog (DEV instance for spot-check)
     CI->>GH: Post status and DEV link
     GH->>ADM: Request required review
     GH->>MA: Request co-approval
@@ -282,7 +282,7 @@ sequenceDiagram
     GH->>CI: Trigger: deploy-prod.yml
     CI->>ADM: Manual approval gate (prod environment)
     ADM->>CI: Approve PROD deployment
-    CI->>AS_PROD: deploy-model (PROD instance)
+    CI->>AS_PROD: atscale-deploy-catalog (PROD instance)
     CI->>GH: Post PROD deploy summary
     MA->>GH: Open second PR (hotfix/* → development)
     GH->>GH: Merge hotfix/* → development (no extra review)
@@ -513,13 +513,35 @@ In GitHub → Settings → Environments, create three environments: `dev`, `uat`
 
 For `prod`, add a **Required reviewers** protection rule (list the Administrator GitHub usernames). This creates the manual approval gate before PROD deploys.
 
-Add the following secrets to each environment:
+Add the following to each environment:
 
-| Secret | Description |
-|---|---|
-| `ATSCALE_HOST` | Hostname of the AtScale instance for this environment |
-| `ATSCALE_API_TOKEN` | API token for the AtScale instance |
-| `ATSCALE_ORG` | AtScale organisation name |
+| Name | Kind | Description |
+|---|---|---|
+| `CONNECTIONS_FILE` | Secret | The complete ps-utils connections file for this environment, with one connection named after the environment (`dev`, `uat`, or `prod`) |
+| `ATSCALE_URL` | Variable | Design Center URL for this environment, posted in pull request comments |
+
+Using the same connection name inside each environment's file lets every workflow select its target by environment alone. Example for `uat`:
+
+```yaml
+# CONNECTIONS_FILE for the uat environment (format: README "Connection YAML")
+users:
+  atscale_ci:
+    apiToken: "<API token for the uat AtScale instance>"
+    username: "<service account>"   # atscale-deploy-catalog also needs a username and password
+    password: "<password>"
+connections:
+  uat:                             # connection name used by the workflows in this environment
+    atscale:
+      url: https://atscale-uat.example.com
+      user: atscale_ci
+      insecure: false
+    sql:                             # AtScale SQL endpoint, used by the query harness
+      dialect: postgres
+      server: atscale-uat.example.com
+      port: 15432
+      database: <catalog name>
+      user: atscale_ci
+```
 
 #### 5. Commit the GitHub Actions workflow files
 
@@ -548,7 +570,10 @@ SML models live as YAML files in your repository. Modify per your requirements.
 
 ```bash
 # Using ps-utils to validate and preview
-npx @atscale-ps/ps-utils validate-sml --connection-file example/connections.yaml
+npx @atscale-ps/ps-utils atscale-list-model-errors \
+  --connection-file example/connections.yaml --atscale-connection-name dev \
+  --sml-dir ./models --skip-engine-checks > model-errors.json
+jq '.summary' model-errors.json   # the command exits 0 even when it finds errors
 ```
 
 #### 4. Push and open a PR
@@ -650,7 +675,10 @@ git pull origin main
 git checkout -b hotfix/fix-revenue-calc
 
 # 2. Apply the minimal targeted fix, then validate
-npx @atscale-ps/ps-utils validate-sml --connection-file example/connections.yaml
+npx @atscale-ps/ps-utils atscale-list-model-errors \
+  --connection-file example/connections.yaml --atscale-connection-name dev \
+  --sml-dir ./models --skip-engine-checks > model-errors.json
+jq '.summary' model-errors.json   # the command exits 0 even when it finds errors
 
 # 3. Commit and push
 git add .
@@ -802,6 +830,7 @@ jobs:
   validate-sml:
     name: Validate SML
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -813,11 +842,22 @@ jobs:
       - name: Install ps-utils
         run: npm install -g @atscale-ps/ps-utils
 
-      - name: Validate SML schema
+      - name: Write connections file
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
+
+      - name: Validate SML
         run: |
-          ps-utils validate-sml \
-            --sml-root ./models \
-            --fail-on-warning
+          atscale-utils atscale-list-model-errors \
+            --connection-file connections.yaml \
+            --atscale-connection-name dev \
+            --sml-dir ./models \
+            --skip-engine-checks \
+            --insecure false > model-errors.json
+          cat model-errors.json
+          # The operation exits 0 even when it reports problems, so gate on its JSON output
+          jq -e '(.summary.errors // 0) == 0' model-errors.json
 
   deploy-dev:
     name: Deploy to DEV AtScale
@@ -827,23 +867,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: dev
-              host: ${{ secrets.ATSCALE_HOST }}
-              apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-              org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Deploy model to DEV
-        uses: atscaleinc/ps-utils@v1
+        uses: AtScaleInc/ps-utils@v1
         with:
-          operation: deploy-model
-          connection-file: /tmp/connections.yaml
-          connection: dev
-          sml-root: ./models
+          operation: atscale-deploy-catalog
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          atscale-connection-name: dev
+          sml-dir: ./models
+          repo-name: ${{ github.event.repository.name }}
+          insecure: "false"
 
       - name: Post DEV link to PR
         uses: actions/github-script@v7
@@ -853,7 +885,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `✅ **DEV deploy complete.** Review at: https://${{ secrets.ATSCALE_HOST }}/ui`
+              body: `✅ **DEV deploy complete.** Review at: ${{ vars.ATSCALE_URL }}`
             })
 ```
 
@@ -877,23 +909,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: uat
-              host: ${{ secrets.ATSCALE_HOST }}
-              apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-              org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Deploy model to UAT
-        uses: atscaleinc/ps-utils@v1
+        uses: AtScaleInc/ps-utils@v1
         with:
-          operation: deploy-model
-          connection-file: /tmp/connections.yaml
-          connection: uat
-          sml-root: ./models
+          operation: atscale-deploy-catalog
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          atscale-connection-name: uat
+          sml-dir: ./models
+          repo-name: ${{ github.event.repository.name }}
+          insecure: "false"
 
   smoke-test-uat:
     name: Smoke Test UAT
@@ -903,14 +927,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run MDX smoke tests
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ps-utils
+        run: npm install -g @atscale-ps/ps-utils
+
+      - name: Write connections file
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
+
+      - name: Run smoke-test queries
         run: |
-          # Execute a known MDX query against UAT and assert non-empty results
-          # Replace with your own test queries
-          ps-utils execute-mdx \
-            --connection-file /tmp/connections.yaml \
-            --connection uat \
-            --query "SELECT [Measures].[Total Revenue] ON 0 FROM [Sales]"
+          # tests/smoke-queries.json: a few known queries in harness format
+          # (for example produced by generate-queries-from-sml). The 'uat' connection
+          # needs a sql: block pointing at the AtScale SQL endpoint.
+          atscale-utils execute-atscale-query-harness \
+            --connection-file connections.yaml \
+            --connection-name uat \
+            --protocol sql \
+            --query-file tests/smoke-queries.json \
+            --output-dir smoke-uat
+          # The harness exits 0 even when queries fail; require every query to succeed and return rows
+          python3 -c 'import csv,glob,sys; rows=[r for f in glob.glob("smoke-uat/*.csv") for r in csv.DictReader(open(f, newline=""))]; bad=[r["query_name"] for r in rows if r["status"]!="SUCCEEDED" or r["row_count"] in ("", "0")]; print(len(rows), "queries,", len(bad), "failed or empty:", bad); sys.exit(1 if bad or not rows else 0)'
 ```
 
 ### `.github/workflows/deploy-prod.yml`
@@ -933,23 +975,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: prod
-              host: ${{ secrets.ATSCALE_HOST }}
-              apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-              org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Deploy model to PROD
-        uses: atscaleinc/ps-utils@v1
+        uses: AtScaleInc/ps-utils@v1
         with:
-          operation: deploy-model
-          connection-file: /tmp/connections.yaml
-          connection: prod
-          sml-root: ./models
+          operation: atscale-deploy-catalog
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          atscale-connection-name: prod
+          sml-dir: ./models
+          repo-name: ${{ github.event.repository.name }}
+          insecure: "false"
 
   smoke-test-prod:
     name: Smoke Test PROD
@@ -959,12 +993,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run PROD smoke tests
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install ps-utils
+        run: npm install -g @atscale-ps/ps-utils
+
+      - name: Write connections file
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
+
+      - name: Run smoke-test queries
         run: |
-          ps-utils execute-mdx \
-            --connection-file /tmp/connections.yaml \
-            --connection prod \
-            --query "SELECT [Measures].[Total Revenue] ON 0 FROM [Sales]"
+          # tests/smoke-queries.json: a few known queries in harness format
+          # (for example produced by generate-queries-from-sml). The 'prod' connection
+          # needs a sql: block pointing at the AtScale SQL endpoint.
+          atscale-utils execute-atscale-query-harness \
+            --connection-file connections.yaml \
+            --connection-name prod \
+            --protocol sql \
+            --query-file tests/smoke-queries.json \
+            --output-dir smoke-prod
+          # The harness exits 0 even when queries fail; require every query to succeed and return rows
+          python3 -c 'import csv,glob,sys; rows=[r for f in glob.glob("smoke-prod/*.csv") for r in csv.DictReader(open(f, newline=""))]; bad=[r["query_name"] for r in rows if r["status"]!="SUCCEEDED" or r["row_count"] in ("", "0")]; print(len(rows), "queries,", len(bad), "failed or empty:", bad); sys.exit(1 if bad or not rows else 0)'
 
       - name: Notify on success
         uses: actions/github-script@v7
@@ -990,6 +1044,7 @@ jobs:
   validate-sml-full:
     name: Full SML Regression
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -1001,20 +1056,30 @@ jobs:
       - name: Install ps-utils
         run: npm install -g @atscale-ps/ps-utils
 
-      - name: Validate entire SML tree
-        run: |
-          ps-utils validate-sml \
-            --sml-root ./models \
-            --strict \
-            --fail-on-warning
+      - name: Write connections file
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
 
-      - name: Check for breaking changes
+      - name: Validate SML (errors and warnings)
         run: |
-          # Diff against main to detect renamed or removed measures
-          ps-utils diff-sml \
-            --base origin/main \
-            --head HEAD \
-            --fail-on-breaking
+          atscale-utils atscale-list-model-errors \
+            --connection-file connections.yaml \
+            --atscale-connection-name dev \
+            --sml-dir ./models \
+            --insecure false > model-errors.json
+          cat model-errors.json
+          # The operation exits 0 even when it reports problems, so gate on its JSON output
+          jq -e '(.summary.errors // 0) == 0 and (.summary.warnings // 0) == 0' model-errors.json
+
+      - name: Check for removed or renamed objects
+        run: |
+          # ps-utils has no SML diff operation. A top-level unique_name present on main but
+          # missing from this branch is a removed or renamed object: a breaking change for reports.
+          git fetch --no-tags --depth=1 origin main
+          names() { git grep -h -E '^unique_name:' "$1" -- models | sort -u; }
+          removed=$(comm -23 <(names origin/main) <(names HEAD))
+          if [ -n "$removed" ]; then echo "Removed or renamed objects:"; echo "$removed"; exit 1; fi
 ```
 
 ### `.github/workflows/hotfix-pr.yml`
@@ -1036,6 +1101,7 @@ jobs:
   validate-sml:
     name: Validate SML
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -1047,18 +1113,31 @@ jobs:
       - name: Install ps-utils
         run: npm install -g @atscale-ps/ps-utils
 
-      - name: Validate SML schema
-        run: |
-          ps-utils validate-sml \
-            --sml-root ./models \
-            --fail-on-warning
+      - name: Write connections file
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
 
-      - name: Check for breaking changes against main
+      - name: Validate SML
         run: |
-          ps-utils diff-sml \
-            --base origin/main \
-            --head HEAD \
-            --fail-on-breaking
+          atscale-utils atscale-list-model-errors \
+            --connection-file connections.yaml \
+            --atscale-connection-name dev \
+            --sml-dir ./models \
+            --skip-engine-checks \
+            --insecure false > model-errors.json
+          cat model-errors.json
+          # The operation exits 0 even when it reports problems, so gate on its JSON output
+          jq -e '(.summary.errors // 0) == 0' model-errors.json
+
+      - name: Check for removed or renamed objects
+        run: |
+          # ps-utils has no SML diff operation. A top-level unique_name present on main but
+          # missing from this branch is a removed or renamed object: a breaking change for reports.
+          git fetch --no-tags --depth=1 origin main
+          names() { git grep -h -E '^unique_name:' "$1" -- models | sort -u; }
+          removed=$(comm -23 <(names origin/main) <(names HEAD))
+          if [ -n "$removed" ]; then echo "Removed or renamed objects:"; echo "$removed"; exit 1; fi
 
   deploy-dev:
     name: Deploy hotfix to DEV for spot-check
@@ -1068,23 +1147,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: dev
-              host: ${{ secrets.ATSCALE_HOST }}
-              apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-              org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Deploy hotfix to DEV
-        uses: atscaleinc/ps-utils@v1
+        uses: AtScaleInc/ps-utils@v1
         with:
-          operation: deploy-model
-          connection-file: /tmp/connections.yaml
-          connection: dev
-          sml-root: ./models
+          operation: atscale-deploy-catalog
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          atscale-connection-name: dev
+          sml-dir: ./models
+          repo-name: ${{ github.event.repository.name }}
+          insecure: "false"
 
       - name: Post DEV link to PR
         uses: actions/github-script@v7
@@ -1094,7 +1165,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚨 **Hotfix DEV deploy complete.** Verify the fix at: https://${{ secrets.ATSCALE_HOST }}/ui before approving.`
+              body: `🚨 **Hotfix DEV deploy complete.** Verify the fix at: ${{ vars.ATSCALE_URL }} before approving.`
             })
 ```
 
@@ -1141,23 +1212,15 @@ jobs:
             // Post as a GitHub commit status comment or notify via your team's channel
             console.log(msg);
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: uat
-              host: ${{ secrets.ATSCALE_HOST }}
-              apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-              org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Deploy hotfix branch to UAT
-        uses: atscaleinc/ps-utils@v1
+        uses: AtScaleInc/ps-utils@v1
         with:
-          operation: deploy-model
-          connection-file: /tmp/connections.yaml
-          connection: uat
-          sml-root: ./models
+          operation: atscale-deploy-catalog
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
+          atscale-connection-name: uat
+          sml-dir: ./models
+          repo-name: ${{ github.event.repository.name }}
+          insecure: "false"
 ```
 
 ---
@@ -1374,7 +1437,7 @@ For the shared package team to use when publishing a release:
 - **Always validate package updates in UAT before PROD.** The bump flows through the same `development → main` promotion path as model changes. Do not skip UAT by merging the bump directly to `main`.
 - **Require CI to pass on bump PRs before merging.** A package update that breaks CI is a signal the update has breaking changes — read the release notes before merging or deferring.
 - **Coordinate major version cutover with the shared package team.** Before bumping a major version on `development`, confirm the release is stable and the migration guide is complete.
-- **Document the minimum required version.** In the consumer repo's `README.md` or `docs/DEVELOPER.md`, note the minimum shared package version and why (e.g., "requires `ps-utils` ≥ 1.3.0 for `--case-insensitive` support in `extract-ddl-from-connection`").
+- **Document the minimum required version.** In the consumer repo's `README.md` or `docs/reference/DEVELOPER.md`, note the minimum shared package version and why (e.g., "requires `ps-utils` ≥ 1.3.0 for `--case-insensitive` support in `extract-ddl-from-connection`").
 
 ---
 
@@ -1389,7 +1452,7 @@ For the shared package team to use when publishing a release:
 
 ### For Designers
 
-- **Validate locally before pushing.** Use `ps-utils validate-sml` locally to catch syntax errors before CI runs them.
+- **Validate locally before pushing.** Use `atscale-utils atscale-list-model-errors --skip-engine-checks` locally to catch syntax errors before CI runs them.
 - **Name measures consistently.** Follow the project naming conventions (Title Case, no abbreviations). The Model Administrator will request changes otherwise.
 - **Keep commits small and atomic.** One commit per logical change makes the diff easier to review. Use `git commit --fixup` to amend related changes before opening the PR.
 
@@ -1402,7 +1465,7 @@ For the shared package team to use when publishing a release:
 ### For Administrators
 
 - **Protect the `prod` GitHub Environment.** The required reviewer gate on the `prod` environment is your last defence before a bad deploy reaches live traffic. Never bypass it.
-- **Rotate API tokens regularly.** Each environment's `ATSCALE_API_TOKEN` secret should be rotated on a schedule and immediately after any personnel change.
+- **Rotate API tokens regularly.** The API token in each environment's `CONNECTIONS_FILE` secret should be rotated on a schedule and immediately after any personnel change.
 - **Tag releases on `main`.** After each PROD deploy, tag the commit: `git tag -a v2026.4.1 -m "release: Q3 model updates"`. This makes rollbacks straightforward.
 - **Test rollback procedures.** Know how to redeploy the previous tag to PROD using the workflow's `workflow_dispatch` trigger before you need to do it under pressure.
 - **Enforce the hotfix back-merge.** After every hotfix merges to `main`, verify the back-merge PR to `development` is opened and merged the same day. A diverged `development` branch is a future incident waiting to happen.

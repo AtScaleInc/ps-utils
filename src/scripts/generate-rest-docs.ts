@@ -14,7 +14,7 @@ import { buildOpMetas } from "../operations/execute-web-services/graphql-server.
 import type { OpMeta, ParamMeta } from "../operations/execute-web-services/graphql-server.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUT = path.resolve(__dirname, "../../docs/REST.md");
+const OUT = path.resolve(__dirname, "../../docs/reference/REST.md");
 
 const nullLogger = { log: () => { }, info: () => { }, error: () => { }, verbose: () => { } };
 
