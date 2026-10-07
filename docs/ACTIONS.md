@@ -1068,7 +1068,7 @@ With Snowflake dialect:
 |---|---|---|---|
 | `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `output-file` | No | stdout | Output path for the generated DDL |
-| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. BigQuery and Databricks omit `PRIMARY KEY` / `FOREIGN KEY` constraints |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
 **Dialect notes:** `bigquery` omits `PRIMARY KEY`/`FOREIGN KEY` constraints. `snowflake` maps integers to `NUMBER(n,0)`. All others use standard ANSI types.
@@ -1172,9 +1172,9 @@ Full pipeline — extract shape, generate DDL, populate:
 | `seed` | No | — | Integer seed for reproducible output |
 | `create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `create-tables` |
-| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
+| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE` and `INSERT`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
 | `batch-size` | No | `500` | Rows per `INSERT` statement |
-| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`; a dataset on BigQuery). On BigQuery, defaults to the connection's `sql.schema` (or `sql.dataset`) and is required if neither is set |
 | `reports-dir` | No | `_reports` | Directory for security audit artifacts |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 

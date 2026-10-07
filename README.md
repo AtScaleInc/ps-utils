@@ -1285,7 +1285,7 @@ With dialect selection:
 |---|---|---|---|
 | `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `--output-file` | No | stdout | Output path for the generated DDL |
-| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. BigQuery and Databricks omit `PRIMARY KEY` / `FOREIGN KEY` constraints |
 | `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
 **Output:** One `CREATE TABLE` statement per dimension and fact. Dimension tables are emitted first so `FOREIGN KEY` references resolve correctly.
@@ -1373,9 +1373,9 @@ With scale factor and batch tuning:
 | `--seed` | No | — | Integer random seed for reproducible output |
 | `--create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `--drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `--create-tables` |
-| `--dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection configuration (`sql.dialect`); falls back to `ansi` |
+| `--dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE` and `INSERT`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. When omitted, the dialect is read from the connection configuration (`sql.dialect`); falls back to `ansi` |
 | `--batch-size` | No | `500` | Rows per `INSERT` statement |
-| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`; a dataset on BigQuery). On BigQuery, defaults to the connection's `sql.schema` (or `sql.dataset`) and is required if neither is set |
 | `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimensions are inserted in parallel since they have no inter-table FK dependencies. Facts are inserted in parallel after all dimension inserts complete, ensuring FK constraints are respected throughout.

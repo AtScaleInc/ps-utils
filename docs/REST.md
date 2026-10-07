@@ -665,7 +665,7 @@ curl -X POST http://localhost:4000/rest/extract-data-shape-from-connection \
 | `inputFile` | `String` | No | Path to the data-shape.yaml fingerprint file (default: data-shape.yaml) |
 | `inputFileContent` | `String` | No | Raw string content — alternative to `inputFile` |
 | `inputFileUpload` | file field | No | Multipart upload — alternative to `inputFile` |
-| `dialect` | `String` | No | SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery |
+| `dialect` | `String` | No | SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks |
 | `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 
 **curl (JSON):**
@@ -743,9 +743,9 @@ curl -X POST http://localhost:4000/rest/generate-data-from-data-shape \
 | `seed` | `Int` | No | Random seed for reproducible output |
 | `createTables` | `Boolean` | No | Emit CREATE TABLE statements before inserting (default: false) |
 | `dropIfExists` | `Boolean` | No | DROP TABLE IF EXISTS before creating tables — implies --create-tables (default: false) |
-| `dialect` | `String` | No | SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi. |
+| `dialect` | `String` | No | SQL dialect for CREATE TABLE and INSERT: ansi, postgresql, snowflake, mysql, bigquery, databricks. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi. |
 | `batchSize` | `Int` | No | Rows per INSERT statement (default: 500) |
-| `schema` | `String` | No | Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default. |
+| `schema` | `String` | No | Target schema to qualify table names (e.g. PUBLIC; a dataset on BigQuery).  Omit to use the connection default — on BigQuery, the connection's sql.schema (or sql.dataset). |
 | `reportsDir` | `String` | No | Directory where security reports are written (default: ./_reports) |
 | `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 

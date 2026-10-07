@@ -3060,7 +3060,7 @@
         },
         {
           "name": "dialect",
-          "description": "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery",
+          "description": "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -3208,7 +3208,7 @@
         },
         {
           "name": "dialect",
-          "description": "SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.",
+          "description": "SQL dialect for CREATE TABLE and INSERT: ansi, postgresql, snowflake, mysql, bigquery, databricks. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -3224,7 +3224,7 @@
         },
         {
           "name": "schema",
-          "description": "Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default.",
+          "description": "Target schema to qualify table names (e.g. PUBLIC; a dataset on BigQuery).  Omit to use the connection default — on BigQuery, the connection's sql.schema (or sql.dataset).",
           "type": "string",
           "role": "scalar",
           "required": false,
