@@ -65,7 +65,15 @@ async function main(): Promise<void> {
     format: "cjs",
     // pg-native is an optional peer of pg; it is never installed here and
     // requiring it would fail the bundle.
-    external: ["pg-native"],
+    //
+    // @databricks/sql reaches two native addons esbuild cannot inline. Both
+    // stay unresolved in the bundle, which is safe because neither is on the
+    // path SqlService uses: `lz4-napi` is required lazily inside a try/catch
+    // and the Thrift backend only requests LZ4 results when it loaded (and
+    // SqlService turns LZ4 off when bundled anyway); the per-platform kernel
+    // packages belong to the opt-in "kernel" backend, which the driver never
+    // selects by default.
+    external: ["pg-native", "lz4-napi", "@databricks/databricks-sql-kernel-*"],
     banner: {
       js: [
         "globalThis.__PS_UTILS_BUNDLE_DIR__ = __dirname;",

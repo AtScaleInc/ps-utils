@@ -3308,7 +3308,7 @@
         },
         {
           "name": "target-connection-name",
-          "description": "Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift.",
+          "description": "Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift, databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN).",
           "type": "string",
           "role": "scalar",
           "required": false,

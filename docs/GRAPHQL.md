@@ -1588,7 +1588,7 @@ curl -X POST http://localhost:4000/graphql \
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `dbSchema` | `String` | No | Postgres schema prefix for the AtScale backend tables (e.g. 'engine' or 'atscale'). Auto-detected from the connection file when omitted (installer → 'atscale', container → 'engine'). |
 | `days` | `String` | No | How far back in the AtScale query log to search (default: 7). Increase if the harness run was more than a week ago. |
-| `targetConnectionName` | `String` | No | Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift. |
+| `targetConnectionName` | `String` | No | Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift, databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN). |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
 
@@ -4062,7 +4062,7 @@ input GenerateEnhancedQueryResultsInput {
   dbSchema: String
   """How far back in the AtScale query log to search (default: 7). Increase if the harness run was more than a week ago."""
   days: String
-  """Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift."""
+  """Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift, databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN)."""
   targetConnectionName: String
 }
 

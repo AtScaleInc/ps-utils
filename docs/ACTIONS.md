@@ -1615,7 +1615,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `output-file` | No | `{stem}_enhanced.csv` | Output file path |
 | `db-schema` | No | auto | Postgres schema for AtScale backend tables (`atscale` or `engine`) |
 | `days` | No | `7` | Look-back window when searching the AtScale query log |
-| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`. |
+| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`, `databricks`, and `bigquery` (dry run). |
 
 **Output:** Input CSV with the following columns appended on the right. Rows with no match have empty values.
 
@@ -1624,7 +1624,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `run_atscale_query_id` | Always | AtScale's internal `query_id` for the inbound query |
 | `run_inbound_query_id` | Always | AtScale's `query_id` for the inbound annotated query (same source as `run_atscale_query_id`) |
 | `run_outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
-| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift and Databricks (`EXPLAIN FORMATTED`), JSON dry-run job statistics for BigQuery (no `EXPLAIN` exists; the query is validated but not executed) |
 | `run_used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
 | `run_duration_ms` | When matched | Total wall-clock time from query receipt to last result row (ms). Computed as `query_results.finished − queries.received`. Falls back to `finished − planning_started` if `received` is unavailable. |
 | `run_inbound_ms` | Best-effort | **INBOUND phase** — time from query receipt to start of planning (ms). Computed as `queries_planned.planning_started − queries.received`. Matches the "INBOUND" metric in the AtScale query monitor. |

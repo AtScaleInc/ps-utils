@@ -635,7 +635,8 @@ inputs:
       database and fetches an execution plan (EXPLAIN) for each outbound query,
       stored in the 'run_outbound_execution_plan' column.
       Supported dialects: snowflake (SYSTEM$EXPLAIN_PLAN_JSON), postgres
-      (EXPLAIN FORMAT JSON), redshift (EXPLAIN).
+      (EXPLAIN FORMAT JSON), redshift (EXPLAIN), databricks (EXPLAIN FORMATTED),
+      bigquery (dry-run job statistics; BigQuery has no EXPLAIN).
       Used by: generate-enhanced-query-results.
     required: false
 

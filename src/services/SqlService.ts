@@ -1,24 +1,31 @@
 /**
- * Native SQL service supporting Postgres, Redshift, and Snowflake
- * without a JVM dependency.
+ * Native SQL service supporting Postgres, Redshift, Snowflake, BigQuery and
+ * Databricks without a JVM dependency.
  */
 import { Client as PgClient } from "pg";
 import type { Client as PgClientType } from "pg";
 import snowflake from "snowflake-sdk";
 import type { Connection as SnowflakeConnection } from "snowflake-sdk";
+import { BigQuery } from "@google-cloud/bigquery";
+import { DBSQLClient } from "@databricks/sql";
 import path from "path";
 import fs from "fs";
 import net from "net";
 import { createPrivateKey } from "crypto";
 import { ServiceProvider } from "./ServiceProvider.js";
+import { isBundled } from "../assets.js";
 import type { Logger } from "../logging.js";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
+type DatabricksSession = Awaited<ReturnType<DBSQLClient["openSession"]>>;
+
 export type SqlConnection =
   | { dialect: "postgres"; client: PgClientType }
   | { dialect: "redshift"; client: PgClientType }
-  | { dialect: "snowflake"; connection: SnowflakeConnection };
+  | { dialect: "snowflake"; connection: SnowflakeConnection }
+  | { dialect: "bigquery"; client: BigQuery; location?: string }
+  | { dialect: "databricks"; client: DBSQLClient; session: DatabricksSession };
 
 export type ConnectionConfig = {
   connections?: Record<string, any>;
@@ -54,8 +61,14 @@ export class SqlService extends ServiceProvider {
     if (dialect === "snowflake") {
       return this.connectSnowflake(sql, users, connectionUser);
     }
+    if (dialect === "bigquery") {
+      return this.connectBigQuery(sql, users, connectionUser);
+    }
+    if (dialect === "databricks") {
+      return this.connectDatabricks(sql, users, connectionUser);
+    }
     throw new Error(
-      `Unsupported SQL dialect: '${dialect}'. Supported dialects: postgres, redshift, snowflake.`,
+      `Unsupported SQL dialect: '${dialect}'. Supported dialects: postgres, redshift, snowflake, bigquery, databricks.`,
     );
   }
 
@@ -405,6 +418,85 @@ export class SqlService extends ServiceProvider {
     return { dialect: "snowflake", connection };
   }
 
+  private async connectBigQuery(
+    sql: Record<string, any>,
+    users: Record<string, any>,
+    connectionUser?: string,
+  ): Promise<SqlConnection> {
+    const userEntry = this.resolveUserEntry(users, sql.user ?? sql.username, connectionUser);
+    const projectId = sql.project ?? sql.projectId;
+    if (!projectId) {
+      throw new Error("BigQuery connection requires 'project'.");
+    }
+
+    // Service-account key file, if given; otherwise the client library falls
+    // back to Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS,
+    // gcloud auth application-default login, or the GCE metadata server).
+    const keyPath = userEntry?.keyFilename ?? userEntry?.key_file ?? sql.keyFilename ?? sql.key_file;
+    const keyFilename = keyPath
+      ? path.isAbsolute(keyPath) ? keyPath : path.resolve(process.cwd(), keyPath)
+      : undefined;
+    const location: string | undefined = sql.location;
+
+    this.logger?.verbose(
+      `[SqlService] Connecting to BigQuery: ${projectId}` +
+      (keyFilename ? ` (key file ${keyFilename})` : " (application default credentials)"),
+    );
+    const client = new BigQuery({ projectId, keyFilename, location });
+    // The client is lazy — run a trivial query so bad credentials or a wrong
+    // project fail here rather than on the first real query.
+    await client.query({ query: "SELECT 1", location });
+    return { dialect: "bigquery", client, location };
+  }
+
+  private async connectDatabricks(
+    sql: Record<string, any>,
+    users: Record<string, any>,
+    connectionUser?: string,
+  ): Promise<SqlConnection> {
+    const userEntry = this.resolveUserEntry(users, sql.user ?? sql.username, connectionUser);
+    const host = sql.server ?? sql.host;
+    const httpPath = sql.http_path ?? sql.httpPath;
+    if (!host || !httpPath) {
+      throw new Error("Databricks connection requires 'server' and 'http_path'.");
+    }
+
+    // Databricks personal access tokens are also accepted as the password of
+    // the "token" user, so a password-only entry works too.
+    const token = userEntry?.token ?? userEntry?.pat ?? userEntry?.password ?? sql.token ?? sql.password;
+    if (!token) {
+      throw new Error("Databricks connection requires a personal access token (token).");
+    }
+
+    this.logger?.verbose(`[SqlService] Connecting to Databricks: ${host}${httpPath}`);
+    // The driver's default logger writes JSON lines to stdout (which callers
+    // parse) and installs a process-wide uncaught-exception handler; route its
+    // output to our verbose log instead.
+    const client = new DBSQLClient({
+      logger: { log: (level, message) => this.logger?.verbose(`[Databricks] ${level}: ${message}`) },
+    });
+    await client.connect({
+      host,
+      path: httpPath,
+      token,
+      ...(sql.port ? { port: Number(sql.port) } : {}),
+      // The driver retries for up to 15 minutes by default, so a wrong host or
+      // a stopped warehouse would look like a hang. One minute is enough for a
+      // serverless warehouse to wake.
+      retriesTimeout: 60_000,
+    });
+    try {
+      const session = await client.openSession({
+        initialCatalog: sql.catalog ?? sql.database,
+        initialSchema: sql.schema,
+      });
+      return { dialect: "databricks", client, session };
+    } catch (err) {
+      await client.close().catch(() => {});
+      throw err;
+    }
+  }
+
   // ── query ─────────────────────────────────────────────────────────────────
 
   async query(connection: SqlConnection, sql: string, params: unknown[] = []): Promise<any[]> {
@@ -412,6 +504,27 @@ export class SqlService extends ServiceProvider {
     if (connection.dialect === "postgres" || connection.dialect === "redshift") {
       const result = await connection.client.query(sql, params.length ? (params as any[]) : undefined);
       return result.rows;
+    }
+    if (connection.dialect === "bigquery") {
+      const [rows] = await connection.client.query({
+        query: sql,
+        params: params.length ? (params as any[]) : undefined,
+        location: connection.location,
+      });
+      return rows;
+    }
+    if (connection.dialect === "databricks") {
+      const operation = await connection.session.executeStatement(sql, {
+        ordinalParameters: params.length ? (params as any[]) : undefined,
+        // The CLI bundle leaves out the lz4-napi native addon (see
+        // bundle-cli.ts); skip LZ4 there so the driver doesn't warn on every query.
+        ...(isBundled() ? { useLZ4Compression: false } : {}),
+      });
+      try {
+        return await operation.fetchAll();
+      } finally {
+        await operation.close();
+      }
     }
     return new Promise<any[]>((resolve, reject) => {
       connection.connection.execute({
@@ -433,6 +546,18 @@ export class SqlService extends ServiceProvider {
       const result = await connection.client.query(sql);
       return result.rowCount ?? 0;
     }
+    if (connection.dialect === "bigquery") {
+      const [job] = await connection.client.createQueryJob({ query: sql, location: connection.location });
+      await job.getQueryResults();
+      const [metadata] = await job.getMetadata();
+      return Number(metadata.statistics?.query?.numDmlAffectedRows ?? 0);
+    }
+    if (connection.dialect === "databricks") {
+      // DML returns a single row such as { num_affected_rows, num_inserted_rows };
+      // DDL returns no rows.
+      const rows = (await this.query(connection, sql)) as Array<Record<string, unknown>>;
+      return Number(rows[0]?.num_affected_rows ?? 0);
+    }
     return new Promise<number>((resolve, reject) => {
       connection.connection.execute({
         sqlText: sql,
@@ -442,6 +567,27 @@ export class SqlService extends ServiceProvider {
         },
       });
     });
+  }
+
+  // ── dryRun ────────────────────────────────────────────────────────────────
+
+  /**
+   * Validate a BigQuery statement without running it and return the job
+   * statistics — bytes that would be processed, referenced tables, result
+   * schema. BigQuery has no EXPLAIN statement; this is the closest
+   * equivalent that doesn't execute (or bill for) the query.
+   */
+  async dryRun(connection: SqlConnection, sql: string): Promise<Record<string, unknown>> {
+    if (connection.dialect !== "bigquery") {
+      throw new Error(`dryRun is only supported for BigQuery, not '${connection.dialect}'.`);
+    }
+    this.logger?.verbose(`[SQL dry run] ${sql.trim()}`);
+    const [job] = await connection.client.createQueryJob({
+      query: sql,
+      dryRun: true,
+      location: connection.location,
+    });
+    return (job.metadata?.statistics ?? {}) as Record<string, unknown>;
   }
 
   // ── close ─────────────────────────────────────────────────────────────────
@@ -462,6 +608,15 @@ export class SqlService extends ServiceProvider {
       }
       return;
     }
+    if (connection.dialect === "bigquery") {
+      // The BigQuery client is stateless HTTP; there is nothing to close.
+      return;
+    }
+    if (connection.dialect === "databricks") {
+      await connection.session.close().catch(() => {});
+      await connection.client.close();
+      return;
+    }
     await new Promise<void>((resolve, reject) => {
       connection.connection.destroy((err: any) => {
         if (err) reject(err);
@@ -473,6 +628,10 @@ export class SqlService extends ServiceProvider {
   // ── metadata ──────────────────────────────────────────────────────────────
 
   async getSchemas(connection: SqlConnection): Promise<any[]> {
+    if (connection.dialect === "bigquery") {
+      const datasets = await this.bigQueryDatasets(connection);
+      return datasets.map((schema_name) => ({ schema_name }));
+    }
     return this.query(
       connection,
       "SELECT schema_name FROM information_schema.schemata ORDER BY schema_name",
@@ -487,6 +646,18 @@ export class SqlService extends ServiceProvider {
   ): Promise<any[]> {
     // INFORMATION_SCHEMA uses 'BASE TABLE' for regular tables; accept 'TABLE' as a shorthand.
     const mappedTypes = types.map((t) => (t === "TABLE" ? "BASE TABLE" : t));
+    if (connection.dialect === "bigquery") {
+      return this.queryEachBigQueryDataset(connection, schema, (from) =>
+        `SELECT table_name   AS TABLE_NAME,
+                table_schema AS TABLE_SCHEM,
+                table_type   AS TABLE_TYPE
+         FROM   ${from("TABLES")}
+         WHERE  table_name LIKE ?
+           AND  table_type IN UNNEST(?)
+         ORDER BY table_name`,
+        [tablePattern, mappedTypes],
+      );
+    }
     const typeList = mappedTypes.map((t) => `'${this.esc(t)}'`).join(", ");
     const schemaClause = schema ? `AND table_schema = '${this.esc(schema)}'` : "";
     return this.query(
@@ -503,6 +674,16 @@ export class SqlService extends ServiceProvider {
   }
 
   async getViews(connection: SqlConnection, schema?: string, viewPattern = "%"): Promise<any[]> {
+    if (connection.dialect === "bigquery") {
+      return this.queryEachBigQueryDataset(connection, schema, (from) =>
+        `SELECT table_name      AS TABLE_NAME,
+                view_definition AS VIEW_DEFINITION
+         FROM   ${from("VIEWS")}
+         WHERE  table_name LIKE ?
+         ORDER BY table_name`,
+        [viewPattern],
+      );
+    }
     const schemaClause = schema ? `AND table_schema = '${this.esc(schema)}'` : "";
     return this.query(
       connection,
@@ -521,6 +702,26 @@ export class SqlService extends ServiceProvider {
     tablePattern = "%",
     columnPattern = "%",
   ): Promise<any[]> {
+    if (connection.dialect === "bigquery") {
+      // BigQuery has no character_maximum_length / numeric_precision columns;
+      // a declared length lives in data_type itself, e.g. STRING(10) or
+      // NUMERIC(10, 2). Split it into TYPE_NAME and COLUMN_SIZE so callers see
+      // the same shape as other dialects. Parameterised types such as
+      // STRUCT<…> and ARRAY<…> are left whole.
+      return this.queryEachBigQueryDataset(connection, schema, (from) =>
+        `SELECT table_name       AS TABLE_NAME,
+                column_name      AS COLUMN_NAME,
+                REGEXP_REPLACE(data_type, r'^(\\w+)\\(.*\\)$', r'\\1') AS TYPE_NAME,
+                IFNULL(SAFE_CAST(REGEXP_EXTRACT(data_type, r'^\\w+\\((\\d+)') AS INT64), 0) AS COLUMN_SIZE,
+                ordinal_position AS ORDINAL_POSITION,
+                IF(is_nullable = 'YES', 1, 0) AS NULLABLE
+         FROM   ${from("COLUMNS")}
+         WHERE  table_name  LIKE ?
+           AND  column_name LIKE ?
+         ORDER BY table_name, ordinal_position`,
+        [tablePattern, columnPattern],
+      );
+    }
     const schemaClause = schema ? `AND table_schema = '${this.esc(schema)}'` : "";
     return this.query(
       connection,
@@ -545,6 +746,9 @@ export class SqlService extends ServiceProvider {
   ): Promise<any[]> {
     if (connection.dialect === "snowflake") {
       return this.getForeignKeysSnowflake(connection, schema, tablePattern);
+    }
+    if (connection.dialect === "bigquery") {
+      return this.getForeignKeysBigQuery(connection, schema, tablePattern);
     }
     return this.getForeignKeysPg(connection, schema, tablePattern);
   }
@@ -609,7 +813,81 @@ export class SqlService extends ServiceProvider {
     }
   }
 
+  private async getForeignKeysBigQuery(
+    connection: SqlConnection,
+    schema?: string,
+    tablePattern = "%",
+  ): Promise<any[]> {
+    // BigQuery supports unenforced PRIMARY KEY / FOREIGN KEY constraints but
+    // has no REFERENTIAL_CONSTRAINTS view. CONSTRAINT_COLUMN_USAGE gives the
+    // referenced columns of an FK without their order, so pair each FK column
+    // with the referenced primary-key column at the same key position —
+    // otherwise a composite key comes back as a cross product.
+    try {
+      return await this.queryEachBigQueryDataset(connection, schema, (from) =>
+        `SELECT kcu.table_name    AS FKTABLE_NAME,
+                kcu.column_name   AS FKCOLUMN_NAME,
+                pk.table_name     AS PKTABLE_NAME,
+                pk.column_name    AS PKCOLUMN_NAME,
+                kcu.position_in_unique_constraint AS KEY_SEQ,
+                tc.constraint_name AS FK_NAME
+         FROM   ${from("TABLE_CONSTRAINTS")} tc
+         JOIN   ${from("KEY_COLUMN_USAGE")} kcu
+                ON  kcu.constraint_name = tc.constraint_name
+         JOIN   ${from("CONSTRAINT_COLUMN_USAGE")} ccu
+                ON  ccu.constraint_name = tc.constraint_name
+         JOIN   ${from("TABLE_CONSTRAINTS")} pktc
+                ON  pktc.table_name      = ccu.table_name
+                AND pktc.constraint_type = 'PRIMARY KEY'
+         JOIN   ${from("KEY_COLUMN_USAGE")} pk
+                ON  pk.constraint_name  = pktc.constraint_name
+                AND pk.column_name      = ccu.column_name
+                AND pk.ordinal_position = kcu.position_in_unique_constraint
+         WHERE  tc.constraint_type = 'FOREIGN KEY'
+           AND  kcu.table_name LIKE ?
+         ORDER BY kcu.table_name, kcu.ordinal_position`,
+        [tablePattern],
+      );
+    } catch {
+      return [];
+    }
+  }
+
   // ── private helpers ───────────────────────────────────────────────────────
+
+  /** Dataset ids in the connection's project, or just `schema` when given. */
+  private async bigQueryDatasets(connection: SqlConnection, schema?: string): Promise<string[]> {
+    if (schema) return [schema];
+    if (connection.dialect !== "bigquery") return [];
+    const [datasets] = await connection.client.getDatasets({ autoPaginate: true });
+    return datasets.map((d) => d.id ?? "").filter(Boolean).sort();
+  }
+
+  /**
+   * Run an INFORMATION_SCHEMA query against each BigQuery dataset in scope and
+   * concatenate the rows. BigQuery has no unqualified INFORMATION_SCHEMA: the
+   * views must be prefixed with a dataset (or a region, which would need the
+   * connection's location), so `sqlFor` receives a function that builds
+   * `` `project.dataset`.INFORMATION_SCHEMA.<view> ``.
+   */
+  private async queryEachBigQueryDataset(
+    connection: SqlConnection,
+    schema: string | undefined,
+    sqlFor: (from: (view: string) => string) => string,
+    params: unknown[],
+  ): Promise<any[]> {
+    if (connection.dialect !== "bigquery") return [];
+    const project = connection.client.projectId;
+    const rows: any[] = [];
+    for (const dataset of await this.bigQueryDatasets(connection, schema)) {
+      if (/[`\\]/.test(dataset)) {
+        throw new Error(`Invalid BigQuery dataset name: '${dataset}'.`);
+      }
+      const from = (view: string) => `\`${project}.${dataset}\`.INFORMATION_SCHEMA.${view}`;
+      rows.push(...(await this.query(connection, sqlFor(from), params)));
+    }
+    return rows;
+  }
 
   /** Escape single quotes for SQL string literals. */
   private esc(value: string): string {
