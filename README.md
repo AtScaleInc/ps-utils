@@ -4,7 +4,6 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
 
   Upcoming features:
 - Google Sheets
-- Rudy's aggregate util
 - Perspectives
 - -- apply plan should show command
 - graphql output not going to output
@@ -39,6 +38,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    BUNDLE["Support bundles"] --> GB["generate-sml-from-bundle"] --> SMLB["SML repos + summary"]
     TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
@@ -164,6 +164,7 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
@@ -587,6 +588,46 @@ With optional overrides:
   calculations/<calc-name>.yml     (one per schema-level calculated member)
   models/<cube-name>.yml           (one per XML <cube>)
 ```
+
+---
+
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every AtScale project inside one or more **support bundles** to SML in one run, using the same converter as `generate-sml-from-xml`. Two bundle shapes are accepted: the archive the engine's **Download support bundle** button produces (a zip of per-area zips, with projects inside `metadata.zip` at `metadata/<id>/project.xml`), and an unpacked tree with a `metadata/` directory (`metadata/<id>/project.xml` for the container edition, `metadata/<org>/<id>/project.xml` for the installer edition), or a zip of such a tree, with or without a wrapper folder. Only `metadata.zip` and `metadata/**` entries are extracted, so the log archives that dominate a real bundle are never read. No database connection is required.
+
+Each project becomes its own SML repository under `<output-dir>/<bundle>/<org>/<project>__<id8>/`. Projects are named from the XML root's `name` attribute, with the first eight characters of the project id appended so same-named projects never collide; two bundles with the same basename get `-2`, `-3` suffixes. Re-runs skip projects whose output already exists unless `--force` is given. A conversion is staged beside its destination and only replaces the previous output when it succeeds, so a failing forced re-run never destroys a good repository. Converter output is kept only while a project is failing, under `<output-dir>/.logs/`. `summary.csv` merges with the summary already in the output directory, so a filtered or partial re-run still describes everything on disk. The operation attempts every project before it reports, writes the summary either way, and exits non-zero if any project failed or a bundle held no metadata.
+
+```bash
+./atscale-utils generate-sml-from-bundle \
+  --bundles    "./customer-bundle.zip,./customer-bundle-prod" \
+  --output-dir "./sml-out" \
+  --model-mode new
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--bundles` | Yes | | Comma-separated support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory |
+| `--output-dir` | Yes | | Directory that receives one SML repository per project plus `summary.csv` and `summary.md` |
+| `--force` | No | `false` | Re-convert projects whose output directory already exists |
+| `--org` | No | all | Comma-separated organisation folder names to include (installer bundles) |
+| `--connection-name` | No | Auto-detected per XML | Connection `unique_name` to embed in generated files |
+| `--connection-type` | No | | Database dialect written to the connection files |
+| `--connection-db` | No | | Database name written to the connection files; when set, every dataset shares one connection |
+| `--connection-schema` | No | | Schema name written to the connection files; when set, every dataset shares one connection |
+| `--model-mode` | No | | Compatibility policy applied to every project when query-name collisions occur. Pass `new` for unattended runs; `existing` marks a colliding project as failed for review |
+
+**Output layout:**
+```
+<output-dir>/
+  summary.csv                       one row per project: bundle, org, project, id, status, counts, paths
+  summary.md                        the same table, readable
+  <bundle>/<org>/<project>__<id8>/  catalog.yml, connections/, datasets/, dimensions/, metrics/, calculations/, models/, README.md
+  .logs/<bundle>/<org>/<project>.log   converter transcript, kept only while the project is failing
+```
+
+Statuses: `ok`, `ok-no-model` (the XML had no cube), `skipped` (already present, counts read from disk), `FAILED`, `NO-METADATA` (a bundle with neither `metadata/` nor `metadata.zip`).
 
 ---
 
@@ -1579,6 +1620,8 @@ Reads an SML directory and generates two query JSON files — one XMLA (MDX) and
 - **Metric totals** — one query per metric with no dimensional breakdown (verifies the measure computes without errors and returns a value)
 - **Level breakdowns** — one query per hierarchy level across all dimensions, selecting all model metrics broken down by that level (verifies dimensional slicing at every granularity)
 
+By default each level breakdown selects **every** metric. If one metric isn't defined over that level's dimension, AtScale rejects the whole query (*measures … are not defined over the product of these dimensions*) and no metric is tested on that level. Pass `--metrics-per-level-query each` to emit one breakdown per (level, metric) instead, so the failure pins down exactly which metric isn't conformed.
+
 **XMLA query formats:**
 
 Metric total:
@@ -1610,6 +1653,10 @@ GROUP BY "level_column"
 ORDER BY "level_column"
 ```
 
+Names come from the SML `unique_name`s, which is how AtScale exposes objects: the dimension, hierarchy and level-attribute `unique_name`s go in the MDX brackets, and the level attribute's `unique_name` is its SQL column (never the dataset's physical `name_column`). Labels are used only in the query's display name (`Dim | Hierarchy | Level`).
+
+Role-played dimensions are expanded once per role: a relationship with `role_play: "Order {0}"` yields `[Order Date Dimension].[Order CustomPP445].[Order customyear]` in MDX and `"Order customyear"` in SQL, matching how AtScale exposes the role.
+
 ```bash
 # Generate queries from an SML directory
 ./atscale-utils generate-queries-from-sml \
@@ -1631,6 +1678,7 @@ ORDER BY "level_column"
 | `--sml-dir` | Yes | | Path to the SML directory (must contain `models/`, `metrics/`, `dimensions/` sub-directories) |
 | `--model-name` | No | First model found | Model `label` or `unique_name` to use |
 | `--cube-name` | No | Model label | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `--metrics-per-level-query` | No | `all` | `all`: one level-breakdown query per level selecting every metric. `each`: one query per (level, metric), named `Dim \| Hierarchy \| Level \| Metric`, so a metric not defined over a dimension (another fact / measure group) fails only its own query instead of every breakdown on that level |
 | `--xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
 | `--sql-output-file` | Yes | | Path to write the SQL query JSON |
 
@@ -1643,6 +1691,8 @@ ORDER BY "level_column"
 Reads a `model.yaml` file (output of `extract-model-from-atscale` or `extract-model-from-sml`) and generates the same XMLA and SQL query JSON files as `generate-queries-from-sml`. Use this operation when a model.yaml is already available instead of a raw SML directory.
 
 Coverage is identical: one grand-total query per metric and one per-level breakdown query per hierarchy level across all dimensions.
+
+MDX resolves levels by name, not caption, so the level breakdowns put each level's `query_name` (`MDSCHEMA_LEVELS.LEVEL_NAME`) in the `[Dim].[Hierarchy].[Level]` brackets. The `caption` is used only in the query's display name (`Dim | Hierarchy | Caption`).
 
 ```bash
 # Generate queries from a model.yaml
@@ -1664,6 +1714,7 @@ Coverage is identical: one grand-total query per metric and one per-level breakd
 | `--model-file` | Yes | | Path to the `model.yaml` file |
 | `--model-name` | No | First model found | Top-level model key to use when the file contains multiple models |
 | `--cube-name` | No | Model name | Override the cube name used in MDX `FROM` and SQL `FROM` clauses |
+| `--metrics-per-level-query` | No | `all` | `all`: one level-breakdown query per level selecting every metric. `each`: one query per (level, metric), named `Dim \| Hierarchy \| Level \| Metric`, so a metric not defined over a dimension (another fact / measure group) fails only its own query instead of every breakdown on that level |
 | `--xmla-output-file` | Yes | | Path to write the XMLA (MDX) query JSON |
 | `--sql-output-file` | Yes | | Path to write the SQL query JSON |
 
@@ -1701,20 +1752,35 @@ With a monthly breakdown:
 | `--connection-file` | Yes | | Path to connections file |
 | `--connection-name` | Yes | | Connection name in the file |
 | `--model` | Yes | | AtScale model (cube) name to analyse |
+| `--catalog` | No | `mdx.catalog_name` | AtScale catalog (project) name containing the model. Defaults to `mdx.catalog_name`; required when the connection has no `mdx:` block (e.g. a container connection with only an `atscale:` entry). |
 | `--output-dir` | No | `.` | Directory to write the output CSV files |
 | `--window-days` | No | `30` | Days to look back when no explicit date range is given |
 | `--start-date` | No | | Explicit window start (ISO-8601, e.g. `2025-01-01T00:00:00Z`). Overrides `--window-days`. |
 | `--end-date` | No | now | Explicit window end (ISO-8601). Only used when `--start-date` is set. |
-| `--monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv` |
+| `--monthly` | No | `false` | When `true`, also writes `{catalog}_{model}_monthly_occurrences.csv`. Months are UTC calendar months (Jan 1 00:00:00Z up to Feb 1 00:00:00Z, and so on), whatever the machine's time zone, and each query is counted in the month it was **received** — including one that finishes after midnight. |
 | `--monthly-year` | No | current year | Calendar year for the monthly breakdown |
-| `--limit` | No | `100` | Page size for the query history API |
+| `--limit` | No | `100` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
+| `--query-source` | No | `user` | Which queries to read: `user` (queries sent by clients), `system` (engine-issued — aggregate builds, canaries, …) or `all` |
 | `--num-queries` | No | `10` | Max sample query IDs retained per (attribute, measure) pair via reservoir sampling |
 
 **Outputs:**
+- `{output-dir}/{catalog}_{model}_queries.csv` — one row per query: `query_id`, `received`, `duration_ms`, `user_id`, `cube_name`, `class`, `aggregate_count`, `subquery_count`. `class` is how the query was answered, first match wins: **cache** (a subquery was served from the engine's local result cache, or the query sent no subquery), **agg** (the engine used an aggregate), **raw** (the warehouse answered without an aggregate). The log prints the totals per class.
 - `{output-dir}/{catalog}_{model}_occurrences.csv` — occurrence count for every (attribute, measure) pair in the model
 - `{output-dir}/{catalog}_{model}_monthly_occurrences.csv` — month-by-month counts (only when `--monthly true`)
 
-The `connections.yaml` entry must have an `mdx:` block with `url`, `organization_id`, `catalog_name`, and `user`. The user entry needs `username` and `password` (installer mode) or `username` and `password` for cloud OAuth2.
+**Connection entry.** Container hosts can use the standard `atscale:` entry — no `mdx:` block or `organization_id` needed — with the catalog passed as `--catalog`:
+
+```yaml
+connections:
+  dev:
+    atscale:
+      url: https://atscale.example.com
+      username: admin
+      password: "<password>"
+      insecure: true   # optional — skip TLS certificate verification
+```
+
+An `mdx:` block (`url`, `catalog_name`, `user`, plus `organization_id`) still works for both modes. `organization_id` is required only for installer connections (`installer: true`). Authentication is Keycloak (password grant) on container hosts and HTTP Basic against the installer auth endpoint otherwise.
 
 ---
 
@@ -1762,7 +1828,12 @@ Supports two config formats:
 - `{model}_sql_installer_queries.json` — installer SQL queries (`sql`/Hive language)
 - `{model}_xmla_queries.json` — XMLA/MDX queries (`analysis` language)
 
-Each file is a JSON array of query records with fields: `queryName`, `queryLanguage`, `originalText`, `originalTextHash` (SHA-256), `outboundText`, `cubeName`, `projectId`, `aggregateUsed`, `numTimes`, `elapsedTimeInSeconds`, `avgResultSetSize`, `atscaleQueryId`.
+Each file is a JSON array of query records, one per distinct query text, with fields: `queryName`, `queryLanguage`, `originalText`, `originalTextHash` (SHA-256), `outboundText`, `cubeName`, `projectId`, `aggregateUsed`, `numTimes`, `elapsedTimeInSeconds`, `avgResultSetSize`, `atscaleQueryId`, plus how the executions were answered: `cacheExecutions`, `aggExecutions`, `rawExecutions`, `usedLocalCache`, `usedAggregateCache` and `avgSubqueryCount`.
+
+- **`numTimes`** counts executions — each query once, however many outbound subqueries it sent. `elapsedTimeInSeconds` and `avgResultSetSize` are averaged over executions.
+- **Cache-served queries are included.** A query answered without sending any subquery has `outboundText: null` and `avgSubqueryCount: 0`. XMLA `REFRESH CUBE` commands, which also send no subquery, are excluded — replaying one would refresh the cube.
+- **`aggregateUsed`** is `true` when the engine recorded an aggregate for any execution (`query_aggregate_usage`).
+- **Answered-by breakdown** — each execution is classified, first match wins: **cache** (a subquery was served from the engine's local result cache, or no subquery was sent), **agg** (an aggregate was used), **raw** (the warehouse answered without an aggregate). `cacheExecutions + aggExecutions + rawExecutions = numTimes`.
 
 The `connections.yaml` entry must have a `sql:` block with `dialect: postgres` pointing at the AtScale Postgres backend (typically port `25432`, database `atscale`).
 
@@ -1780,6 +1851,13 @@ Supports three input modes:
 - **`--task-file`** — executor task YAML/JSON (runs all tasks sequentially, inferring protocol from `simulationClass`)
 
 Supports two connection config formats: `connections.yaml` or `systems.properties`.
+
+**XMLA authentication (`connections.yaml`, container hosts — `installer: false`)** — two options:
+
+- **XMLA token in the URL** — set `mdx.url` to `https://<host>/engine/xmla/<xmla-token>`. The URL authenticates on its own; no user credentials are needed.
+- **User password** — set `mdx.url` to the host (or `https://<host>/engine/xmla`) and `mdx.user` to a `users:` entry with `username` / `password`. The harness obtains a Keycloak token (password grant, same as `extract-model-from-atscale`) and sends it as a Bearer token.
+
+For SQL on a container host's port 15432, set `sql.ssl: true` — the server requires TLS.
 
 ```bash
 # Direct mode — XMLA queries from a JSON file
@@ -1836,8 +1914,9 @@ Supports two connection config formats: `connections.yaml` or `systems.propertie
 
 - **`run_query_uuid`** — UUID generated per individual query execution; correlates this CSV row with the comment injected into the executed query (when `--annotate-queries true`)
 - **`original_atscale_query_id`** — the query ID recorded in AtScale's query log when the query was originally captured
-- **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). `0` when no data is returned or on error.
-- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the SOAP `<Body>` content only (the `<Header>` is excluded because it contains per-request session IDs and timestamps). Empty when `row_count = 0` or when the query fails.
+- **`row_count`** — number of rows returned (SQL) or number of `<Value>` elements within `<CellData>` in the XMLA response (MDX). For XMLA this is a **cell** count (rows × measures), not a row count: a 1124-row breakdown selecting 3 metrics reads `3372` for XMLA and `1124` for SQL. `0` when no data is returned or on error.
+- **`checksum`** — SHA1 hex digest of the result data. For SQL, computed over all rows serialised deterministically (columns sorted alphabetically, values tab-separated, rows newline-separated). For XMLA, computed over the result itself — the `<Axes>` (tuples) and `<CellData>` sections — so per-request and per-response metadata (the SOAP `<Header>` session ID and the `LastDataUpdate` / `LastSchemaUpdate` timestamps in `OlapInfo`) does not affect it, and the same result gives the same checksum across runs and hosts. Empty when `row_count = 0` or when the query fails.
+- **`status`** for XMLA is `FAILED` on a non-200 HTTP status **or** when the response carries a SOAP `<Fault>` (even with HTTP 200); the fault's `faultstring` goes in `error`.
 
 **Output filename:**
 - Task-file mode: derived from `runLogFileName` in the task definition (`.log` → `.csv`)

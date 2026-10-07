@@ -88,6 +88,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromConnection`](#generatesmlfromconnection)
   - [`generateSMLFromDDL`](#generatesmlfromddl)
   - [`generateSMLFromXML`](#generatesmlfromxml)
+  - [`generateSMLFromBundle`](#generatesmlfrombundle)
   - [`generateSMLFromTabular`](#generatesmlfromtabular)
   - [`analyzePowerBIDaxGaps`](#analyzepowerbidaxgaps)
   - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
@@ -398,6 +399,43 @@ function generateSMLFromXML(
 | `connectionDb` | `string` | No | | Database name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `connectionSchema` | `string` | No | | Schema name written into the connection file; when set, every dataset shares one connection instead of a separate connection per distinct database/schema pair found in the XML |
 | `modelMode` | `"new" \| "existing"` | No | | Compatibility policy used only when query-name collisions occur |
+
+---
+
+### `generateSMLFromBundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every project inside one or more AtScale support bundles to SML, one repository per project, and writes `summary.csv` / `summary.md` in the output directory. Throws after attempting every project if any failed.
+
+```typescript
+import { generateSMLFromBundle } from "@atscale-ps/ps-utils";
+
+await generateSMLFromBundle({
+  bundles:   ["./customer-prod.zip", "./customer-dev"],
+  outputDir: "./sml-out",
+  modelMode: "new",
+});
+```
+
+```typescript
+function generateSMLFromBundle(
+  params: GenerateSMLFromBundleParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `bundles` | `string[] \| string` | Yes | | Support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory; an array or a comma-separated string |
+| `outputDir` | `DirOutput` | Yes | | Directory for the per-project SML repositories and summary files, or a `Writable` to receive a ZIP |
+| `force` | `boolean` | No | `false` | Re-convert projects whose output already exists |
+| `org` | `string` | No | | Comma-separated organisation folders to include (installer bundles) |
+| `connectionName` | `string` | No | | Connection `unique_name` to embed in generated files (auto-detected per XML if omitted) |
+| `connectionType` | `string` | No | | Database dialect written to the connection files |
+| `connectionDb` | `string` | No | | Database name written to the connection files |
+| `connectionSchema` | `string` | No | | Schema name written to the connection files |
+| `modelMode` | `"new" \| "existing"` | No | | Compatibility policy for query-name collisions; pass `new` for unattended runs |
 
 ---
 
@@ -1117,6 +1155,7 @@ function generateQueriesFromSML(
 | `sqlOutputFile` | `FileOutput` | Yes | | Output path for SQL query JSON, or a `Writable` to receive it |
 | `modelName` | `string` | No | | Model name to use |
 | `cubeName` | `string` | No | | Cube name to use |
+| `metricsPerLevelQuery` | `"all" \| "each"` | No | `"all"` | `"all"`: one level-breakdown query per level selecting every metric. `"each"`: one query per (level, metric), so a metric not defined over a dimension fails only its own query |
 
 ---
 
@@ -1150,6 +1189,7 @@ function generateQueriesFromModel(
 | `sqlOutputFile` | `FileOutput` | Yes | | Output path for SQL query JSON, or a `Writable` to receive it |
 | `modelName` | `string` | No | | Model name to use |
 | `cubeName` | `string` | No | | Cube name to use |
+| `metricsPerLevelQuery` | `"all" \| "each"` | No | `"all"` | `"all"`: one level-breakdown query per level selecting every metric. `"each"`: one query per (level, metric), so a metric not defined over a dimension fails only its own query |
 
 ---
 
@@ -1181,10 +1221,12 @@ function extractQueryStatsFromAtScale(
 | `connectionFile` | `FileInput` | Yes | | Path to connections file, or a `Readable` of its contents |
 | `connectionName` | `string` | Yes | | Connection name in the file |
 | `model` | `string` | Yes | | AtScale model (cube) name to analyse |
+| `catalog` | `string` | No | `mdx.catalog_name` | AtScale catalog (project) name containing the model. Defaults to `mdx.catalog_name`; required when the connection has no `mdx:` block (e.g. a container connection with only an `atscale:` entry). |
 | `outputDir` | `DirOutput` | No | `"."` | Output directory for CSV files, or a `Writable` to receive a ZIP |
 | `windowDays` | `string` | No | `"30"` | Look-back window in days |
-| `monthly` | `string` | No | `"false"` | Generate monthly breakdown CSV |
-| `limit` | `string` | No | `"100"` | Page size for query history API |
+| `monthly` | `string` | No | `"false"` | Generate monthly breakdown CSV (UTC calendar months; each query counted in the month it was received) |
+| `limit` | `string` | No | `"100"` | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped to 100; every page is still fetched. |
+| `querySource` | `"user" \| "system" \| "all"` | No | `"user"` | Which queries to read: `user` (queries sent by clients), `system` (engine-issued — aggregate builds, canaries, …) or `all` |
 | `numQueries` | `string` | No | `"10"` | Max sample query IDs per attribute × measure pair |
 | `startDate` | `string` | No | | Explicit window start (ISO-8601); overrides `windowDays` |
 | `endDate` | `string` | No | | Explicit window end (ISO-8601) |

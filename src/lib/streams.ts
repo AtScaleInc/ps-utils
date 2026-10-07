@@ -20,7 +20,7 @@ import {
 } from "node:fs";
 import { mkdtemp }     from "node:fs/promises";
 import { tmpdir }      from "node:os";
-import { join, dirname, relative } from "node:path";
+import { join, dirname, relative, resolve, sep } from "node:path";
 import JSZip           from "jszip";
 
 // ── Public type aliases ───────────────────────────────────────────────────────
@@ -68,10 +68,26 @@ async function toBuffer(stream: Readable): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-async function unzipTo(stream: Readable, dir: string): Promise<void> {
-  const zip = await JSZip.loadAsync(await toBuffer(stream));
+/**
+ * Extract a zip (a Readable or an in-memory Buffer) into `dir`.
+ *
+ * Every entry is resolved and checked to stay inside `dir`, so a crafted
+ * archive with `../` segments cannot write outside it.  `include` lets callers
+ * extract only the entries they need (a support bundle is mostly logs).
+ */
+export async function unzipTo(
+  source: Readable | Buffer,
+  dir: string,
+  include?: (entryName: string) => boolean,
+): Promise<void> {
+  const zip = await JSZip.loadAsync(Buffer.isBuffer(source) ? source : await toBuffer(source));
+  const root = resolve(dir);
   for (const [filename, file] of Object.entries(zip.files)) {
-    const dest = join(dir, filename);
+    if (include && !include(filename)) continue;
+    const dest = resolve(root, filename);
+    if (dest !== root && !dest.startsWith(root + sep)) {
+      throw new Error(`Zip entry escapes extraction directory: ${filename}`);
+    }
     if (file.dir) {
       mkdirSync(dest, { recursive: true });
     } else {

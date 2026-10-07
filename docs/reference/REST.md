@@ -1021,6 +1021,7 @@ curl -X POST http://localhost:4000/rest/generate-notebook-from-connection \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 
 **curl (JSON):**
 
@@ -1049,6 +1050,7 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-sml \
 | `modelFileUpload` | file field | No | Multipart upload — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
 
@@ -1085,12 +1087,14 @@ curl -X POST http://localhost:4000/rest/generate-queries-from-model \
 | `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
 | `connectionName` | `String` | Yes | Connection name within the connections file |
 | `model` | `String` | Yes | AtScale model (cube) name to analyse |
+| `catalog` | `String` | No | AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name of the connection; required when the connection has no mdx: block. |
 | `windowDays` | `String` | No | Number of days to look back when no explicit start/end date is given |
 | `startDate` | `String` | No | Explicit window start (ISO-8601, e.g. 2025-01-01T00:00:00Z). Overrides --window-days. |
 | `endDate` | `String` | No | Explicit window end (ISO-8601). Defaults to now when --start-date is given. |
 | `monthly` | `String` | No | When 'true', also generates a month-by-month breakdown CSV for --monthly-year |
 | `monthlyYear` | `String` | No | Calendar year (e.g. 2025) for the monthly breakdown. Defaults to the current year. |
-| `limit` | `String` | No | Page size for the query history API |
+| `limit` | `String` | No | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped; every page is still fetched. |
+| `querySource` | `String` | No | Which queries to read: "user" (default — queries sent by clients), "system" (engine-issued: aggregate builds, canaries, …) or "all" |
 | `numQueries` | `String` | No | Maximum number of sample query IDs to retain per (attribute, measure) pair |
 
 \* Required when neither the `Content` nor `Upload` variant is provided.
@@ -1758,6 +1762,37 @@ curl -X POST http://localhost:4000/rest/echo-connection-metadata \
 curl -X POST http://localhost:4000/rest/echo-connection-metadata \
   -F "connectionFileUpload=@/path/to/file" \
   -F "connectionName=value"
+```
+
+---
+
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
+
+**Endpoint:** `POST /rest/generate-sml-from-bundle`  |  **GraphQL:** `generateSmlFromBundle`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
+| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
+| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
+| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
+| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
+| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
+| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
+| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-bundle \
+  -H "Content-Type: application/json" \
+  -d '{
+      "bundles": "value"
+  }'
 ```
 
 ---

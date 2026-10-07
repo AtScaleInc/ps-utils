@@ -555,6 +555,11 @@ export async function convertXmlToSml(
   // calculation expressions referencing other metrics by name can be rewritten to match.
   const measureRefMap = buildMeasureRefMap(cubeEls, calcMemberDefs);
 
+  // Same idea for non-Measures MDX references — "[Dim].[Dim Hierarchy].[Dim Level]" — so a
+  // calc expression pointing at a renamed hierarchy/level doesn't keep referencing the
+  // pre-safeName (spaced) text. See buildDimensionRefMap/rewriteDimensionRefs.
+  const dimRefMap = buildDimensionRefMap(allDims, attrDef);
+
   // Determine, across every cube up front, which dimensions may validly use SML's
   // shared-degenerate mechanism — a decision made cube-by-cube can't see a dimension's
   // bindings in OTHER cubes, but SML's constraints (every level of the dimension sharing
@@ -1072,7 +1077,7 @@ export async function convertXmlToSml(
               const fname = safeFilename(altUniqueName);
               output.set(
                 `metrics/${fname}.yml`,
-                buildCalcMemberYaml(altUniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
+                buildCalcMemberYaml(altUniqueName, label, rewriteDimensionRefs(rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), dimRefMap), format, folder, visible, description),
               );
               logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
               metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
@@ -1097,7 +1102,7 @@ export async function convertXmlToSml(
           // with an unrecognized "formula" key.
           output.set(
             `metrics/${fname}.yml`,
-            buildCalcMemberYaml(uniqueName, label, rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), format, folder, visible, description),
+            buildCalcMemberYaml(uniqueName, label, rewriteDimensionRefs(rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), dimRefMap), format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
@@ -1573,7 +1578,7 @@ export async function convertXmlToSml(
       buildCalcMemberYaml(
         pc.uniqueName,
         pc.label,
-        rewriteMeasureRefs(pc.def.expression, calcAwareRefMap),
+        rewriteDimensionRefs(rewriteMeasureRefs(pc.def.expression, calcAwareRefMap), dimRefMap),
         pc.format,
         pc.def.folder,
         pc.def.visible,
@@ -2419,6 +2424,83 @@ function rewriteMeasureRefs(text: string, nameMap: Map<string, string>): string 
   });
 }
 
+/**
+ * Build, per dimension, a map from a hierarchy/level's original XML name to its final
+ * safeName()'d unique_name — the non-Measures counterpart to buildMeasureRefMap. A calc
+ * expression's "[Dim].[Dim Hierarchy].[Dim Level].&[key]" tuple is copied from the XML
+ * verbatim, but the hierarchy and level it names go through the same space-stripping
+ * safeName() transform as everything else in this file (e.g. "Foo Level" -> "Foo_Level"),
+ * so without rewriting, the expression keeps pointing at a name nothing in the model has
+ * anymore. Scoped per dimension (keyed by dimension name, case-insensitively) because two
+ * different dimensions can legitimately reuse the same hierarchy/level name; only entries
+ * whose safeName transform actually changes the text are recorded, so a reference to an
+ * untouched name is never rewritten.
+ */
+function buildDimensionRefMap(
+  allDims: Map<string, Record<string, unknown>>,
+  attrDef: Map<string, AttrDefEntry>,
+): Map<string, Map<string, string>> {
+  const byDim = new Map<string, Map<string, string>>();
+  for (const [dimName, dimEl] of allDims) {
+    const nameMap = new Map<string, string>();
+    for (const hierEl of arr((dimEl as Record<string, unknown>).hierarchy)) {
+      const hierName = a(hierEl, "name");
+      if (hierName) {
+        const finalHierName = truncateUniqueName(safeName(hierName));
+        if (finalHierName.toLowerCase() !== hierName.toLowerCase()) {
+          nameMap.set(hierName.toLowerCase(), finalHierName);
+        }
+      }
+      for (const levelEl of arr((hierEl as Record<string, unknown>).level)) {
+        const primaryAttrUuid = a(levelEl, "primary-attribute");
+        const primaryDef = primaryAttrUuid ? attrDef.get(primaryAttrUuid) : undefined;
+        if (!primaryDef) continue;
+        const finalLevelName = levelUniqueNameFor(primaryDef.name);
+        if (finalLevelName.toLowerCase() !== primaryDef.name.toLowerCase()) {
+          nameMap.set(primaryDef.name.toLowerCase(), finalLevelName);
+        }
+      }
+    }
+    if (nameMap.size) byDim.set(dimName.toLowerCase(), nameMap);
+  }
+  return byDim;
+}
+
+/**
+ * Rewrite "[Dimension].[Hierarchy].[Level]" MDX tuples to match renamed hierarchy/level
+ * unique_names — see buildDimensionRefMap. Matching exactly three consecutive bracketed
+ * segments leaves a following ".&[memberKey]" key segment alone (it never starts with a
+ * bare "[", always "&["), and a dimension not present in dimRefMap (nothing to rename) is
+ * returned untouched.
+ *
+ * A second pass then rewrites the equally common bare "[Dimension].[Hierarchy]" form used
+ * with a member function instead of a level tuple (e.g. "...CurrentMember", "...Lag(11)")
+ * — without it, a ParallelPeriod/PeriodsToDate call's OWN CurrentMember reference would
+ * keep pointing at the renamed hierarchy's old, now-nonexistent name even after its sibling
+ * level tuple earlier in the same expression got corrected by the first pass. The negative
+ * lookahead `(?!\.\[)` excludes a tuple's own first two segments (always followed by a
+ * third ".[...]"), so this never double-processes what the first pass already handled; a
+ * false match on an unrelated 2-segment bracket pair (e.g. "[Measures].[Name]") is
+ * harmless since dimRefMap has no entry for a non-dimension name on the left.
+ */
+function rewriteDimensionRefs(text: string, dimRefMap: Map<string, Map<string, string>>): string {
+  const withLevelsRewritten = text.replace(/\[([^\]]+)\]\.\[([^\]]+)\]\.\[([^\]]+)\]/g, (full, dim, hier, level) => {
+    const nameMap = dimRefMap.get(String(dim).toLowerCase());
+    if (!nameMap) return full;
+    const newHier = nameMap.get(String(hier).toLowerCase());
+    const newLevel = nameMap.get(String(level).toLowerCase());
+    if (!newHier && !newLevel) return full;
+    return `[${dim}].[${newHier ?? hier}].[${newLevel ?? level}]`;
+  });
+  return withLevelsRewritten.replace(/\[([^\]]+)\]\.\[([^\]]+)\](?!\.\[)/g, (full, dim, hier) => {
+    const nameMap = dimRefMap.get(String(dim).toLowerCase());
+    if (!nameMap) return full;
+    const newHier = nameMap.get(String(hier).toLowerCase());
+    if (!newHier) return full;
+    return `[${dim}].[${newHier}]`;
+  });
+}
+
 /** Convert a name to a safe filename (lowercase, hyphens). */
 function safeFilename(s: string): string {
   return s
@@ -2509,8 +2591,14 @@ function resolveFormat(formatString?: string, namedFormat?: string): string | un
       case "$#,##0":    return "$#,##0";
       case "#,##0%":    return "#,##0%";
       default:
-        // format-string can also hold a named format (e.g. "General Number") rather than a numeric pattern
-        return /[a-zA-Z]/.test(formatString) ? normalizeNamedFormat(formatString) : formatString;
+        // format-string can also hold a named format (e.g. "General Number") rather than a
+        // numeric pattern, but it can equally hold a date/time pattern (e.g. "MM/dd/yyyy") —
+        // both contain letters, but only the named-format case should be lowercased.
+        // Date/time patterns are case-sensitive (uppercase "MM" is month, lowercase "mm" is
+        // minutes) and use only the y/M/d/H/h/m/s tokens plus separators, a narrow charset no
+        // English named-format keyword matches, so that's what distinguishes the two here.
+        if (!/[a-zA-Z]/.test(formatString)) return formatString;
+        return /^[yMdHhms\/\-:., ]+$/.test(formatString) ? formatString : normalizeNamedFormat(formatString);
     }
   }
   return undefined;

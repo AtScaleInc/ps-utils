@@ -1251,6 +1251,7 @@ curl -X POST http://localhost:4000/graphql \
 | `smlDir` | `String` | Yes | Path to the SML directory (must contain models/, metrics/, dimensions/ sub-directories) |
 | `modelName` | `String` | No | Model label or unique_name to use (defaults to the first model found) |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file. |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 | `xmlaOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 
@@ -1292,6 +1293,7 @@ curl -X POST http://localhost:4000/graphql \
 | `modelFileContent` | `String` | No | Raw string content — alternative to `modelFile` |
 | `modelName` | `String` | No | Top-level model key to use when model.yaml contains multiple models. Defaults to the first model found. |
 | `cubeName` | `String` | No | Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key). |
+| `metricsPerLevelQuery` | `String` | No | How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query) |
 | `xmlaOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
 
@@ -1343,13 +1345,15 @@ curl -X POST http://localhost:4000/graphql \
 | `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
 | `connectionName` | `String` | Yes | Connection name within the connections file |
 | `model` | `String` | Yes | AtScale model (cube) name to analyse |
+| `catalog` | `String` | No | AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name of the connection; required when the connection has no mdx: block. |
 | `outputDir` | `String` | — | *Server-managed output path — do not pass* |
 | `windowDays` | `String` | No | Number of days to look back when no explicit start/end date is given |
 | `startDate` | `String` | No | Explicit window start (ISO-8601, e.g. 2025-01-01T00:00:00Z). Overrides --window-days. |
 | `endDate` | `String` | No | Explicit window end (ISO-8601). Defaults to now when --start-date is given. |
 | `monthly` | `String` | No | When 'true', also generates a month-by-month breakdown CSV for --monthly-year |
 | `monthlyYear` | `String` | No | Calendar year (e.g. 2025) for the monthly breakdown. Defaults to the current year. |
-| `limit` | `String` | No | Page size for the query history API |
+| `limit` | `String` | No | Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped; every page is still fetched. |
+| `querySource` | `String` | No | Which queries to read: "user" (default — queries sent by clients), "system" (engine-issued: aggregate builds, canaries, …) or "all" |
 | `numQueries` | `String` | No | Maximum number of sample query IDs to retain per (attribute, measure) pair |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
@@ -2197,6 +2201,49 @@ curl -X POST http://localhost:4000/graphql \
   -F 'operations={"query":"mutation($f:Upload!){echoConnectionMetadata(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateSmlFromBundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
+
+**CLI name:** `generate-sml-from-bundle`  |  **REST:** `POST /rest/generate-sml-from-bundle`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
+| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
+| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
+| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
+| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
+| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
+| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromBundle(input: {
+    bundles: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromBundle(input:{bundles: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ---
@@ -3139,6 +3186,28 @@ input GenerateSmlFromXmlInput {
   modelMode: String
 }
 
+"""Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary"""
+input GenerateSmlFromBundleInput {
+  """Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory"""
+  bundles: String!
+  """Directory that receives one SML repository per project plus summary.csv and summary.md"""
+  outputDir: String
+  """Re-convert projects whose output directory already exists"""
+  force: Boolean
+  """Comma-separated organisation folder names to include (installer bundles); default is all"""
+  org: String
+  """SML connection unique_name to embed in generated files (auto-detected from each XML if omitted)"""
+  connectionName: String
+  """Database dialect for the connection files (e.g. "snowflake", "bigquery")"""
+  connectionType: String
+  """Database name written into the connection files; when set, every dataset shares one connection"""
+  connectionDb: String
+  """Schema name written into the connection files; when set, every dataset shares one connection"""
+  connectionSchema: String
+  """Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs."""
+  modelMode: String
+}
+
 """Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
 input GenerateSmlFromTabularInput {
   """Path to the TMSL/XMLA export (createOrReplace JSON) to convert"""
@@ -3441,6 +3510,8 @@ input ExtractQueryStatsFromAtscaleInput {
   connectionName: String!
   """AtScale model (cube) name to analyse"""
   model: String!
+  """AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name of the connection; required when the connection has no mdx: block."""
+  catalog: String
   """Directory to write the output CSV files"""
   outputDir: String
   """Number of days to look back when no explicit start/end date is given"""
@@ -3453,8 +3524,10 @@ input ExtractQueryStatsFromAtscaleInput {
   monthly: String
   """Calendar year (e.g. 2025) for the monthly breakdown. Defaults to the current year."""
   monthlyYear: String
-  """Page size for the query history API"""
+  """Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped; every page is still fetched."""
   limit: String
+  """Which queries to read: "user" (default — queries sent by clients), "system" (engine-issued: aggregate builds, canaries, …) or "all" """
+  querySource: String
   """Maximum number of sample query IDs to retain per (attribute, measure) pair"""
   numQueries: String
 }
@@ -4031,6 +4104,8 @@ input GenerateQueriesFromSmlInput {
   modelName: String
   """Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model label from the SML model file."""
   cubeName: String
+  """How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query)"""
+  metricsPerLevelQuery: String
   """Path to write the XMLA (MDX) query JSON file"""
   xmlaOutputFile: String
   """Path to write the SQL query JSON file"""
@@ -4049,6 +4124,8 @@ input GenerateQueriesFromModelInput {
   modelName: String
   """Override the cube name used in MDX FROM and SQL FROM clauses. Defaults to the model name (top-level key)."""
   cubeName: String
+  """How level breakdowns select metrics: "all" (one query per level selecting every metric) or "each" (one query per level and metric, so a metric not defined over a dimension fails only its own query)"""
+  metricsPerLevelQuery: String
   """Path to write the XMLA (MDX) query JSON file"""
   xmlaOutputFile: String
   """Path to write the SQL query JSON file"""
@@ -4093,6 +4170,8 @@ type Mutation {
   generateSmlFromDdl(input: GenerateSmlFromDdlInput): OperationResult!
   """Convert an AtScale XML project file (project_2_0 format) to AtScale SML files"""
   generateSmlFromXml(input: GenerateSmlFromXmlInput): OperationResult!
+  """Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary"""
+  generateSmlFromBundle(input: GenerateSmlFromBundleInput): OperationResult!
   """Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files"""
   generateSmlFromTabular(input: GenerateSmlFromTabularInput): OperationResult!
   """Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports"""

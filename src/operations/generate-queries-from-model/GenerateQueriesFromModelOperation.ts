@@ -15,6 +15,9 @@
  *   Level breakdowns — one query per level across every hierarchy in
  *     mdx.attributes, selecting all metrics broken down by that level.
  *
+ * --metrics-per-level-query each splits every level breakdown into one query
+ * per metric, so a non-conformed metric fails only its own query.
+ *
  * Query generation is delegated to generate-queries-shared.ts.
  */
 import { Operation } from "../Operation.js";
@@ -26,6 +29,7 @@ import {
   type MetricEntry,
   type LevelEntry,
   buildQueryPairs,
+  parseMetricsPerLevelQuery,
   writeQueryFiles,
 } from "../generate-queries-shared.js";
 import fs from "fs";
@@ -56,6 +60,18 @@ class GenerateQueriesFromModelParamsSet extends ParameterSet {
       required = false;
     })(),
     new (class extends StringParameter {
+      name = "metrics-per-level-query";
+      description =
+        "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) " +
+        "or \"each\" (one query per level and metric, so a metric not defined over a " +
+        "dimension fails only its own query)";
+      required = false;
+      defaultValue = "all";
+      validate(value: string): void {
+        parseMetricsPerLevelQuery(value);
+      }
+    })(),
+    new (class extends StringParameter {
       name = "xmla-output-file";
       description = "Path to write the XMLA (MDX) query JSON file";
       required = true;
@@ -72,6 +88,7 @@ type Params = {
   "model-file": string;
   "model-name"?: string;
   "cube-name"?: string;
+  "metrics-per-level-query"?: string;
   "xmla-output-file": string;
   "sql-output-file": string;
 };
@@ -140,21 +157,27 @@ export class GenerateQueriesFromModelOperation extends Operation<Params> {
     this.logger.info(`  Metrics: ${metrics.length}`);
 
     // ── Extract hierarchy levels from mdx.attributes ──────────────────────────
-    // Structure: attributes[dimLabel][hierLabel] = [{ query_name, caption, level_number }]
+    // Structure: attributes[dimName][hierName] = [{ query_name, caption, level_number }]
+    // The keys are parsed from HIERARCHY_UNIQUE_NAME, so they are MDX names.
+    // query_name is MDSCHEMA_LEVELS.LEVEL_NAME — what MDX resolves a level by —
+    // while caption is display-only and may differ.
     const levels: LevelEntry[] = [];
     const attributes: Record<string, Record<string, any[]>> = modelData.mdx?.attributes ?? {};
 
-    for (const dimLabel of Object.keys(attributes)) {
-      const hierarchies = attributes[dimLabel];
-      for (const hierLabel of Object.keys(hierarchies)) {
-        const levelArray: any[] = hierarchies[hierLabel] ?? [];
+    for (const dimName of Object.keys(attributes)) {
+      const hierarchies = attributes[dimName];
+      for (const hierName of Object.keys(hierarchies)) {
+        const levelArray: any[] = hierarchies[hierName] ?? [];
         // Sort by level_number so levels are added broadest → most granular
         const sorted = [...levelArray].sort((a, b) => (a.level_number ?? 0) - (b.level_number ?? 0));
         for (const lvl of sorted) {
           if (!lvl.query_name) continue;
           levels.push({
-            dimLabel,
-            hierLabel,
+            dimName,
+            hierName,
+            levelName:       lvl.query_name,
+            dimLabel:        dimName,
+            hierLabel:       hierName,
             levelLabel:      lvl.caption ?? lvl.query_name,
             levelNameColumn: lvl.query_name,
           });
@@ -165,11 +188,13 @@ export class GenerateQueriesFromModelOperation extends Operation<Params> {
     this.logger.info(`  Hierarchy levels: ${levels.length}`);
 
     // ── Generate and write ────────────────────────────────────────────────────
-    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, cubeName);
+    const metricsPerLevelQuery = parseMetricsPerLevelQuery(params["metrics-per-level-query"]);
+    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, cubeName, metricsPerLevelQuery);
 
+    const breakdowns = metricsPerLevelQuery === "each" ? levels.length * metrics.length : levels.length;
     this.logger.info(
       `Generated ${xmlaQueries.length} XMLA and ${sqlQueries.length} SQL queries ` +
-      `(${metrics.length} metric totals + ${levels.length} level breakdowns each)`,
+      `(${metrics.length} metric totals + ${breakdowns} level breakdowns each)`,
     );
 
     writeQueryFiles(

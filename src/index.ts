@@ -222,6 +222,29 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
   } finally { cleanup(); }
 }
 
+export type GenerateSMLFromBundleParams = {
+  bundles: string[] | string;
+  outputDir: DirOutput;
+  force?: boolean;
+  org?: string;
+  connectionName?: string;
+  connectionType?: string;
+  connectionDb?: string;
+  connectionSchema?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromBundle(p: GenerateSMLFromBundleParams, o: LibraryOptions = {}) {
+  const normalized = { ...p, bundles: Array.isArray(p.bundles) ? p.bundles.join(",") : p.bundles };
+  const { params, flush, cleanup } = await resolveIO(normalized as Record<string, unknown>, {
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-bundle", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLFromTabularParams = {
   xmlaFile: FileInput;
   warehouse: "Snowflake" | "Databricks" | "BigQuery" | "Postgres";
@@ -695,6 +718,7 @@ export type GenerateQueriesFromSMLParams = {
   sqlOutputFile: FileOutput;
   modelName?: string;
   cubeName?: string;
+  metricsPerLevelQuery?: "all" | "each";
 };
 
 export async function generateQueriesFromSML(p: GenerateQueriesFromSMLParams, o: LibraryOptions = {}) {
@@ -714,6 +738,7 @@ export type GenerateQueriesFromModelParams = {
   sqlOutputFile: FileOutput;
   modelName?: string;
   cubeName?: string;
+  metricsPerLevelQuery?: "all" | "each";
 };
 
 export async function generateQueriesFromModel(p: GenerateQueriesFromModelParams, o: LibraryOptions = {}) {
@@ -731,10 +756,12 @@ export type ExtractQueryStatsFromAtScaleParams = {
   connectionFile: FileInput;
   connectionName: string;
   model: string;
+  catalog?: string;
   outputDir?: DirOutput;  // default: "."
   windowDays?: string;     // default: "30"
   monthly?: string;     // default: "false"
   limit?: string;     // default: "100"
+  querySource?: "user" | "system" | "all";  // default: "user"
   numQueries?: string;     // default: "10"
   startDate?: string;
   endDate?: string;

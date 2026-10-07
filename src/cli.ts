@@ -5,7 +5,11 @@ import { runCli } from "./cli-runner.js";
  * CLI entrypoint. Delegates execution to the shared runner.
  */
 async function readStdin(): Promise<string | undefined> {
-  if (process.stdin.isTTY) {
+  // YAML on stdin is only meaningful when no operation was named on the
+  // command line. Reading stdin unconditionally made every shell loop that
+  // pipes a list into a `while read` body hang or fail, because the first
+  // invocation swallowed the rest of the list as "YAML".
+  if (process.stdin.isTTY || process.argv.length > 2) {
     return undefined;
   }
 

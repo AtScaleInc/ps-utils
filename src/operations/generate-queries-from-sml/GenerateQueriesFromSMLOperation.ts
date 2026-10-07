@@ -13,6 +13,9 @@
  *   Level breakdowns — one query per hierarchy level across every dimension,
  *     selecting all model metrics broken down by that level.
  *
+ * --metrics-per-level-query each splits every level breakdown into one query
+ * per metric, so a non-conformed metric fails only its own query.
+ *
  * Query generation is delegated to generate-queries-shared.ts.
  */
 import { Operation } from "../Operation.js";
@@ -24,6 +27,7 @@ import {
   type MetricEntry,
   type LevelEntry,
   buildQueryPairs,
+  parseMetricsPerLevelQuery,
   writeQueryFiles,
 } from "../generate-queries-shared.js";
 import fs from "fs";
@@ -53,6 +57,18 @@ class GenerateQueriesFromSMLParamsSet extends ParameterSet {
       required = false;
     })(),
     new (class extends StringParameter {
+      name = "metrics-per-level-query";
+      description =
+        "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) " +
+        "or \"each\" (one query per level and metric, so a metric not defined over a " +
+        "dimension fails only its own query)";
+      required = false;
+      defaultValue = "all";
+      validate(value: string): void {
+        parseMetricsPerLevelQuery(value);
+      }
+    })(),
+    new (class extends StringParameter {
       name = "xmla-output-file";
       description = "Path to write the XMLA (MDX) query JSON file";
       required = true;
@@ -69,6 +85,7 @@ type Params = {
   "sml-dir": string;
   "model-name"?: string;
   "cube-name"?: string;
+  "metrics-per-level-query"?: string;
   "xmla-output-file": string;
   "sql-output-file": string;
 };
@@ -163,34 +180,63 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
     const dimensionsLookup = new Map<string, any>();
     for (const [, d] of dimensionsMap) dimensionsLookup.set(d.unique_name, d);
 
-    const relatedDimNames = new Set<string>(
-      (modelData.relationships ?? [])
-        .map((r: any) => r.to?.dimension)
-        .filter(Boolean),
-    );
-    const allDimNames = [...relatedDimNames, ...(modelData.dimensions ?? [])];
+    // A relationship with a role_play template (e.g. "Order {0}") exposes the
+    // dimension once per role, and AtScale applies the template to every
+    // dimension, hierarchy and level name and caption — "Order Date Dimension"
+    // / "Order CustomPP445" / "Order customyear". "{0}" is the un-role-played
+    // dimension (plain relationships and degenerate dimensions).
+    const rolesByDim = new Map<string, Set<string>>();
+    const addRole = (dimName: string, template: string) => {
+      if (!rolesByDim.has(dimName)) rolesByDim.set(dimName, new Set());
+      rolesByDim.get(dimName)!.add(template);
+    };
+    for (const r of (modelData.relationships ?? [])) {
+      const dimName = r.to?.dimension;
+      if (!dimName) continue;
+      const template = typeof r.role_play === "string" && r.role_play.includes("{0}")
+        ? r.role_play
+        : "{0}";
+      addRole(dimName, template);
+    }
+    for (const d of (modelData.dimensions ?? [])) {
+      const dimName = typeof d === "string" ? d : d?.unique_name;
+      if (dimName) addRole(dimName, "{0}");
+    }
 
     const levels: LevelEntry[] = [];
 
-    for (const dimUniqueName of allDimNames) {
+    for (const [dimUniqueName, roles] of rolesByDim) {
       const dim = dimensionsLookup.get(dimUniqueName);
       if (!dim) { this.logger.verbose(`Dimension not found: ${dimUniqueName}`); continue; }
 
-      const dimLabel: string = dim.label ?? dimUniqueName;
+      // AtScale exposes SML objects under their unique_name: it is the MDX
+      // name of the dimension / hierarchy / level (LEVEL_NAME equals the level
+      // attribute's unique_name) and the level's column name in the SQL
+      // interface. Labels are captions — display only — and name_column is
+      // the dataset's physical column, which the SQL interface never exposes.
+      const dimName: string  = dim.unique_name ?? dimUniqueName;
+      const dimLabel: string = dim.label ?? dimName;
       const laLookup = new Map<string, any>();
       for (const la of (dim.level_attributes ?? [])) laLookup.set(la.unique_name, la);
 
-      for (const hier of (dim.hierarchies ?? [])) {
-        const hierLabel: string = hier.label ?? hier.unique_name;
-        for (const levelRef of (hier.levels ?? [])) {
-          const la = laLookup.get(levelRef.unique_name);
-          if (!la) continue;
-          levels.push({
-            dimLabel,
-            hierLabel,
-            levelLabel:      la.label ?? la.name_column,
-            levelNameColumn: la.name_column,
-          });
+      for (const template of roles) {
+        const role = (name: string) => template.split("{0}").join(name);
+        for (const hier of (dim.hierarchies ?? [])) {
+          const hierName: string  = hier.unique_name;
+          const hierLabel: string = hier.label ?? hierName;
+          for (const levelRef of (hier.levels ?? [])) {
+            const la = laLookup.get(levelRef.unique_name);
+            if (!la) continue;
+            levels.push({
+              dimName:         role(dimName),
+              hierName:        role(hierName),
+              levelName:       role(la.unique_name),
+              dimLabel:        role(dimLabel),
+              hierLabel:       role(hierLabel),
+              levelLabel:      role(la.label ?? la.unique_name),
+              levelNameColumn: role(la.unique_name),
+            });
+          }
         }
       }
     }
@@ -198,11 +244,13 @@ export class GenerateQueriesFromSMLOperation extends Operation<Params> {
     this.logger.info(`  Hierarchy levels: ${levels.length}`);
 
     // ── Generate and write ────────────────────────────────────────────────────
-    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, cubeName);
+    const metricsPerLevelQuery = parseMetricsPerLevelQuery(params["metrics-per-level-query"]);
+    const { xmlaQueries, sqlQueries } = buildQueryPairs(metrics, levels, cubeName, metricsPerLevelQuery);
 
+    const breakdowns = metricsPerLevelQuery === "each" ? levels.length * metrics.length : levels.length;
     this.logger.info(
       `Generated ${xmlaQueries.length} XMLA and ${sqlQueries.length} SQL queries ` +
-      `(${metrics.length} metric totals + ${levels.length} level breakdowns each)`,
+      `(${metrics.length} metric totals + ${breakdowns} level breakdowns each)`,
     );
 
     writeQueryFiles(

@@ -31,6 +31,24 @@ export interface QueryRecord {
   cubeName: string;
   projectId: string;
   aggregateUsed: boolean;
+  /**
+   * How the executions of this query text were answered, first match wins:
+   *   cache — a subquery was served from the engine's local result cache, or
+   *           the query succeeded without sending any subquery (fully
+   *           cache-served)
+   *   agg   — the engine recorded an aggregate for it (query_aggregate_usage)
+   *   raw   — the warehouse answered it without an aggregate
+   * Only set by extract-queries-from-atscale.
+   */
+  cacheExecutions?: number;
+  aggExecutions?: number;
+  rawExecutions?: number;
+  /** Any execution had a subquery served from the local result cache. */
+  usedLocalCache?: boolean;
+  /** Any execution had a subquery served from the aggregate cache. */
+  usedAggregateCache?: boolean;
+  /** Average number of outbound subqueries per execution (0 = cache-served). */
+  avgSubqueryCount?: number;
   numTimes: number;
   elapsedTimeInSeconds: number | null;
   avgResultSetSize: number;
@@ -160,8 +178,19 @@ export function parseJdbcPostgresUrl(jdbcUrl: string): {
  * cubeName     — AtScale model/cube name
  * days         — look-back window (days)
  * minExec      — minimum execution count (HAVING COUNT(*) >= N)
+ *
+ * Aggregates per query first, then groups by text. `subqueries` holds one row
+ * per outbound subquery, so joining it straight into the grouped query counted
+ * each execution once per subquery (inflating num_times and weighting the
+ * averages), and an inner join dropped every query that sent no subquery —
+ * the fully cache-served ones. The `sub` CTE reduces subqueries to one row per
+ * query and is LEFT JOINed; `per_query` is then one row per execution.
+ *
+ * used_agg comes from query_aggregate_usage, where the engine records every
+ * aggregate a query used, rather than from matching one subquery's text
+ * against the aggregate table-name prefix.
  */
-function buildExtractionSql(
+export function buildExtractionSql(
   schema: string,
   queryLang: string,
   cubeName: string,
@@ -171,33 +200,69 @@ function buildExtractionSql(
   // Allow letters, digits, underscores, dots, hyphens in the schema prefix only.
   const safeSchema = schema.replace(/[^a-zA-Z0-9_.]/g, "");
   return `
+WITH sub AS (
+    SELECT s.query_id,
+           COUNT(*)                                          AS subquery_count,
+           MAX(s.subquery_text)                              AS outbound_text,
+           bool_or(COALESCE(sr.used_local_cache, false))     AS used_local_cache,
+           bool_or(COALESCE(sr.used_aggregate_cache, false)) AS used_aggregate_cache
+    FROM      ${safeSchema}.subqueries       s
+    LEFT JOIN ${safeSchema}.subquery_results sr ON sr.subquery_id = s.subquery_id
+    GROUP BY s.query_id
+),
+per_query AS (
+    SELECT q.query_id,
+           q.service,
+           q.query_language,
+           q.query_text,
+           p.cube_name,
+           p.project_id,
+           r.finished - p.planning_started                   AS elapsed,
+           r.result_size,
+           COALESCE(sub.subquery_count, 0)                   AS subquery_count,
+           sub.outbound_text,
+           COALESCE(sub.used_local_cache, false)             AS used_local_cache,
+           COALESCE(sub.used_aggregate_cache, false)         AS used_aggregate_cache,
+           EXISTS (SELECT 1 FROM ${safeSchema}.query_aggregate_usage u
+                   WHERE u.query_id = q.query_id)            AS used_agg
+    FROM      ${safeSchema}.queries          q
+    JOIN      ${safeSchema}.query_results    r ON q.query_id = r.query_id
+    JOIN      ${safeSchema}.queries_planned  p ON q.query_id = p.query_id
+    LEFT JOIN sub                               ON q.query_id = sub.query_id
+    WHERE  q.query_language = '${sqEscape(queryLang)}'
+    AND    p.planning_started > current_timestamp - INTERVAL '${days} days'
+    AND    p.cube_name        = '${sqEscape(cubeName)}'
+    AND    q.service          = 'user-query'
+    AND    r.succeeded        = true
+    AND    LENGTH(q.query_text) > 1
+    AND    q.query_text NOT LIKE '/* Virtual query to get the members of a level */%'
+    AND    q.query_text NOT LIKE '-- statement does not return rows%'
+    -- XMLA commands, not queries: they send no subquery (so the LEFT JOIN
+    -- keeps them) and replaying one would refresh the cube mid-run.
+    AND    q.query_text NOT ILIKE 'REFRESH CUBE%'
+)
 SELECT
-    q.service,
-    q.query_language,
-    q.query_text                                                                  AS original_text,
-    MAX(q.query_id::text)                                                         AS atscale_query_id,
-    MAX(s.subquery_text)                                                          AS outbound_text,
-    p.cube_name,
-    p.project_id,
-    CASE WHEN MAX(s.subquery_text) LIKE '%as_agg_%' THEN true ELSE false END      AS used_agg,
-    COUNT(*)                                                                      AS num_times,
-    EXTRACT(EPOCH FROM AVG(r.finished - p.planning_started))                      AS elapsed_time_in_seconds,
-    AVG(r.result_size)                                                            AS avg_result_size
-FROM   ${safeSchema}.queries          q
-JOIN   ${safeSchema}.query_results    r ON q.query_id = r.query_id
-JOIN   ${safeSchema}.queries_planned  p ON q.query_id = p.query_id
-JOIN   ${safeSchema}.subqueries       s ON q.query_id = s.query_id
-WHERE  q.query_language = '${sqEscape(queryLang)}'
-AND    p.planning_started > current_timestamp - INTERVAL '${days} days'
-AND    p.cube_name        = '${sqEscape(cubeName)}'
-AND    q.service          = 'user-query'
-AND    r.succeeded        = true
-AND    LENGTH(q.query_text) > 1
-AND    q.query_text NOT LIKE '/* Virtual query to get the members of a level */%'
-AND    q.query_text NOT LIKE '-- statement does not return rows%'
-GROUP  BY 1, 2, 3, 6, 7
+    service,
+    query_language,
+    query_text                                                AS original_text,
+    MAX(query_id::text)                                       AS atscale_query_id,
+    MAX(outbound_text)                                        AS outbound_text,
+    cube_name,
+    project_id,
+    bool_or(used_agg)                                         AS used_agg,
+    bool_or(used_local_cache)                                 AS used_local_cache,
+    bool_or(used_aggregate_cache)                             AS used_aggregate_cache,
+    COUNT(*)                                                  AS num_times,
+    COUNT(*) FILTER (WHERE used_local_cache OR subquery_count = 0)                 AS cache_executions,
+    COUNT(*) FILTER (WHERE NOT (used_local_cache OR subquery_count = 0) AND used_agg)     AS agg_executions,
+    COUNT(*) FILTER (WHERE NOT (used_local_cache OR subquery_count = 0) AND NOT used_agg) AS raw_executions,
+    AVG(subquery_count)                                       AS avg_subquery_count,
+    EXTRACT(EPOCH FROM AVG(elapsed))                          AS elapsed_time_in_seconds,
+    AVG(result_size)                                          AS avg_result_size
+FROM   per_query
+GROUP  BY service, query_language, query_text, cube_name, project_id
 HAVING COUNT(*) >= ${minExec}
-ORDER  BY 3
+ORDER  BY original_text
 `.trim();
 }
 
@@ -221,7 +286,7 @@ function langLabel(lang: string): "SQL" | "XMLA" {
  *
  * Example: "SQL Query 3 (a3f8c21d-4b90-4e12-8c77-1f2e3d4a5b6c)"
  */
-function rowToRecord(row: Record<string, any>, idx: number, fallbackLang: string, fallbackCube: string): QueryRecord {
+export function rowToRecord(row: Record<string, any>, idx: number, fallbackLang: string, fallbackCube: string): QueryRecord {
   const get = (key: string): any => row[key] ?? row[key.toUpperCase()] ?? row[key.toLowerCase()];
   const text: string = get("original_text") ?? "";
   const atscaleQueryId = String(get("atscale_query_id") ?? "");
@@ -235,6 +300,12 @@ function rowToRecord(row: Record<string, any>, idx: number, fallbackLang: string
     cubeName: get("cube_name") ?? fallbackCube,
     projectId: String(get("project_id") ?? ""),
     aggregateUsed: Boolean(get("used_agg")),
+    cacheExecutions: Number(get("cache_executions") ?? 0),
+    aggExecutions: Number(get("agg_executions") ?? 0),
+    rawExecutions: Number(get("raw_executions") ?? 0),
+    usedLocalCache: Boolean(get("used_local_cache")),
+    usedAggregateCache: Boolean(get("used_aggregate_cache")),
+    avgSubqueryCount: Number(get("avg_subquery_count") ?? 0),
     numTimes: Number(get("num_times") ?? 0),
     elapsedTimeInSeconds:
       get("elapsed_time_in_seconds") != null

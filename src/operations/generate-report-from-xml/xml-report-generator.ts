@@ -469,40 +469,6 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     }
   }
 
-  // ── "Used across cubes" tally — now that every cube's data-set-ref logical section
-  //    has been ingested (Phase 5), keyMap/attrMap hold every key-ref/attribute-ref
-  //    binding, each tagged with the cube it came from (or untagged, for a binding
-  //    declared only in a dataset's own schema-level <logical> block). A key/attribute
-  //    id is genuinely tied to a cube if ANY binding for that id — on this dataset, or on
-  //    another one, e.g. the fact table whose FK binding shares the same id as this
-  //    dataset's own authoritative definition — is cube-tagged. That is the same
-  //    "real join" shape isRealJoin (below) checks per-cube; this just answers it once,
-  //    across all cubes, per dataset. Only bindings for ids that clear that bar are
-  //    counted, so a fully-populated but never-joined dataset (declares plenty of
-  //    key-refs/attribute-refs about its own columns, but no cube's data-set-ref ever
-  //    touches the same ids) correctly reports zero usage instead of its raw declaration
-  //    count.
-  function tallyUsageByDataset(bindingsById: Map<string, { dataset: string; cube?: string }[]>): Map<string, number> {
-    const counts = new Map<string, number>();
-    for (const bindings of bindingsById.values()) {
-      if (!bindings.some((b) => b.cube !== undefined)) continue;
-      // Count this id once per dataset it touches, not once per binding — an id can be
-      // declared twice for the SAME dataset (once untagged in that dataset's own
-      // schema-level <logical> block, once tagged in a cube's data-set-ref <logical>
-      // block that simply restates it), and that must still land as a single "used by
-      // this id" credit, not two.
-      const datasetsForId = new Set(bindings.map((b) => b.dataset));
-      for (const dataset of datasetsForId) counts.set(dataset, (counts.get(dataset) ?? 0) + 1);
-    }
-    return counts;
-  }
-  const keyRefUsage = tallyUsageByDataset(keyMap);
-  const attrRefUsage = tallyUsageByDataset(attrMap);
-  for (const ds of datasets) {
-    ds.keyRefCount = keyRefUsage.get(ds.name) ?? 0;
-    ds.attrRefCount = attrRefUsage.get(ds.name) ?? 0;
-  }
-
   // ── Phase 6: cube-usage rollup ──────────────────────────────────────────────
   // This report is a complete inventory of the XML schema (see file header) — every
   // dataset/dimension/attribute/calculated-member the schema declares is documented
@@ -660,18 +626,24 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   /**
    * Resolves a cross-dimension embed the same way xml-converter.ts's
    * resolveSnowflakeRelationship does: ref-id bridges to the key-ref id that actually carries
-   * it (refPathIdToKeyRefId), which must resolve to EXACTLY one target binding (complete="true"
-   * and unique) plus one other (host) binding — anything else (no bridge, more/fewer than two
-   * bindings, no unique target, or the target resolving back to the host dimension itself) is
-   * not a real, resolvable relationship and must be left out, matching the converter exactly
-   * (e.g. a same-shaped embed whose "target" key-ref is complete but not unique is excluded).
+   * it (refPathIdToKeyRefId). A key-ref id names an abstract <attribute-key>, not a
+   * join-specific pairing, so it can be redeclared by other, unrelated datasets elsewhere in
+   * the schema — keyMap.get(hostKeyRefId) is not reliably exactly the two datasets on either
+   * side of this particular join. The host side is picked by matching the dataset the level's
+   * own primary attribute already lives on (hostDatasetName); the target side by completeness
+   * alone when there are more than two redeclarations, or by completeness AND uniqueness (the
+   * only other signal available) in the ordinary two-entry case — mirrors the converter
+   * exactly, including its own more-than-two-datasets fix.
    */
-  function resolveEmbeddedDimName(refId: string, attrId: string, hostDimName: string): string | undefined {
+  function resolveEmbeddedDimName(refId: string, attrId: string, hostDimName: string, hostDatasetName: string | undefined): string | undefined {
     const hostKeyRefId = refPathIdToKeyRefId.get(refId);
     const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) ?? [] : [];
-    if (entries.length !== 2) return undefined;
-    const targetEntry = entries.find((e) => e.complete === "true" && e.unique);
-    const hostEntry = entries.find((e) => e !== targetEntry);
+    if (entries.length < 2) return undefined;
+    const hostEntry = entries.find((e) => e.dataset === hostDatasetName);
+    const targetEntry =
+      entries.length === 2
+        ? entries.find((e) => e.complete === "true" && e.unique)
+        : entries.find((e) => e.complete === "true" && e !== hostEntry);
     if (!targetEntry || !hostEntry) return undefined;
     const targetDimName = attrIdToDimName.get(attrId);
     if (!targetDimName || targetDimName === hostDimName) return undefined;
@@ -686,7 +658,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   /** Every cross-dimension embed (ref-id present) found on a currently-used dimension's own
    *  level, collected alongside usedAttrIds so the fixed-point loop below can attempt to
    *  resolve each one without re-walking every dimension's levels again. */
-  let pendingEmbeds: Array<{ refId: string; attrId: string; hostDimName: string }> = [];
+  let pendingEmbeds: Array<{ refId: string; attrId: string; hostDimName: string; hostDatasetName: string | undefined }> = [];
   function collectUsedAttrIds(): void {
     usedAttrIds.clear();
     pendingEmbeds = [];
@@ -695,6 +667,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         for (const level of arr(hier.level)) {
           const primaryId = a(level, "primary-attribute");
           if (primaryId) usedAttrIds.add(primaryId);
+          // The dataset this level's own primary attribute is authoritatively bound to — same
+          // pick xml-converter.ts's authEntry.datasetName makes — used below to identify which
+          // of a redeclared key-ref's bindings is the host side, not the embed's target.
+          const hostDatasetName = primaryId ? pickAuthBinding(keyMap.get(attrDef.get(primaryId)?.keyUuid ?? "") ?? [])?.dataset : undefined;
           for (const kref of arr(level["keyed-attribute-ref"])) {
             const attrId = a(kref, "attribute-id");
             if (!attrId) continue;
@@ -705,7 +681,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
               // relationship (matching xml-converter.ts, which drops an unresolved embed
               // entirely — dimMeta.skippedCrossDimRefs — rather than treating it as a live
               // secondary attribute).
-              pendingEmbeds.push({ refId, attrId, hostDimName: d.name });
+              pendingEmbeds.push({ refId, attrId, hostDimName: d.name, hostDatasetName });
             } else {
               usedAttrIds.add(attrId); // plain secondary attribute, hosted natively here
             }
@@ -721,8 +697,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   let grew = true;
   while (grew) {
     grew = false;
-    for (const { refId, attrId, hostDimName } of pendingEmbeds) {
-      const targetDimName = resolveEmbeddedDimName(refId, attrId, hostDimName);
+    for (const { refId, attrId, hostDimName, hostDatasetName } of pendingEmbeds) {
+      const targetDimName = resolveEmbeddedDimName(refId, attrId, hostDimName, hostDatasetName);
       if (targetDimName && !usedDimNames.has(targetDimName)) {
         usedDimNames.add(targetDimName);
         grew = true;
@@ -733,15 +709,71 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       collectUsedAttrIds();
     }
   }
+  // Snapshot the pre-growth set — every dataset a cube's own data-set-ref names directly —
+  // before the loop below adds dimension-backing datasets too. This is the "Fact" side of
+  // the Datasets section's role tag; anything the loop below adds that isn't already here
+  // is a "Dimension" table instead (mirrors generate-report-from-sml's factDatasets/
+  // dimDatasets split, which reads the same fact-vs-dimension distinction off the SML side).
+  const factDatasetNames = new Set(usedDatasetNames);
+
   // Schema-level dimensions never appear in a cube's own data-set-ref list (they're pulled
   // in via keyed-attribute key-refs instead, resolved through keyMap below), so a dataset
   // that only backs a dimension level — never a cube's fact table — still counts as used;
   // matches xml-converter.ts, which scans each emitted dimension's own YAML for the
   // datasets it names, in addition to what cubes reference directly, regardless of whether
   // any individual binding happens to be cube-tagged.
+  //
+  // A key-ref id names an abstract key, not a join-specific pairing, so it can be
+  // redeclared by other, unrelated datasets elsewhere in the schema purely by UUID
+  // coincidence — e.g. a legacy/duplicate dataset that reuses the same key-ref id with
+  // complete="false" and no ref-path of its own, wired to nothing. Growing usedDatasetNames
+  // from every such redeclaration (rather than only the one(s) actually reachable) would
+  // mark that dead dataset "used" purely because a live dimension happens to share its
+  // key-ref id. authoritativeBindings() restricts growth to the complete="true"
+  // registration(s) — the same signal pickAuthBinding/resolveEmbeddedDimName already use to
+  // pick the real source out of a group of redeclarations — falling back to the raw set
+  // only when none are complete.
   for (const attrId of usedAttrIds) {
     const keyUuid = attrDef.get(attrId)?.keyUuid;
-    for (const b of keyUuid ? keyMap.get(keyUuid) ?? [] : []) usedDatasetNames.add(b.dataset);
+    const bindings = keyUuid ? keyMap.get(keyUuid) ?? [] : [];
+    for (const b of authoritativeBindings(bindings)) usedDatasetNames.add(b.dataset);
+  }
+
+  // ── "Used across cubes" tally — usedDatasetNames is now fully grown (direct cube
+  //    data-set-ref references, plus every dataset that only backs a used dimension level,
+  //    including one reached solely through a snowflake/embedded relationship), so gate the
+  //    tally on dataset membership in that set rather than requiring each individual id to
+  //    independently carry a cube-tagged binding. The per-id gate undercounted: only a
+  //    key-ref id gets restated elsewhere (the fact table's own FK binding, sharing the same
+  //    id as the dimension's authoritative definition) — an attribute-ref for a genuine
+  //    (non-degenerate) snowflake dimension is never duplicated onto the fact table, so
+  //    requiring a per-id restatement left attribute-ref counts at zero for every such
+  //    dimension, and silently dropped any of its key-refs that likewise never happen to be
+  //    restated. A dataset that clears the usedDatasetNames bar is, by construction, one
+  //    whose own declared key-refs/attribute-refs are actually wired into the model — mirrors
+  //    xml-converter.ts, which never excludes individual attributes within a dataset it keeps
+  //    — so once a dataset clears that bar, every one of its own bindings counts; a dataset
+  //    that never clears it still reports zero instead of its raw declaration count.
+  function tallyUsageByDataset(bindingsById: Map<string, { dataset: string }[]>): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const bindings of bindingsById.values()) {
+      // Count this id once per dataset it touches, not once per binding — an id can be
+      // declared twice for the SAME dataset (once in that dataset's own schema-level
+      // <logical> block, once in a cube's data-set-ref <logical> block that simply
+      // restates it), and that must still land as a single "used by this id" credit.
+      const datasetsForId = new Set(bindings.map((b) => b.dataset));
+      for (const dataset of datasetsForId) {
+        if (!usedDatasetNames.has(dataset)) continue;
+        counts.set(dataset, (counts.get(dataset) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }
+  const keyRefUsage = tallyUsageByDataset(keyMap);
+  const attrRefUsage = tallyUsageByDataset(attrMap);
+  for (const ds of datasets) {
+    ds.keyRefCount = keyRefUsage.get(ds.name) ?? 0;
+    ds.attrRefCount = attrRefUsage.get(ds.name) ?? 0;
   }
 
   // ============================================================
@@ -846,7 +878,10 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // ── Datasets ────────────────────────────────────────────────────────────────
 
   out.push("## Datasets", "");
-  for (const ds of datasets) renderDataset(out, ds);
+  for (const ds of datasets) {
+    const role = factDatasetNames.has(ds.name) ? "Fact" : usedDatasetNames.has(ds.name) ? "Dimension" : undefined;
+    renderDataset(out, ds, role);
+  }
 
   // ── Attribute Library ────────────────────────────────────────────────────────
 
@@ -927,8 +962,8 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   // Section renderers (closures over the phase-1..5 maps above)
   // ============================================================
 
-  function renderDataset(o: string[], ds: DatasetDef): void {
-    o.push(`### ${ds.name}`, "");
+  function renderDataset(o: string[], ds: DatasetDef, role: string | undefined): void {
+    o.push(`### ${ds.name}${role ? `  \`${role}\`` : ""}`, "");
     const meta: string[] = [];
     if (ds.connectionId) meta.push(`- Connection: \`${cell(ds.connectionId)}\``);
     if (ds.table) meta.push(`- Table: \`${cell([ds.table.database, ds.table.schema, ds.table.name].filter(Boolean).join("."))}\``);
@@ -970,6 +1005,33 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   }
 
   /**
+   * Restricts a key-ref id's SCHEMA-LEVEL redeclarations (cube undefined — see KeyBinding)
+   * to its complete="true" registration(s), dropping bare complete="false" pointers that
+   * merely defer to (or, if undeclared/dangling, never reach) some other dataset. A
+   * schema-level redeclaration's whole purpose is either to BE the source or to point at
+   * one; it is never an independent binding in its own right, so treating it as one
+   * fabricates a join hop that doesn't exist in the resolved model (e.g. a legacy/duplicate
+   * dataset that reuses another dataset's key-ref id with complete="false" and no ref-path
+   * of its own, wired to nothing). Falls back to the raw schema-level set when none are
+   * complete — keyMap defaults a declaration with no explicit `complete` attribute to
+   * "true", so an empty result here only happens when every schema-level declaration is
+   * explicitly an incomplete pointer.
+   *
+   * Cube-scoped bindings (cube set, from a cube's own <data-set-ref> override — see the
+   * other ingestLogical call site) are always kept regardless of `complete`: a cube-scoped
+   * override is itself the evidence the binding is real and reachable from that cube, the
+   * same "independently cube-tagged" signal `tallyUsageByDataset` relies on elsewhere in
+   * this file, so it is never the dangling kind this filter targets.
+   */
+  function authoritativeBindings(bindings: KeyBinding[]): KeyBinding[] {
+    const schemaLevel = bindings.filter((b) => b.cube === undefined);
+    const completeSchemaLevel = schemaLevel.filter((b) => b.complete === "true");
+    if (!completeSchemaLevel.length) return bindings;
+    const cubeLevel = bindings.filter((b) => b.cube !== undefined);
+    return [...completeSchemaLevel, ...cubeLevel];
+  }
+
+  /**
    * A key-ref id can legitimately be registered more than once and still deserve every
    * registration shown, not collapsed to one:
    *  - under more than one DIFFERENT dataset (e.g. a shared/conformed attribute present in
@@ -981,10 +1043,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
    * role" on both) are the alternative/override case pickAuthBinding resolves — e.g. one
    * entry from a dataset's own authoritative <logical> section and a stale/incomplete
    * cube-scoped override of the same key.
+   *
+   * Bare complete="false" pointers to a DIFFERENT dataset are filtered out first (via
+   * authoritativeBindings) rather than grouped alongside the real source(s) — such a
+   * pointer either resolves elsewhere (a snowflake embed, rendered by its own dedicated
+   * table) or nowhere (a dangling/orphaned redeclaration), and either way it is not itself
+   * a binding this attribute's value is drawn from.
    */
   function bindingLabel(bindings: KeyBinding[]): string {
     const byDatasetAndRole = new Map<string, KeyBinding[]>();
-    for (const b of bindings) {
+    for (const b of authoritativeBindings(bindings)) {
       const groupKey = `${b.dataset} ${b.rolePlay ?? ""}`;
       const group = byDatasetAndRole.get(groupKey) ?? [];
       group.push(b);
@@ -1024,6 +1092,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
           cell(def?.caption),
           code(bindingLabel(bindings)),
           cell(levelType),
+          flag(bindings.some((b) => b.unique)),
           flag(!visible) ? "hidden" : "",
           cell(def?.folder),
           def?.allowedCalcTypes.join(", ") ?? "",
@@ -1051,7 +1120,7 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       }
 
       if (levelRows.length) {
-        o.push(...table(["Level (primary attribute)", "Caption", "Bound to (dataset.column)", "Level type", "Hidden", "Folder", "Allowed DMA calcs"], levelRows));
+        o.push(...table(["Level (primary attribute)", "Caption", "Bound to (dataset.column)", "Level type", "Unique key", "Hidden", "Folder", "Allowed DMA calcs"], levelRows));
       }
       if (secondaryRows.length) {
         o.push("Level attributes (name/sort overrides and secondary attributes):", "");
@@ -1089,10 +1158,14 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
    * dimension's key still needs a row describing which column it joins on. That holds even
    * when the authoritative dataset is itself one of this cube's own fact tables (a
    * degenerate dimension whose values live on fact A, looked up via FK from fact B, is a
-   * real relationship, not a coincidence). The one case NOT a real join is two datasets that
+   * real relationship, not a coincidence). Two cases are NOT a real join: two datasets that
    * each independently declare complete="true" for the same key — both already own the
    * value outright, so neither is joining to the other, they just happen to carry the same
-   * degenerate value (shared_degenerate_columns).
+   * degenerate value (shared_degenerate_columns) — and, symmetrically, no dataset at all
+   * declaring complete="true" for the key (every entry is "false"/"partial"): there is no
+   * authoritative lookup table for any of them to join to, so every dataset under that key
+   * hosts the value directly and the whole group is shared-degenerate, not a join. Mirrors
+   * the dimTrueEntry rule in xml-converter.ts's gatherDimensionBindings.
    *
    * Also returns schemaJoinedDimNames: schema-level dimensions this cube actually uses via a
    * key-ref binding (as opposed to an explicit <dimension-ref>) — broader than isRealJoin, since
@@ -1106,6 +1179,9 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
   function computeCubeJoins(cube: El): { joinRows: string[][]; schemaJoinedDimNames: Set<string> } {
     const cubeName = a(cube, "name") ?? "";
     function isRealJoin(b: KeyBinding, allBindings: KeyBinding[]): boolean {
+      // No dataset owns the key outright: it is a shared-degenerate value living directly
+      // on every dataset registered under it, not a cross-table relationship at all.
+      if (!allBindings.some((e) => e.complete === "true")) return false;
       return allBindings.some((other) => other.dataset !== b.dataset && !(b.complete === "true" && other.complete === "true"));
     }
     const joinRows: string[][] = [];
@@ -1169,6 +1245,16 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
    * bare key-ref join (schemaJoinedDimNames, from computeCubeJoins) with no <dimension-ref>
    * ever naming it — without that, such dimensions would silently vanish from "Dimensions
    * used" even though the cube genuinely depends on them.
+   *
+   * The converse also has to be filtered: a schema-level <dimension-ref> is only a
+   * *declaration* that the cube's schema mentions the dimension, not proof the cube joins
+   * to it. A schema can (and legitimately does) declare a dimension-ref whose dataset has
+   * no key-ref binding to any of this cube's fact datasets anywhere in the model — a
+   * dimension left over from another cube's schema, or never wired up at all. Such a
+   * dimension-ref is excluded here exactly as xml-converter.ts excludes it from the
+   * emitted SML (its referencedDimNames is built from real relationships/degenerate
+   * bindings, not from the mere presence of a <dimension-ref>), so this report's "used by
+   * a cube" counts agree with what actually gets converted.
    */
   function computeCubeDimNames(cube: El, schemaJoinedDimNames: Set<string>): { dimNames: string[]; usedNames: Set<string> } {
     const dimNames: string[] = [];
@@ -1183,6 +1269,11 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         const refId = a(dimRef, "id");
         const found = [...schemaDims.entries()].find(([, d]) => a(d, "id") === refId);
         const dName = found ? found[0] : refId ?? "?";
+        // Only drop it when we positively resolved the ref to a real schema-level
+        // dimension AND that dimension has zero cube-tagged key-ref bindings anywhere
+        // (schemaJoinedDimNames). An unresolved ref (found undefined) is kept as before —
+        // there's nothing to check it against.
+        if (found && !schemaJoinedDimNames.has(dName)) continue;
         dimNames.push(dName);
         namedDimNames.add(dName);
       }
@@ -1402,28 +1493,41 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
       o.push(...table(["Name", "Caption", "Formula", "Folder", "Format", "Hidden"], calcRows));
     }
 
-    // User Defined Aggregates.
+    // User Defined Aggregates. Each attribute-ref is split into the dimension-attribute
+    // column or the metric column (measures and calculated members) based on which map
+    // resolved it, mirroring the SML report's separate "# attributes"/"# metrics" columns.
     const aggRows: string[][] = [];
     for (const aggsSec of arr(cube.aggregates)) {
       for (const aggEl of arr(aggsSec.aggregate)) {
         const aggName = a(aggEl, "name") ?? "?";
         const targetConn = s(first(arr(aggEl["target-connection"])));
-        const attrIds: string[] = [];
+        const attrNames: string[] = [];
+        const metricNames: string[] = [];
         for (const attrsWrap of arr(aggEl.attributes)) {
           for (const attrRef of arr(attrsWrap["attribute-ref"])) {
             const refId = a(attrRef, "id");
             const def = refId ? attrDef.get(refId) : undefined;
-            const resolvedName =
-              def?.name ?? (refId ? attrNameById.get(refId) ?? calcMemberDef.get(refId)?.name : undefined);
-            attrIds.push(resolvedName ?? refId ?? "?");
+            if (def) {
+              attrNames.push(def.name);
+              continue;
+            }
+            const resolvedName = refId ? attrNameById.get(refId) ?? calcMemberDef.get(refId)?.name : undefined;
+            metricNames.push(resolvedName ?? refId ?? "?");
           }
         }
-        aggRows.push([code(aggName), code(targetConn), String(attrIds.length), attrIds.map((n) => `\`${n}\``).join(", ")]);
+        aggRows.push([
+          code(aggName),
+          code(targetConn),
+          String(attrNames.length),
+          attrNames.map((n) => `\`${n}\``).join(", "),
+          String(metricNames.length),
+          metricNames.map((n) => `\`${n}\``).join(", "),
+        ]);
       }
     }
     if (aggRows.length) {
       o.push("**User Defined Aggregates**", "");
-      o.push(...table(["Name", "Target connection", "# attributes", "Attributes"], aggRows));
+      o.push(...table(["Name", "Target connection", "# attributes", "Attributes", "# metrics", "Metrics"], aggRows));
     }
 
     // Named sets / KPIs (presence-only — no SML equivalent, but the user should

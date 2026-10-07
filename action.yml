@@ -13,6 +13,7 @@ inputs:
         extract-model-from-sml
         generate-sml-from-connection
         generate-sml-from-ddl
+        generate-sml-from-bundle
         generate-namespace-from-model
         generate-metrics-from-model
         generate-tableau-from-namespace
@@ -132,7 +133,10 @@ inputs:
     description: Database schema to scope SML generation to.
     required: false
   catalog-name:
-    description: Catalog (database) name for the SML project.
+    description: >
+      Catalog (database) name for the SML project. For
+      extract-query-stats-from-atscale, the AtScale catalog containing the model
+      (defaults to mdx.catalog_name of the connection).
     required: false
   pii-severity:
     description: Minimum PII severity level to tag in generated SML (none/low/medium/high).
@@ -201,6 +205,25 @@ inputs:
   # ── generate-sml-from-ddl ────────────────────────────────────────────────
   ddl-file:
     description: Path to the DDL SQL file to parse for SML generation.
+    required: false
+
+  # ── generate-sml-from-bundle ─────────────────────────────────────────────
+  bundles:
+    description: >
+      Comma-separated AtScale support bundle paths: the engine's support-bundle
+      .zip, a directory containing metadata/ or metadata.zip, or a zip of such a
+      directory. Used by: generate-sml-from-bundle.
+    required: false
+  force:
+    description: >
+      Re-convert projects whose output directory already exists ("true"/"false").
+      Used by: generate-sml-from-bundle.
+    required: false
+    default: "false"
+  org:
+    description: >
+      Comma-separated organisation folder names to include (installer bundles).
+      Used by: generate-sml-from-bundle.
     required: false
 
   # ── generate-sml-from-xml / generate-report-from-xml ────────────────────
@@ -583,6 +606,11 @@ inputs:
       atscale-list-aggregate-build-history (default: 20).
     required: false
 
+  query-source:
+    description: >
+      Which queries to read: "user" (default), "system" (engine-issued) or "all".
+      Used by: extract-query-stats-from-atscale.
+    required: false
   # ── generate-enhanced-query-results ──────────────────────────────────────
   db-schema:
     description: >
@@ -670,6 +698,13 @@ inputs:
     description: >
       Override the cube name used in MDX FROM and SQL FROM clauses.
       Defaults to the model label from the SML model file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+  metrics-per-level-query:
+    description: >
+      How level breakdowns select metrics: "all" (default; one query per level
+      selecting every metric) or "each" (one query per level and metric, so a
+      metric not defined over a dimension fails only its own query).
       Used by: generate-queries-from-sml, generate-queries-from-model.
     required: false
 
@@ -1122,6 +1157,25 @@ runs:
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-bundle ─────────────────────────────────────────────
+    - name: Generate SML from support bundles
+      if: inputs.operation == 'generate-sml-from-bundle'
+      run: |
+        ARGS=(
+          --bundles    "${{ inputs.bundles }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ "${{ inputs.force }}" == "true" ]]       && ARGS+=(--force true)
+        [[ -n "${{ inputs.org }}" ]]                && ARGS+=(--org               "${{ inputs.org }}")
+        [[ -n "${{ inputs.connection-name }}"   ]]  && ARGS+=(--connection-name   "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}"   ]]  && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]]  && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]]  && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.model-mode }}"        ]]  && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-bundle "${ARGS[@]}"
       shell: bash
 
     # ── generate-sml-from-xml ────────────────────────────────────────────────
@@ -1710,11 +1764,13 @@ runs:
           --model           "${{ inputs.model }}"
           --verbose true
         )
+        [[ -n "${{ inputs.catalog-name }}"  ]] && ARGS+=(--catalog       "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
         [[ -n "${{ inputs.window-days }}"   ]] && ARGS+=(--window-days   "${{ inputs.window-days }}")
         [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")
         [[ -n "${{ inputs.end-date }}"      ]] && ARGS+=(--end-date      "${{ inputs.end-date }}")
         [[ -n "${{ inputs.limit }}"         ]] && ARGS+=(--limit         "${{ inputs.limit }}")
+        [[ -n "${{ inputs.query-source }}"  ]] && ARGS+=(--query-source  "${{ inputs.query-source }}")
         [[ "${{ inputs.monthly }}" == "true" ]] && ARGS+=(--monthly true)
         [[ -n "${{ inputs.monthly-year }}"  ]] && ARGS+=(--monthly-year  "${{ inputs.monthly-year }}")
         node "${{ github.action_path }}/dist/cli.js" extract-query-stats-from-atscale "${ARGS[@]}"
@@ -1815,6 +1871,7 @@ runs:
         )
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        [[ -n "${{ inputs.metrics-per-level-query }}" ]] && ARGS+=(--metrics-per-level-query "${{ inputs.metrics-per-level-query }}")
         node "${{ github.action_path }}/dist/cli.js" generate-queries-from-sml "${ARGS[@]}"
       shell: bash
 
@@ -1830,6 +1887,7 @@ runs:
         )
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        [[ -n "${{ inputs.metrics-per-level-query }}" ]] && ARGS+=(--metrics-per-level-query "${{ inputs.metrics-per-level-query }}")
         node "${{ github.action_path }}/dist/cli.js" generate-queries-from-model "${ARGS[@]}"
       shell: bash
 
