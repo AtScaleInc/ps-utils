@@ -45,7 +45,7 @@ class GenerateDDLFromDataShapeParamsSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name         = "dialect";
-      description  = "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery";
+      description  = "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks";
       required     = false;
       defaultValue = "ansi";
     })(),

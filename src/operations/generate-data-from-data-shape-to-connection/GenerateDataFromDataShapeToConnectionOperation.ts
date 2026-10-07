@@ -89,7 +89,7 @@ class GenerateDataToConnectionParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "dialect";
-      description = "SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.";
+      description = "SQL dialect for CREATE TABLE and INSERT: ansi, postgresql, snowflake, mysql, bigquery, databricks. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.";
       required    = false;
     })(),
     new (class extends NumberParameter {
@@ -100,7 +100,7 @@ class GenerateDataToConnectionParams extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name        = "schema";
-      description = "Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default.";
+      description = "Target schema to qualify table names (e.g. PUBLIC; a dataset on BigQuery).  Omit to use the connection default — on BigQuery, the connection's sql.schema (or sql.dataset).";
       required    = false;
     })(),
     new (class extends StringParameter {
@@ -150,7 +150,6 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
     const inputFile    = path.resolve(params["input-file"]);
     const reportsDir   = path.resolve(params["reports-dir"]);
     const batchSize    = Math.max(1, params["batch-size"]);
-    const schemaPrefix = params["schema"] ? `${params["schema"]}.` : "";
     const doCreate     = params["create-tables"] || params["drop-if-exists"];
     const doDrop       = params["drop-if-exists"];
     const startedAt    = new Date().toISOString();
@@ -184,12 +183,24 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
     const config = yaml.readFromFile<ConnectionConfig>(params["connection-file"]);
 
     // Resolve dialect: explicit flag → connection config → ansi fallback
-    const connectionDialect =
-      config.connections?.[params["connection-name"]]?.sql?.dialect as string | undefined;
+    const connectionSql = config.connections?.[params["connection-name"]]?.sql;
+    const connectionDialect = connectionSql?.dialect as string | undefined;
     const dialect = (params["dialect"] || connectionDialect || "ansi") as SqlDialect;
     if (!params["dialect"] && connectionDialect) {
       this.logger.log(`[${tag}] Using dialect from connection config: ${connectionDialect}`);
     }
+
+    // BigQuery has no session default dataset, so unqualified table names fail;
+    // fall back to the dataset named on the connection.
+    const schema: string | undefined =
+      params["schema"] ||
+      (dialect === "bigquery" ? connectionSql?.schema ?? connectionSql?.dataset : undefined);
+    if (dialect === "bigquery" && !schema) {
+      throw new Error(
+        "BigQuery needs a target dataset: pass --schema or set sql.schema on the connection.",
+      );
+    }
+    const schemaPrefix = schema ? `${schema}.` : "";
 
     const conn = await sql.connect(config, params["connection-name"]);
     this.logger.log(`[${tag}] Connected to "${params["connection-name"]}"`);
@@ -228,12 +239,12 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
       await Promise.all(
         data.dimensions
           .filter((t) => t.rows.length > 0)
-          .map((t) => insertTable(sql, conn, t, schemaPrefix, batchSize, this.logger, tag)),
+          .map((t) => insertTable(sql, conn, t, schemaPrefix, batchSize, dialect, this.logger, tag)),
       );
       await Promise.all(
         data.facts
           .filter((t) => t.rows.length > 0)
-          .map((t) => insertTable(sql, conn, t, schemaPrefix, batchSize, this.logger, tag)),
+          .map((t) => insertTable(sql, conn, t, schemaPrefix, batchSize, dialect, this.logger, tag)),
       );
 
       const allTables = [...data.dimensions, ...data.facts];
@@ -249,7 +260,7 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
         .update(JSON.stringify({
           rowCounts, fingerprintSha256,
           connection: params["connection-name"],
-          schema:     params["schema"] ?? null,
+          schema:     schema ?? null,
           seed:       params["seed"],
           scaleFactor: params["scale-factor"],
         }))
@@ -260,7 +271,7 @@ export class GenerateDataFromDataShapeToConnectionOperation extends Operation<Pa
         startedAt, completedAt,
         inputs: { fingerprintFile: inputFile, fingerprintSha256, fingerprintVersion: fp.version },
         outputs: {
-          path: `${params["connection-name"]}:${params["schema"] ?? "(default)"}`,
+          path: `${params["connection-name"]}:${schema ?? "(default)"}`,
           kind: "database",
           artifacts: allTables.map((t) => `${schemaPrefix}${t.tableName}`),
         },
@@ -310,6 +321,7 @@ async function insertTable(
   table:      GeneratedTable,
   prefix:     string,
   batchSize:  number,
+  dialect:    SqlDialect,
   logger:     Logger,
   tag:        string,
 ): Promise<void> {
@@ -323,7 +335,7 @@ async function insertTable(
   for (let start = 0; start < totalRows; start += batchSize) {
     const batch   = table.rows.slice(start, start + batchSize);
     const valRows = batch.map(
-      (row) => `(${row.map(sqlLiteral).join(", ")})`,
+      (row) => `(${row.map((v) => sqlLiteral(v, dialect)).join(", ")})`,
     ).join(",\n  ");
 
     const insertSql = `INSERT INTO ${qualName} (${colList}) VALUES\n  ${valRows}`;
@@ -334,22 +346,36 @@ async function insertTable(
   logger.log(`    ✓ ${inserted.toLocaleString()} rows`);
 }
 
+/** Dialects whose string literals escape with a backslash rather than a doubled quote. */
+const BACKSLASH_ESCAPE_DIALECTS: ReadonlySet<SqlDialect> = new Set(["bigquery", "databricks"]);
+
 /** Convert a JS value to a SQL literal. */
-function sqlLiteral(v: unknown): string {
+function sqlLiteral(v: unknown, dialect: SqlDialect): string {
   if (v === null || v === undefined) return "NULL";
   if (typeof v === "number")         return String(v);
   if (typeof v === "boolean")        return v ? "1" : "0";
-  // String: escape single quotes
+  // BigQuery rejects '' inside a literal, and Spark SQL reads 'it''s' as two
+  // adjacent literals ('it' 's' → "its"); both take backslash escapes instead.
+  if (BACKSLASH_ESCAPE_DIALECTS.has(dialect)) {
+    return `'${String(v).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+  }
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
 // ─── DDL parsing helpers ──────────────────────────────────────────────────────
 
-/** Split DDL output into individual CREATE TABLE statements. */
+/**
+ * Split DDL output into individual CREATE TABLE statements.
+ *
+ * Comments are stripped before splitting: generated column comments can
+ * contain a semicolon (e.g. `-- → D1 leaf; NOT NULL`), which would otherwise
+ * cut a statement off mid-column-list.
+ */
 function parseDdlStatements(ddl: string): string[] {
   return ddl
+    .replace(/--[^\n]*/g, "")
     .split(/;/)
-    .map((s) => s.replace(/--[^\n]*/g, "").trim())
+    .map((s) => s.trim())
     .filter((s) => /^CREATE\s+TABLE/i.test(s))
     .map((s) => s + ";");
 }

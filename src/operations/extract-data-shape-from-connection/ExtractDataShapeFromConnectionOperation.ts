@@ -124,18 +124,33 @@ class SqlQueryRunner implements DatabaseQueryRunner {
 // ─── Dialect detection ────────────────────────────────────────────────────────
 
 /**
- * Infer whether the connected database supports TABLESAMPLE SYSTEM from the
+ * Dialects known to accept a TABLESAMPLE clause. The exact form differs per
+ * dialect — see `tablesampleClause` in statistics/sampling.ts.
+ *
+ * Deliberately an allowlist: a denylist lets any new dialect through and hands
+ * it syntax it may not accept, which fails mid-profile rather than falling back.
+ * Anything not listed here uses the LIMIT-based fallback, which is universally
+ * valid and only costs randomness.
+ */
+const TABLESAMPLE_DIALECTS = [
+  "postgres",    // includes "postgresql"
+  "snowflake",
+  "databricks",
+  "spark",
+  "bigquery",
+  "duckdb",
+];
+
+/**
+ * Infer whether the connected database supports a TABLESAMPLE clause from the
  * dialect string in the connection config.
  *
- * Conservative: only return true for explicitly known-good dialects.
- * Users can override with --no-tablesample for unsupported databases.
+ * Users can override with --no-tablesample.
  */
 function dialectSupportsTablesample(dialect?: string): boolean {
-  if (!dialect) return true; // assume yes for unknown dialects
+  if (!dialect) return false; // unknown dialect — use the portable fallback
   const d = dialect.toLowerCase();
-  // MySQL / MariaDB do not support standard TABLESAMPLE
-  if (d.includes("mysql") || d.includes("mariadb")) return false;
-  return true;
+  return TABLESAMPLE_DIALECTS.some((s) => d.includes(s));
 }
 
 // ─── Operation ────────────────────────────────────────────────────────────────

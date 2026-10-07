@@ -917,7 +917,7 @@ function generateDDLFromDataShape(
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `inputFile` | `FileInput` | No | `"data-shape.yaml"` | Path to `data-shape.yaml`, or a `Readable` of its contents |
-| `dialect` | `string` | No | `"ansi"` | SQL dialect (e.g. `ansi`, `snowflake`) |
+| `dialect` | `string` | No | `"ansi"` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks` |
 | `outputFile` | `FileOutput` | No | | Output path for DDL, or a `Writable` to receive it (stdout if omitted) |
 | `preserveMetadata` | `boolean` | No | `false` | Use original table and column names from the fingerprint metadata block |
 
@@ -985,7 +985,7 @@ function generateDataFromDataShapeToConnection(
 | `batchSize` | `number` | No | `500` | Insert batch size |
 | `reportsDir` | `string` | No | `"_reports"` | Directory for load reports |
 | `seed` | `number` | No | | Random seed for reproducible output |
-| `schema` | `string` | No | | Target schema to qualify table names |
+| `schema` | `string` | No | | Target schema to qualify table names (a dataset on BigQuery; defaults to the connection's `sql.schema` there) |
 | `preserveMetadata` | `boolean` | No | `false` | Use original table and column names from the fingerprint metadata block |
 
 ---

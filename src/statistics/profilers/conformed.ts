@@ -16,7 +16,7 @@ import type {
   ConformedDimensionFingerprint,
   SamplingConfig,
 } from "../types.js";
-import { q, qualifyTable, num } from "../sql-helpers.js";
+import { num, quoter } from "../sql-helpers.js";
 import type { IdMapper }        from "../id-mapper.js";
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -25,9 +25,10 @@ export async function profileConformedDimensions(
   runner:     DatabaseQueryRunner,
   facts:      FactNode[],
   dimensions: DimensionNode[],
-  _config:    SamplingConfig,
+  config:     SamplingConfig,
   idMapper:   IdMapper,
 ): Promise<ConformedDimensionFingerprint[]> {
+  const { q, qualifyTable } = quoter(config.dialect);
   const dimByName = new Map(dimensions.map((d) => [d.uniqueName, d]));
   const results: ConformedDimensionFingerprint[] = [];
 

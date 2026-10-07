@@ -20,6 +20,25 @@ import type { Logger } from "../logging.js";
 
 type DatabricksSession = Awaited<ReturnType<DBSQLClient["openSession"]>>;
 
+/**
+ * INFORMATION_SCHEMA.TABLES.TABLE_TYPE values that mean "a regular table".
+ *
+ * Postgres, Redshift and Snowflake report the ANSI 'BASE TABLE'. Databricks
+ * Unity Catalog reports the storage kind instead (MANAGED, EXTERNAL, and the
+ * shallow-clone / foreign / streaming variants), so filtering on 'BASE TABLE'
+ * alone silently matches nothing there. Matching the whole set is safe on every
+ * dialect — the others never emit the Databricks values.
+ */
+export const BASE_TABLE_TYPES = [
+  "BASE TABLE",
+  "MANAGED",
+  "EXTERNAL",
+  "MANAGED_SHALLOW_CLONE",
+  "EXTERNAL_SHALLOW_CLONE",
+  "FOREIGN",
+  "STREAMING_TABLE",
+] as const;
+
 export type SqlConnection =
   | { dialect: "postgres"; client: PgClientType }
   | { dialect: "redshift"; client: PgClientType }
@@ -454,11 +473,14 @@ export class SqlService extends ServiceProvider {
     users: Record<string, any>,
     connectionUser?: string,
   ): Promise<SqlConnection> {
-    const userEntry = this.resolveUserEntry(users, sql.user ?? sql.username, connectionUser);
+    // `databricks_user` mirrors how connectSnowflake accepts `snowflake_user`, and
+    // `path` is the key the README's connection example uses.
+    const userKey  = sql.databricks_user ?? sql.user ?? sql.username;
+    const userEntry = this.resolveUserEntry(users, userKey, connectionUser);
     const host = sql.server ?? sql.host;
-    const httpPath = sql.http_path ?? sql.httpPath;
+    const httpPath = sql.http_path ?? sql.httpPath ?? sql.path;
     if (!host || !httpPath) {
-      throw new Error("Databricks connection requires 'server' and 'http_path'.");
+      throw new Error("Databricks connection requires 'server' (or 'host') and 'http_path' (or 'path').");
     }
 
     // Databricks personal access tokens are also accepted as the password of
@@ -644,8 +666,9 @@ export class SqlService extends ServiceProvider {
     tablePattern = "%",
     types = ["TABLE"],
   ): Promise<any[]> {
-    // INFORMATION_SCHEMA uses 'BASE TABLE' for regular tables; accept 'TABLE' as a shorthand.
-    const mappedTypes = types.map((t) => (t === "TABLE" ? "BASE TABLE" : t));
+    // Accept 'TABLE' as shorthand for every INFORMATION_SCHEMA value that means
+    // "a regular table" — see BASE_TABLE_TYPES.
+    const mappedTypes = types.flatMap((t) => (t === "TABLE" ? [...BASE_TABLE_TYPES] : [t]));
     if (connection.dialect === "bigquery") {
       return this.queryEachBigQueryDataset(connection, schema, (from) =>
         `SELECT table_name   AS TABLE_NAME,

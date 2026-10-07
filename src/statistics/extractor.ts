@@ -121,7 +121,7 @@ export async function extractFingerprint(
       return { id: idMapper.dimensionId(dim.uniqueName), ...cached };
     }
     log(`  Dimension: ${dim.sourceTable}`);
-    const rowCount    = await countRows(runner, dim.sourceSchema, dim.sourceTable);
+    const rowCount    = await countRows(runner, dim.sourceSchema, dim.sourceTable, config.dialect);
     const hierarchies = await profileHierarchies(runner, dim, config, idMapper);
     seenDimTables.set(dim.sourceTable, { rowCount, hierarchies });
     return { id: idMapper.dimensionId(dim.uniqueName), rowCount, hierarchies };
@@ -159,7 +159,7 @@ export async function extractFingerprint(
 
   for (const fact of uniqueFacts) {
     log(`  Fact: ${fact.sourceTable}`);
-    const rowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable);
+    const rowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable, config.dialect);
 
     log(`    → density profiling (${fact.joins.length} join(s))…`);
     const { joins, coldMembers, fkAssociations } = await profileFactJoins(
