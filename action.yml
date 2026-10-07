@@ -402,8 +402,8 @@ inputs:
       Database dialect.
       For generate-sml-from-ddl: e.g. snowflake, postgresql — auto-detected from filename if omitted;
       when snowflake, dataset table names are uppercased.
-      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, or bigquery.
-      BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
+      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, bigquery, or databricks.
+      BigQuery and Databricks omit PRIMARY KEY / FOREIGN KEY constraints.
       For generate-data-from-data-shape-to-connection: when omitted, the dialect is read from
       the connection configuration (sql.dialect); falls back to ansi.
     required: false
@@ -635,7 +635,8 @@ inputs:
       database and fetches an execution plan (EXPLAIN) for each outbound query,
       stored in the 'run_outbound_execution_plan' column.
       Supported dialects: snowflake (SYSTEM$EXPLAIN_PLAN_JSON), postgres
-      (EXPLAIN FORMAT JSON), redshift (EXPLAIN).
+      (EXPLAIN FORMAT JSON), redshift (EXPLAIN), databricks (EXPLAIN FORMATTED),
+      bigquery (dry-run job statistics; BigQuery has no EXPLAIN).
       Used by: generate-enhanced-query-results.
     required: false
 

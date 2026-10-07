@@ -1068,7 +1068,7 @@ With Snowflake dialect:
 |---|---|---|---|
 | `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `output-file` | No | stdout | Output path for the generated DDL |
-| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. BigQuery and Databricks omit `PRIMARY KEY` / `FOREIGN KEY` constraints |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
 **Dialect notes:** `bigquery` omits `PRIMARY KEY`/`FOREIGN KEY` constraints. `snowflake` maps integers to `NUMBER(n,0)`. All others use standard ANSI types.
@@ -1172,9 +1172,9 @@ Full pipeline — extract shape, generate DDL, populate:
 | `seed` | No | — | Integer seed for reproducible output |
 | `create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `create-tables` |
-| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
+| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE` and `INSERT`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
 | `batch-size` | No | `500` | Rows per `INSERT` statement |
-| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`; a dataset on BigQuery). On BigQuery, defaults to the connection's `sql.schema` (or `sql.dataset`) and is required if neither is set |
 | `reports-dir` | No | `_reports` | Directory for security audit artifacts |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
@@ -1615,7 +1615,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `output-file` | No | `{stem}_enhanced.csv` | Output file path |
 | `db-schema` | No | auto | Postgres schema for AtScale backend tables (`atscale` or `engine`) |
 | `days` | No | `7` | Look-back window when searching the AtScale query log |
-| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`. |
+| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`, `databricks`, and `bigquery` (dry run). |
 
 **Output:** Input CSV with the following columns appended on the right. Rows with no match have empty values.
 
@@ -1624,7 +1624,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `run_atscale_query_id` | Always | AtScale's internal `query_id` for the inbound query |
 | `run_inbound_query_id` | Always | AtScale's `query_id` for the inbound annotated query (same source as `run_atscale_query_id`) |
 | `run_outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
-| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift and Databricks (`EXPLAIN FORMATTED`), JSON dry-run job statistics for BigQuery (no `EXPLAIN` exists; the query is validated but not executed) |
 | `run_used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
 | `run_duration_ms` | When matched | Total wall-clock time from query receipt to last result row (ms). Computed as `query_results.finished − queries.received`. Falls back to `finished − planning_started` if `received` is unavailable. |
 | `run_inbound_ms` | Best-effort | **INBOUND phase** — time from query receipt to start of planning (ms). Computed as `queries_planned.planning_started − queries.received`. Matches the "INBOUND" metric in the AtScale query monitor. |

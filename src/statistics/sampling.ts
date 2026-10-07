@@ -10,6 +10,7 @@
  */
 
 import type { SamplingConfig } from "./types.js";
+import { quoter } from "./sql-helpers.js";
 
 // ─── Sample size ──────────────────────────────────────────────────────────────
 
@@ -40,6 +41,21 @@ function zForConfidence(c: number): number {
 
 // ─── Sampling clauses ─────────────────────────────────────────────────────────
 
+/**
+ * The TABLESAMPLE form each dialect accepts.
+ *
+ *   postgres / redshift / snowflake  TABLESAMPLE SYSTEM (pct)
+ *   bigquery                         TABLESAMPLE SYSTEM (pct PERCENT)   — PERCENT required
+ *   databricks                       TABLESAMPLE (pct PERCENT)          — no SYSTEM keyword
+ */
+function tablesampleClause(dialect: string | undefined, pct: number): string {
+  const d = (dialect ?? "").toLowerCase();
+  const n = pct.toFixed(4);
+  if (d.includes("databricks") || d.includes("spark")) return `TABLESAMPLE (${n} PERCENT)`;
+  if (d.includes("bigquery")) return `TABLESAMPLE SYSTEM (${n} PERCENT)`;
+  return `TABLESAMPLE SYSTEM (${n})`;
+}
+
 export interface SampleClause {
   /** Full table reference to use in the FROM clause. */
   tableRef:       string;
@@ -53,7 +69,7 @@ export interface SampleClause {
  * Build a SQL FROM-clause table reference that samples the table when its
  * estimated row count exceeds `targetRows`.
  *
- * Uses TABLESAMPLE SYSTEM(pct) when supported; falls back to
+ * Uses a dialect-appropriate TABLESAMPLE form when supported; falls back to
  * `(SELECT * FROM t LIMIT n)` otherwise.  The fallback loses true randomness
  * but is universally compatible and acceptable for distribution estimation.
  */
@@ -64,6 +80,7 @@ export function buildSampleClause(
   targetRows: number,
   config: SamplingConfig,
 ): SampleClause {
+  const { qualifyTable } = quoter(config.dialect);
   const qualified = qualifyTable(schema, table);
 
   if (estimatedRowCount <= targetRows || targetRows <= 0) {
@@ -76,7 +93,7 @@ export function buildSampleClause(
 
   if (config.supportsTablesample) {
     return {
-      tableRef:       `${qualified} TABLESAMPLE SYSTEM (${pct.toFixed(4)})`,
+      tableRef:       `${qualified} ${tablesampleClause(config.dialect, pct)}`,
       scaleFactor,
       sampled:        true,
       sampleFraction: pct / 100,
@@ -93,8 +110,3 @@ export function buildSampleClause(
   };
 }
 
-// ─── Helper (shared with sql-helpers) ────────────────────────────────────────
-
-function qualifyTable(schema: string, table: string): string {
-  return schema ? `"${schema}"."${table}"` : `"${table}"`;
-}

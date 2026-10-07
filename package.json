@@ -47,6 +47,8 @@
     "check:atscale-capabilities": "node dist/scripts/check-atscale-capabilities.js"
   },
   "dependencies": {
+    "@databricks/sql": "^2.2.0",
+    "@google-cloud/bigquery": "^9.1.0",
     "@types/node": "^25.3.0",
     "axios": "^1.13.5",
     "busboy": "^1.6.0",

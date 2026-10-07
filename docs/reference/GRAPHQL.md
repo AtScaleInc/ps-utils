@@ -799,7 +799,7 @@ curl -X POST http://localhost:4000/graphql \
 | `inputFileUpload` | `Upload` | No | Multipart upload — alternative to `inputFile` |
 | `inputFileContent` | `String` | No | Raw string content — alternative to `inputFile` |
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
-| `dialect` | `String` | No | SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery |
+| `dialect` | `String` | No | SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks |
 | `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 
 **GraphQL:**
@@ -904,9 +904,9 @@ curl -X POST http://localhost:4000/graphql \
 | `seed` | `Int` | No | Random seed for reproducible output |
 | `createTables` | `Boolean` | No | Emit CREATE TABLE statements before inserting (default: false) |
 | `dropIfExists` | `Boolean` | No | DROP TABLE IF EXISTS before creating tables — implies --create-tables (default: false) |
-| `dialect` | `String` | No | SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi. |
+| `dialect` | `String` | No | SQL dialect for CREATE TABLE and INSERT: ansi, postgresql, snowflake, mysql, bigquery, databricks. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi. |
 | `batchSize` | `Int` | No | Rows per INSERT statement (default: 500) |
-| `schema` | `String` | No | Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default. |
+| `schema` | `String` | No | Target schema to qualify table names (e.g. PUBLIC; a dataset on BigQuery).  Omit to use the connection default — on BigQuery, the connection's sql.schema (or sql.dataset). |
 | `reportsDir` | `String` | No | Directory where security reports are written (default: ./_reports) |
 | `preserveMetaData` | `Boolean` | No | Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true. |
 
@@ -1588,7 +1588,7 @@ curl -X POST http://localhost:4000/graphql \
 | `outputFile` | `String` | — | *Server-managed output path — do not pass* |
 | `dbSchema` | `String` | No | Postgres schema prefix for the AtScale backend tables (e.g. 'engine' or 'atscale'). Auto-detected from the connection file when omitted (installer → 'atscale', container → 'engine'). |
 | `days` | `String` | No | How far back in the AtScale query log to search (default: 7). Increase if the harness run was more than a week ago. |
-| `targetConnectionName` | `String` | No | Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift. |
+| `targetConnectionName` | `String` | No | Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift, databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN). |
 
 \* Required when neither the `Upload` nor `Content` variant is provided.
 
@@ -3978,7 +3978,7 @@ input GenerateDdlFromDataShapeInput {
   inputFileContent: String
   """Output path for the generated DDL.  Omit to write to stdout."""
   outputFile: String
-  """SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery"""
+  """SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks"""
   dialect: String
   """Use original table and column names from the fingerprint metadata block instead of synthetic names (default: false). Only has effect when the fingerprint was extracted with --preserve-meta-data true."""
   preserveMetaData: Boolean
@@ -4028,11 +4028,11 @@ input GenerateDataFromDataShapeToConnectionInput {
   createTables: Boolean
   """DROP TABLE IF EXISTS before creating tables — implies --create-tables (default: false)"""
   dropIfExists: Boolean
-  """SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi."""
+  """SQL dialect for CREATE TABLE and INSERT: ansi, postgresql, snowflake, mysql, bigquery, databricks. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi."""
   dialect: String
   """Rows per INSERT statement (default: 500)"""
   batchSize: Int
-  """Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default."""
+  """Target schema to qualify table names (e.g. PUBLIC; a dataset on BigQuery).  Omit to use the connection default — on BigQuery, the connection's sql.schema (or sql.dataset)."""
   schema: String
   """Directory where security reports are written (default: ./_reports)"""
   reportsDir: String
@@ -4062,7 +4062,7 @@ input GenerateEnhancedQueryResultsInput {
   dbSchema: String
   """How far back in the AtScale query log to search (default: 7). Increase if the harness run was more than a week ago."""
   days: String
-  """Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift."""
+  """Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift, databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN)."""
   targetConnectionName: String
 }
 
