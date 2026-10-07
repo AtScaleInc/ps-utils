@@ -23,7 +23,7 @@ import type {
   PairwiseMeasureCorrelation,
   SamplingConfig,
 } from "../types.js";
-import { qualifyTable, num, queryPercentiles } from "../sql-helpers.js";
+import { num, queryPercentiles } from "../sql-helpers.js";
 import { buildSampleClause }                   from "../sampling.js";
 import { classifyShape }                       from "../distribution.js";
 import { countRows }                           from "../sql-helpers.js";
@@ -37,7 +37,7 @@ export async function profileMeasures(
   config:   SamplingConfig,
   idMapper: IdMapper,
 ): Promise<{ measures: MeasureFingerprint[]; correlations?: PairwiseMeasureCorrelation[] }> {
-  const rowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable);
+  const rowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable, config.dialect);
   const sample   = buildSampleClause(
     fact.sourceSchema, fact.sourceTable, rowCount, config.targetColumnRows, config,
   );

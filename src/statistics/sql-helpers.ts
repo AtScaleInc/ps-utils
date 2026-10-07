@@ -1,8 +1,10 @@
 /**
  * SQL generation helpers shared across all profilers.
  *
- * Identifier quoting uses double-quotes (ANSI SQL standard), which is compatible
- * with PostgreSQL, Redshift, Snowflake, DuckDB, and BigQuery.
+ * Identifier quoting is dialect-aware. PostgreSQL, Redshift, Snowflake and DuckDB
+ * use double-quotes (ANSI SQL standard); Databricks and BigQuery use backticks and
+ * read a double-quoted token as a string literal, so they need `quoter(dialect)`
+ * rather than the default `q` / `qualifyTable`.
  *
  * Percentile queries use PERCENTILE_CONT … WITHIN GROUP (ORDER BY …), which is
  * SQL:2003 ordered-set aggregate syntax supported by PostgreSQL ≥ 9.4, Snowflake,
@@ -14,14 +16,45 @@ import type { DatabaseQueryRunner, PercentileSet } from "./types.js";
 
 // ─── Identifier & table helpers ───────────────────────────────────────────────
 
-/** Quote a single SQL identifier (column or table name). */
+/** Dialects that quote identifiers with backticks instead of double-quotes. */
+const BACKTICK_DIALECTS = ["databricks", "bigquery", "spark", "hive", "mysql", "mariadb"];
+
+/** True when `dialect` reads a double-quoted token as a string literal. */
+export function usesBacktickQuoting(dialect?: string): boolean {
+  if (!dialect) return false;
+  const d = dialect.toLowerCase();
+  return BACKTICK_DIALECTS.some((b) => d.includes(b));
+}
+
+/** Quote a single SQL identifier (column or table name). ANSI double-quotes. */
 export function q(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
 
-/** Build a schema-qualified table reference. */
+/** Build a schema-qualified table reference. ANSI double-quotes. */
 export function qualifyTable(schema: string, table: string): string {
   return schema ? `${q(schema)}.${q(table)}` : q(table);
+}
+
+export interface Quoter {
+  q:            (identifier: string) => string;
+  qualifyTable: (schema: string, table: string) => string;
+}
+
+/**
+ * Identifier quoting bound to a dialect.
+ *
+ * Destructure it at the top of a profiler — `const { q, qualifyTable } = quoter(dialect)`
+ * — so the existing call sites in that scope pick up the dialect-aware versions
+ * instead of the ANSI defaults exported above.
+ */
+export function quoter(dialect?: string): Quoter {
+  if (!usesBacktickQuoting(dialect)) return { q, qualifyTable };
+  const bq = (identifier: string) => `\`${identifier.replace(/`/g, "``")}\``;
+  return {
+    q:            bq,
+    qualifyTable: (schema: string, table: string) => (schema ? `${bq(schema)}.${bq(table)}` : bq(table)),
+  };
 }
 
 // ─── Row extraction helpers ───────────────────────────────────────────────────
@@ -119,8 +152,9 @@ export async function countRows(
   runner: DatabaseQueryRunner,
   schema: string,
   table: string,
+  dialect?: string,
 ): Promise<number> {
-  const qualified = qualifyTable(schema, table);
+  const qualified = quoter(dialect).qualifyTable(schema, table);
   const rows = await runner.query(`SELECT COUNT(*) AS n FROM ${qualified}`);
   return num(rows[0], "n");
 }

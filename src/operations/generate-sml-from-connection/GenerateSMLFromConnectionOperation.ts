@@ -162,13 +162,6 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
     const config = yaml.readFromFile<ConnectionConfig>(connectionFile);
     const conn   = await sql.connect(config, connectionName);
 
-    // Resolve schema: CLI param > connection config > "PUBLIC"
-    const schema = (
-      params.schema ??
-      (config.connections?.[connectionName]?.sql?.schema as string | undefined) ??
-      "PUBLIC"
-    ).toUpperCase();
-
     // Resolve database name and dialect from connection config
     const database =
       (config.connections?.[connectionName]?.sql?.database as string | undefined) ??
@@ -176,6 +169,18 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
 
     const dialect =
       (config.connections?.[connectionName]?.sql?.dialect as string | undefined);
+
+    // Resolve schema: CLI param > connection config > "PUBLIC".
+    // Snowflake folds unquoted identifiers to upper case, so INFORMATION_SCHEMA
+    // stores them that way. Databricks, BigQuery and Postgres do not — upper-casing
+    // there matches nothing and the run silently yields zero tables.
+    const rawSchema =
+      params.schema ??
+      (config.connections?.[connectionName]?.sql?.schema as string | undefined) ??
+      "PUBLIC";
+    const schema = (dialect ?? "").toLowerCase().includes("snowflake")
+      ? rawSchema.toUpperCase()
+      : rawSchema;
 
     this.logger.log(`[GenerateSMLFromConnection] Connected to "${connectionName}" (schema: ${schema})`);
 
