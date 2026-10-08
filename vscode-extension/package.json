@@ -88,6 +88,19 @@
           "default": "warning",
           "scope": "window",
           "markdownDescription": "Report keys an SML file uses that the specification does not document — typically typos — with a quick fix when a documented property is close enough to suggest.\n\nThis is deliberately a *warning* rather than a schema error: the SML schemas are permissive because the published specification lags the implementation, so an undocumented key is sometimes a real gap rather than a mistake. Known gaps are allowlisted from the generator, and unlike the rest of SML validation this works without the YAML extension installed.\n\nGated by `#psUtils.smlEnabled#`."
+        },
+        "psUtils.smlMonitorTimeout": {
+          "type": "number",
+          "default": 120,
+          "minimum": 5,
+          "scope": "window",
+          "markdownDescription": "Seconds a **Monitor SML Directory** validation run may take before it is cancelled.\n\nThis is the outer backstop. The operation is also passed `--timeout` at half this value, which bounds each individual AtScale request; the kill here only fires if that fails to.\n\nRaise it if a large model is being cancelled mid-run."
+        },
+        "psUtils.smlMonitorEngineChecks": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "Run the phase 2 **engine** checks on every change while monitoring, as well as the phase 1 structural checks.\n\nOff by default. Phase 1 resolves cross-file references locally in about a second and needs no AtScale instance. Phase 2 asks the engine to run SQL against the warehouse to test joinability and uniqueness — far too slow and too expensive to repeat on every save, and it blocks entirely when the instance is unreachable.\n\nLeave this off for editing and use **Validate now** (click the monitored folder again) for a full check, or the `atscale-list-model-errors` operation from the context menu."
         }
       }
     },
@@ -171,6 +184,36 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.generate-sml-from-bundle",
+        "title": "generate-sml-from-bundle",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-sml-from-tabular",
+        "title": "generate-sml-from-tabular",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.analyze-powerbi-dax-gaps",
+        "title": "analyze-powerbi-dax-gaps",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
+        "title": "generate-sml-from-ssas-multidimensional",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-report-from-xml",
+        "title": "generate-report-from-xml",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.generate-report-from-sml",
+        "title": "generate-report-from-sml",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.apply-style-to-sml",
         "title": "apply-style-to-sml",
         "category": "PS-Utils"
@@ -178,6 +221,11 @@
       {
         "command": "psUtils.op.generate-sml-docs",
         "title": "generate-sml-docs",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.clean-unused-sml-objects",
+        "title": "clean-unused-sml-objects",
         "category": "PS-Utils"
       },
       {
@@ -281,6 +329,31 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.atscale-list-aggregates",
+        "title": "atscale-list-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-rebuild-aggregates",
+        "title": "atscale-rebuild-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-list-aggregate-build-history",
+        "title": "atscale-list-aggregate-build-history",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-export-aggregates",
+        "title": "atscale-export-aggregates",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.op.atscale-import-aggregates",
+        "title": "atscale-import-aggregates",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-ddl-from-atscale",
         "title": "generate-ddl-from-atscale",
         "category": "PS-Utils"
@@ -364,6 +437,31 @@
         "command": "psUtils.sml.toggle",
         "title": "Toggle SML Support for this Project",
         "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.monitor",
+        "title": "☐ Monitor SML Directory",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.monitorActive",
+        "title": "☑ Monitor SML Directory",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.monitorPick",
+        "title": "Monitor an SML Directory…",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.stopMonitor",
+        "title": "Stop Monitoring SML Directory",
+        "category": "PS-Utils"
+      },
+      {
+        "command": "psUtils.sml.showMonitorLog",
+        "title": "Show SML Validation Log",
+        "category": "PS-Utils"
       }
     ],
     "submenus": [
@@ -372,8 +470,8 @@
         "label": "PS-Utils"
       },
       {
-        "id": "psUtils.group.visualization-and-namespace-processing",
-        "label": "Visualization and Namespace Processing"
+        "id": "psUtils.group.model-extraction",
+        "label": "Model Extraction"
       },
       {
         "id": "psUtils.group.sml-creation-and-manipulation",
@@ -384,8 +482,8 @@
         "label": "Synthetic Data Generation"
       },
       {
-        "id": "psUtils.group.bi-tool-integration",
-        "label": "BI Tool Integration"
+        "id": "psUtils.group.visualization-and-namespace-processing",
+        "label": "Visualization and Namespace Processing"
       },
       {
         "id": "psUtils.group.testing-query-processing",
@@ -394,6 +492,10 @@
       {
         "id": "psUtils.group.atscale-config",
         "label": "AtScale Config"
+      },
+      {
+        "id": "psUtils.group.aggregate-management",
+        "label": "Aggregate Management"
       },
       {
         "id": "psUtils.group.general",
@@ -410,8 +512,9 @@
       ],
       "psUtils.root": [
         {
-          "submenu": "psUtils.group.visualization-and-namespace-processing",
-          "group": "1_groups@1"
+          "submenu": "psUtils.group.model-extraction",
+          "group": "1_groups@1",
+          "when": "explorerResourceIsFolder"
         },
         {
           "submenu": "psUtils.group.sml-creation-and-manipulation",
@@ -422,7 +525,7 @@
           "group": "1_groups@3"
         },
         {
-          "submenu": "psUtils.group.bi-tool-integration",
+          "submenu": "psUtils.group.visualization-and-namespace-processing",
           "group": "1_groups@4"
         },
         {
@@ -434,8 +537,12 @@
           "group": "1_groups@6"
         },
         {
-          "submenu": "psUtils.group.general",
+          "submenu": "psUtils.group.aggregate-management",
           "group": "1_groups@7"
+        },
+        {
+          "submenu": "psUtils.group.general",
+          "group": "1_groups@8"
         },
         {
           "command": "psUtils.settings",
@@ -455,27 +562,27 @@
           "command": "psUtils.sml.disable",
           "group": "9_settings@2",
           "when": "psUtils.yamlExtensionInstalled && psUtils.smlEnabled"
+        },
+        {
+          "command": "psUtils.sml.monitor",
+          "group": "9_settings@3",
+          "when": "explorerResourceIsFolder && !(resourcePath in psUtils.smlMonitoredDirs)"
+        },
+        {
+          "command": "psUtils.sml.monitorActive",
+          "group": "9_settings@3",
+          "when": "explorerResourceIsFolder && resourcePath in psUtils.smlMonitoredDirs"
         }
       ],
-      "psUtils.group.visualization-and-namespace-processing": [
-        {
-          "command": "psUtils.op.generate-metrics-from-model",
-          "group": "1_ops@1",
-          "when": "!explorerResourceIsFolder"
-        },
-        {
-          "command": "psUtils.op.generate-namespace-from-model",
-          "group": "1_ops@2",
-          "when": "!explorerResourceIsFolder"
-        },
+      "psUtils.group.model-extraction": [
         {
           "command": "psUtils.op.extract-model-from-atscale",
-          "group": "1_ops@3",
+          "group": "1_ops@1",
           "when": "explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.extract-model-from-sml",
-          "group": "1_ops@4",
+          "group": "1_ops@2",
           "when": "explorerResourceIsFolder"
         }
       ],
@@ -504,28 +611,65 @@
           "group": "1_ops@5"
         },
         {
-          "command": "psUtils.op.apply-style-to-sml",
+          "command": "psUtils.op.generate-sml-from-bundle",
           "group": "1_ops@6",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-sml-docs",
-          "group": "1_ops@7",
+          "command": "psUtils.op.generate-sml-from-tabular",
+          "group": "1_ops@7"
+        },
+        {
+          "command": "psUtils.op.analyze-powerbi-dax-gaps",
+          "group": "1_ops@8"
+        },
+        {
+          "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
+          "group": "1_ops@9"
+        },
+        {
+          "command": "psUtils.op.generate-report-from-xml",
+          "group": "1_ops@10",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-report-from-sml",
+          "group": "1_ops@11",
           "when": "explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.generate-shared-model-plan",
-          "group": "1_ops@8",
+          "group": "1_ops@12",
           "when": "explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.apply-shared-model-plan-option",
-          "group": "1_ops@9"
+          "group": "1_ops@13"
+        },
+        {
+          "command": "psUtils.op.apply-style-to-sml",
+          "group": "1_ops@14",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-sml-docs",
+          "group": "1_ops@15",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.clean-unused-sml-objects",
+          "group": "1_ops@16",
+          "when": "explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.generate-ddl-from-atscale",
-          "group": "1_ops@10",
+          "group": "1_ops@17",
           "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-metrics-from-model",
+          "group": "1_ops@18",
+          "when": "!explorerResourceIsFolder"
         }
       ],
       "psUtils.group.synthetic-data-generation": [
@@ -548,24 +692,29 @@
           "group": "1_ops@4"
         }
       ],
-      "psUtils.group.bi-tool-integration": [
+      "psUtils.group.visualization-and-namespace-processing": [
         {
-          "command": "psUtils.op.generate-tableau-from-namespace",
+          "command": "psUtils.op.generate-namespace-from-model",
           "group": "1_ops@1",
           "when": "!explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-excel-from-namespace",
+          "command": "psUtils.op.generate-tableau-from-namespace",
           "group": "1_ops@2",
           "when": "!explorerResourceIsFolder"
         },
         {
+          "command": "psUtils.op.generate-excel-from-namespace",
+          "group": "1_ops@3",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
           "command": "psUtils.op.generate-powerbi-from-namespace",
-          "group": "1_ops@3"
+          "group": "1_ops@4"
         },
         {
           "command": "psUtils.op.generate-notebook-from-connection",
-          "group": "1_ops@4",
+          "group": "1_ops@5",
           "when": "!explorerResourceIsFolder"
         }
       ],
@@ -627,6 +776,23 @@
           "when": "explorerResourceIsFolder"
         }
       ],
+      "psUtils.group.aggregate-management": [
+        {
+          "command": "psUtils.op.atscale-list-aggregates",
+          "group": "1_ops@1",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.atscale-export-aggregates",
+          "group": "1_ops@2",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.atscale-import-aggregates",
+          "group": "1_ops@3",
+          "when": "!explorerResourceIsFolder"
+        }
+      ],
       "psUtils.group.general": [
         {
           "command": "psUtils.op.echo-connection-metadata",
@@ -653,16 +819,24 @@
           "group": "1_ops@6"
         },
         {
-          "command": "psUtils.op.get-dso-count",
+          "command": "psUtils.op.atscale-rebuild-aggregates",
           "group": "1_ops@7"
         },
         {
-          "command": "psUtils.op.execute-web-services",
+          "command": "psUtils.op.atscale-list-aggregate-build-history",
           "group": "1_ops@8"
         },
         {
-          "command": "psUtils.op.version",
+          "command": "psUtils.op.get-dso-count",
           "group": "1_ops@9"
+        },
+        {
+          "command": "psUtils.op.execute-web-services",
+          "group": "1_ops@10"
+        },
+        {
+          "command": "psUtils.op.version",
+          "group": "1_ops@11"
         }
       ],
       "commandPalette": [
@@ -680,6 +854,24 @@
         },
         {
           "command": "psUtils.sml.toggle"
+        },
+        {
+          "command": "psUtils.sml.monitor",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.monitorActive",
+          "when": "false"
+        },
+        {
+          "command": "psUtils.sml.monitorPick"
+        },
+        {
+          "command": "psUtils.sml.stopMonitor"
+        },
+        {
+          "command": "psUtils.sml.showMonitorLog",
+          "when": "false"
         }
       ]
     }

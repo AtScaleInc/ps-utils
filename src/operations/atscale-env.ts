@@ -39,12 +39,15 @@ export type AtScaleEnvOpts = {
  * @param connectionName  Key under `connections:` to look up
  * @param insecureOverride  When provided, overrides the `insecure` flag from the file
  * @param opts            Optional auth overrides (cookieAuth, useRawApiToken, authType)
+ * @param timeoutMs       Per-request timeout in milliseconds, authentication included.
+ *                        Omit to wait indefinitely (the historical behaviour).
  */
 export function resolveAtScaleEnv(
   config: Record<string, any>,
   connectionName: string,
   insecureOverride?: boolean,
   opts: AtScaleEnvOpts = {},
+  timeoutMs?: number,
 ): AtScaleEnvironment {
   const connections: Record<string, any> = config.connections ?? {};
   const entry = connections[connectionName];
@@ -104,5 +107,6 @@ export function resolveAtScaleEnv(
     insecure:       insecureOverride ?? atscale.insecure,
     useRawApiToken: opts.useRawApiToken,
     cookieAuth:     opts.cookieAuth,
+    timeoutMs,
   });
 }

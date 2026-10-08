@@ -27,6 +27,8 @@ export interface StyleGuideOptions {
   catalogName:       string;
   /** PII exclusion threshold: "HIGH" | "MEDIUM" | "LOW" | "none". */
   piiSeverity:       string;
+  /** Model compatibility policy, unresolved unless explicitly configured. */
+  modelMode?:        "new" | "existing";
   /** Whether dataset/dimension filenames use camelCase. */
   camelCaseFiles:    boolean;
   /** Whether metric labels use camelCase.
@@ -45,7 +47,7 @@ export interface StyleGuideOptions {
 }
 
 function buildStyleGuide(opts: StyleGuideOptions): string {
-  const { catalogName, piiSeverity, camelCaseFiles, camelCaseMeasures, labelStyle, factTables, sampleSize, minHierarchiesPerDim, maxHierarchiesPerDim } = opts;
+  const { catalogName, piiSeverity, modelMode, camelCaseFiles, camelCaseMeasures, labelStyle, factTables, sampleSize, minHierarchiesPerDim, maxHierarchiesPerDim } = opts;
   const effectiveLabelStyle = labelStyle ?? (camelCaseMeasures ? "camel-case" : "title-case");
 
   // ── Derived descriptions ──────────────────────────────────────────────────
@@ -192,6 +194,7 @@ function buildStyleGuide(opts: StyleGuideOptions): string {
     `|---|---|`,
     `| **Catalog** | ${catalogName} |`,
     `| **PII Exclusion** | ${piiDesc} |`,
+    `| **Model Mode** | ${modelMode ?? "Unresolved — requested only if a query-name collision occurs"} |`,
     `| **Label Style** | ${labelStyleDesc} |`,
     `| **File Naming** | ${fileNamingDesc} |`,
     `| **Metric Labels** | ${labelNamingDesc} |`,

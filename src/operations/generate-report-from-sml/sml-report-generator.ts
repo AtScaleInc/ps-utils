@@ -1,0 +1,747 @@
+/**
+ * Markdown generator for generate-report-from-sml.
+ *
+ * Pure (no fs / no services): given the objects collected from an SML
+ * directory, it returns a single, human-readable Markdown document describing
+ * every object found in the model as-is — connections, datasets, the
+ * fact-to-dimension join graph, dimensions (hierarchies, levels, secondary
+ * attributes, snowflake/embedded joins), models (relationships, metrics used,
+ * calculations used, degenerate dimensions, perspectives, aggregates,
+ * overrides, drillthrough), the metrics library, the calculations library,
+ * perspectives, and security.
+ *
+ * This mirrors generate-report-from-xml's report shape and section ordering
+ * (Connections → Datasets → Dimensions → the cube-equivalent unit → its
+ * reference libraries → Perspectives) adapted to SML's object model: SML has
+ * no schema-level attribute library (level attributes bind straight to
+ * dataset columns inside each dimension), but metrics and calculations *are*
+ * global libraries referenced by models via unique_name, so — like the XML
+ * report resolves calculated-member refs against its schema library — this
+ * resolves a model's `metrics`/`calculations` refs against the SML metrics
+ * and calculations libraries rather than rendering them inline.
+ *
+ * Kept local and independent from generate-sml-docs's loader/renderer so this
+ * report never depends on, or risks destabilizing, the docs generator.
+ */
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Raw = Record<string, any>;
+
+/** One parsed SML object plus the file it came from (relative to the sml-dir). */
+export interface SmlObject {
+  file: string;
+  raw: Raw;
+}
+
+/** Everything collected from an SML directory, grouped by kind. */
+export interface SmlCollection {
+  catalog?: Raw;
+  connections: SmlObject[];
+  datasets: SmlObject[];
+  dimensions: SmlObject[];
+  metrics: SmlObject[];
+  calculations: SmlObject[];
+  models: SmlObject[];
+  /** Objects whose object_type did not match a known kind. */
+  other: SmlObject[];
+}
+
+export interface SmlReportOptions {
+  /** Basename of the SML directory — included in the report header for traceability. */
+  smlDirName?: string;
+  /** H1 title. Defaults to the catalog label / unique_name. */
+  title?: string;
+}
+
+// ── small Markdown helpers (same conventions as generate-report-from-xml) ──
+
+function cell(v: unknown): string {
+  if (v === undefined || v === null || v === "") return "";
+  return String(v).replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
+}
+
+function code(v: unknown): string {
+  const c = cell(v);
+  return c ? `\`${c}\`` : "";
+}
+
+function flag(v: unknown): string {
+  return v === true || v === "true" || v === "yes" ? "yes" : "";
+}
+
+/**
+ * Per the SML spec, `perspectives[].metrics`/`perspectives[].dimensions` are hide-lists
+ * (the objects to hide in that perspective), not the perspective's visible content — an
+ * empty list means everything is visible, not that the perspective is empty. Summarize
+ * accordingly rather than reporting the list lengths as if they were inclusion counts.
+ */
+function perspectiveHideSummary(p: Raw | undefined): string {
+  const nMetrics = asArray(p?.metrics).length;
+  const nDims = asArray(p?.dimensions).length;
+  if (nMetrics === 0 && nDims === 0) return "hides nothing — all metrics and dimensions visible";
+  return `hides ${nMetrics} metric(s), ${nDims} dimension(s)`;
+}
+
+function anchor(title: string): string {
+  return title.toLowerCase().replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
+}
+
+/** Render a table; returns [] when there are no rows. */
+function table(headers: string[], rows: string[][]): string[] {
+  if (rows.length === 0) return [];
+  const sep = headers.map(() => "---");
+  return [`| ${headers.join(" | ")} |`, `| ${sep.join(" | ")} |`, ...rows.map((r) => `| ${r.join(" | ")} |`), ""];
+}
+
+function asArray<T = any>(v: unknown): T[] {
+  if (Array.isArray(v)) return v as T[];
+  if (v === undefined || v === null) return [];
+  return [v as T];
+}
+
+/** Display label for an object: label → unique_name → file stem. */
+function label(o: SmlObject): string {
+  return String(o.raw.label ?? o.raw.unique_name ?? o.file);
+}
+
+/** Normalize a dataset reference by dropping a trailing `.dataset` suffix. */
+function normDataset(ref: unknown): string {
+  return String(ref ?? "").replace(/\.dataset$/, "");
+}
+
+/**
+ * Render a `table` value that may be a string or a `{db, schema, name}` object,
+ * qualifying it with the owning connection's `database`/`schema` when the table
+ * itself doesn't carry them — the converter moves db/schema qualification onto
+ * the connection file, leaving a bare table name on the dataset.
+ */
+function tableRef(t: unknown, conn?: Raw): string {
+  const name = t && typeof t === "object" ? (t as Raw).name : t;
+  const db = (t && typeof t === "object" && (t as Raw).db) || conn?.database;
+  const schema = (t && typeof t === "object" && (t as Raw).schema) || conn?.schema;
+  return [db, schema, name].filter(Boolean).join(".");
+}
+
+// ============================================================
+// Main entry point
+// ============================================================
+
+export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions = {}): string {
+  const out: string[] = [];
+
+  const catalog = c.catalog ?? {};
+  const title = opts.title ?? String(catalog.label ?? catalog.unique_name ?? "SML Model");
+
+  // ── Cross-references ───────────────────────────────────────────────────────
+
+  const factDatasets = new Set<string>();
+  const dimDatasets = new Set<string>();
+  const datasetRelCount = new Map<string, number>();
+  // Fact-side join bindings for a dimension's level, keyed by `${dimension}::${level}` —
+  // the XML report's level binding merges the dimension table's own key column with the
+  // fact table's foreign-key column used by each cube's join; a model's `relationships[]`
+  // is where SML records that same fact-side column, so cross-reference it here rather
+  // than rendering it only in the separate Relationships table.
+  const factBindingsByDimLevel = new Map<string, string[]>();
+  for (const m of c.models) {
+    for (const rel of asArray<Raw>(m.raw.relationships)) {
+      const ds = normDataset(rel?.from?.dataset);
+      if (!ds) continue;
+      factDatasets.add(ds);
+      datasetRelCount.set(ds, (datasetRelCount.get(ds) ?? 0) + 1);
+      const toDim = rel?.to?.dimension;
+      const toLevel = rel?.to?.level;
+      if (!toDim || !toLevel) continue;
+      const cols = asArray(rel?.from?.join_columns).join("+");
+      if (!cols) continue;
+      const modelLabel = m.raw.label ?? m.raw.unique_name;
+      const key = `${toDim}::${toLevel}`;
+      const list = factBindingsByDimLevel.get(key) ?? [];
+      list.push(`${ds}.${cols}${modelLabel ? ` (${modelLabel})` : ""}`);
+      factBindingsByDimLevel.set(key, list);
+    }
+  }
+  // A metric binds straight to a dataset column (`dataset:`/`column:`) rather than
+  // through a model relationship, so a denormalized fact table with no dimension
+  // joins (`relationships: []`) would otherwise never register as a fact dataset —
+  // and its usage stats would omit every measure that reads it.
+  const datasetMetricCount = new Map<string, number>();
+  for (const m of c.metrics) {
+    const ds = normDataset(m.raw.dataset);
+    if (!ds) continue;
+    factDatasets.add(ds);
+    datasetMetricCount.set(ds, (datasetMetricCount.get(ds) ?? 0) + 1);
+  }
+  const datasetAttrCount = new Map<string, number>();
+  for (const d of c.dimensions) {
+    for (const la of asArray<Raw>(d.raw.level_attributes)) {
+      // A level bound to more than one physical dataset carries its bindings under
+      // `shared_degenerate_columns` instead of a top-level `dataset` — same shape
+      // bindingLabel/datasetsForDimension below already unwrap. Falling back to
+      // `la?.dataset` alone silently dropped every shared-degenerate level attribute
+      // (the common case: most degenerate dimensions in a multi-fact cube use it) from
+      // this count and from dimDatasets.
+      const shared = asArray<Raw>(la?.shared_degenerate_columns);
+      const levelDatasets = shared.length ? shared.map((s) => normDataset(s?.dataset)) : [normDataset(la?.dataset)];
+      for (const ds of levelDatasets) {
+        if (!ds) continue;
+        dimDatasets.add(ds);
+        datasetAttrCount.set(ds, (datasetAttrCount.get(ds) ?? 0) + 1);
+      }
+    }
+    // Secondary attributes live on hierarchies[].levels[].secondary_attributes, not on
+    // level_attributes (see renderDimension's own "Secondary attributes" table and the
+    // Summary's attrCount rollup above, which already walk this nesting) — la?.secondary_attributes
+    // above is always empty, so this tally needs its own pass over the same shape.
+    for (const h of asArray<Raw>(d.raw.hierarchies)) {
+      for (const lvl of asArray<Raw>(h?.levels)) {
+        for (const sec of asArray<Raw>(lvl?.secondary_attributes)) {
+          const shared = asArray<Raw>(sec?.shared_degenerate_columns);
+          const secDatasets = shared.length ? shared.map((s) => normDataset(s?.dataset)) : [normDataset(sec?.dataset)];
+          for (const secDs of secDatasets) {
+            if (!secDs) continue;
+            dimDatasets.add(secDs);
+            datasetAttrCount.set(secDs, (datasetAttrCount.get(secDs) ?? 0) + 1);
+          }
+        }
+      }
+    }
+    for (const rel of asArray<Raw>(d.raw.relationships)) {
+      const ds = normDataset(rel?.from?.dataset);
+      if (ds) datasetAttrCount.set(ds, (datasetAttrCount.get(ds) ?? 0) + 1);
+    }
+  }
+
+  const metricByName = new Map<string, SmlObject>();
+  for (const m of c.metrics) if (m.raw.unique_name) metricByName.set(String(m.raw.unique_name), m);
+  const calcByName = new Map<string, SmlObject>();
+  for (const cc of c.calculations) if (cc.raw.unique_name) calcByName.set(String(cc.raw.unique_name), cc);
+  const dimByName = new Map<string, SmlObject>();
+  for (const d of c.dimensions) if (d.raw.unique_name) dimByName.set(String(d.raw.unique_name), d);
+  const connByName = new Map<string, SmlObject>();
+  for (const conn of c.connections) if (conn.raw.unique_name) connByName.set(String(conn.raw.unique_name), conn);
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+
+  out.push(`# ${title}`, "");
+  if (opts.smlDirName) out.push(`> Source: \`${opts.smlDirName}\``, "");
+  if (catalog.unique_name) {
+    out.push(`> Catalog \`${catalog.unique_name}\`${catalog.version ? ` · version ${catalog.version}` : ""}`, "");
+  }
+
+  const hierCount = c.dimensions.reduce((n, d) => n + asArray(d.raw.hierarchies).length, 0);
+  const levelCount = c.dimensions.reduce(
+    (n, d) => n + asArray<Raw>(d.raw.hierarchies).reduce((k, h) => k + asArray(h.levels).length, 0),
+    0,
+  );
+  // SML has no separate schema-level attribute library — level and secondary attributes
+  // live inline inside each dimension — but the XML report's "Attributes used by a cube"
+  // Summary row counts exactly this same population (the converter only ever emits
+  // attributes at least one cube references), so roll both up here for parity.
+  const attrCount = c.dimensions.reduce(
+    (n, d) =>
+      n +
+      asArray(d.raw.level_attributes).length +
+      asArray<Raw>(d.raw.hierarchies).reduce(
+        (k, h) => k + asArray<Raw>(h.levels).reduce((j, lvl) => j + asArray(lvl?.secondary_attributes).length, 0),
+        0,
+      ),
+    0,
+  );
+  const perspectives = c.models.flatMap((m) => asArray<Raw>(m.raw.perspectives));
+  const aggregateCount = c.models.reduce((n, m) => n + asArray<Raw>(m.raw.aggregates).length, 0);
+
+  out.push("## Summary", "");
+  out.push(
+    ...table(
+      ["Object", "Count"],
+      [
+        ["Models", String(c.models.length)],
+        ["Datasets", String(c.datasets.length)],
+        ["Connections", String(c.connections.length)],
+        ["Attributes", String(attrCount)],
+        ["Dimensions", String(c.dimensions.length)],
+        ["Hierarchies", String(hierCount)],
+        ["Levels", String(levelCount)],
+        ["Metrics", String(c.metrics.length)],
+        ["Calculations", String(c.calculations.length)],
+        ["User Defined Aggregates", String(aggregateCount)],
+        ["Perspectives", String(perspectives.length)],
+        ["Other objects", String(c.other.length)],
+      ].filter((r) => r[1] !== "0"),
+    ),
+  );
+
+  // ── Table of contents ──────────────────────────────────────────────────────
+
+  const sections = ["Connections", "Datasets", "Dimensions", "Models", "Metrics", "Calculations"];
+  if (perspectives.length) sections.push("Perspectives");
+  sections.push("Security");
+  if (c.other.length) sections.push("Other Objects");
+
+  out.push("## Table of Contents", "");
+  for (const sec of sections) out.push(`- [${sec}](#${anchor(sec)})`);
+  out.push("");
+
+  // ── Connections ─────────────────────────────────────────────────────────────
+
+  out.push("## Connections", "");
+  if (c.connections.length) {
+    const rows = c.connections.map((conn) => [
+      code(conn.raw.unique_name),
+      cell(conn.raw.label),
+      code(conn.raw.as_connection),
+      cell(conn.raw.database),
+      cell(conn.raw.schema),
+    ]);
+    out.push(...table(["Unique name", "Label", "AtScale connection", "Database", "Schema"], rows));
+  } else {
+    out.push("_No connections found._", "");
+  }
+
+  // ── Datasets ────────────────────────────────────────────────────────────────
+
+  out.push("## Datasets", "");
+  for (const d of c.datasets) {
+    const nn = normDataset(d.raw.unique_name);
+    const kind = factDatasets.has(nn) ? "Fact" : dimDatasets.has(nn) ? "Dimension" : "Unreferenced";
+    renderDataset(out, d, kind);
+  }
+
+  // ── Dimensions ──────────────────────────────────────────────────────────────
+
+  out.push("## Dimensions", "");
+  const sortedDimensions = [...c.dimensions].sort((x, y) => label(x).localeCompare(label(y)));
+  for (const d of sortedDimensions) renderDimension(out, d);
+
+  // ── Models ──────────────────────────────────────────────────────────────────
+
+  out.push("## Models", "");
+  for (const m of c.models) renderModel(out, m);
+
+  // ── Metrics (library) ────────────────────────────────────────────────────────
+
+  out.push("## Metrics", "");
+  out.push(
+    "The metrics library — every metric defined in this SML directory, whether or not a model currently references it.",
+    "",
+  );
+  if (c.metrics.length) {
+    const rows = c.metrics.map((m) => [
+      code(m.raw.unique_name),
+      cell(m.raw.label),
+      code(m.raw.calculation_method),
+      code(m.raw.dataset),
+      code(m.raw.column),
+      code(m.raw.format),
+      cell(m.raw.folder),
+      flag(m.raw.is_hidden),
+    ]);
+    out.push(
+      ...table(["Unique name", "Label", "Aggregation", "Dataset", "Column", "Format", "Folder", "Hidden"], rows),
+    );
+  } else {
+    out.push("_No metrics defined._", "");
+  }
+
+  // ── Calculations (library) ───────────────────────────────────────────────────
+
+  out.push("## Calculations", "");
+  out.push(
+    "The calculations library — every calculated-metric formula defined in this SML directory, whether or not a model currently references it.",
+    "",
+  );
+  if (c.calculations.length) {
+    for (const calc of c.calculations) renderCalculation(out, calc);
+  } else {
+    out.push("_No calculations defined._", "");
+  }
+
+  // ── Perspectives ─────────────────────────────────────────────────────────────
+
+  if (perspectives.length) {
+    out.push("## Perspectives", "");
+    for (const p of perspectives) {
+      out.push(`- **${cell(p?.label ?? p?.unique_name)}** — ${perspectiveHideSummary(p)}`);
+    }
+    out.push("");
+  }
+
+  // ── Security ─────────────────────────────────────────────────────────────────
+
+  renderSecurity(out, c);
+
+  // ── Other (unrecognized object_type) ────────────────────────────────────────
+
+  if (c.other.length) {
+    out.push("## Other Objects", "");
+    out.push(
+      ...table(
+        ["File", "object_type", "Unique name"],
+        c.other.map((o) => [code(o.file), code(o.raw.object_type), code(o.raw.unique_name)]),
+      ),
+    );
+  }
+
+  out.push("---", "", "_Generated by `atscale-utils generate-report-from-sml`._", "");
+  return out.join("\n");
+
+  // ============================================================
+  // Section renderers (closures over the cross-reference maps above)
+  // ============================================================
+
+  function renderDataset(o: string[], d: SmlObject, kind: string): void {
+    const raw = d.raw;
+    o.push(`### ${label(d)}  \`${kind}\``, "");
+    if (raw.unique_name && raw.unique_name !== label(d)) o.push(`\`${raw.unique_name}\``, "");
+    if (raw.description) o.push(cell(raw.description), "");
+
+    const nn = normDataset(raw.unique_name);
+    const meta: string[] = [];
+    if (raw.connection_id) meta.push(`- Connection: \`${cell(raw.connection_id)}\``);
+    if (raw.table) {
+      const conn = connByName.get(String(raw.connection_id ?? ""))?.raw;
+      meta.push(`- Table: \`${cell(tableRef(raw.table, conn))}\``);
+    }
+    if (raw.sql) meta.push(`- Backed by a SQL query (view)`);
+    if (raw.immutable !== undefined) meta.push(`- Immutable: ${flag(raw.immutable) || "no"}`);
+    // `allow_aggregates` is not a dataset-object property in SML — it's a repository-wide
+    // override on catalog.yml's `dataset_properties`, keyed by the dataset's unique_name.
+    // Fall back to a value on the dataset object itself in case a hand-authored file put it
+    // there directly (harmless either way; the schema is permissive).
+    const catalogAggProps = (catalog.dataset_properties as Raw | undefined)?.[String(raw.unique_name ?? "")];
+    const allowAggregates = raw.allow_aggregates !== undefined ? raw.allow_aggregates : catalogAggProps?.allow_aggregates;
+    if (allowAggregates !== undefined) meta.push(`- Allow aggregates: ${flag(allowAggregates) || "no"}`);
+    meta.push(
+      `- Used by ${datasetAttrCount.get(nn) ?? 0} level attribute(s) across all dimensions, ${datasetMetricCount.get(nn) ?? 0} metric(s), and ${datasetRelCount.get(nn) ?? 0} relationship(s) across all models`,
+    );
+    o.push(...meta, "");
+
+    if (raw.sql) o.push("```sql", String(raw.sql).trim(), "```", "");
+
+    const cols = asArray<Raw>(raw.columns);
+    if (cols.length) {
+      o.push(...table(["Column", "Data type", "Expression"], cols.map((col) => [code(col?.name), code(col?.data_type), code(col?.sql)])));
+    }
+    o.push(`_Source: \`${d.file}\`_`, "", "---", "");
+  }
+
+  function renderDimension(o: string[], d: SmlObject): void {
+    const raw = d.raw;
+    const dimType = raw.type ?? (raw.is_degenerate ? "degenerate" : "standard");
+    o.push(`### ${label(d)}  \`${cell(dimType)}\``, "");
+    if (raw.unique_name && raw.unique_name !== label(d)) o.push(`\`${raw.unique_name}\``, "");
+    if (raw.description) o.push(cell(raw.description), "");
+
+    const attrs = asArray<Raw>(raw.level_attributes);
+    // xml-converter.ts's truncateUniqueName() shortens an over-length unique_name to
+    // `${head}_${8-hex sha1}_${tail}` — recognizable by that exact interior segment, unlike
+    // any ordinary sanitized name. Only fall back to the sibling level_attributes[].label for
+    // a level whose own unique_name matches this signature; substituting a label for every
+    // level would surface unrelated label/unique_name mismatches elsewhere in the SML as if
+    // they were this report's own bug.
+    const truncatedHashPattern = /_[0-9a-f]{8}_/;
+    const attrLabelByName = new Map(attrs.map((a) => [a?.unique_name, a?.label]));
+
+    const hierarchies = asArray<Raw>(raw.hierarchies);
+    if (hierarchies.length) {
+      o.push("**Hierarchies**", "");
+      for (const h of hierarchies) {
+        const levels = asArray<Raw>(h.levels).map((l) => {
+          const uniqueName = l?.unique_name;
+          const isTruncated = typeof uniqueName === "string" && truncatedHashPattern.test(uniqueName);
+          return cell(isTruncated ? attrLabelByName.get(uniqueName) ?? uniqueName : uniqueName ?? l);
+        });
+        o.push(`- **${cell(h?.label ?? h?.unique_name)}**: ${levels.map((l) => `\`${l}\``).join(" → ") || "_(no levels)_"}`);
+      }
+      o.push("");
+    }
+
+    if (attrs.length) {
+      o.push("**Level attributes**", "");
+      o.push(
+        ...table(
+          ["Attribute", "Label", "Bound to (dataset.column)", "Sort", "Time unit", "Unique key", "Hidden", "Allowed DMA calcs"],
+          attrs.map((a) => [
+            code(a?.unique_name),
+            cell(a?.label),
+            code(levelBindingLabel(raw?.unique_name, a)),
+            code(a?.sort_column),
+            code(a?.time_unit),
+            flag(a?.is_unique_key),
+            flag(a?.is_hidden),
+            asArray(a?.allowed_calcs_for_dma).join(", "),
+          ]),
+        ),
+      );
+    }
+
+    // Secondary attributes live on the hierarchy level that owns them
+    // (hierarchies[].levels[].secondary_attributes), not on level_attributes.
+    const secondaries: Raw[] = hierarchies.flatMap((h) =>
+      asArray<Raw>(h?.levels).flatMap((lvl) =>
+        asArray<Raw>(lvl?.secondary_attributes).map((sa): Raw => ({ ...sa, level: lvl?.unique_name })),
+      ),
+    );
+    if (secondaries.length) {
+      o.push("**Secondary attributes**", "");
+      o.push(
+        ...table(
+          ["Level", "Attribute", "Label", "Bound to (dataset.column)", "Folder", "Hidden", "Allowed DMA calcs"],
+          secondaries.map((a) => [
+            code(a.level),
+            code(a?.unique_name),
+            cell(a?.label),
+            code(bindingLabel(a)),
+            cell(a?.folder),
+            flag(a?.is_hidden),
+            asArray(a?.allowed_calcs_for_dma).join(", "),
+          ]),
+        ),
+      );
+    }
+
+    const rels = asArray<Raw>(raw.relationships);
+    if (rels.length) {
+      o.push("**Snowflake / embedded joins**", "");
+      // For a dimension-embedded relationship, SML's `to.level` is validated by the engine
+      // as a level of THIS (the host) dimension, not of `to.dimension` — the host level that
+      // owns the join's key arity, not a level living on the target dimension. Label the
+      // column accordingly so it doesn't read as though it mis-names the target's level.
+      o.push(
+        ...table(
+          ["From dataset", "Join columns", "To dimension", "Host level", "Type"],
+          rels.map((rel) => [
+            code(normDataset(rel?.from?.dataset)),
+            code(asArray(rel?.from?.join_columns).join(", ")),
+            cell(rel?.to?.dimension),
+            cell(rel?.to?.level),
+            cell(rel?.type),
+          ]),
+        ),
+      );
+    }
+    o.push(`_Source: \`${d.file}\`_`, "", "---", "");
+  }
+
+  /**
+   * A level/secondary attribute's own `dataset` + key/name column(s), rendered like the
+   * XML report's dataset.column bindings. A level bound to more than one physical dataset
+   * (e.g. a degenerate time level shared across several fact tables) carries the binding
+   * under `shared_degenerate_columns` instead of top-level `dataset`/`key_columns` —
+   * render one `dataset.column` per entry.
+   */
+  function bindingLabel(a: Raw): string {
+    const shared = asArray<Raw>(a?.shared_degenerate_columns);
+    if (shared.length) return shared.map((s) => bindingLabel(s)).filter(Boolean).join(", ");
+    const ds = normDataset(a?.dataset);
+    if (!ds) return "";
+    const cols = asArray(a?.key_columns).length ? asArray(a.key_columns).join("+") : a?.name_column ?? "";
+    return cols ? `${ds}.${cols}` : ds;
+  }
+
+  /**
+   * A level attribute's binding plus every fact table foreign-key column joined to it via
+   * a model's `relationships[]` (see factBindingsByDimLevel above) — matches the XML
+   * report's merged "dimension-column, fact-column (cube)" cell instead of showing only
+   * the dimension-side half of the join.
+   *
+   * A model can legitimately record a relationship from the level's OWN dataset (e.g. a
+   * cube that joins a dimension to itself from more than one fact table, one of which is
+   * the dimension's own source table) — that relationship's `from.dataset`+`from.join_columns`
+   * is then identical to the level's native binding, and listing it again would print the
+   * same `dataset.column` twice. Drop any fact binding that duplicates the native one.
+   */
+  function levelBindingLabel(dimUniqueName: unknown, a: Raw): string {
+    const own = bindingLabel(a);
+    const ownBindings = new Set(own.split(", ").filter(Boolean));
+    const factBindings = factBindingsByDimLevel.get(`${dimUniqueName}::${a?.unique_name}`) ?? [];
+    const extra = factBindings.filter((fb) => !ownBindings.has(fb.replace(/ \([^)]*\)$/, "")));
+    return [own, ...extra].filter(Boolean).join(", ");
+  }
+
+  /** Every physical dataset a dimension's level attributes bind to, across single- and shared/multi-dataset bindings. */
+  function datasetsForDimension(raw: Raw | undefined): string[] {
+    if (!raw) return [];
+    return asArray<Raw>(raw.level_attributes).flatMap((a) => {
+      const shared = asArray<Raw>(a?.shared_degenerate_columns);
+      if (shared.length) return shared.map((s) => normDataset(s?.dataset));
+      return [normDataset(a?.dataset)];
+    });
+  }
+
+  function renderModel(o: string[], m: SmlObject): void {
+    const raw = m.raw;
+    const hiddenMarker = raw.visible === false ? "  `hidden`" : "";
+    o.push(`### ${label(m)}${hiddenMarker}`, "");
+    if (raw.unique_name && raw.unique_name !== label(m)) o.push(`\`${raw.unique_name}\``, "");
+    if (raw.description) o.push(cell(raw.description), "");
+
+    const rels = asArray<Raw>(raw.relationships);
+    const degen = asArray<Raw>(raw.dimensions).map((x) => String(x?.unique_name ?? x?.name ?? x));
+    // A degenerate dimension brings its own datasets into the model even though it has
+    // no entry in `relationships` (it's bound straight to fact columns, not joined).
+    const degenDatasets = degen.flatMap((name) => datasetsForDimension(dimByName.get(name)?.raw));
+    const dsRefs = [
+      ...new Set([...rels.map((rel) => normDataset(rel?.from?.dataset)), ...degenDatasets].filter(Boolean)),
+    ];
+    if (dsRefs.length) o.push(`**Datasets:** ${dsRefs.map((d) => `\`${d}\``).join(", ")}`, "");
+
+    if (rels.length) {
+      o.push("**Joins (fact dataset → dimension level)**", "");
+      o.push(
+        ...table(
+          ["From dataset", "Join columns", "To dimension", "To level", "Role play", "Type"],
+          rels.map((rel) => [
+            code(normDataset(rel?.from?.dataset)),
+            code(asArray(rel?.from?.join_columns).join(", ")),
+            cell(rel?.to?.dimension),
+            cell(rel?.to?.level),
+            cell(rel?.role_play),
+            cell(rel?.type),
+          ]),
+        ),
+      );
+    }
+
+    const dimNames = [...new Set(rels.map((rel) => String(rel?.to?.dimension ?? "")).filter(Boolean))];
+    if (dimNames.length || degen.length) {
+      o.push(
+        `**Dimensions used:** ${[...dimNames, ...degen.map((d) => `${d} (degenerate)`)].map((d) => `\`${d}\``).join(", ")}`,
+        "",
+      );
+    }
+
+    // Metrics used — resolved against the metrics library, mirroring how the
+    // XML report resolves a cube's calculated-member refs against its schema library.
+    // Per the SML spec, a model's `metrics:` array legitimately references both
+    // `metric` and `metric_calc` objects, so a ref that misses the metrics library
+    // is retried against the calculations library and rendered in that table instead.
+    const metricRows: string[][] = [];
+    const calcRefRows: string[][] = [];
+    for (const ref of asArray<Raw>(raw.metrics)) {
+      const refName = String(ref?.unique_name ?? ref);
+      const def = metricByName.get(refName)?.raw;
+      if (def) {
+        metricRows.push([
+          code(refName),
+          cell(def.label),
+          code(def.calculation_method),
+          code(def.dataset),
+          code(def.column),
+          cell(def.folder),
+          flag(def.is_hidden),
+        ]);
+        continue;
+      }
+      const calcDef = calcByName.get(refName)?.raw;
+      if (calcDef) {
+        calcRefRows.push([code(refName), cell(calcDef.label), code(calcDef.expression), cell(calcDef.format), flag(calcDef.is_hidden)]);
+      } else {
+        metricRows.push([code(refName), "", "", "", "", "", ""]);
+      }
+    }
+    if (metricRows.length) {
+      o.push("**Metrics used**", "");
+      o.push(...table(["Name", "Label", "Aggregation", "Dataset", "Column", "Folder", "Hidden"], metricRows));
+    }
+
+    // Calculations used — resolved against the calculations library. Includes
+    // both an explicit `calculations:` array (if present) and any metric_calc
+    // refs found above while walking `metrics:`.
+    const calcRows: string[][] = [...calcRefRows];
+    for (const ref of asArray<Raw>(raw.calculations)) {
+      const refName = String(ref?.unique_name ?? ref);
+      const def = calcByName.get(refName)?.raw;
+      if (!def) continue;
+      calcRows.push([code(refName), cell(def.label), code(def.expression), cell(def.format), flag(def.is_hidden)]);
+    }
+    if (calcRows.length) {
+      o.push("**Calculations used**", "");
+      o.push(...table(["Name", "Label", "Formula", "Format", "Hidden"], calcRows));
+    }
+
+    const perspectives = asArray<Raw>(raw.perspectives);
+    if (perspectives.length) {
+      o.push("**Perspectives**", "");
+      for (const p of perspectives) {
+        o.push(`- **${cell(p?.label ?? p?.unique_name)}** — ${perspectiveHideSummary(p)}`);
+      }
+      o.push("");
+    }
+
+    const aggregates = asArray<Raw>(raw.aggregates);
+    if (aggregates.length || raw.allow_aggregates !== undefined) {
+      o.push("**Aggregates**", "");
+      if (raw.allow_aggregates !== undefined) o.push(`- Allow aggregates: ${flag(raw.allow_aggregates) || "no"}`);
+      if (aggregates.length) {
+        const aggRows = aggregates.map((ag) => {
+          const attrNames = asArray<Raw>(ag?.attributes).map((at) => String(at?.name ?? at?.dimension ?? "?"));
+          const metricNames = asArray(ag?.metrics).map((m) => String(m));
+          return [
+            code(ag?.unique_name ?? ag?.label),
+            cell(ag?.label),
+            String(attrNames.length),
+            attrNames.map((n) => `\`${n}\``).join(", "),
+            String(metricNames.length),
+            metricNames.map((n) => `\`${n}\``).join(", "),
+          ];
+        });
+        o.push(...table(["Name", "Label", "# attributes", "Attributes", "# metrics", "Metrics"], aggRows));
+      }
+      o.push("");
+    }
+
+    const overrides = raw.overrides;
+    if (overrides && typeof overrides === "object" && Object.keys(overrides).length) {
+      o.push("**Query-name overrides**", "");
+      o.push(
+        ...table(["Object", "query_name"], Object.entries(overrides).map(([k, v]) => [code(k), code((v as Raw)?.query_name ?? v)])),
+      );
+    }
+
+    if (raw.include_default_drillthrough !== undefined) {
+      o.push(`**Drillthrough:** default drillthrough ${flag(raw.include_default_drillthrough) ? "enabled" : "disabled"}`, "");
+    }
+
+    o.push(`_Source: \`${m.file}\`_`, "", "---", "");
+  }
+
+  function renderCalculation(o: string[], calc: SmlObject): void {
+    const raw = calc.raw;
+    o.push(`### ${label(calc)}`, "");
+    if (raw.unique_name && raw.unique_name !== label(calc)) o.push(`\`${raw.unique_name}\``, "");
+    if (raw.description) o.push(cell(raw.description), "");
+    const meta: string[] = [];
+    if (raw.mdx_aggregate_function) meta.push(`- MDX aggregate: \`${cell(raw.mdx_aggregate_function)}\``);
+    if (raw.format) meta.push(`- Format: \`${cell(raw.format)}\``);
+    if (raw.folder) meta.push(`- Folder: \`${cell(raw.folder)}\``);
+    if (raw.is_hidden) meta.push(`- Hidden`);
+    if (meta.length) o.push(...meta, "");
+    if (raw.expression) o.push("```", String(raw.expression).trim(), "```", "");
+    o.push(`_Source: \`${calc.file}\`_`, "", "---", "");
+  }
+
+  function renderSecurity(o: string[], coll: SmlCollection): void {
+    o.push("## Security", "");
+    const findings: string[] = [];
+
+    const secObjs = [...coll.other, ...coll.models, ...coll.dimensions].filter((obj) =>
+      String(obj.raw.object_type ?? "").toLowerCase().includes("security"),
+    );
+    for (const obj of secObjs) findings.push(`- \`${cell(obj.raw.object_type)}\` \`${cell(obj.raw.unique_name)}\` (\`${obj.file}\`)`);
+
+    const SEC_KEYS = ["row_security", "dimension_security", "security"];
+    for (const obj of [...coll.models, ...coll.dimensions]) {
+      for (const k of SEC_KEYS) {
+        if (obj.raw[k] !== undefined) findings.push(`- \`${k}\` on \`${cell(obj.raw.unique_name)}\` (\`${obj.file}\`)`);
+      }
+    }
+
+    if (findings.length) {
+      o.push("The following security definitions were found:", "", ...findings, "");
+    } else {
+      o.push("_No row-level or dimension security objects were found in this SML directory._", "");
+    }
+  }
+}

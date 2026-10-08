@@ -376,6 +376,13 @@ interface XmlaConfig {
   authPassword?: string;
   /** container mode: token embedded in the XMLA URL path */
   isContainer: boolean;
+  /**
+   * Container mode from connections.yaml without an XMLA token in the URL:
+   * obtain a Keycloak JWT with the connection user's credentials (password
+   * grant, same as extract-model-from-atscale) and send it as a Bearer token.
+   * Container hosts reject an unauthenticated /engine/xmla with HTTP 401.
+   */
+  keycloakAuth?: boolean;
   useAggregates: boolean;
   generateAggregates: boolean;
   useQueryCache: boolean;
@@ -428,7 +435,7 @@ function xmlaConfigFromProperties(
  * Determine XMLA config from a connections.yaml connection entry.
  * Uses the same installer/cloud flag pattern as the other operations.
  */
-function xmlaConfigFromYaml(
+export function xmlaConfigFromYaml(
   connectionFile: Record<string, any>,
   connectionName: string,
   model: string,
@@ -450,13 +457,23 @@ function xmlaConfigFromYaml(
   const orgId: string = mdx.organization_id ?? "";
   const catalog: string = mdx.catalog_name ?? "";
 
+  // mdx.url may already carry the /engine/xmla suffix — avoid doubling it —
+  // optionally followed by a per-user XMLA token (/engine/xmla/<token>), in
+  // which case the URL authenticates on its own and no token is fetched.
+  // Otherwise auth is against the AtScale base host, never the XMLA endpoint.
+  const engineIdx = baseUrl.toLowerCase().indexOf("/engine/xmla");
+  const hasUrlToken = engineIdx >= 0 &&
+    baseUrl.slice(engineIdx + "/engine/xmla".length).replace(/^\/+|\/+$/g, "").length > 0;
+  const hostUrl: string = connection.atscale?.url ??
+    (engineIdx >= 0 ? baseUrl.slice(0, engineIdx) : baseUrl);
+
   const xmlaUrl = installer
     ? `${baseUrl}:10502/xmla/${orgId}`
-    : `${baseUrl}/engine/xmla`;
+    : engineIdx >= 0 ? baseUrl : `${baseUrl}/engine/xmla`;
 
   const authUrl = installer
     ? `${baseUrl}:10500/${orgId}/auth`
-    : `${baseUrl}/auth/realms/atscale/protocol/openid-connect/token`;
+    : `${hostUrl}/auth/realms/atscale/protocol/openid-connect/token`;
 
   return {
     url: xmlaUrl,
@@ -466,6 +483,7 @@ function xmlaConfigFromYaml(
     authUsername: userEntry.username,
     authPassword: userEntry.password,
     isContainer: !installer,
+    keycloakAuth: !installer && !hasUrlToken,
     useAggregates: true,
     generateAggregates: false,
     useQueryCache: false,
@@ -535,6 +553,35 @@ function sqlConfigFromProperties(
 
 // ── XMLA execution ─────────────────────────────────────────────────────────────
 
+/** Obtain a Keycloak JWT (password grant) for container-mode XMLA. */
+async function getKeycloakToken(
+  authUrl: string,
+  username: string,
+  password: string,
+  proxyConfig: Record<string, any>,
+  certConfig: Record<string, any>
+): Promise<string> {
+  try {
+    const config: Record<string, any> = {};
+    if (Object.keys(proxyConfig).length != 0) {
+      config.proxy = proxyConfig
+    }
+    if (Object.keys(certConfig).length != 0) {
+      config.httpsAgent = new https.Agent(certConfig);
+    }
+    const form = new URLSearchParams();
+    form.append("client_id", "atscale-ai-link");
+    form.append("grant_type", "password");
+    form.append("username", username);
+    form.append("password", password);
+    const response = await axios.post(authUrl, form, config);
+    return String(response.data.access_token ?? "");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to obtain Keycloak token from ${authUrl}: ${msg}`);
+  }
+}
+
 /** Obtain a bearer token for installer-mode XMLA. */
 async function getBearerToken(
   authUrl: string,
@@ -593,14 +640,62 @@ function buildSoapEnvelope(
 }
 
 /**
+ * Summarise a successful (HTTP 200) XMLA response body into row count and checksum.
+ *
+ * Row count: counts <Value> elements within the <CellData> section of the XMLA
+ * response — a cell count (rows × measures), not a row count.
+ *
+ * Checksum: SHA1 of the result itself — the <Axes> (tuples) and <CellData>
+ * sections of the SOAP <Body>. Everything else is metadata that varies per
+ * request or per response and would make identical result sets produce
+ * different checksums: the SOAP <Header> (SessionId) and the
+ * <LastDataUpdate> / <LastSchemaUpdate> timestamps inside OlapInfo/CubeInfo,
+ * which change on every run even on the same host. Hashing only the result
+ * also ignores any other metadata AtScale may add later. Empty when
+ * rowCount = 0.
+ */
+export function summarizeXmlaResponse(body: string): { rowCount: number; checksum: string } {
+  // Extract SOAP Body content (excludes Header with session IDs / timestamps)
+  // Handles namespace-prefixed tags such as SOAP-ENV:Body or soap:Body.
+  const bodyTagMatch = body.match(/<[A-Za-z0-9_]*:?Body[^>]*>([\s\S]*)<\/[A-Za-z0-9_]*:?Body>/i);
+  const bodyContent = bodyTagMatch ? bodyTagMatch[1] : body;
+
+  // Count <Value> elements inside <CellData> as the row count. For XMLA this
+  // is a cell count (rows × measures). The prefix must end in a colon, or
+  // <FmtValue> would also match and every formatted cell count twice.
+  let rowCount = 0;
+  const cellDataMatch = bodyContent.match(
+    /<[A-Za-z0-9_]*:?CellData[^>]*>([\s\S]*?)<\/[A-Za-z0-9_]*:?CellData>/i,
+  );
+  if (cellDataMatch) {
+    rowCount = (cellDataMatch[1].match(/<(?:[A-Za-z0-9_]+:)?Value[\s>\/]/gi) ?? []).length;
+  }
+
+  if (!cellDataMatch || rowCount === 0) return { rowCount, checksum: "" };
+
+  const axesMatch = bodyContent.match(
+    /<[A-Za-z0-9_]*:?Axes[\s>][\s\S]*?<\/[A-Za-z0-9_]*:?Axes>/i,
+  );
+  const hashed = (axesMatch ? axesMatch[0] : "") + cellDataMatch[0];
+  const checksum = createHash("sha1").update(hashed, "utf8").digest("hex");
+  return { rowCount, checksum };
+}
+
+/**
+ * Return the error message of a SOAP fault carried in an XMLA response, or ""
+ * when there is none. Some engines return faults with HTTP 200, so the status
+ * code alone does not prove the query succeeded.
+ */
+export function xmlaFaultMessage(body: string): string {
+  const fault = body.match(/<(?:[A-Za-z0-9_]+:)?faultstring[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_]+:)?faultstring>/i);
+  if (fault) return fault[1].trim() || "SOAP fault";
+  if (/<(?:[A-Za-z0-9_]+:)?Fault[\s>]/.test(body)) return "SOAP fault";
+  return "";
+}
+
+/**
  * Execute one XMLA query and return timing/row-count/checksum result.
- *
- * Row count: counts <Value> elements within the <CellData> section of the XMLA response.
- *
- * Checksum: SHA1 of the SOAP <Body> content only — the SOAP <Header> is excluded
- * because it contains per-request values (SessionId, timestamps) that would make
- * identical result sets produce different checksums.  Empty when rowCount = 0 or
- * on error.
+ * See summarizeXmlaResponse for how row count and checksum are derived.
  */
 async function executeXmlaQuery(
   query: QueryRecord,
@@ -615,7 +710,7 @@ async function executeXmlaQuery(
     Accept: "text/xml",
   };
 
-  if (!cfg.isContainer && token) {
+  if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
@@ -644,27 +739,16 @@ async function executeXmlaQuery(
         durationMs,
         rowCount: 0,
         checksum: "",
-        error: `HTTP ${response.status}: ${body.slice(0, 200)}`,
+        error: `HTTP ${response.status}: ${xmlaFaultMessage(body) || body.slice(0, 200)}`,
       };
     }
 
-    // Extract SOAP Body content (excludes Header with session IDs / timestamps)
-    // Handles namespace-prefixed tags such as SOAP-ENV:Body or soap:Body.
-    const bodyTagMatch = body.match(/<[A-Za-z0-9_]*:?Body[^>]*>([\s\S]*)<\/[A-Za-z0-9_]*:?Body>/i);
-    const bodyContent = bodyTagMatch ? bodyTagMatch[1] : body;
-
-    // Count <Value> elements inside <CellData> as the row count.
-    let rowCount = 0;
-    const cellDataMatch = bodyContent.match(
-      /<[A-Za-z0-9_]*:?CellData[^>]*>([\s\S]*?)<\/[A-Za-z0-9_]*:?CellData>/i,
-    );
-    if (cellDataMatch) {
-      rowCount = (cellDataMatch[1].match(/<[A-Za-z0-9_]*:?Value[\s>\/]/gi) ?? []).length;
+    const fault = xmlaFaultMessage(body);
+    if (fault) {
+      return { status: "FAILED", durationMs, rowCount: 0, checksum: "", error: fault };
     }
 
-    const checksum = rowCount > 0
-      ? createHash("sha1").update(bodyContent, "utf8").digest("hex")
-      : "";
+    const { rowCount, checksum } = summarizeXmlaResponse(body);
 
     return { status: "SUCCEEDED", durationMs, rowCount, checksum, error: "" };
   } catch (err) {
@@ -1112,9 +1196,11 @@ export class ExecuteAtScaleQueryHarnessOperation extends Operation<Params> {
             : xmlaConfigFromYaml(yamlConfig, params["connection-name"], model);
 
           this.logger.info(`  XMLA URL: ${cfg.url}`);
-          const token = cfg.isContainer
-            ? ""
-            : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, false, proxyConfig, certConfig);
+          const token = cfg.keycloakAuth
+            ? await getKeycloakToken(cfg.authUrl!, cfg.authUsername ?? "", cfg.authPassword ?? "", proxyConfig, certConfig)
+            : cfg.isContainer
+              ? ""
+              : await getBearerToken(cfg.authUrl!, cfg.authUsername!, cfg.authPassword!, false, proxyConfig, certConfig);
 
           // All XMLA workers share the same stateless HTTP execute function.
           executePerWorker = Array.from({ length: concurrency }, () =>

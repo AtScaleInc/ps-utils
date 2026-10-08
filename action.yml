@@ -13,13 +13,16 @@ inputs:
         extract-model-from-sml
         generate-sml-from-connection
         generate-sml-from-ddl
+        generate-sml-from-bundle
         generate-namespace-from-model
         generate-metrics-from-model
         generate-tableau-from-namespace
         generate-excel-from-namespace
         generate-powerbi-from-namespace
+        generate-notebook-from-connection
         execute-sql-on-connection
         extract-ddl-from-connection
+        echo-connection-metadata
         generate-atscale-install-yaml
         atscale-list-data-sources
         atscale-create-data-source
@@ -42,12 +45,23 @@ inputs:
         generate-queries-from-model
         extract-query-stats-from-atscale
         generate-sml-from-xml
+        generate-sml-from-tabular
+        analyze-powerbi-dax-gaps
+        generate-sml-from-ssas-multidimensional
+        generate-report-from-xml
+        generate-report-from-sml
         generate-shared-model-plan
         apply-shared-model-plan-option
         generate-sml-docs
+        clean-unused-sml-objects
         deploy-atscale-microk8s
         execute-web-services
         get-dso-count
+        atscale-list-aggregates
+        atscale-rebuild-aggregates
+        atscale-list-aggregate-build-history
+        atscale-export-aggregates
+        atscale-import-aggregates
     required: true
 
   # ── Shared ────────────────────────────────────────────────────────────────
@@ -57,7 +71,8 @@ inputs:
       Used by: extract-model-from-atscale, generate-sml-from-connection,
                generate-tableau-from-namespace, execute-sql-on-connection,
                extract-ddl-from-connection, extract-data-shape-from-connection,
-               generate-data-from-data-shape-to-connection, get-dso-count.
+               generate-data-from-data-shape-to-connection, get-dso-count,
+               echo-connection-metadata, generate-notebook-from-connection.
     required: false
   connection-name:
     description: >
@@ -66,20 +81,21 @@ inputs:
                generate-sml-from-ddl, generate-tableau-from-namespace,
                execute-sql-on-connection, extract-ddl-from-connection,
                extract-data-shape-from-connection, get-dso-count,
-               generate-data-from-data-shape-to-connection.
+               generate-data-from-data-shape-to-connection,
+               echo-connection-metadata, generate-notebook-from-connection.
     required: false
 
   # ── extract-model-from-atscale / get-dso-count────────────────────────────────────────────
   model:
-    description: 
-      AtScale model identifier (cube name).
+    description: >
+      AtScale model identifier (cube name), or the model name to restrict the DSO count to.
       Used by: extract-model-from-atscale, get-dso-count.
     required: false
 
-# ── get-dso-count ────────────────────────────────────────────
-  model:
-    description: 
-      AtScale catalog identifier.
+  # ── get-dso-count ────────────────────────────────────────────
+  catalog:
+    description: >
+      AtScale catalog name to restrict the DSO count to. Omit to count all catalogs.
       Used by: get-dso-count.
     required: false
 
@@ -89,7 +105,8 @@ inputs:
       Model name used when reading or generating an SML project, or the model
       label/unique_name to validate.
       Used by: extract-model-from-sml, generate-sml-from-connection,
-               generate-sml-from-ddl, atscale-list-model-errors.
+               generate-sml-from-ddl, atscale-list-model-errors,
+               generate-sml-from-tabular.
     required: false
 
   # ── extract-model-from-atscale / extract-model-from-sml ──────────────────
@@ -104,7 +121,9 @@ inputs:
       Path to the SML project directory.
       Used by: extract-model-from-sml,
                atscale-deploy-catalog (required),
-               atscale-list-model-errors (local mode — provide this OR repo-name/repo-id).
+               atscale-list-model-errors (local mode — provide this OR repo-name/repo-id),
+               clean-unused-sml-objects,
+               generate-report-from-sml.
     required: false
 
   # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
@@ -113,15 +132,29 @@ inputs:
       Output directory.
       For generate-sml-from-connection / generate-sml-from-ddl: SML output directory (default: sml/).
       For generate-data-from-data-shape: CSV output directory (default: data/).
+      For analyze-powerbi-dax-gaps: directory for the gap report (required).
     required: false
   schema:
-    description: Database schema to scope SML generation to.
+    description: >
+      Database schema to scope SML generation to.
+      For echo-connection-metadata: schema to read metadata from (default: the
+      connection's sql.schema, else PUBLIC; upper-cased before querying).
     required: false
   catalog-name:
-    description: Catalog (database) name for the SML project.
+    description: >
+      Catalog (database) name for the SML project. For
+      extract-query-stats-from-atscale, the AtScale catalog containing the model
+      (defaults to mdx.catalog_name of the connection).
     required: false
   pii-severity:
     description: Minimum PII severity level to tag in generated SML (none/low/medium/high).
+    required: false
+  model-mode:
+    description: >
+      Model compatibility policy for query-name collisions: new permits
+      deterministic renaming; existing preserves names and reports a blocking conflict.
+      Used by: generate-sml-from-connection, generate-sml-from-ddl, generate-sml-from-xml,
+               generate-sml-from-tabular, generate-sml-from-ssas-multidimensional.
     required: false
 
   # ── generate-sml-from-connection ─────────────────────────────────────────
@@ -182,28 +215,80 @@ inputs:
     description: Path to the DDL SQL file to parse for SML generation.
     required: false
 
-  # ── generate-sml-from-xml ────────────────────────────────────────────────
+  # ── generate-sml-from-bundle ─────────────────────────────────────────────
+  bundles:
+    description: >
+      Comma-separated AtScale support bundle paths: the engine's support-bundle
+      .zip, a directory containing metadata/ or metadata.zip, or a zip of such a
+      directory. Used by: generate-sml-from-bundle.
+    required: false
+  force:
+    description: >
+      Re-convert projects whose output directory already exists ("true"/"false").
+      Used by: generate-sml-from-bundle.
+    required: false
+    default: "false"
+  org:
+    description: >
+      Comma-separated organisation folder names to include (installer bundles).
+      Used by: generate-sml-from-bundle.
+    required: false
+
+  # ── generate-sml-from-xml / generate-report-from-xml ────────────────────
   xml-file:
-    description: Path to the AtScale XML project file (project_2_0 format) to convert.
+    description: >
+      Path to the AtScale XML project file (project_2_0 format) to convert or report on.
+      Used by: generate-sml-from-xml, generate-report-from-xml.
+    required: false
+  xmla-file:
+    description: >
+      Path to the TMSL/XMLA export (createOrReplace JSON) to convert, or the SSAS
+      Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert.
+      Used by: generate-sml-from-tabular, generate-sml-from-ssas-multidimensional.
     required: false
   connection-type:
     description: >
       Database dialect for the connection file (e.g. "snowflake", "bigquery").
-      Used by: generate-sml-from-xml.
+      Used by: generate-sml-from-xml, generate-sml-from-ssas-multidimensional.
     required: false
   connection-db:
     description: >
       Database or project name written into the connection file. When set, every
       dataset shares one connection instead of a separate connection per distinct
       database/schema pair found in the XML.
-      Used by: generate-sml-from-xml.
+      Used by: generate-sml-from-xml, generate-sml-from-ssas-multidimensional.
     required: false
   connection-schema:
     description: >
       Schema or dataset name written into the connection file. When set, every
       dataset shares one connection instead of a separate connection per distinct
       database/schema pair found in the XML.
-      Used by: generate-sml-from-xml.
+      Used by: generate-sml-from-xml, generate-sml-from-ssas-multidimensional.
+    required: false
+
+  # ── generate-sml-from-tabular ────────────────────────────────────────────
+  warehouse:
+    description: >
+      Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres.
+      Used by: generate-sml-from-tabular.
+    required: false
+  currency:
+    description: >
+      Currency code used for currency-formatted metrics. Defaults to USD.
+      Used by: generate-sml-from-tabular.
+    required: false
+    default: "USD"
+  description:
+    description: >
+      Optional catalog/model description override.
+      Used by: generate-sml-from-tabular.
+    required: false
+
+  # ── analyze-powerbi-dax-gaps ─────────────────────────────────────────────
+  pbix-file:
+    description: >
+      Path to the Power BI .pbix file to analyse.
+      Used by: analyze-powerbi-dax-gaps.
     required: false
 
   # ── apply-shared-model-plan-option ──────────────────────────────────
@@ -252,6 +337,9 @@ inputs:
     description: >
       Title for the generated namespace / Tableau workbook.
       For generate-sml-docs: H1 title of the docs (default: catalog label / unique_name).
+      For clean-unused-sml-objects: H1 title of the report (default: catalog label / unique_name).
+      For generate-report-from-xml: H1 title of the report (default: XML schema name).
+      For generate-report-from-sml: H1 title of the report (default: catalog label / unique_name).
     required: false
   max-suggestions:
     description: "Maximum number of analysis suggestions to generate (default: 25)."
@@ -276,7 +364,18 @@ inputs:
       For generate-atscale-install-yaml: path for the generated values.yaml (default: values.yaml).
       For execute-query-on-connection: path to write query results (CSV for SQL, XML for XMLA).
       For generate-sml-docs: Markdown output file; relative paths are written inside the SML dir (default: README.md).
+      For clean-unused-sml-objects: Markdown report output file (omit to print to stdout).
+      For generate-report-from-xml: Markdown report output file (omit to print to stdout).
+      For generate-report-from-sml: Markdown report output file (omit to print to stdout).
+      For atscale-list-aggregates: CSV export path (omit to skip the CSV export).
+      For atscale-export-aggregates: export JSON output path (default: aggregates-export-<catalog-id>-<model-id>.json).
     required: false
+  apply:
+    description: >
+      Actually delete the unused files. Defaults to a preview-only report.
+      Used by: clean-unused-sml-objects.
+    required: false
+    default: "false"
 
   # ── generate-tableau-from-namespace / generate-excel-from-namespace / generate-powerbi-from-namespace ──
   namespace-file:
@@ -293,7 +392,10 @@ inputs:
     required: false
     default: "2025"
   target-file:
-    description: "Output path for the generated Tableau or Excel workbook."
+    description: >
+      Output path for the generated Tableau or Excel workbook, or for the notebook
+      written by generate-notebook-from-connection (default: notebook.ipynb; the
+      folder must already exist).
     required: false
   target-folder:
     description: >
@@ -311,8 +413,8 @@ inputs:
       Database dialect.
       For generate-sml-from-ddl: e.g. snowflake, postgresql — auto-detected from filename if omitted;
       when snowflake, dataset table names are uppercased.
-      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, or bigquery.
-      BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
+      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, bigquery, or databricks.
+      BigQuery and Databricks omit PRIMARY KEY / FOREIGN KEY constraints.
       For generate-data-from-data-shape-to-connection: when omitted, the dialect is read from
       the connection configuration (sql.dialect); falls back to ansi.
     required: false
@@ -511,8 +613,15 @@ inputs:
     description: >
       Page size for the AtScale query history API.
       Used by: extract-query-stats-from-atscale.
+      Also used by: atscale-list-aggregates (default: 200),
+      atscale-list-aggregate-build-history (default: 20).
     required: false
 
+  query-source:
+    description: >
+      Which queries to read: "user" (default), "system" (engine-issued) or "all".
+      Used by: extract-query-stats-from-atscale.
+    required: false
   # ── generate-enhanced-query-results ──────────────────────────────────────
   db-schema:
     description: >
@@ -537,7 +646,8 @@ inputs:
       database and fetches an execution plan (EXPLAIN) for each outbound query,
       stored in the 'run_outbound_execution_plan' column.
       Supported dialects: snowflake (SYSTEM$EXPLAIN_PLAN_JSON), postgres
-      (EXPLAIN FORMAT JSON), redshift (EXPLAIN).
+      (EXPLAIN FORMAT JSON), redshift (EXPLAIN), databricks (EXPLAIN FORMATTED),
+      bigquery (dry-run job statistics; BigQuery has no EXPLAIN).
       Used by: generate-enhanced-query-results.
     required: false
 
@@ -600,6 +710,13 @@ inputs:
     description: >
       Override the cube name used in MDX FROM and SQL FROM clauses.
       Defaults to the model label from the SML model file.
+      Used by: generate-queries-from-sml, generate-queries-from-model.
+    required: false
+  metrics-per-level-query:
+    description: >
+      How level breakdowns select metrics: "all" (default; one query per level
+      selecting every metric) or "each" (one query per level and metric, so a
+      metric not defined over a dimension fails only its own query).
       Used by: generate-queries-from-sml, generate-queries-from-model.
     required: false
 
@@ -686,7 +803,10 @@ inputs:
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
                atscale-list-deployments, atscale-deploy-catalog,
-               atscale-list-model-errors, generate-ddl-from-atscale.
+               atscale-list-model-errors, generate-ddl-from-atscale,
+               atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
     required: false
   data-source-name:
     description: >
@@ -736,9 +856,98 @@ inputs:
       Used by: atscale-list-data-sources, atscale-create-data-source,
                atscale-list-repos, atscale-create-repo,
                atscale-list-deployments, atscale-deploy-catalog,
-               atscale-list-model-errors, generate-ddl-from-atscale.
+               atscale-list-model-errors, generate-ddl-from-atscale,
+               atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
     required: false
     default: "true"
+
+  # ── atscale-list-aggregates / atscale-rebuild-aggregates / atscale-list-aggregate-build-history / atscale-export-aggregates / atscale-import-aggregates ──
+  catalog-id:
+    description: >
+      Catalog (project) UUID, from atscale-list-deployments. When omitted (with model-id),
+      deployed catalogs/models are listed and an error lists them (GitHub Actions runs non-interactively).
+      Used by: atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
+    required: false
+  model-id:
+    description: >
+      Model (cube) UUID, from atscale-list-deployments. See catalog-id for behavior when omitted.
+      Used by: atscale-list-aggregates, atscale-rebuild-aggregates,
+               atscale-list-aggregate-build-history, atscale-export-aggregates,
+               atscale-import-aggregates.
+    required: false
+  full-build:
+    description: >
+      Trigger a full build when true, or an incremental build when false. Defaults to true.
+      Used by: atscale-rebuild-aggregates.
+    required: false
+    default: "true"
+  input-file:
+    description: >
+      Path to the export JSON file to import.
+      Used by: atscale-import-aggregates.
+    required: false
+  source-atscale-connection-name:
+    description: >
+      Name of the AtScale connection entry for the SOURCE instance the export came from. Only
+      consulted when the input file has no embedded _psUtils.sourceObjectNames map (an older
+      export file, or one hand-crafted per AtScale's own docs) — lets cross-host imports still
+      translate key/role-play reference ids by name instead of only substituting catalog/model ids.
+      Used by: atscale-import-aggregates.
+    required: false
+  connection-remap:
+    description: >
+      Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by
+      the imported aggregates. Manual override; connections are otherwise remapped automatically
+      to the target model's connection when it differs.
+      Used by: atscale-import-aggregates.
+    required: false
+  import-distribution-key:
+    description: >
+      Import distribution-key hints. Defaults to true.
+      Used by: atscale-import-aggregates.
+    required: false
+    default: "true"
+  import-partition-keys:
+    description: >
+      Import partition-key hints. Defaults to true.
+      Used by: atscale-import-aggregates.
+    required: false
+    default: "true"
+  import-replication:
+    description: >
+      Import replication hints. Defaults to true.
+      Used by: atscale-import-aggregates.
+    required: false
+    default: "true"
+
+  # ── atscale-list-model-errors ────────────────────────────────────────────
+  skip-engine-checks:
+    description: >
+      Run only the structural checks (phase 1) and skip the engine checks (phase 2).
+      Phase 1 is a local cross-reference check needing no reachable AtScale instance,
+      so this is the fast pre-merge gate; phase 2 waits on the warehouse.
+      Used by: atscale-list-model-errors.
+    required: false
+    default: "false"
+  skip-structural-checks:
+    description: >
+      Skip the structural checks (phase 1) and run only the engine checks (phase 2).
+      Passing this together with skip-engine-checks is an error.
+      Used by: atscale-list-model-errors.
+    required: false
+    default: "false"
+  timeout:
+    description: >
+      Seconds to wait for any single AtScale request, authentication included,
+      before failing. Defaults to 60; 0 waits indefinitely. Without a bound an
+      unreachable instance blocks until the job's own timeout kills it.
+      Used by: atscale-list-model-errors.
+    required: false
+    default: "60"
 
   # ── atscale-create-repo / atscale-list-model-errors ──────────────────────
   repo-name:
@@ -857,7 +1066,9 @@ runs:
          inputs.operation == 'generate-tableau-from-namespace' ||
          inputs.operation == 'generate-excel-from-namespace' ||
          inputs.operation == 'generate-powerbi-from-namespace' ||
+         inputs.operation == 'generate-notebook-from-connection' ||
          inputs.operation == 'execute-sql-on-connection' ||
+         inputs.operation == 'echo-connection-metadata' ||
          inputs.operation == 'extract-ddl-from-connection' ||
          inputs.operation == 'atscale-list-data-sources' ||
          inputs.operation == 'atscale-create-data-source' ||
@@ -874,7 +1085,12 @@ runs:
          inputs.operation == 'extract-queries-from-atscale' ||
          inputs.operation == 'execute-atscale-query-harness' ||
          inputs.operation == 'execute-query-on-connection' ||
-         inputs.operation == 'generate-enhanced-query-results')
+         inputs.operation == 'generate-enhanced-query-results' ||
+         inputs.operation == 'atscale-list-aggregates' ||
+         inputs.operation == 'atscale-rebuild-aggregates' ||
+         inputs.operation == 'atscale-list-aggregate-build-history' ||
+         inputs.operation == 'atscale-export-aggregates' ||
+         inputs.operation == 'atscale-import-aggregates')
       run: printf '%s\n' '${{ inputs.connection-file }}' > "${{ github.action_path }}/connection.yml"
       shell: bash
 
@@ -918,6 +1134,7 @@ runs:
         [[ -n "${{ inputs.schema }}" ]]        && ARGS+=(--schema        "${{ inputs.schema }}")
         [[ -n "${{ inputs.catalog-name }}" ]]  && ARGS+=(--catalog-name  "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.pii-severity }}" ]]  && ARGS+=(--pii-severity  "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.model-mode }}" ]]    && ARGS+=(--model-mode    "${{ inputs.model-mode }}")
         [[ -n "${{ inputs.sample-size }}" ]]     && ARGS+=(--sample-size     "${{ inputs.sample-size }}")
         [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
         [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
@@ -945,6 +1162,7 @@ runs:
         [[ -n "${{ inputs.database }}" ]]        && ARGS+=(--database        "${{ inputs.database }}")
         [[ -n "${{ inputs.dialect }}" ]]         && ARGS+=(--dialect         "${{ inputs.dialect }}")
         [[ -n "${{ inputs.pii-severity }}" ]]    && ARGS+=(--pii-severity    "${{ inputs.pii-severity }}")
+        [[ -n "${{ inputs.model-mode }}" ]]      && ARGS+=(--model-mode      "${{ inputs.model-mode }}")
         [[ -n "${{ inputs.fact-tables }}" ]]     && ARGS+=(--fact-tables     "${{ inputs.fact-tables }}")
         [[ -n "${{ inputs.sml-config-file }}" ]] && ARGS+=(--sml-config-file "${{ inputs.sml-config-file }}")
         [[ "${{ inputs.camel-case-files }}" == "true" ]]    && ARGS+=(--camel-case-files    true)
@@ -953,6 +1171,25 @@ runs:
         [[ -n "${{ inputs.min-hierarchies-per-dim }}" ]] && ARGS+=(--min-hierarchies-per-dim "${{ inputs.min-hierarchies-per-dim }}")
         [[ -n "${{ inputs.max-hierarchies-per-dim }}" ]] && ARGS+=(--max-hierarchies-per-dim "${{ inputs.max-hierarchies-per-dim }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-bundle ─────────────────────────────────────────────
+    - name: Generate SML from support bundles
+      if: inputs.operation == 'generate-sml-from-bundle'
+      run: |
+        ARGS=(
+          --bundles    "${{ inputs.bundles }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ "${{ inputs.force }}" == "true" ]]       && ARGS+=(--force true)
+        [[ -n "${{ inputs.org }}" ]]                && ARGS+=(--org               "${{ inputs.org }}")
+        [[ -n "${{ inputs.connection-name }}"   ]]  && ARGS+=(--connection-name   "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}"   ]]  && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]]  && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]]  && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.model-mode }}"        ]]  && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-bundle "${ARGS[@]}"
       shell: bash
 
     # ── generate-sml-from-xml ────────────────────────────────────────────────
@@ -969,7 +1206,81 @@ runs:
         [[ -n "${{ inputs.connection-db }}"     ]] && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
         [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
         [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.model-mode }}"         ]] && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-sml-from-tabular ─────────────────────────────────────────────
+    - name: Generate SML from Tabular (TMSL/XMLA)
+      if: inputs.operation == 'generate-sml-from-tabular'
+      run: |
+        ARGS=(
+          --xmla-file  "${{ inputs.xmla-file }}"
+          --warehouse  "${{ inputs.warehouse }}"
+          --database   "${{ inputs.database }}"
+          --schema     "${{ inputs.schema }}"
+          --model-name "${{ inputs.model-name }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --currency   "${{ inputs.currency }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-name }}" ]] && ARGS+=(--catalog-name "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.description }}"  ]] && ARGS+=(--description  "${{ inputs.description }}")
+        [[ -n "${{ inputs.model-mode }}"   ]] && ARGS+=(--model-mode   "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-tabular "${ARGS[@]}"
+      shell: bash
+
+    # ── analyze-powerbi-dax-gaps ──────────────────────────────────────────────
+    - name: Analyze Power BI DAX gaps
+      if: inputs.operation == 'analyze-powerbi-dax-gaps'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" analyze-powerbi-dax-gaps \
+          --pbix-file  "${{ inputs.pbix-file }}" \
+          --output-dir "${{ inputs.output-dir }}" \
+          --verbose true
+      shell: bash
+
+    # ── generate-sml-from-ssas-multidimensional ───────────────────────────────
+    - name: Generate SML from SSAS Multidimensional
+      if: inputs.operation == 'generate-sml-from-ssas-multidimensional'
+      run: |
+        ARGS=(
+          --xmla-file  "${{ inputs.xmla-file }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.connection-type }}"   ]] && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]] && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]] && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.catalog-name }}"      ]] && ARGS+=(--catalog-name      "${{ inputs.catalog-name }}")
+        [[ -n "${{ inputs.model-mode }}"        ]] && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ssas-multidimensional "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-report-from-xml ─────────────────────────────────────────────
+    - name: Generate report from XML
+      if: inputs.operation == 'generate-report-from-xml'
+      run: |
+        ARGS=(
+          --xml-file "${{ inputs.xml-file }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-report-from-xml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-report-from-sml ─────────────────────────────────────────────
+    - name: Generate report from SML
+      if: inputs.operation == 'generate-report-from-sml'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-report-from-sml "${ARGS[@]}"
       shell: bash
 
     # ── apply-style-to-sml ──────────────────────────────────────────────
@@ -997,6 +1308,20 @@ runs:
         [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-docs "${ARGS[@]}"
+      shell: bash
+
+    # ── clean-unused-sml-objects ─────────────────────────────────────────
+    - name: Clean unused SML objects
+      if: inputs.operation == 'clean-unused-sml-objects'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.apply }}" ]]       && ARGS+=(--apply       "${{ inputs.apply }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
+        node "${{ github.action_path }}/dist/cli.js" clean-unused-sml-objects "${ARGS[@]}"
       shell: bash
 
     # ── apply-shared-model-plan-option ──────────────────────────────────
@@ -1108,6 +1433,19 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" generate-powerbi-from-namespace "${ARGS[@]}"
       shell: bash
 
+    # ── generate-notebook-from-connection ────────────────────────────────────
+    - name: Generate Jupyter notebook from connection
+      if: inputs.operation == 'generate-notebook-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.target-file }}" ]] && ARGS+=(--target-file "${{ inputs.target-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-notebook-from-connection "${ARGS[@]}"
+      shell: bash
+
     # ── execute-sql-on-connection ─────────────────────────────────────────────
     - name: Execute SQL on connection
       if: inputs.operation == 'execute-sql-on-connection'
@@ -1137,6 +1475,19 @@ runs:
         [[ "${{ inputs.case-insensitive }}" == "true" ]] && ARGS+=(--case-insensitive true)
         [[ -n "${{ inputs.output-file }}" ]]       && ARGS+=(--output-file      "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── echo-connection-metadata ──────────────────────────────────────────────
+    - name: Echo connection metadata
+      if: inputs.operation == 'echo-connection-metadata'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.schema }}" ]] && ARGS+=(--schema "${{ inputs.schema }}")
+        node "${{ github.action_path }}/dist/cli.js" echo-connection-metadata "${ARGS[@]}"
       shell: bash
 
     # ── generate-atscale-install-yaml ────────────────────────────────────────
@@ -1227,6 +1578,92 @@ runs:
           --verbose true
       shell: bash
 
+    # ── atscale-list-aggregates ───────────────────────────────────────────────
+    - name: List AtScale aggregates
+      if: inputs.operation == 'atscale-list-aggregates'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]]  && ARGS+=(--catalog-id  "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]    && ARGS+=(--model-id    "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.limit }}" ]]       && ARGS+=(--limit       "${{ inputs.limit }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-aggregates "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-rebuild-aggregates ────────────────────────────────────────────
+    - name: Rebuild AtScale aggregates
+      if: inputs.operation == 'atscale-rebuild-aggregates'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --full-build "${{ inputs.full-build }}"
+          --insecure "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]] && ARGS+=(--catalog-id "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]   && ARGS+=(--model-id   "${{ inputs.model-id }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-rebuild-aggregates "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-list-aggregate-build-history ──────────────────────────────────
+    - name: List AtScale aggregate build history
+      if: inputs.operation == 'atscale-list-aggregate-build-history'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]] && ARGS+=(--catalog-id "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]   && ARGS+=(--model-id   "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.limit }}" ]] && ARGS+=(--limit "${{ inputs.limit }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-list-aggregate-build-history "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-export-aggregates ──────────────────────────────────────────────
+    - name: Export AtScale aggregates
+      if: inputs.operation == 'atscale-export-aggregates'
+      run: |
+        ARGS=(
+          --connection-file         "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name "${{ inputs.atscale-connection-name }}"
+          --insecure                "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]]  && ARGS+=(--catalog-id  "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]    && ARGS+=(--model-id    "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-export-aggregates "${ARGS[@]}"
+      shell: bash
+
+    # ── atscale-import-aggregates ──────────────────────────────────────────────
+    - name: Import AtScale aggregates
+      if: inputs.operation == 'atscale-import-aggregates'
+      run: |
+        ARGS=(
+          --connection-file             "${{ github.action_path }}/connection.yml"
+          --atscale-connection-name     "${{ inputs.atscale-connection-name }}"
+          --input-file                  "${{ inputs.input-file }}"
+          --import-distribution-key     "${{ inputs.import-distribution-key }}"
+          --import-partition-keys       "${{ inputs.import-partition-keys }}"
+          --import-replication          "${{ inputs.import-replication }}"
+          --insecure                    "${{ inputs.insecure }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.catalog-id }}" ]]        && ARGS+=(--catalog-id       "${{ inputs.catalog-id }}")
+        [[ -n "${{ inputs.model-id }}" ]]          && ARGS+=(--model-id         "${{ inputs.model-id }}")
+        [[ -n "${{ inputs.source-atscale-connection-name }}" ]] && ARGS+=(--source-atscale-connection-name "${{ inputs.source-atscale-connection-name }}")
+        [[ -n "${{ inputs.connection-remap }}" ]]  && ARGS+=(--connection-remap "${{ inputs.connection-remap }}")
+        node "${{ github.action_path }}/dist/cli.js" atscale-import-aggregates "${ARGS[@]}"
+      shell: bash
+
     # ── atscale-deploy-catalog ───────────────────────────────────────────────────
     - name: Deploy AtScale catalog
       if: inputs.operation == 'atscale-deploy-catalog'
@@ -1260,6 +1697,9 @@ runs:
         [[ -n "${{ inputs.repo-id }}"    ]] && ARGS+=(--repo-id    "${{ inputs.repo-id }}")
         [[ -n "${{ inputs.branch }}"     ]] && ARGS+=(--branch     "${{ inputs.branch }}")
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
+        [[ -n "${{ inputs.timeout }}"    ]] && ARGS+=(--timeout    "${{ inputs.timeout }}")
+        [[ "${{ inputs.skip-engine-checks }}"     == "true" ]] && ARGS+=(--skip-engine-checks)
+        [[ "${{ inputs.skip-structural-checks }}" == "true" ]] && ARGS+=(--skip-structural-checks)
         node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
       shell: bash
 
@@ -1267,15 +1707,14 @@ runs:
     - name: Get DSO Count
       if: inputs.operation == 'get-dso-count'
       run: |
-         ARGS=(
-          --connection-file         "${{ github.action_path }}/connection.yml"
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
           --connection-name "${{ inputs.connection-name }}"
-          --insecure                "${{ inputs.insecure }}"
           --verbose true
         )
         [[ -n "${{ inputs.catalog }}"  ]] && ARGS+=(--catalog  "${{ inputs.catalog }}")
         [[ -n "${{ inputs.model }}"    ]] && ARGS+=(--model    "${{ inputs.model }}")
-        node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
+        node "${{ github.action_path }}/dist/cli.js" get-dso-count "${ARGS[@]}"
       shell: bash
 
     # ── generate-ddl-from-atscale ────────────────────────────────────────────
@@ -1375,11 +1814,13 @@ runs:
           --model           "${{ inputs.model }}"
           --verbose true
         )
+        [[ -n "${{ inputs.catalog-name }}"  ]] && ARGS+=(--catalog       "${{ inputs.catalog-name }}")
         [[ -n "${{ inputs.output-dir }}"    ]] && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
         [[ -n "${{ inputs.window-days }}"   ]] && ARGS+=(--window-days   "${{ inputs.window-days }}")
         [[ -n "${{ inputs.start-date }}"    ]] && ARGS+=(--start-date    "${{ inputs.start-date }}")
         [[ -n "${{ inputs.end-date }}"      ]] && ARGS+=(--end-date      "${{ inputs.end-date }}")
         [[ -n "${{ inputs.limit }}"         ]] && ARGS+=(--limit         "${{ inputs.limit }}")
+        [[ -n "${{ inputs.query-source }}"  ]] && ARGS+=(--query-source  "${{ inputs.query-source }}")
         [[ "${{ inputs.monthly }}" == "true" ]] && ARGS+=(--monthly true)
         [[ -n "${{ inputs.monthly-year }}"  ]] && ARGS+=(--monthly-year  "${{ inputs.monthly-year }}")
         node "${{ github.action_path }}/dist/cli.js" extract-query-stats-from-atscale "${ARGS[@]}"
@@ -1480,6 +1921,7 @@ runs:
         )
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        [[ -n "${{ inputs.metrics-per-level-query }}" ]] && ARGS+=(--metrics-per-level-query "${{ inputs.metrics-per-level-query }}")
         node "${{ github.action_path }}/dist/cli.js" generate-queries-from-sml "${ARGS[@]}"
       shell: bash
 
@@ -1495,6 +1937,7 @@ runs:
         )
         [[ -n "${{ inputs.model-name }}" ]] && ARGS+=(--model-name "${{ inputs.model-name }}")
         [[ -n "${{ inputs.cube-name }}"  ]] && ARGS+=(--cube-name  "${{ inputs.cube-name }}")
+        [[ -n "${{ inputs.metrics-per-level-query }}" ]] && ARGS+=(--metrics-per-level-query "${{ inputs.metrics-per-level-query }}")
         node "${{ github.action_path }}/dist/cli.js" generate-queries-from-model "${ARGS[@]}"
       shell: bash
 

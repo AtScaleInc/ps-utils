@@ -12,9 +12,10 @@ import { fileURLToPath } from "url";
 import { buildRegistry } from "../operations/index.js";
 import { buildOpMetas, buildSdl } from "../operations/execute-web-services/graphql-server.js";
 import type { OpMeta, ParamMeta } from "../operations/execute-web-services/graphql-server.js";
+import { OPERATION_GROUPS } from "../operations/operation-groups.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUT = path.resolve(__dirname, "../../docs/GRAPHQL.md");
+const OUT = path.resolve(__dirname, "../../docs/reference/GRAPHQL.md");
 
 const nullLogger = { log: () => { }, info: () => { }, error: () => { }, verbose: () => { } };
 
@@ -72,44 +73,12 @@ function curlMultipartBody(meta: OpMeta): string[] | null {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Operation groupings (mirrors README.md TOC order)
+// Operation groupings (OPERATION_GROUPS — mirrors README.md TOC order)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const GROUPS: [string, string[]][] = [
-  ["Model Extraction", [
-    "extract-model-from-atscale", "extract-model-from-sml",
-  ]],
-  ["SML Creation and Manipulation", [
-    "execute-sql-on-connection", "extract-ddl-from-connection",
-    "generate-sml-from-connection", "generate-sml-from-ddl",
-    "generate-sml-from-xml", "generate-shared-model-plan",
-    "apply-shared-model-plan-option", "generate-ddl-from-atscale",
-    "generate-metrics-from-model",
-  ]],
-  ["Synthetic Data Generation", [
-    "extract-data-shape-from-connection", "generate-ddl-from-data-shape",
-    "generate-data-from-data-shape", "generate-data-from-data-shape-to-connection",
-  ]],
-  ["Visualization and Namespace Processing", [
-    "generate-namespace-from-model", "generate-tableau-from-namespace",
-    "generate-excel-from-namespace", "generate-powerbi-from-namespace",
-    "generate-notebook-from-connection",
-  ]],
-  ["Testing / Query Processing", [
-    "generate-queries-from-sml", "generate-queries-from-model",
-    "extract-query-stats-from-atscale", "extract-queries-from-atscale",
-    "execute-atscale-query-harness", "execute-query-on-connection",
-    "generate-enhanced-query-results", "execute-run-analysis",
-  ]],
-  ["AtScale Config", [
-    "generate-atscale-install-yaml", "atscale-list-data-sources",
-    "atscale-create-data-source", "atscale-list-repos",
-    "atscale-create-repo", "atscale-list-deployments",
-    "atscale-deploy-catalog", "atscale-list-model-errors",
-    "get-dso-count"
-  ]],
-  ["Web Services", ["execute-web-services"]],
-];
+// The authoritative grouping — the same list that drives the CLI help and the
+// VS Code extension menus, so the generated docs can never drift from it.
+const GROUPS: [string, string[]][] = OPERATION_GROUPS.map((g) => [g.name, g.operations]);
 
 // Build lookup maps and sort metas to match group order
 const opToGroup = new Map<string, string>();

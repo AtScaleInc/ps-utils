@@ -25,10 +25,8 @@ export interface OperationGroup {
  */
 export const OPERATION_GROUPS: OperationGroup[] = [
   {
-    name: "Visualization and Namespace Processing",
+    name: "Model Extraction",
     operations: [
-      "generate-metrics-from-model",
-      "generate-namespace-from-model",
       "extract-model-from-atscale",
       "extract-model-from-sml",
     ],
@@ -41,11 +39,20 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "generate-sml-from-connection",
       "generate-sml-from-ddl",
       "generate-sml-from-xml",
-      "apply-style-to-sml",
-      "generate-sml-docs",
+      "generate-sml-from-bundle",
+      "generate-sml-from-tabular",
+      "analyze-powerbi-dax-gaps",
+      "generate-sml-from-ssas-multidimensional",
+      "generate-report-from-xml",
+      "generate-report-from-sml",
       "generate-shared-model-plan",
       "apply-shared-model-plan-option",
+      "apply-style-to-sml",
+      "generate-sml-docs",
+      "clean-unused-sml-objects",
       "generate-ddl-from-atscale",
+      "generate-metrics-from-model",
+      "echo-connection-metadata",
     ],
   },
   {
@@ -58,8 +65,9 @@ export const OPERATION_GROUPS: OperationGroup[] = [
     ],
   },
   {
-    name: "BI Tool Integration",
+    name: "Visualization and Namespace Processing",
     operations: [
+      "generate-namespace-from-model",
       "generate-tableau-from-namespace",
       "generate-excel-from-namespace",
       "generate-powerbi-from-namespace",
@@ -94,11 +102,25 @@ export const OPERATION_GROUPS: OperationGroup[] = [
     ],
   },
   {
+    name: "Aggregate Management",
+    operations: [
+      "atscale-list-aggregates",
+      "atscale-rebuild-aggregates",
+      "atscale-list-aggregate-build-history",
+      "atscale-export-aggregates",
+      "atscale-import-aggregates",
+    ],
+  },
+  {
     name: "Web Services",
-    operations: ["execute-web-services"],
+    operations: [
+      "execute-web-services",
+    ],
   },
   {
     name: "Utilities",
-    operations: ["version"],
+    operations: [
+      "version",
+    ],
   },
 ];

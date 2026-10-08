@@ -139,6 +139,94 @@ rather than a cascade.
 Set [`psUtils.smlUnknownKeys`](#settings) to `information` to keep the findings in the Problems
 panel without an editor squiggle, or `off` to disable them. `psUtils.smlEnabled` gates them too.
 
+## Monitoring a directory for model errors
+
+Everything above validates **one file against the specification**. It cannot see that a
+relationship's `join_columns` names a column that was deleted from the dataset last week, or that a
+level attribute marked `is_unique_key` is not actually unique in the warehouse. Those are what
+[`atscale-list-model-errors`](../README.md) checks — cross-file references in phase 1, then
+joinability and uniqueness against the live AtScale engine in phase 2.
+
+Right-click a folder → **PS-Utils → ☐ Monitor SML Directory** to run that operation continuously.
+Every change to a `.yml`/`.yaml` file under the directory re-runs it, and the problems it reports
+land in the Problems panel on the line that caused them. The menu item shows **☑** on a directory
+that is being watched — per directory, not globally, so with two monitors only the watched folders
+are ticked.
+
+**Saves run phase 1 only.** Phase 1 resolves cross-file references locally and finishes in about a
+second; phase 2 asks the engine to run SQL against the warehouse, which is far too slow to repeat on
+every keystroke and blocks entirely when the instance is down. The monitor therefore passes
+`--skip-engine-checks` on watch-triggered runs. Click the monitored folder again and choose
+**Validate now** for a full check including the engine, or set
+[`psUtils.smlMonitorEngineChecks`](#settings) to run it on every change.
+
+You are asked once for the connections file (skipped when [`psUtils.connectionFile`](#settings) is
+set) and the AtScale connection to validate against; the connection is remembered like any other
+parameter, so a second directory in the same project is a single click. Right-clicking a folder
+*inside* the model — `datasets/`, say — walks up to the directory holding `models/`, which is what
+the operation actually needs.
+
+Clicking **☑ Monitor SML Directory** on a directory that is already monitored offers **Validate
+now**, **Show validation log**, and **Stop monitoring**. Monitors are stored per workspace and
+resume when the window reloads. A status-bar item shows the current problem count and opens the log.
+
+From the Command Palette the entries are **PS-Utils: Monitor an SML Directory…** and **PS-Utils:
+Stop Monitoring SML Directory** — plain verbs, since the checkbox glyph reads badly in a search
+list, exactly as for the SML support toggle.
+
+### Where a problem ends up
+
+**Everything the run reports becomes a Problems-panel entry** — errors as errors, warnings as
+warnings, each with `atscale-list-model-errors` as its source and the validation phase
+(`structural` / `engine`) as its code. The same problems are also written to the **PS-Utils SML
+Validation** output channel in the operation's own format, as a timestamped record of each re-run.
+
+Placing them takes some work, because the operation reports against SML *object names*
+(`datasets/sales_fact`, `models/ → rel_date`) and never file positions — it validates a directory of
+YAML and does not track where a given `unique_name` was written. The extension maps them back:
+
+| Reported | Squiggle lands on |
+|----------|-------------------|
+| `Dataset 'sales_fact': connection_id 'ghost' not found` | the `connection_id: ghost` line in `datasets/sales_fact.yml` |
+| `Relationship 'rel_date': join_column 'dt' not found` | `rel_date`'s declaration in the model file |
+| `Engine validation failed for connectionId='default'` | names no SML object — the model file, prefixed with the reported location |
+
+Where the message quotes a value that appears in the resolved file, the diagnostic moves onto that
+line rather than the object's `unique_name` — the first row above is the common case, and the
+`connection_id` line is where the edit has to happen. When nothing matches it stays on the
+declaration rather than guessing at a line, and a problem that maps to no object at all is prefixed
+with the operation's own location string so a diagnostic on line 1 of the model file is not
+mistaken for being about that line.
+
+A run that **fails outright** — unreachable instance, unknown connection, no model file — is itself
+an error in the Problems panel (`atscale-list-model-errors could not validate <dir>: …`), and the
+status bar reads `SML: validation failed`. A monitor that has silently stopped validating would
+otherwise be indistinguishable from a model with no problems. The previous problems are kept
+alongside it, since a failed run proves nothing about the files; the next successful run clears the
+failure and replaces them.
+
+### Cost
+
+A run reaches a live AtScale instance and issues SQL. Changes are therefore debounced (1.2 s after
+the last one), runs never overlap, and a change arriving mid-run queues exactly one re-run rather
+than one per event.
+
+There are two bounds, because an unreachable instance used to hang the whole thing indefinitely:
+
+- The monitor passes **`--timeout`** to the operation, at half `psUtils.smlMonitorTimeout`. That
+  bounds each individual AtScale request *including the token exchange*, which is where an
+  unreachable instance actually stalls — long before it reaches the endpoint being called. A run
+  that hits it still produces a report, with the unreachable engine as a phase 2 warning.
+- **`psUtils.smlMonitorTimeout`** (default 120 s) is the outer backstop: the child is killed if the
+  operation somehow fails to return anyway. That is reported as a timeout in the Problems panel and
+  the log.
+
+Without them one stalled run wedged the monitor for good — it never reported, and every later change
+was coalesced into a re-run that never started, so the log simply went quiet after `validating`.
+
+The exact command is written to the log at the start of every run, and the elapsed time on
+completion, so a run that behaves oddly can be reproduced in a terminal without reconstructing it.
+
 ## Requirements
 
 - **VS Code** 1.85 or newer.
@@ -235,6 +323,11 @@ from the manifest, so adding or changing an operation in the CLI automatically u
 It preserves every other field, so the `configuration`, `yamlValidation` and `grammars`
 contributions are hand-maintained and safe to edit.
 
+Commands that are **not** operations — `Settings…`, the SML support checkbox, and the
+[monitor](#monitoring-a-directory-for-model-errors) entries — are declared in that script's
+`SML_MENU` and `MONITOR_MENU` tables, never in `package.json` directly, since the next build
+overwrites `commands`/`submenus`/`menus` wholesale.
+
 The SML schemas and the injection grammar are generated too, from the vendored specification:
 
 ```bash
@@ -266,6 +359,8 @@ Set via the **Settings…** menu item (writes workspace `.vscode/settings.json`)
 | `psUtils.rememberParameters` | Remember the last value entered for each scalar parameter and reuse it across operations (default `true`) |
 | `psUtils.smlEnabled` | [SML schema support](#sml-editing-support) — completion, hover docs and validation for SML YAML files (default `true`). Set per project; see [Turning it on and off per project](#turning-it-on-and-off-per-project) |
 | `psUtils.smlUnknownKeys` | Severity for [keys the specification does not document](#undocumented-keys): `warning` (default), `information`, or `off` |
+| `psUtils.smlMonitorTimeout` | Seconds a [monitored validation run](#cost) may take before it is cancelled (default `120`) |
+| `psUtils.smlMonitorEngineChecks` | Run the slow phase 2 engine checks on every change while monitoring, not just structural ones (default `false`) |
 
 ### Remembered parameters (cross-operation defaults)
 

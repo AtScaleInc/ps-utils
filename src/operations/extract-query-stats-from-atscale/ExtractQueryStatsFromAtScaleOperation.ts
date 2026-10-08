@@ -42,6 +42,13 @@ class ExtractQueryStatsParameterSet extends ParameterSet {
       required = true;
     })(),
     new (class extends StringParameter {
+      name = "catalog";
+      description =
+        "AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name " +
+        "of the connection; required when the connection has no mdx: block.";
+      required = false;
+    })(),
+    new (class extends StringParameter {
       name = "output-dir";
       description = "Directory to write the output CSV files";
       required = false;
@@ -76,9 +83,22 @@ class ExtractQueryStatsParameterSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name = "limit";
-      description = "Page size for the query history API";
+      description =
+        "Page size for the query history API. The engine serves at most 101 rows per page, " +
+        "so values above 100 are clamped; every page is still fetched.";
       required = false;
       defaultValue = "100";
+    })(),
+    new (class extends StringParameter {
+      name = "query-source";
+      description =
+        "Which queries to read: \"user\" (default — queries sent by clients), \"system\" " +
+        "(engine-issued: aggregate builds, canaries, …) or \"all\"";
+      required = false;
+      defaultValue = "user";
+      validate(value: string): void {
+        parseQuerySource(value);
+      }
     })(),
     new (class extends StringParameter {
       name = "num-queries";
@@ -93,6 +113,7 @@ type Params = {
   "connection-file": string;
   "connection-name": string;
   model: string;
+  catalog?: string;
   "output-dir": string;
   "window-days": string;
   "start-date"?: string;
@@ -100,6 +121,7 @@ type Params = {
   monthly: string;
   "monthly-year"?: string;
   limit: string;
+  "query-source"?: string;
   "num-queries": string;
 };
 export type ExtractQueryStatsFromAtScaleParams = Params;
@@ -113,6 +135,313 @@ function pairKey(attribute: string | null, measure: string | null): PairKey {
 
 function parsePairKey(key: PairKey): [string | null, string | null] {
   return JSON.parse(key) as [string | null, string | null];
+}
+
+// ---------------------------------------------------------------------------
+// Escaping and sampling helpers
+// ---------------------------------------------------------------------------
+
+/** Escape text for an XML element body (the SOAP envelope carries it raw). */
+export function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * A DMV string literal for a name, ready to embed in the SOAP <Statement>:
+ * single quotes doubled for the DMV parser, then XML-escaped for the envelope.
+ */
+export function dmvStringLiteral(value: string): string {
+  return `'${escapeXml(value.replace(/'/g, "''"))}'`;
+}
+
+/**
+ * Offer one item to a size-`capacity` reservoir that has already seen `seen`
+ * items (Algorithm R): the first `capacity` fill it, and item n (0-based) then
+ * replaces a random slot with probability capacity / (n + 1). Every item seen
+ * ends up in the sample with equal probability.
+ */
+export function reservoirOffer<T>(
+  sample: T[],
+  item: T,
+  seen: number,
+  capacity: number,
+  random: () => number = Math.random,
+): void {
+  if (seen < capacity) {
+    sample.push(item);
+    return;
+  }
+  const j = Math.floor(random() * (seen + 1));
+  if (j < capacity) sample[j] = item;
+}
+
+// ---------------------------------------------------------------------------
+// Connection
+// ---------------------------------------------------------------------------
+
+export interface QueryStatsConnection {
+  installer: boolean;
+  atscaleUrl: string;
+  /** Only used by installer deployments (auth, XMLA and query history paths). */
+  organizationId?: string;
+  catalogName: string;
+  username: string;
+  password: string;
+  /** connections.<name>.atscale.insecure: skip TLS certificate verification. */
+  insecure: boolean;
+}
+
+/**
+ * Resolve what this operation needs from a connections.yaml entry.
+ *
+ * Container hosts can use the standard `atscale: { url, username, password,
+ * insecure }` entry the other container operations use; an installer-shaped
+ * `mdx: { url, organization_id, catalog_name, user }` block still works for
+ * both modes. organization_id is required only for installer deployments —
+ * container routes (/engine/xmla, /engine/queries, Keycloak) never use it.
+ */
+export function resolveQueryStatsConnection(
+  connectionFile: any,
+  connectionName: string,
+  catalogParam: string | undefined,
+): QueryStatsConnection {
+  const connection = connectionFile?.connections?.[connectionName];
+  if (!connection) {
+    throw new Error(`Connection '${connectionName}' not found`);
+  }
+  const { mdx, atscale } = connection;
+  const installer = !!connection.installer;
+  if (!mdx && !atscale) {
+    throw new Error(
+      `Connection '${connectionName}' needs an 'atscale:' block (url, username, password) ` +
+      `or an 'mdx:' block (url, organization_id, catalog_name, user).`,
+    );
+  }
+
+  let atscaleUrl: string = atscale?.url ?? mdx?.url ?? "";
+  // mdx.url may carry an /engine/xmla suffix; auth and REST are against the host.
+  const engineIdx = atscaleUrl.toLowerCase().indexOf("/engine/xmla");
+  if (engineIdx >= 0) atscaleUrl = atscaleUrl.slice(0, engineIdx);
+  atscaleUrl = atscaleUrl.replace(/\/+$/, "");
+
+  const users = connectionFile.users ?? {};
+  const user = users[mdx?.user] ?? users[atscale?.user] ?? {};
+  const username: string = user.username ?? atscale?.username ?? "";
+  const password: string = user.password ?? atscale?.password ?? "";
+
+  const organizationId: string | undefined = mdx?.organization_id ?? atscale?.organization_id;
+  if (installer && !organizationId) {
+    throw new Error(
+      `Connection '${connectionName}' is an installer connection and needs mdx.organization_id.`,
+    );
+  }
+  const catalogName: string = catalogParam?.trim() || mdx?.catalog_name || "";
+  if (!catalogName) {
+    throw new Error(
+      `No catalog name: pass --catalog or set mdx.catalog_name on connection '${connectionName}'.`,
+    );
+  }
+  if (!atscaleUrl) {
+    throw new Error(`Connection '${connectionName}' has no AtScale URL (atscale.url or mdx.url).`);
+  }
+  return {
+    installer, atscaleUrl, organizationId, catalogName, username, password,
+    insecure: atscale?.insecure === true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Query history REST API
+// ---------------------------------------------------------------------------
+
+/**
+ * Base URL of the engine's query history list route.
+ *
+ * The engine mounts it as `"queries" -> ActivityMonitorRest()` and the list is
+ * `(get & pathEnd)`: there is no `orgId/{org}` segment on container builds, so
+ * `/engine/queries/orgId/default` is a 404. Container nginx strips `/engine`
+ * before forwarding. Installer deployments keep their org-scoped path.
+ */
+export function queryHistoryBaseUrl(
+  installer: boolean,
+  atscaleUrl: string,
+  organizationId: string | undefined,
+): string {
+  return installer
+    ? `${atscaleUrl}:10502/queries/orgId/${organizationId}`
+    : `${atscaleUrl}/engine/queries`;
+}
+
+export type QuerySource = "user" | "system" | "all";
+
+export function parseQuerySource(value: string | undefined): QuerySource {
+  const v = (value ?? "user").trim().toLowerCase() || "user";
+  if (v !== "user" && v !== "system" && v !== "all") {
+    throw new Error('Parameter query-source must be "user", "system" or "all".');
+  }
+  return v;
+}
+
+export interface QueryHistoryFilters {
+  catalogId: string;
+  modelId: string;
+  startTime: string;
+  endTime: string;
+  /** Defaults to "user". "all" sends no querySource filter. */
+  querySource?: QuerySource;
+}
+
+/** One page request against the query history list route. */
+export function queryHistoryPageUrl(
+  baseUrl: string,
+  filters: QueryHistoryFilters,
+  offset: number,
+  limit: number,
+): string {
+  const source = filters.querySource ?? "user";
+  const sourceParam = source === "all" ? "" : `querySource=${source}&`;
+  return (
+    `${baseUrl}?${sourceParam}status=success` +
+    `&projectId=${filters.catalogId}&cubeId=${filters.modelId}` +
+    `&queryDateTimeStart=${filters.startTime}&queryDateTimeEnd=${filters.endTime}` +
+    `&offset=${offset}&limit=${limit}`
+  );
+}
+
+/**
+ * Largest page the engine serves. PaginationSupport clamps `limit` to
+ * ResultsPerPage (101) without saying so, so a larger request gets 101 rows
+ * back. Requests are clamped below that, and paging is driven by the rows
+ * actually returned rather than by the requested size.
+ */
+export const MAX_QUERY_HISTORY_PAGE_SIZE = 100;
+
+/**
+ * Page through the query history list route until a page comes back empty or
+ * shorter than the (clamped) page size, returning every row.
+ */
+export async function fetchAllQueryHistory(
+  getPage: (url: string) => Promise<any>,
+  baseUrl: string,
+  filters: QueryHistoryFilters,
+  requestedLimit: number,
+  logger?: Pick<Logger, "verbose">,
+): Promise<any[]> {
+  const limit = Math.min(Math.max(1, requestedLimit), MAX_QUERY_HISTORY_PAGE_SIZE);
+  const rows: any[] = [];
+  let offset = 0;
+  for (;;) {
+    const url = queryHistoryPageUrl(baseUrl, filters, offset, limit);
+    logger?.verbose(`Fetching query page at offset ${offset}: ${url}`);
+    const body = await getPage(url);
+    const data: any[] = body?.response?.data ?? [];
+    rows.push(...data);
+    if (data.length === 0 || data.length < limit) break;
+    offset += data.length;
+  }
+  return rows;
+}
+
+/** How long after a window's end a query may still finish and be counted in it. */
+const MONTH_FINISH_GRACE_MS = 24 * 60 * 60 * 1000;
+
+export interface MonthWindow {
+  /** queryDateTimeStart — the engine matches it against a query's received time. */
+  start: string;
+  /** queryDateTimeEnd — the engine matches it against a query's finish time. */
+  end: string;
+  /** Rows received at or after this instant belong to the next month. */
+  receivedBefore: string;
+}
+
+/**
+ * The twelve UTC calendar months of `year` as query history windows.
+ *
+ * The engine filters queryDateTimeStart on the received time and
+ * queryDateTimeEnd on the finish time, both inclusive (QueryInfoPostgresDao).
+ * Month boundaries alone would therefore drop a query received before
+ * midnight and finished after it. Each window's end is extended by a day and
+ * rows received after the month are dropped client-side (receivedBefore), so
+ * every query is counted in exactly one month — the one it was received in.
+ * Building the months in UTC keeps the result independent of the machine's
+ * time zone; local-time windows were shifted by the UTC offset.
+ */
+export function monthlyWindowsUtc(year: number): MonthWindow[] {
+  const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
+  return Array.from({ length: 12 }, (_, month) => {
+    const next = Date.UTC(year, month + 1, 1);
+    return {
+      start: iso(Date.UTC(year, month, 1)),
+      end: iso(next + MONTH_FINISH_GRACE_MS),
+      receivedBefore: iso(next),
+    };
+  });
+}
+
+/** When the engine received a query row: its QueryWallTime event's start. */
+export function queryReceivedAt(row: any): string | undefined {
+  const events: any[] = Array.isArray(row?.timeline_events) ? row.timeline_events : [];
+  return events.find((e) => e?.type === "QueryWallTime")?.started ?? undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Answered-by classification
+// ---------------------------------------------------------------------------
+
+export type AnsweredBy = "cache" | "agg" | "raw";
+
+export interface QuerySummaryRow {
+  query_id: string;
+  received: string;
+  duration_ms: number | null;
+  user_id: string;
+  cube_name: string;
+  class: AnsweredBy;
+  aggregate_count: number;
+  subquery_count: number;
+}
+
+/**
+ * Reduce one engine query history row to its summary, classifying how it was
+ * answered (first match wins):
+ *   cache — a subquery was served from the engine's local result cache
+ *           (SubqueriesWall children used_local_cache), or the query succeeded
+ *           without sending any subquery (fully cache-served)
+ *   agg   — the engine lists aggregates it used (aggregate_definition_ids)
+ *   raw   — the warehouse answered it without an aggregate
+ */
+export function summarizeQueryRow(row: any): QuerySummaryRow {
+  const events: any[] = Array.isArray(row?.timeline_events) ? row.timeline_events : [];
+  const subqueries: any[] = events
+    .filter((e) => e?.type === "SubqueriesWall")
+    .flatMap((e) => (Array.isArray(e.children) ? e.children : []));
+  const wall = events.find((e) => e?.type === "QueryWallTime");
+  const aggregates: any[] = Array.isArray(row?.aggregate_definition_ids) ? row.aggregate_definition_ids : [];
+  const succeeded = row?.succeeded !== false;
+
+  let cls: AnsweredBy;
+  if (subqueries.some((sq) => sq?.used_local_cache === true) || (succeeded && subqueries.length === 0)) {
+    cls = "cache";
+  } else if (aggregates.length > 0) {
+    cls = "agg";
+  } else {
+    cls = "raw";
+  }
+
+  const seconds = typeof wall?.duration === "number" ? wall.duration : null;
+  return {
+    query_id: String(row?.query_id ?? ""),
+    received: String(wall?.started ?? ""),
+    duration_ms: seconds === null ? null : Math.round(seconds * 1000 * 1000) / 1000,
+    user_id: String(row?.user_id ?? ""),
+    cube_name: String(row?.cube_name ?? ""),
+    class: cls,
+    aggregate_count: aggregates.length,
+    subquery_count: subqueries.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -190,12 +519,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
             <Execute xmlns="urn:schemas-microsoft-com:xml-analysis">
                 <Command><Statement>${statement}</Statement></Command>
                 <Properties>
-                    <PropertyList><Catalog>${catalogName}</Catalog></PropertyList>
+                    <PropertyList><Catalog>${escapeXml(catalogName)}</Catalog></PropertyList>
                 </Properties>
                 <Parameters>
                     <Parameter>
                         <Name>CubeName</Name>
-                        <Value>${modelName}</Value>
+                        <Value>${escapeXml(modelName)}</Value>
                     </Parameter>
                 </Parameters>
             </Execute>
@@ -310,15 +639,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     certConfig: Record<string, any>
   ): Promise<{ catalogId: string; modelId: string }> {
     const catalogStatement =
-      `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = '${catalogName}'`;
+      `SELECT CATALOG_GUID FROM $system.DBSCHEMA_CATALOGS WHERE [CATALOG_NAME] = ${dmvStringLiteral(catalogName)}`;
     const catalogRows = await this.getDmvData(
       token, installer, atscaleUrl, catalogStatement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
     const catalogId = catalogRows[0]?.CATALOG_GUID ?? "";
 
     const modelStatement =
-      `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = '${catalogName}' ` +
-      `and [CUBE_NAME] = '${modelName}'`;
+      `SELECT CUBE_GUID FROM $system.MDSCHEMA_CUBES WHERE [CATALOG_NAME] = ${dmvStringLiteral(catalogName)} ` +
+      `and [CUBE_NAME] = ${dmvStringLiteral(modelName)}`;
     const modelRows = await this.getDmvData(
       token, installer, atscaleUrl, modelStatement, organizationId, catalogName, modelName, proxyConfig, certConfig
     );
@@ -333,11 +662,12 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
   /**
    * Pages through the AtScale query history REST API for [startTime, endTime],
-   * tallying how many successful user queries involved each
+   * tallying how many successful queries (of querySource) involved each
    * (dimension-attribute, measure) pair.
    *
-   * Uses reservoir sampling so that at most `numQueries` representative query
-   * IDs are kept per pair (matching the notebook's approach exactly).
+   * Keeps at most `numQueries` sample query IDs per pair by reservoir sampling
+   * (Algorithm R, see reservoirOffer), so every query of a pair is equally
+   * likely to be kept. Sampling affects only which IDs are kept, not counts.
    *
    * Returns:
    *   occurrenceDict  — Map<pairKey, count>
@@ -355,10 +685,13 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     limit: number,
     numQueries: number,
     proxyConfig: Record<string, any>,
-    certConfig: Record<string, any>
+    certConfig: Record<string, any>,
+    receivedBefore?: string,
+    querySource: QuerySource = "user",
   ): Promise<{
     occurrenceDict: Map<PairKey, number>;
     sampleQueryIds: Map<PairKey, Array<[string, string[]]>>;
+    summaries: QuerySummaryRow[];
   }> {
     const occurrenceDict = new Map<PairKey, number>();
     const sampleQueryIds = new Map<PairKey, Array<[string, string[]]>>();
@@ -375,80 +708,61 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
       'Authorization': `Bearer ${token}`
     }
 
-    const baseUrl = installer
-      ? `${atscaleUrl}:10502/queries/orgId/${organizationId}`
-      : `${atscaleUrl}/engine/queries/orgId/${organizationId}`;
+    const baseUrl = queryHistoryBaseUrl(installer, atscaleUrl, organizationId);
 
-    let offset = 0;
-    let done = false;
+    const fetched = await fetchAllQueryHistory(
+      async (url) => (await axios.get(url, config)).data,
+      baseUrl, { catalogId, modelId, startTime, endTime, querySource }, limit, this.logger,
+    );
+    const cutoff = receivedBefore ? Date.parse(receivedBefore) : undefined;
+    const data = cutoff === undefined ? fetched : fetched.filter((row) => {
+      const received = queryReceivedAt(row);
+      return received === undefined || Date.parse(received) < cutoff;
+    });
 
-    while (!done) {
-      const url =
-        `${baseUrl}?querySource=user&status=success` +
-        `&projectId=${catalogId}&cubeId=${modelId}` +
-        `&queryDateTimeStart=${startTime}&queryDateTimeEnd=${endTime}` +
-        `&offset=${offset}&limit=${limit}`;
+    for (const query of data) {
+      const queryId: string = query.query_id ?? "";
+      const rawAttrs: any[] | null | undefined = query.attributes;
 
-      this.logger.verbose(`Fetching query page at offset ${offset}: ${url}`);
-      const response = await axios.get(url, config);
-      const data: any[] = response.data?.response?.data ?? [];
+      if (rawAttrs == null) continue;
 
-      for (const query of data) {
-        const queryId: string = query.query_id ?? "";
-        const rawAttrs: any[] | null | undefined = query.attributes;
+      const measures: Array<string | null> = [];
+      const attributes: Array<string | null> = [];
 
-        if (rawAttrs == null) continue;
-
-        const measures: Array<string | null> = [];
-        const attributes: Array<string | null> = [];
-
-        for (const attr of rawAttrs) {
-          if (attr["attribute-type"] === "measure") {
-            measures.push(attr.name ?? null);
-          } else if (attr["attribute-type"] === "dimension") {
-            attributes.push(attr.name ?? null);
-          }
-        }
-
-        if (attributes.length === 0) attributes.push(null);
-        if (measures.length === 0) measures.push(null);
-
-        const allFields = [
-          ...measures.filter((x): x is string => x !== null),
-          ...attributes.filter((x): x is string => x !== null),
-        ];
-
-        for (const attribute of attributes) {
-          for (const measure of measures) {
-            const key = pairKey(attribute, measure);
-            const count = occurrenceDict.get(key) ?? 0;
-
-            if (count === 0) {
-              sampleQueryIds.set(key, [[queryId, allFields]]);
-            } else if (count < numQueries) {
-              sampleQueryIds.get(key)!.push([queryId, allFields]);
-            } else if (Math.random() < 0.5) {
-              const idx = Math.floor(Math.random() * numQueries);
-              sampleQueryIds.get(key)![idx] = [queryId, allFields];
-            }
-
-            occurrenceDict.set(key, count + 1);
-          }
+      for (const attr of rawAttrs) {
+        if (attr["attribute-type"] === "measure") {
+          measures.push(attr.name ?? null);
+        } else if (attr["attribute-type"] === "dimension") {
+          attributes.push(attr.name ?? null);
         }
       }
 
-      if (data.length < limit) {
-        done = true;
-      } else {
-        offset += limit;
+      if (attributes.length === 0) attributes.push(null);
+      if (measures.length === 0) measures.push(null);
+
+      const allFields = [
+        ...measures.filter((x): x is string => x !== null),
+        ...attributes.filter((x): x is string => x !== null),
+      ];
+
+      for (const attribute of attributes) {
+        for (const measure of measures) {
+          const key = pairKey(attribute, measure);
+          const count = occurrenceDict.get(key) ?? 0;
+
+          if (!sampleQueryIds.has(key)) sampleQueryIds.set(key, []);
+          reservoirOffer(sampleQueryIds.get(key)!, [queryId, allFields], count, numQueries);
+
+          occurrenceDict.set(key, count + 1);
+        }
       }
     }
 
     this.logger.verbose(
-      `Processed ${offset + limit} query records; found ${occurrenceDict.size} unique (attribute, measure) pairs`,
+      `Processed ${data.length} query records; found ${occurrenceDict.size} unique (attribute, measure) pairs`,
     );
 
-    return { occurrenceDict, sampleQueryIds };
+    return { occurrenceDict, sampleQueryIds, summaries: data.map(summarizeQueryRow) };
   }
 
   // -------------------------------------------------------------------------
@@ -481,16 +795,14 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Connection setup ---
     this.logger.info(`Reading connection file: ${params["connection-file"]}`);
     const connectionFile = yaml.readFromFile<any>(params["connection-file"]);
-    const connection = connectionFile.connections[params["connection-name"]];
+    const connection = connectionFile.connections?.[params["connection-name"]];
     if (!connection) {
       throw new Error(`Connection '${params["connection-name"]}' not found in ${params["connection-file"]}`);
     }
-    if (!connection.mdx) {
-      throw new Error(
-        `Connection '${params["connection-name"]}' is missing an 'mdx:' block. ` +
-        `Add mdx: { url, organization_id, catalog_name, user } to this connection in ${params["connection-file"]}.`
-      );
-    }
+    const resolved = resolveQueryStatsConnection(connectionFile, params["connection-name"], params.catalog);
+    const { installer, atscaleUrl, catalogName, username, password, insecure } = resolved;
+    // Only installer paths use the org id; container routes ignore it.
+    const organizationId = resolved.organizationId ?? "";
 
     let proxyConfig: any = {};
     if (connection.proxy && connection.proxy.host) {
@@ -533,16 +845,16 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
         certConfig.rejectUnauthorized = false;
       }
     }
+    if (insecure) {
+      certConfig.rejectUnauthorized = false;
+    }
 
-    const { installer, mdx } = connection;
-    const { url: atscaleUrl, organization_id: organizationId, catalog_name: catalogName } = mdx;
-    const user = (connectionFile.users ?? {})[mdx.user] ?? {};
     const modelName = params.model;
 
     // --- Auth ---
     this.logger.info("Authenticating…");
     const token = await this.getToken(
-      installer, atscaleUrl, organizationId, user.username, user.password, proxyConfig, certConfig
+      installer, atscaleUrl, organizationId, username, password, proxyConfig, certConfig
     );
 
     // --- Discover model schema ---
@@ -586,6 +898,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // --- Parse parameters ---
     const limit = Math.max(1, parseInt(params.limit, 10) || 100);
     const numQueries = Math.max(1, parseInt(params["num-queries"], 10) || 10);
+    const querySource = parseQuerySource(params["query-source"]);
     const doMonthly = params.monthly?.toLowerCase() === "true";
     const outputDir = path.resolve(params["output-dir"] ?? ".");
     fs.mkdirSync(outputDir, { recursive: true });
@@ -612,9 +925,27 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     }
 
     this.logger.info(`Collecting query stats from ${startTime} to ${endTime}…`);
-    const { occurrenceDict } = await this.processQueries(
+    const { occurrenceDict, summaries } = await this.processQueries(
       installer, atscaleUrl, token, organizationId,
-      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig, certConfig
+      catalogId, modelId, startTime, endTime, limit, numQueries, proxyConfig, certConfig,
+      undefined, querySource,
+    );
+
+    // Per-query summary CSV with the answered-by breakdown.
+    const summaryColumns: Array<keyof QuerySummaryRow> = [
+      "query_id", "received", "duration_ms", "user_id", "cube_name", "class", "aggregate_count", "subquery_count",
+    ];
+    const summaryFile = `${filePrefix}_queries.csv`;
+    fs.writeFileSync(
+      summaryFile,
+      this.toCsv([summaryColumns, ...summaries.map((r) => summaryColumns.map((c) => r[c]))]),
+      "utf8",
+    );
+    const byClass = { cache: 0, agg: 0, raw: 0 };
+    for (const r of summaries) byClass[r.class]++;
+    this.logger.info(
+      `Wrote ${summaries.length} ${querySource === "all" ? "" : querySource + " "}quer${summaries.length === 1 ? "y" : "ies"} to ${summaryFile}` +
+      `  (cache ${byClass.cache}, agg ${byClass.agg}, raw ${byClass.raw})`,
     );
 
     // Build occurrence CSV: cross-product of attributes × measures
@@ -725,7 +1056,7 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
     // Monthly breakdown CSV (optional)
     // -----------------------------------------------------------------------
     if (doMonthly) {
-      const year = parseInt(params["monthly-year"] ?? String(now.getFullYear()), 10);
+      const year = parseInt(params["monthly-year"] ?? String(now.getUTCFullYear()), 10);
       this.logger.info(`Generating monthly breakdown for ${year}…`);
 
       const MONTHS = [
@@ -740,18 +1071,15 @@ export class ExtractQueryStatsFromAtScaleOperation extends Operation<Params> {
 
       // Collect all 12 months' occurrence dicts
       const monthlyDicts: Map<PairKey, number>[] = [];
+      const windows = monthlyWindowsUtc(year);
       for (let month = 0; month < 12; month++) {
-        const monthStart = new Date(year, month, 1, 0, 0, 0);
-        const monthEnd = new Date(year, month + 1, 1, 0, 0, 0);
-        monthEnd.setSeconds(monthEnd.getSeconds() - 1);
-
-        const mStart = monthStart.toISOString().replace(/\.\d+Z$/, "Z");
-        const mEnd = monthEnd.toISOString().replace(/\.\d+Z$/, "Z");
+        const { start: mStart, end: mEnd, receivedBefore } = windows[month];
 
         this.logger.info(`  ${MONTHS[month]} ${year}…`);
         const { occurrenceDict: mDict } = await this.processQueries(
           installer, atscaleUrl, token, organizationId,
-          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig
+          catalogId, modelId, mStart, mEnd, limit, numQueries, proxyConfig, certConfig, receivedBefore,
+          querySource,
         );
         monthlyDicts.push(mDict);
       }

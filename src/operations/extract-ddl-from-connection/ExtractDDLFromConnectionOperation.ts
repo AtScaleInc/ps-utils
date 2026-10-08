@@ -24,7 +24,7 @@ import { ParameterSet, StringParameter, BooleanParameter } from "../../Parameter
 import type { ServiceRegistry } from "../../services/registry.js";
 import type { Logger } from "../../logging.js";
 import { YamlService } from "../../services/YamlService.js";
-import { SqlService, type ConnectionConfig, type SqlConnection } from "../../services/SqlService.js";
+import { SqlService, BASE_TABLE_TYPES, type ConnectionConfig, type SqlConnection } from "../../services/SqlService.js";
 
 // ----------------------------------------------------------
 // Parameters
@@ -316,7 +316,7 @@ export class ExtractDDLFromConnectionOperation extends Operation<Params> {
         conn,
         `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
           WHERE TABLE_SCHEMA = '${schema}'
-            AND TABLE_TYPE   = 'BASE TABLE'
+            AND TABLE_TYPE IN (${BASE_TABLE_TYPES.map((t) => `'${t}'`).join(", ")})
           ORDER BY TABLE_NAME`,
       );
       const allTableNames: string[] = tableRows.map(

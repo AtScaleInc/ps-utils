@@ -1,7 +1,7 @@
 {
   "name": "@atscale-ps/ps-utils",
-  "version": "3.0.0",
-  "description": "AtScale PS utilities — CLI and library for SML generation, deployment, and analysis",
+  "version": "4.0.0",
+  "description": "AtScale PS utilities \u2014 CLI and library for SML generation, deployment, and analysis",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -43,9 +43,12 @@
     "generate:extension-manifest": "node dist/scripts/generate-extension-manifest.js",
     "generate:extension-contributes": "node dist/scripts/generate-extension-contributes.js",
     "generate:sml-schema": "node dist/scripts/generate-sml-schema.js",
-    "bundle:cli": "node dist/scripts/bundle-cli.js"
+    "bundle:cli": "node dist/scripts/bundle-cli.js",
+    "check:atscale-capabilities": "node dist/scripts/check-atscale-capabilities.js"
   },
   "dependencies": {
+    "@databricks/sql": "^2.2.0",
+    "@google-cloud/bigquery": "^9.1.0",
     "@types/node": "^25.3.0",
     "axios": "^1.13.5",
     "busboy": "^1.6.0",
@@ -56,7 +59,7 @@
     "js-yaml": "^4.2.0",
     "jszip": "^3.10.1",
     "pg": "^8.20.0",
-    "snowflake-sdk": "^2.3.6",
+    "snowflake-sdk": "^3.4.0",
     "xml2js": "^0.6.2",
     "yaml": "^2.4.5"
   },

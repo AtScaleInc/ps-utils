@@ -85,7 +85,8 @@ class GenerateEnhancedQueryResultsParameterSet extends ParameterSet {
         "Connection name within connections.yaml for the target data source. " +
         "When provided, the operation connects to the target database and fetches " +
         "an execution plan (EXPLAIN) for each outbound query, stored in the " +
-        "'execution_plan' column. Supported dialects: snowflake, postgres, redshift.";
+        "'execution_plan' column. Supported dialects: snowflake, postgres, redshift, " +
+        "databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN).";
       required = false;
     })(),
   ];
@@ -576,6 +577,12 @@ const SUBQUERY_SEPARATOR = "\n---\n";
  * Redshift: EXPLAIN returns text rows, one line per row, in a "QUERY PLAN"
  *   column.  Redshift does not support FORMAT JSON.
  *
+ * Databricks: EXPLAIN FORMATTED returns a single row whose "plan" column is
+ *   the physical plan as text (an outline followed by per-node details).
+ *
+ * BigQuery has no EXPLAIN statement; fetchExplainPlan uses a dry run instead
+ *   and never reaches this function.
+ *
  * Fallback: plain EXPLAIN — used for any unrecognised dialect.
  */
 function buildExplainSql(dialect: string, querySql: string): string {
@@ -588,6 +595,8 @@ function buildExplainSql(dialect: string, querySql: string): string {
       return `EXPLAIN (FORMAT JSON) ${querySql}`;
     case "redshift":
       return `EXPLAIN ${querySql}`;
+    case "databricks":
+      return `EXPLAIN FORMATTED ${querySql}`;
     default:
       return `EXPLAIN ${querySql}`;
   }
@@ -607,6 +616,11 @@ function parseExplainRows(dialect: string, rows: any[]): string {
       const r = rows[0];
       const val = r["QUERY PLAN"] ?? r["query_plan"] ?? Object.values(r)[0];
       return typeof val === "string" ? val : JSON.stringify(val);
+    }
+    case "databricks": {
+      // Single row, "plan" column — the formatted plan text.
+      const r = rows[0];
+      return String(r["plan"] ?? Object.values(r)[0] ?? "");
     }
     default: {
       // Text plan, one line per row.
@@ -653,6 +667,10 @@ async function fetchExplainPlan(
 
   for (const sq of subqueries) {
     try {
+      if (conn.dialect === "bigquery") {
+        plans.push(JSON.stringify(await sqlSvc.dryRun(conn, sq)));
+        continue;
+      }
       const explainSql = buildExplainSql(conn.dialect, sq);
       const rows = await sqlSvc.query(conn, explainSql);
       plans.push(parseExplainRows(conn.dialect, rows));

@@ -17,7 +17,7 @@
  * Dialect support:
  *   ansi (default), postgresql, snowflake, mysql, bigquery
  *
- * See STATISTICS.md §Phase 7 for the reconstruction algorithm.
+ * See docs/system/STATISTICS.md §Phase 7 for the reconstruction algorithm.
  */
 import fs   from "fs";
 import path from "path";
@@ -45,7 +45,7 @@ class GenerateDDLFromDataShapeParamsSet extends ParameterSet {
     })(),
     new (class extends StringParameter {
       name         = "dialect";
-      description  = "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery";
+      description  = "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks";
       required     = false;
       defaultValue = "ansi";
     })(),

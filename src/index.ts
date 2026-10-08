@@ -144,6 +144,7 @@ export type GenerateSMLFromConnectionParams = {
   schema?: string;
   catalogName?: string;
   piiSeverity?: string;
+  modelMode?: "new" | "existing";
   sampleSize?: number;
   factTables?: string;
   camelCaseFiles?: boolean;
@@ -174,6 +175,7 @@ export type GenerateSMLFromDDLParams = {
   modelName?: string;
   catalogName?: string;
   piiSeverity?: string;
+  modelMode?: "new" | "existing";
   schema?: string;
   database?: string;
   dialect?: string;
@@ -206,6 +208,7 @@ export type GenerateSMLFromXMLParams = {
   catalogName?: string;
   connectionDb?: string;
   connectionSchema?: string;
+  modelMode?: "new" | "existing";
 };
 
 export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: LibraryOptions = {}) {
@@ -215,6 +218,126 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
   });
   try {
     await run("generate-sml-from-xml", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GenerateSMLFromBundleParams = {
+  bundles: string[] | string;
+  outputDir: DirOutput;
+  force?: boolean;
+  org?: string;
+  connectionName?: string;
+  connectionType?: string;
+  connectionDb?: string;
+  connectionSchema?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromBundle(p: GenerateSMLFromBundleParams, o: LibraryOptions = {}) {
+  const normalized = { ...p, bundles: Array.isArray(p.bundles) ? p.bundles.join(",") : p.bundles };
+  const { params, flush, cleanup } = await resolveIO(normalized as Record<string, unknown>, {
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-bundle", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GenerateSMLFromTabularParams = {
+  xmlaFile: FileInput;
+  warehouse: "Snowflake" | "Databricks" | "BigQuery" | "Postgres";
+  database: string;
+  schema: string;
+  modelName: string;
+  outputDir: DirOutput;
+  catalogName?: string;
+  currency?: string;      // default: "USD"
+  description?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromTabular(p: GenerateSMLFromTabularParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["xmlaFile"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-tabular", Object.assign({
+      "currency": "USD",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AnalyzePowerBIDaxGapsParams = {
+  pbixFile: FileInput;
+  outputDir: DirOutput;
+};
+
+export async function analyzePowerBIDaxGaps(p: AnalyzePowerBIDaxGapsParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["pbixFile"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("analyze-powerbi-dax-gaps", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GenerateSMLFromSsasMultidimensionalParams = {
+  xmlaFile: FileInput;
+  outputDir: DirOutput;
+  catalogName?: string;
+  connectionType?: string;
+  connectionDb?: string;
+  connectionSchema?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromSsasMultidimensional(p: GenerateSMLFromSsasMultidimensionalParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["xmlaFile"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-ssas-multidimensional", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GenerateReportFromXMLParams = {
+  xmlFile:     FileInput;
+  outputFile?: FileOutput;
+  title?:      string;
+};
+
+export async function generateReportFromXML(p: GenerateReportFromXMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["xmlFile"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("generate-report-from-xml", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GenerateReportFromSMLParams = {
+  smlDir:      DirInput;
+  outputFile?: FileOutput;
+  title?:      string;
+};
+
+export async function generateReportFromSML(p: GenerateReportFromSMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputDirs: ["smlDir"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("generate-report-from-sml", cc2kebab(params), o);
     await flush();
   } finally { cleanup(); }
 }
@@ -241,6 +364,23 @@ export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, 
   } finally { cleanup(); }
 }
 
+export type ApplyStyleToSMLParams = {
+  smlDir:         string;   // rewritten in place, so a path rather than a stream
+  smlConfigFile?: FileInput; // default: <smlDir>/sml.style.yaml
+  labelStyle?:    "title-case" | "camel-case" | "none"; // default: from sml.style.yaml, else "title-case"
+  catalogName?:   string;   // default: from sml.style.yaml
+};
+
+export async function applyStyleToSML(p: ApplyStyleToSMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["smlConfigFile"],
+  });
+  try {
+    await run("apply-style-to-sml", Object.assign({}, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLDocsParams = {
   smlDir:       DirInput;
   outputFile?:  string;   // default: "README.md" (relative → written inside smlDir)
@@ -254,6 +394,26 @@ export async function generateSMLDocs(p: GenerateSMLDocsParams, o: LibraryOption
   try {
     await run("generate-sml-docs", Object.assign({
       "output-file": "README.md",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type CleanUnusedSMLObjectsParams = {
+  smlDir:       DirInput;
+  apply?:       boolean;      // default: false (preview-only report; nothing is deleted)
+  outputFile?:  FileOutput;
+  title?:       string;
+};
+
+export async function cleanUnusedSMLObjects(p: CleanUnusedSMLObjectsParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputDirs: ["smlDir"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("clean-unused-sml-objects", Object.assign({
+      apply: false,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -541,6 +701,32 @@ export async function generateExcelFromNamespace(p: GenerateExcelFromNamespacePa
   } finally { cleanup(); }
 }
 
+export type GeneratePowerBIFromNamespaceParams = {
+  namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  modelFile?: FileInput;   // default: "model.yaml"
+  targetFolder?: DirOutput;   // default: "powerbi"
+  connectionName?: string;      // default: "default"
+  aliasesFile?: FileInput;
+};
+
+export async function generatePowerBIFromNamespace(p: GeneratePowerBIFromNamespaceParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
+    outputDirs: ["targetFolder"],
+  });
+  try {
+    await run("generate-powerbi-from-namespace", Object.assign({
+      "namespace-file": "analysis/namespace.yaml",
+      "connection-file": "connections.yaml",
+      "model-file": "model.yaml",
+      "target-folder": "powerbi",
+      "connection-name": "default",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateNotebookFromConnectionParams = {
   namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
   connectionFile?: FileInput;   // default: "connections.yaml"
@@ -575,6 +761,7 @@ export type GenerateQueriesFromSMLParams = {
   sqlOutputFile: FileOutput;
   modelName?: string;
   cubeName?: string;
+  metricsPerLevelQuery?: "all" | "each";
 };
 
 export async function generateQueriesFromSML(p: GenerateQueriesFromSMLParams, o: LibraryOptions = {}) {
@@ -594,6 +781,7 @@ export type GenerateQueriesFromModelParams = {
   sqlOutputFile: FileOutput;
   modelName?: string;
   cubeName?: string;
+  metricsPerLevelQuery?: "all" | "each";
 };
 
 export async function generateQueriesFromModel(p: GenerateQueriesFromModelParams, o: LibraryOptions = {}) {
@@ -611,10 +799,12 @@ export type ExtractQueryStatsFromAtScaleParams = {
   connectionFile: FileInput;
   connectionName: string;
   model: string;
+  catalog?: string;
   outputDir?: DirOutput;  // default: "."
   windowDays?: string;     // default: "30"
   monthly?: string;     // default: "false"
   limit?: string;     // default: "100"
+  querySource?: "user" | "system" | "all";  // default: "user"
   numQueries?: string;     // default: "10"
   startDate?: string;
   endDate?: string;
@@ -939,6 +1129,9 @@ export type AtScaleListModelErrorsParams = {
   branch?: string;
   modelName?: string;
   insecure?: boolean;
+  skipEngineChecks?: boolean;
+  skipStructuralChecks?: boolean;
+  timeout?: number;
 };
 
 export async function atScaleListModelErrors(p: AtScaleListModelErrorsParams, o: LibraryOptions = {}) {
@@ -949,6 +1142,7 @@ export async function atScaleListModelErrors(p: AtScaleListModelErrorsParams, o:
   try {
     await run("atscale-list-model-errors", Object.assign({
       "connection-file": "connections.yaml",
+      "timeout": 60,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
@@ -968,6 +1162,127 @@ export async function getDsoCount(p: GetDsoCountParams, o: LibraryOptions = {}) 
   try {
     await run("get-dso-count", Object.assign({
       "connection-file": "connections.yaml",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+// ── Aggregate Management ──────────────────────────────────────────────────────
+
+export type AtScaleListAggregatesParams = {
+  atscaleConnectionName: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  limit?: number;              // default: 200
+  outputFile?: FileOutput;
+  insecure?: boolean;
+};
+
+export async function atScaleListAggregates(p: AtScaleListAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("atscale-list-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+      "limit": 200,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleRebuildAggregatesParams = {
+  atscaleConnectionName: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  fullBuild?: boolean;         // default: true
+  insecure?: boolean;
+};
+
+export async function atScaleRebuildAggregates(p: AtScaleRebuildAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+  });
+  try {
+    await run("atscale-rebuild-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+      "full-build": true,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleListAggregateBuildHistoryParams = {
+  atscaleConnectionName: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  limit?: number;              // default: 20
+  insecure?: boolean;
+};
+
+export async function atScaleListAggregateBuildHistory(p: AtScaleListAggregateBuildHistoryParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+  });
+  try {
+    await run("atscale-list-aggregate-build-history", Object.assign({
+      "connection-file": "connections.yaml",
+      "limit": 20,
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleExportAggregatesParams = {
+  atscaleConnectionName: string;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  outputFile?: FileOutput;     // default: aggregates-export-<catalog-id>-<model-id>.json
+  insecure?: boolean;
+};
+
+export async function atScaleExportAggregates(p: AtScaleExportAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile"],
+    outputFiles: ["outputFile"],
+  });
+  try {
+    await run("atscale-export-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type AtScaleImportAggregatesParams = {
+  atscaleConnectionName: string;
+  inputFile: FileInput;
+  catalogId?: string;   // when omitted (with modelId), deployed catalogs/models are listed and picked interactively, or an error lists them non-interactively
+  modelId?: string;
+  sourceAtscaleConnectionName?: string;  // source instance the export came from; only consulted when the input file has no embedded _psUtils.sourceObjectNames
+  connectionFile?: FileInput;  // default: "connections.yaml"
+  connectionRemap?: string;    // comma-separated originalConnId:newConnId pairs; manual override, connections are otherwise remapped automatically
+  importDistributionKey?: boolean;  // default: true
+  importPartitionKeys?: boolean;    // default: true
+  importReplication?: boolean;      // default: true
+  insecure?: boolean;
+};
+
+export async function atScaleImportAggregates(p: AtScaleImportAggregatesParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["connectionFile", "inputFile"],
+  });
+  try {
+    await run("atscale-import-aggregates", Object.assign({
+      "connection-file": "connections.yaml",
+      "import-distribution-key": true,
+      "import-partition-keys": true,
+      "import-replication": true,
     }, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }

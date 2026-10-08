@@ -17,7 +17,7 @@ import type { SchemaFingerprint } from "../types.js";
 
 /**
  * Regression coverage for the security controls in security.ts.
- * See docs/STATISTICS.md §Security & Compliance Controls for descriptions.
+ * See docs/system/STATISTICS.md §Security & Compliance Controls for descriptions.
  */
 
 function sampleFingerprint(): SchemaFingerprint {

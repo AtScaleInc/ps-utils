@@ -9,10 +9,8 @@
   "generalGroupName": "General",
   "groups": [
     {
-      "name": "Visualization and Namespace Processing",
+      "name": "Model Extraction",
       "operations": [
-        "generate-metrics-from-model",
-        "generate-namespace-from-model",
         "extract-model-from-atscale",
         "extract-model-from-sml"
       ]
@@ -25,11 +23,19 @@
         "generate-sml-from-connection",
         "generate-sml-from-ddl",
         "generate-sml-from-xml",
-        "apply-style-to-sml",
-        "generate-sml-docs",
+        "generate-sml-from-bundle",
+        "generate-sml-from-tabular",
+        "analyze-powerbi-dax-gaps",
+        "generate-sml-from-ssas-multidimensional",
+        "generate-report-from-xml",
+        "generate-report-from-sml",
         "generate-shared-model-plan",
         "apply-shared-model-plan-option",
-        "generate-ddl-from-atscale"
+        "apply-style-to-sml",
+        "generate-sml-docs",
+        "clean-unused-sml-objects",
+        "generate-ddl-from-atscale",
+        "generate-metrics-from-model"
       ]
     },
     {
@@ -42,8 +48,9 @@
       ]
     },
     {
-      "name": "BI Tool Integration",
+      "name": "Visualization and Namespace Processing",
       "operations": [
+        "generate-namespace-from-model",
         "generate-tableau-from-namespace",
         "generate-excel-from-namespace",
         "generate-powerbi-from-namespace",
@@ -72,6 +79,14 @@
       ]
     },
     {
+      "name": "Aggregate Management",
+      "operations": [
+        "atscale-list-aggregates",
+        "atscale-export-aggregates",
+        "atscale-import-aggregates"
+      ]
+    },
+    {
       "name": "General",
       "operations": [
         "echo-connection-metadata",
@@ -80,6 +95,8 @@
         "atscale-list-repos",
         "atscale-create-repo",
         "atscale-list-deployments",
+        "atscale-rebuild-aggregates",
+        "atscale-list-aggregate-build-history",
         "get-dso-count",
         "execute-web-services",
         "version"
@@ -89,7 +106,7 @@
   "operations": {
     "extract-model-from-atscale": {
       "description": "Extract an AtScale model (stub)",
-      "group": "Visualization and Namespace Processing",
+      "group": "Model Extraction",
       "contexts": [
         "folder"
       ],
@@ -133,7 +150,7 @@
     },
     "generate-powerbi-from-namespace": {
       "description": "Generate a PowerBI workbook from a namespace (stub)",
-      "group": "BI Tool Integration",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file",
         "folder"
@@ -194,8 +211,8 @@
       ]
     },
     "generate-notebook-from-connection": {
-      "description": "Generate a Notebook from a namespace (stub)",
-      "group": "BI Tool Integration",
+      "description": "Generate a Notebook from a connection",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file"
       ],
@@ -237,7 +254,7 @@
         },
         {
           "name": "connection-name",
-          "description": "The name of the connection to use",
+          "description": "Connection whose mdx: block (url, user, and organization_id on Installer) the notebook connects with",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -245,7 +262,7 @@
         },
         {
           "name": "target-file",
-          "description": "Target file to output the notebook",
+          "description": "Output path for the notebook (.ipynb); its folder must already exist",
           "type": "string",
           "role": "input-file",
           "required": false,
@@ -255,7 +272,7 @@
     },
     "generate-tableau-from-namespace": {
       "description": "Generate a Tableau workbook from a namespace (stub)",
-      "group": "BI Tool Integration",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file"
       ],
@@ -428,6 +445,14 @@
           "default": null
         },
         {
+          "name": "model-mode",
+          "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict. Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
           "name": "sample-size",
           "description": "Maximum rows to sample per table for type inference (default: 250; 0 to disable). Can also be set in sml.style.yaml.",
           "type": "number",
@@ -548,6 +573,14 @@
         {
           "name": "pii-severity",
           "description": "Minimum PII severity to exclude: \"HIGH\", \"MEDIUM\" (default), \"LOW\", or \"none\". Can also be set in sml.style.yaml.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict. Can also be set in sml.style.yaml.",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -694,6 +727,364 @@
           "role": "scalar",
           "required": false,
           "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-bundle": {
+      "description": "Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "bundles",
+          "description": "Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory that receives one SML repository per project plus summary.csv and summary.md",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "force",
+          "description": "Re-convert projects whose output directory already exists",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "org",
+          "description": "Comma-separated organisation folder names to include (installer bundles); default is all",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-name",
+          "description": "SML connection unique_name to embed in generated files (auto-detected from each XML if omitted)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-type",
+          "description": "Database dialect for the connection files (e.g. \"snowflake\", \"bigquery\")",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-db",
+          "description": "Database name written into the connection files; when set, every dataset shares one connection",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-schema",
+          "description": "Schema name written into the connection files; when set, every dataset shares one connection",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy applied to every project when query-name collisions occur: \"new\" renames colliding objects; \"existing\" preserves names and marks the project failed for review. Pass \"new\" for unattended runs.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-tabular": {
+      "description": "Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "xmla-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "xmla-file",
+          "description": "Path to the TMSL/XMLA export (createOrReplace JSON) to convert",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "warehouse",
+          "description": "Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "database",
+          "description": "Primary connection database/catalog name",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "schema",
+          "description": "Primary connection schema name",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "model-name",
+          "description": "SML model_unique_name (snake_case recommended)",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where SML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-name",
+          "description": "Override the catalog unique_name (defaults to '{model-name}_catalog')",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "description": "Currency code used for currency-formatted metrics",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "USD"
+        },
+        {
+          "name": "description",
+          "description": "Optional catalog/model description override",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "analyze-powerbi-dax-gaps": {
+      "description": "Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "pbix-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "pbix-file",
+          "description": "Path to the Power BI .pbix file to analyse",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where the gap report will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        }
+      ]
+    },
+    "generate-sml-from-ssas-multidimensional": {
+      "description": "Convert an SSAS Multidimensional XMLA export to AtScale SML files",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file",
+        "folder"
+      ],
+      "targetParam": {
+        "file": "xmla-file",
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "xmla-file",
+          "description": "Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where SML files will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-name",
+          "description": "Override the catalog label (defaults to a name derived from the XMLA file)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-type",
+          "description": "Database dialect for the connection file (e.g. \"snowflake\", \"postgresql\")",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-db",
+          "description": "Database name written into the connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-schema",
+          "description": "Schema name written into the connection file",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-mode",
+          "description": "Model compatibility policy used only when query-name collisions occur: \"new\" may rename colliding objects; \"existing\" preserves established names and reports a blocking conflict.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-report-from-xml": {
+      "description": "Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "xml-file"
+      },
+      "params": [
+        {
+          "name": "xml-file",
+          "description": "Path to the AtScale XML project file to report on",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output Markdown file path. Omit to print to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "description": "H1 title for the report. Defaults to the XML schema name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "generate-report-from-sml": {
+      "description": "Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Output Markdown file path. Omit to print to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "description": "H1 title for the report. Defaults to the catalog label / unique_name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
         }
       ]
     },
@@ -770,6 +1161,50 @@
         {
           "name": "title",
           "description": "H1 title for the document. Defaults to the catalog label / unique_name.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "clean-unused-sml-objects": {
+      "description": "Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "apply",
+          "description": "Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "output-file",
+          "description": "Output Markdown report file path. Omit to print to stdout.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "description": "H1 title for the report. Defaults to the catalog label / unique_name.",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -869,7 +1304,7 @@
     },
     "extract-model-from-sml": {
       "description": "Read an SML directory and output the same model.yaml format as extract-model-from-atscale",
-      "group": "Visualization and Namespace Processing",
+      "group": "Model Extraction",
       "contexts": [
         "folder"
       ],
@@ -973,7 +1408,7 @@
     },
     "generate-metrics-from-model": {
       "description": "Generate ranked metric suggestions from a model.yaml file using the analysis-suggestions engine",
-      "group": "Visualization and Namespace Processing",
+      "group": "SML Creation and Manipulation",
       "contexts": [
         "file"
       ],
@@ -1161,7 +1596,7 @@
     },
     "generate-excel-from-namespace": {
       "description": "Generate an Excel workbook with OLAP pivot tables from a namespace",
-      "group": "BI Tool Integration",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file"
       ],
@@ -1254,6 +1689,14 @@
           "default": null
         },
         {
+          "name": "catalog",
+          "description": "AtScale catalog (project) name containing the model. Defaults to mdx.catalog_name of the connection; required when the connection has no mdx: block.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
           "name": "output-dir",
           "description": "Directory to write the output CSV files",
           "type": "string",
@@ -1303,11 +1746,19 @@
         },
         {
           "name": "limit",
-          "description": "Page size for the query history API",
+          "description": "Page size for the query history API. The engine serves at most 101 rows per page, so values above 100 are clamped; every page is still fetched.",
           "type": "string",
           "role": "scalar",
           "required": false,
           "default": "100"
+        },
+        {
+          "name": "query-source",
+          "description": "Which queries to read: \"user\" (default — queries sent by clients), \"system\" (engine-issued: aggregate builds, canaries, …) or \"all\"",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "user"
         },
         {
           "name": "num-queries",
@@ -2054,6 +2505,370 @@
           "role": "scalar",
           "required": false,
           "default": null
+        },
+        {
+          "name": "skip-engine-checks",
+          "description": "Run only the structural checks (phase 1) and skip the engine checks (phase 2). Phase 1 is local and needs no AtScale instance, so this makes the operation fast and offline — the right mode for editor file-watching and for pre-commit hooks.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "skip-structural-checks",
+          "description": "Skip the structural checks (phase 1) and run only the engine checks (phase 2). Normally phase 2 runs only when phase 1 passes; use this to re-test joinability and uniqueness against the warehouse without re-validating cross-references.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "timeout",
+          "description": "Seconds to wait for any single AtScale request, authentication included, before failing. Defaults to 60. Use 0 to wait indefinitely.",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 60
+        }
+      ]
+    },
+    "atscale-list-aggregates": {
+      "description": "List aggregates for a catalog/model with a computed summary and health check",
+      "group": "Aggregate Management",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "limit",
+          "description": "Maximum number of aggregates to fetch",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 200
+        },
+        {
+          "name": "output-file",
+          "description": "When provided, also write a CSV export of the aggregates to this path",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-rebuild-aggregates": {
+      "description": "Trigger a full or incremental aggregate rebuild for a catalog/model",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "full-build",
+          "description": "Trigger a full build when true, or an incremental build when false. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-list-aggregate-build-history": {
+      "description": "List aggregate build history for a catalog/model with a computed summary",
+      "group": "General",
+      "contexts": [],
+      "targetParam": {},
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "limit",
+          "description": "Maximum number of build batches to fetch",
+          "type": "number",
+          "role": "scalar",
+          "required": false,
+          "default": 20
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-export-aggregates": {
+      "description": "Export a catalog/model's aggregate definitions to a JSON file",
+      "group": "Aggregate Management",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (the source instance/environment to export from) in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Catalog (project) UUID to export from, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Model (cube) UUID to export from, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "output-file",
+          "description": "Path to write the export JSON to. Defaults to aggregates-export-<catalog-id>-<model-id>.json in the current directory.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        }
+      ]
+    },
+    "atscale-import-aggregates": {
+      "description": "Import aggregate definitions from an export file into a catalog/model, remapping ids for cross-host promotion",
+      "group": "Aggregate Management",
+      "contexts": [
+        "file"
+      ],
+      "targetParam": {
+        "file": "input-file"
+      },
+      "params": [
+        {
+          "name": "connection-file",
+          "description": "Path to the connections YAML file",
+          "type": "string",
+          "role": "input-file",
+          "required": false,
+          "default": "connections.yaml"
+        },
+        {
+          "name": "atscale-connection-name",
+          "description": "Name of the AtScale connection entry (the target instance/environment to import into) in the connections file",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "input-file",
+          "description": "Path to the export JSON file to import (from atscale-export-aggregates, optionally hand-edited)",
+          "type": "string",
+          "role": "input-file",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "catalog-id",
+          "description": "Target catalog (project) UUID to import into, from atscale-list-deployments. When omitted (with --model-id), the deployed catalogs/models are listed and — in an interactive terminal — you're prompted to pick one; in a non-interactive session, an error lists the available options.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "model-id",
+          "description": "Target model (cube) UUID to import into, from atscale-list-deployments. See --catalog-id for behavior when omitted.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "source-atscale-connection-name",
+          "description": "Name of the AtScale connection entry for the SOURCE instance the export came from, in the connections file. Only used when the input file doesn't already carry an embedded object-name map (files from an older atscale-export-aggregates, or hand-crafted per AtScale's own docs) — lets cross-host imports still translate key/role-play reference ids by name instead of only substituting catalog/model ids.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-remap",
+          "description": "Comma-separated list of originalConnId:newConnId pairs to remap connections referenced by the imported aggregates. Manual override; connections are otherwise remapped automatically to the target model's connection when it differs.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "import-distribution-key",
+          "description": "Import distribution-key hints. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "import-partition-keys",
+          "description": "Import partition-key hints. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "import-replication",
+          "description": "Import replication hints. Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "insecure",
+          "description": "Skip TLS certificate verification (overrides the connections file value). Defaults to true.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": null
         }
       ]
     },
@@ -2245,7 +3060,7 @@
         },
         {
           "name": "dialect",
-          "description": "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery",
+          "description": "SQL dialect: ansi (default), postgresql, snowflake, mysql, bigquery, databricks",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -2393,7 +3208,7 @@
         },
         {
           "name": "dialect",
-          "description": "SQL dialect for CREATE TABLE: ansi, postgresql, snowflake, mysql, bigquery. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.",
+          "description": "SQL dialect for CREATE TABLE and INSERT: ansi, postgresql, snowflake, mysql, bigquery, databricks. When omitted, the dialect is read from the connection configuration (sql.dialect); falls back to ansi.",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -2409,7 +3224,7 @@
         },
         {
           "name": "schema",
-          "description": "Target schema to qualify table names (e.g. PUBLIC).  Omit to use the connection default.",
+          "description": "Target schema to qualify table names (e.g. PUBLIC; a dataset on BigQuery).  Omit to use the connection default — on BigQuery, the connection's sql.schema (or sql.dataset).",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -2493,7 +3308,7 @@
         },
         {
           "name": "target-connection-name",
-          "description": "Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift.",
+          "description": "Connection name within connections.yaml for the target data source. When provided, the operation connects to the target database and fetches an execution plan (EXPLAIN) for each outbound query, stored in the 'execution_plan' column. Supported dialects: snowflake, postgres, redshift, databricks, bigquery (dry-run statistics; BigQuery has no EXPLAIN).",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -2604,6 +3419,14 @@
           "default": null
         },
         {
+          "name": "metrics-per-level-query",
+          "description": "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) or \"each\" (one query per level and metric, so a metric not defined over a dimension fails only its own query)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "all"
+        },
+        {
           "name": "xmla-output-file",
           "description": "Path to write the XMLA (MDX) query JSON file",
           "type": "string",
@@ -2654,6 +3477,14 @@
           "role": "scalar",
           "required": false,
           "default": null
+        },
+        {
+          "name": "metrics-per-level-query",
+          "description": "How level breakdowns select metrics: \"all\" (one query per level selecting every metric) or \"each\" (one query per level and metric, so a metric not defined over a dimension fails only its own query)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "all"
         },
         {
           "name": "xmla-output-file",

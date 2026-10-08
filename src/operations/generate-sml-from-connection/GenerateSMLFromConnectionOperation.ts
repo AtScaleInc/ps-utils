@@ -23,6 +23,7 @@ import { SqlService, type ConnectionConfig } from "../../services/SqlService.js"
 import { SqlSchemaAdapter } from "./SqlSchemaAdapter.js";
 import { resolvePiiSeverity, runInferenceAndWrite } from "../generate-sml-shared.js";
 import { loadSmlStyleConfig, mergeSmlStyle } from "../sml-style-config.js";
+import { parseModelMode, type ModelMode } from "../model-query-name-compatibility.js";
 
 // ----------------------------------------------------------
 // Parameter declarations
@@ -72,6 +73,12 @@ class GenerateSMLFromConnectionParamsSet extends ParameterSet {
       description = 'Minimum PII severity to exclude: "HIGH", "MEDIUM" (default), "LOW", or "none". Can also be set in sml.style.yaml.';
       required    = false;
     })(),
+    new (class extends StringParameter {
+      name        = "model-mode";
+      description = 'Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. Can also be set in sml.style.yaml.';
+      required    = false;
+      validate(value: string): void { parseModelMode(value); }
+    })(),
     new (class extends NumberParameter {
       name        = "sample-size";
       description = "Maximum rows to sample per table for type inference (default: 250; 0 to disable). Can also be set in sml.style.yaml.";
@@ -119,6 +126,7 @@ type Params = {
   schema?:                string;
   "catalog-name"?:        string;
   "pii-severity"?:        string;
+  "model-mode"?:          ModelMode;
   "sample-size"?:         number;
   "fact-tables"?:         string;
   "camel-case-files"?:          boolean;
@@ -154,13 +162,6 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
     const config = yaml.readFromFile<ConnectionConfig>(connectionFile);
     const conn   = await sql.connect(config, connectionName);
 
-    // Resolve schema: CLI param > connection config > "PUBLIC"
-    const schema = (
-      params.schema ??
-      (config.connections?.[connectionName]?.sql?.schema as string | undefined) ??
-      "PUBLIC"
-    ).toUpperCase();
-
     // Resolve database name and dialect from connection config
     const database =
       (config.connections?.[connectionName]?.sql?.database as string | undefined) ??
@@ -168,6 +169,18 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
 
     const dialect =
       (config.connections?.[connectionName]?.sql?.dialect as string | undefined);
+
+    // Resolve schema: CLI param > connection config > "PUBLIC".
+    // Snowflake folds unquoted identifiers to upper case, so INFORMATION_SCHEMA
+    // stores them that way. Databricks, BigQuery and Postgres do not — upper-casing
+    // there matches nothing and the run silently yields zero tables.
+    const rawSchema =
+      params.schema ??
+      (config.connections?.[connectionName]?.sql?.schema as string | undefined) ??
+      "PUBLIC";
+    const schema = (dialect ?? "").toLowerCase().includes("snowflake")
+      ? rawSchema.toUpperCase()
+      : rawSchema;
 
     this.logger.log(`[GenerateSMLFromConnection] Connected to "${connectionName}" (schema: ${schema})`);
 
@@ -177,6 +190,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
     const style = mergeSmlStyle(
       {
         "pii-severity":            params["pii-severity"],
+        "model-mode":              params["model-mode"],
         "fact-tables":             cliFact,
         "catalog-name":            params["catalog-name"],
         "camel-case-files":        params["camel-case-files"],
@@ -220,6 +234,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
         // Effective settings written to <outputDir>/sml.style.yaml
         {
           "pii-severity":        style["pii-severity"],
+          "model-mode":          style["model-mode"],
           "fact-tables":         style["fact-tables"],
           "catalog-name":        catalogName,
           "camel-case-files":          style["camel-case-files"],
@@ -229,6 +244,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
           "min-hierarchies-per-dim":   style["min-hierarchies-per-dim"],
           "max-hierarchies-per-dim":   style["max-hierarchies-per-dim"],
         },
+        style["model-mode"] ? parseModelMode(style["model-mode"]) : undefined,
       );
     } finally {
       await sql.close(conn);
