@@ -9,10 +9,8 @@
   "generalGroupName": "General",
   "groups": [
     {
-      "name": "Visualization and Namespace Processing",
+      "name": "Model Extraction",
       "operations": [
-        "generate-metrics-from-model",
-        "generate-namespace-from-model",
         "extract-model-from-atscale",
         "extract-model-from-sml"
       ]
@@ -27,16 +25,17 @@
         "generate-sml-from-xml",
         "generate-sml-from-bundle",
         "generate-sml-from-tabular",
-        "generate-sml-from-ssas-multidimensional",
         "analyze-powerbi-dax-gaps",
+        "generate-sml-from-ssas-multidimensional",
         "generate-report-from-xml",
         "generate-report-from-sml",
+        "generate-shared-model-plan",
+        "apply-shared-model-plan-option",
         "apply-style-to-sml",
         "generate-sml-docs",
         "clean-unused-sml-objects",
-        "generate-shared-model-plan",
-        "apply-shared-model-plan-option",
-        "generate-ddl-from-atscale"
+        "generate-ddl-from-atscale",
+        "generate-metrics-from-model"
       ]
     },
     {
@@ -49,8 +48,9 @@
       ]
     },
     {
-      "name": "BI Tool Integration",
+      "name": "Visualization and Namespace Processing",
       "operations": [
+        "generate-namespace-from-model",
         "generate-tableau-from-namespace",
         "generate-excel-from-namespace",
         "generate-powerbi-from-namespace",
@@ -106,7 +106,7 @@
   "operations": {
     "extract-model-from-atscale": {
       "description": "Extract an AtScale model (stub)",
-      "group": "Visualization and Namespace Processing",
+      "group": "Model Extraction",
       "contexts": [
         "folder"
       ],
@@ -150,7 +150,7 @@
     },
     "generate-powerbi-from-namespace": {
       "description": "Generate a PowerBI workbook from a namespace (stub)",
-      "group": "BI Tool Integration",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file",
         "folder"
@@ -211,8 +211,8 @@
       ]
     },
     "generate-notebook-from-connection": {
-      "description": "Generate a Notebook from a namespace (stub)",
-      "group": "BI Tool Integration",
+      "description": "Generate a Notebook from a connection",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file"
       ],
@@ -254,7 +254,7 @@
         },
         {
           "name": "connection-name",
-          "description": "The name of the connection to use",
+          "description": "Connection whose mdx: block (url, user, and organization_id on Installer) the notebook connects with",
           "type": "string",
           "role": "scalar",
           "required": false,
@@ -262,7 +262,7 @@
         },
         {
           "name": "target-file",
-          "description": "Target file to output the notebook",
+          "description": "Output path for the notebook (.ipynb); its folder must already exist",
           "type": "string",
           "role": "input-file",
           "required": false,
@@ -272,7 +272,7 @@
     },
     "generate-tableau-from-namespace": {
       "description": "Generate a Tableau workbook from a namespace (stub)",
-      "group": "BI Tool Integration",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file"
       ],
@@ -1304,7 +1304,7 @@
     },
     "extract-model-from-sml": {
       "description": "Read an SML directory and output the same model.yaml format as extract-model-from-atscale",
-      "group": "Visualization and Namespace Processing",
+      "group": "Model Extraction",
       "contexts": [
         "folder"
       ],
@@ -1408,7 +1408,7 @@
     },
     "generate-metrics-from-model": {
       "description": "Generate ranked metric suggestions from a model.yaml file using the analysis-suggestions engine",
-      "group": "Visualization and Namespace Processing",
+      "group": "SML Creation and Manipulation",
       "contexts": [
         "file"
       ],
@@ -1596,7 +1596,7 @@
     },
     "generate-excel-from-namespace": {
       "description": "Generate an Excel workbook with OLAP pivot tables from a namespace",
-      "group": "BI Tool Integration",
+      "group": "Visualization and Namespace Processing",
       "contexts": [
         "file"
       ],

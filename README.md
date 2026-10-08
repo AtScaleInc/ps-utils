@@ -50,7 +50,9 @@ flowchart LR
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
     SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
-    SML --> L["clean-unused-sml-objects"] --> SML
+    SML --> CL["clean-unused-sml-objects"] --> SML
+    PBIX["Power BI .pbix"] --> P["analyze-powerbi-dax-gaps"] --> GAP["Gap report (.md, .json, .csv)"]
+    DB --> Q["echo-connection-metadata"] --> META["Schema metadata (JSON, stdout)"]
 ```
 
 ### Synthetic Data Generation
@@ -75,6 +77,7 @@ flowchart LR
     NS --> B["generate-tableau-from-namespace"] --> TWB["tableau.twb"]
     NS --> C["generate-excel-from-namespace"] --> XLSX["workbook.xlsx"]
     NS --> D["generate-powerbi-from-namespace"] --> PBI["output/powerbi/"]
+    CONN --> E["generate-notebook-from-connection"] --> NB["notebook.ipynb"]
     CONN["connections.yaml"] --> B & C & D
     ALIASES["aliases.yaml (opt.)"] -.-> B & C & D
 ```
@@ -99,22 +102,6 @@ flowchart TD
     F --> SUMMARY["summary.txt"]
     F --> COMPARISON["comparison.csv"]
     F --> OUTLIERS["outliers.csv"]
-```
-
-### Web Services
-
-Expose every operation as a GraphQL mutation and REST endpoint via an embedded HTTP server.
-
-```mermaid
-flowchart LR
-    CLIENT["HTTP Client"] --> A["execute-web-services"] --> OPS["All Operations (GraphQL / REST)"]
-```
-
-### Utilities
-
-```mermaid
-flowchart LR
-    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
 ```
 
 ### AtScale Config
@@ -152,6 +139,22 @@ flowchart LR
     E --> ATS2["AtScale Instance (target)"]
 ```
 
+### Web Services
+
+Expose every operation as a GraphQL mutation and REST endpoint via an embedded HTTP server.
+
+```mermaid
+flowchart LR
+    CLIENT["HTTP Client"] --> A["execute-web-services"] --> OPS["All Operations (GraphQL / REST)"]
+```
+
+### Utilities
+
+```mermaid
+flowchart LR
+    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
+```
+
 ## Table of Contents
 
 - [Setup](#setup)
@@ -167,6 +170,7 @@ flowchart LR
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
+    - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -177,6 +181,7 @@ flowchart LR
     - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
+    - [`echo-connection-metadata`](#echo-connection-metadata)
   - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
     - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
@@ -188,6 +193,7 @@ flowchart LR
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+    - [`generate-notebook-from-connection`](#generate-notebook-from-connection)
   - Testing / Query Processing
     - [`generate-queries-from-sml`](#generate-queries-from-sml)
     - [`generate-queries-from-model`](#generate-queries-from-model)
@@ -274,6 +280,8 @@ The `docs/` directory contains extended reference material:
 
 ## Operations
 
+#### Model Extraction
+
 ### `extract-model-from-atscale`
 
 [↑ Table of Contents](#table-of-contents)
@@ -295,7 +303,7 @@ Connects to a live AtScale instance via MDX and extracts a model's metrics and a
 | `--connection-name` | Yes | | Connection name in the file |
 | `--output-model-file` | No | stdout | Output path for the model YAML |
 
-**GitHub Actions workflow:** See [Extract AtScale Model Workflow](#extract-model-from-atscale-workflow).
+**GitHub Actions workflow:** See [Extract AtScale Model Workflow](#extract-atscale-model-workflow).
 
 ---
 
@@ -329,6 +337,8 @@ With optional overrides:
 | `--output-model-file` | No | stdout | Output path for the model YAML |
 
 ---
+
+#### SML Creation and Manipulation
 
 ### `execute-sql-on-connection`
 
@@ -790,6 +800,8 @@ The parity tests pin each list's size and a sample of entries, so an accidental 
 
 ### `analyze-powerbi-dax-gaps`
 
+[↑ Table of Contents](#table-of-contents)
+
 Analyse a Power BI `.pbix` and report which of its report-scoped DAX measures AtScale can evaluate. No connection is required — everything is read from the file.
 
 ```bash
@@ -1206,6 +1218,32 @@ The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include
 
 ---
 
+### `echo-connection-metadata`
+
+[↑ Table of Contents](#table-of-contents)
+
+Prints the schemas, tables, columns and foreign keys visible through a database connection, as JSON on stdout. Useful for checking that a connection entry is configured correctly before pointing `generate-sml-from-connection` or `extract-ddl-from-connection` at it.
+
+```bash
+./atscale-utils echo-connection-metadata \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Name of the connection in the connections file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--schema` | No | connection's `sql.schema`, else `PUBLIC` | Schema to read metadata from |
+
+The schema name is upper-cased before it is queried, which suits Snowflake. On databases with case-sensitive lower-case schema names, such as PostgreSQL, the lookup will not match.
+
+**Output:** a JSON object with `schemas` (current database and schema), `tables`, `columns` and `foreignKeys` arrays read from `INFORMATION_SCHEMA`.
+
+---
+
+#### Synthetic Data Generation
+
 ### `extract-data-shape-from-connection`
 
 [↑ Table of Contents](#table-of-contents)
@@ -1387,6 +1425,8 @@ With scale factor and batch tuning:
 See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
+
+#### Visualization and Namespace Processing
 
 ### BI Tool Feature Comparison
 
@@ -1612,6 +1652,50 @@ connections:
 ```
 
 ---
+
+### `generate-notebook-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Writes a starter Jupyter notebook for the [`atscale` Python package](https://pypi.org/project/atscale/), pre-filled with the connection details from a connection's `mdx:` block. The notebook:
+
+1. installs the `atscale` package,
+2. connects to the AtScale instance with the connection user's credentials,
+3. prompts you to pick what to explore — a project on Installer, or a repo and then a catalog on Container — and then a data model,
+4. lists the model's folders, numeric and categorical features, dimensions and hierarchies, and
+5. ends with an empty `data_model.get_data(feature_list=[])` query for you to fill in.
+
+The connection entry decides which flavour of notebook is written:
+
+| Connection | `atscale` version | Connects with | Selection |
+|---|---|---|---|
+| `installer: true` | `atscale < 3` | `mdx.url`, `mdx.organization_id`, user | `client.select_project()` |
+| otherwise (Container) | latest | `mdx.url`, user | `client.select_repo()` → `repo.select_catalog()` |
+
+The `mdx.user` key must name an entry under `users:` with a `username` and `password`.
+
+**Security:** the notebook contains that password in plain text. Treat the output as a secret and do not commit or share it.
+
+```bash
+./atscale-utils generate-notebook-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "my_atscale" \
+  --target-file "atscale.ipynb"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | No | `default` | Connection whose `mdx:` block (`url`, `user`, and `organization_id` on Installer) is used |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--target-file` | No | `notebook.ipynb` | Output path for the notebook. Its folder must already exist |
+
+The shared template parameters (`--namespace-file`, `--model-file`, `--aliases-file`) are accepted but not used.
+
+**Output:** a `.ipynb` notebook.
+
+---
+
+#### Testing / Query Processing
 
 ### `generate-queries-from-sml`
 
@@ -2118,6 +2202,8 @@ When the same join-key value appears multiple times in a file (e.g. the same que
 | `--outliers-file` | Yes | | Path to write the filtered outliers CSV (row-count and duration mismatches only) |
 
 ---
+
+#### AtScale Config
 
 ### `generate-atscale-install-yaml`
 
@@ -2626,6 +2712,8 @@ It also applies AtScale's promotion rules: an aggregate already active on the ta
 **Output:** JSON with the raw import response — `numberOfDefinitionsImported`, `numberOfDefinitionsIgnored`, and `aggregates.values[]` (each with `id`, `newId`, `imported`, optional `reason`) — plus `reactivated` (target definition ids unblocked because the import found them already present but blocked) and `skipped` (`{id, reason}` for aggregates not sent to AtScale at all: inactive on the source, a duplicate on the target, a missing connection match, or a plan referencing an object missing on the target).
 
 ---
+
+#### Web Services
 
 ### `execute-web-services`
 

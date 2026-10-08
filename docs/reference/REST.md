@@ -19,10 +19,20 @@
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
+    - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
+    - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
+    - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
+    - [`generate-report-from-xml`](#generate-report-from-xml)
+    - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
+    - [`apply-style-to-sml`](#apply-style-to-sml)
+    - [`generate-sml-docs`](#generate-sml-docs)
+    - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
+    - [`echo-connection-metadata`](#echo-connection-metadata)
   - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
     - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
@@ -53,7 +63,15 @@
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
     - [`get-dso-count`](#get-dso-count)
+  - Aggregate Management
+    - [`atscale-list-aggregates`](#atscale-list-aggregates)
+    - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
+    - [`atscale-list-aggregate-build-history`](#atscale-list-aggregate-build-history)
+    - [`atscale-export-aggregates`](#atscale-export-aggregates)
+    - [`atscale-import-aggregates`](#atscale-import-aggregates)
   - Web Services
+  - Utilities
+    - [`version`](#version)
 
 ---
 
@@ -454,6 +472,218 @@ curl -X POST http://localhost:4000/rest/generate-sml-from-xml \
 
 ---
 
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
+
+**Endpoint:** `POST /rest/generate-sml-from-bundle`  |  **GraphQL:** `generateSmlFromBundle`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
+| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
+| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
+| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
+| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
+| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
+| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
+| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-bundle \
+  -H "Content-Type: application/json" \
+  -d '{
+      "bundles": "value"
+  }'
+```
+
+---
+
+### `generate-sml-from-tabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
+
+**Endpoint:** `POST /rest/generate-sml-from-tabular`  |  **GraphQL:** `generateSmlFromTabular`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
+| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
+| `database` | `String` | Yes | Primary connection database/catalog name |
+| `schema` | `String` | Yes | Primary connection schema name |
+| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
+| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
+| `currency` | `String` | No | Currency code used for currency-formatted metrics |
+| `description` | `String` | No | Optional catalog/model description override |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlaFileContent": "--- # inline YAML/file content",
+      "warehouse": "value",
+      "database": "value",
+      "schema": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
+  -F "xmlaFileUpload=@/path/to/file" \
+  -F "warehouse=value" \
+  -F "database=value" \
+  -F "schema=value"
+```
+
+---
+
+### `analyze-powerbi-dax-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports
+
+**Endpoint:** `POST /rest/analyze-powerbi-dax-gaps`  |  **GraphQL:** `analyzePowerbiDaxGaps`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `pbixFile` | `String` | Yes\* | Path to the Power BI .pbix file to analyse |
+| `pbixFileContent` | `String` | No | Raw string content — alternative to `pbixFile` |
+| `pbixFileUpload` | file field | No | Multipart upload — alternative to `pbixFile` |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
+  -H "Content-Type: application/json" \
+  -d '{
+      "pbixFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
+  -F "pbixFileUpload=@/path/to/file"
+```
+
+---
+
+### `generate-sml-from-ssas-multidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Multidimensional XMLA export to AtScale SML files
+
+**Endpoint:** `POST /rest/generate-sml-from-ssas-multidimensional`  |  **GraphQL:** `generateSmlFromSsasMultidimensional`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
+| `catalogName` | `String` | No | Override the catalog label (defaults to a name derived from the XMLA file) |
+| `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
+| `connectionDb` | `String` | No | Database name written into the connection file |
+| `connectionSchema` | `String` | No | Schema name written into the connection file |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-from-ssas-multidimensional \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlaFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-sml-from-ssas-multidimensional \
+  -F "xmlaFileUpload=@/path/to/file"
+```
+
+---
+
+### `generate-report-from-xml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more
+
+**Endpoint:** `POST /rest/generate-report-from-xml`  |  **GraphQL:** `generateReportFromXml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `xmlFile` | `String` | Yes\* | Path to the AtScale XML project file to report on |
+| `xmlFileContent` | `String` | No | Raw string content — alternative to `xmlFile` |
+| `xmlFileUpload` | file field | No | Multipart upload — alternative to `xmlFile` |
+| `title` | `String` | No | H1 title for the report. Defaults to the XML schema name. |
+
+\* Required when neither the `Content` nor `Upload` variant is provided.
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-report-from-xml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "xmlFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/generate-report-from-xml \
+  -F "xmlFileUpload=@/path/to/file"
+```
+
+---
+
+### `generate-report-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more
+
+**Endpoint:** `POST /rest/generate-report-from-sml`  |  **GraphQL:** `generateReportFromSml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-report-from-sml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
+```
+
+---
+
 ### `generate-shared-model-plan`
 
 [↑ Table of Contents](#table-of-contents)
@@ -515,6 +745,94 @@ curl -X POST http://localhost:4000/rest/apply-shared-model-plan-option \
 curl -X POST http://localhost:4000/rest/apply-shared-model-plan-option \
   -F "planFileUpload=@/path/to/file" \
   -F "sharedDir=value"
+```
+
+---
+
+### `apply-style-to-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md
+
+**Endpoint:** `POST /rest/apply-style-to-sml`  |  **GraphQL:** `applyStyleToSml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories) |
+| `smlConfigFile` | `String` | No | Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml |
+| `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
+| `smlConfigFileUpload` | file field | No | Multipart upload — alternative to `smlConfigFile` |
+| `labelStyle` | `String` | No | Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml. |
+| `catalogName` | `String` | No | Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/apply-style-to-sml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value",
+      "smlConfigFileContent": "--- # inline YAML/file content"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/apply-style-to-sml \
+  -F "smlConfigFileUpload=@/path/to/file" \
+  -F "smlDir=value"
+```
+
+---
+
+### `generate-sml-docs`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
+
+**Endpoint:** `POST /rest/generate-sml-docs`  |  **GraphQL:** `generateSmlDocs`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-sml-docs \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
+```
+
+---
+
+### `clean-unused-sml-objects`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit
+
+**Endpoint:** `POST /rest/clean-unused-sml-objects`  |  **GraphQL:** `cleanUnusedSmlObjects`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `apply` | `Boolean` | No | Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it. |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/clean-unused-sml-objects \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
 ```
 
 ---
@@ -603,6 +921,42 @@ curl -X POST http://localhost:4000/rest/generate-metrics-from-model \
 curl -X POST http://localhost:4000/rest/generate-metrics-from-model \
   -F "modelFileUpload=@/path/to/file" \
   -F "smlConfigFileUpload=@/path/to/file"
+```
+
+---
+
+### `echo-connection-metadata`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Print schemas, tables, columns, and foreign keys for a connection
+
+**Endpoint:** `POST /rest/echo-connection-metadata`  |  **GraphQL:** `echoConnectionMetadata`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `connectionFile` | `String` | No | File that defines all the connections |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `schema` | `String` | No | Override schema name for metadata queries |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/echo-connection-metadata \
+  -H "Content-Type: application/json" \
+  -d '{
+      "connectionFileContent": "--- # inline YAML/file content",
+      "connectionName": "value"
+  }'
+```
+
+```bash
+# With file upload (multipart/form-data):
+curl -X POST http://localhost:4000/rest/echo-connection-metadata \
+  -F "connectionFileUpload=@/path/to/file" \
+  -F "connectionName=value"
 ```
 
 ---
@@ -961,7 +1315,7 @@ curl -X POST http://localhost:4000/rest/generate-powerbi-from-namespace \
 
 [↑ Table of Contents](#table-of-contents)
 
-> Generate a Notebook from a namespace (stub)
+> Generate a Notebook from a connection
 
 **Endpoint:** `POST /rest/generate-notebook-from-connection`  |  **GraphQL:** `generateNotebookFromConnection`
 
@@ -979,8 +1333,8 @@ curl -X POST http://localhost:4000/rest/generate-powerbi-from-namespace \
 | `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
 | `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
 | `aliasesFileUpload` | file field | No | Multipart upload — alternative to `aliasesFile` |
-| `connectionName` | `String` | No | The name of the connection to use |
-| `targetFile` | `String` | No | Target file to output the notebook |
+| `connectionName` | `String` | No | Connection whose mdx: block (url, user, and organization_id on Installer) the notebook connects with |
+| `targetFile` | `String` | No | Output path for the notebook (.ipynb); its folder must already exist |
 | `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
 | `targetFileUpload` | file field | No | Multipart upload — alternative to `targetFile` |
 
@@ -1728,343 +2082,7 @@ curl -X POST http://localhost:4000/rest/get-dso-count \
 
 ---
 
-#### Other
-
-### `echo-connection-metadata`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Print schemas, tables, columns, and foreign keys for a connection
-
-**Endpoint:** `POST /rest/echo-connection-metadata`  |  **GraphQL:** `echoConnectionMetadata`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `connectionFile` | `String` | No | File that defines all the connections |
-| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `connectionFileUpload` | file field | No | Multipart upload — alternative to `connectionFile` |
-| `connectionName` | `String` | Yes | The name of the connection in the connection file |
-| `schema` | `String` | No | Override schema name for metadata queries |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/echo-connection-metadata \
-  -H "Content-Type: application/json" \
-  -d '{
-      "connectionFileContent": "--- # inline YAML/file content",
-      "connectionName": "value"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/echo-connection-metadata \
-  -F "connectionFileUpload=@/path/to/file" \
-  -F "connectionName=value"
-```
-
----
-
-### `generate-sml-from-bundle`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
-
-**Endpoint:** `POST /rest/generate-sml-from-bundle`  |  **GraphQL:** `generateSmlFromBundle`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
-| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
-| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
-| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
-| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
-| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
-| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
-| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/generate-sml-from-bundle \
-  -H "Content-Type: application/json" \
-  -d '{
-      "bundles": "value"
-  }'
-```
-
----
-
-### `generate-sml-from-tabular`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
-
-**Endpoint:** `POST /rest/generate-sml-from-tabular`  |  **GraphQL:** `generateSmlFromTabular`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
-| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
-| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
-| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
-| `database` | `String` | Yes | Primary connection database/catalog name |
-| `schema` | `String` | Yes | Primary connection schema name |
-| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
-| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
-| `currency` | `String` | No | Currency code used for currency-formatted metrics |
-| `description` | `String` | No | Optional catalog/model description override |
-| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
-
-\* Required when neither the `Content` nor `Upload` variant is provided.
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
-  -H "Content-Type: application/json" \
-  -d '{
-      "xmlaFileContent": "--- # inline YAML/file content",
-      "warehouse": "value",
-      "database": "value",
-      "schema": "value"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-sml-from-tabular \
-  -F "xmlaFileUpload=@/path/to/file" \
-  -F "warehouse=value" \
-  -F "database=value" \
-  -F "schema=value"
-```
-
----
-
-### `analyze-powerbi-dax-gaps`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports
-
-**Endpoint:** `POST /rest/analyze-powerbi-dax-gaps`  |  **GraphQL:** `analyzePowerbiDaxGaps`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `pbixFile` | `String` | Yes\* | Path to the Power BI .pbix file to analyse |
-| `pbixFileContent` | `String` | No | Raw string content — alternative to `pbixFile` |
-| `pbixFileUpload` | file field | No | Multipart upload — alternative to `pbixFile` |
-
-\* Required when neither the `Content` nor `Upload` variant is provided.
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
-  -H "Content-Type: application/json" \
-  -d '{
-      "pbixFileContent": "--- # inline YAML/file content"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
-  -F "pbixFileUpload=@/path/to/file"
-```
-
----
-
-### `generate-sml-from-ssas-multidimensional`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Convert an SSAS Multidimensional XMLA export to AtScale SML files
-
-**Endpoint:** `POST /rest/generate-sml-from-ssas-multidimensional`  |  **GraphQL:** `generateSmlFromSsasMultidimensional`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `xmlaFile` | `String` | Yes\* | Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert |
-| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
-| `xmlaFileUpload` | file field | No | Multipart upload — alternative to `xmlaFile` |
-| `catalogName` | `String` | No | Override the catalog label (defaults to a name derived from the XMLA file) |
-| `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
-| `connectionDb` | `String` | No | Database name written into the connection file |
-| `connectionSchema` | `String` | No | Schema name written into the connection file |
-| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
-
-\* Required when neither the `Content` nor `Upload` variant is provided.
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/generate-sml-from-ssas-multidimensional \
-  -H "Content-Type: application/json" \
-  -d '{
-      "xmlaFileContent": "--- # inline YAML/file content"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-sml-from-ssas-multidimensional \
-  -F "xmlaFileUpload=@/path/to/file"
-```
-
----
-
-### `generate-report-from-xml`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more
-
-**Endpoint:** `POST /rest/generate-report-from-xml`  |  **GraphQL:** `generateReportFromXml`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `xmlFile` | `String` | Yes\* | Path to the AtScale XML project file to report on |
-| `xmlFileContent` | `String` | No | Raw string content — alternative to `xmlFile` |
-| `xmlFileUpload` | file field | No | Multipart upload — alternative to `xmlFile` |
-| `title` | `String` | No | H1 title for the report. Defaults to the XML schema name. |
-
-\* Required when neither the `Content` nor `Upload` variant is provided.
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/generate-report-from-xml \
-  -H "Content-Type: application/json" \
-  -d '{
-      "xmlFileContent": "--- # inline YAML/file content"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/generate-report-from-xml \
-  -F "xmlFileUpload=@/path/to/file"
-```
-
----
-
-### `generate-report-from-sml`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more
-
-**Endpoint:** `POST /rest/generate-report-from-sml`  |  **GraphQL:** `generateReportFromSml`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
-| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/generate-report-from-sml \
-  -H "Content-Type: application/json" \
-  -d '{
-      "smlDir": "value"
-  }'
-```
-
----
-
-### `apply-style-to-sml`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md
-
-**Endpoint:** `POST /rest/apply-style-to-sml`  |  **GraphQL:** `applyStyleToSml`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories) |
-| `smlConfigFile` | `String` | No | Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml |
-| `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
-| `smlConfigFileUpload` | file field | No | Multipart upload — alternative to `smlConfigFile` |
-| `labelStyle` | `String` | No | Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml. |
-| `catalogName` | `String` | No | Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml. |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/apply-style-to-sml \
-  -H "Content-Type: application/json" \
-  -d '{
-      "smlDir": "value",
-      "smlConfigFileContent": "--- # inline YAML/file content"
-  }'
-```
-
-```bash
-# With file upload (multipart/form-data):
-curl -X POST http://localhost:4000/rest/apply-style-to-sml \
-  -F "smlConfigFileUpload=@/path/to/file" \
-  -F "smlDir=value"
-```
-
----
-
-### `generate-sml-docs`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
-
-**Endpoint:** `POST /rest/generate-sml-docs`  |  **GraphQL:** `generateSmlDocs`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
-| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/generate-sml-docs \
-  -H "Content-Type: application/json" \
-  -d '{
-      "smlDir": "value"
-  }'
-```
-
----
-
-### `clean-unused-sml-objects`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit
-
-**Endpoint:** `POST /rest/clean-unused-sml-objects`  |  **GraphQL:** `cleanUnusedSmlObjects`
-
-| Field (JSON key) | Type | Required | Description |
-|-----------------|------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
-| `apply` | `Boolean` | No | Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it. |
-| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
-
-**curl (JSON):**
-
-```bash
-curl -X POST http://localhost:4000/rest/clean-unused-sml-objects \
-  -H "Content-Type: application/json" \
-  -d '{
-      "smlDir": "value"
-  }'
-```
-
----
+#### Aggregate Management
 
 ### `atscale-list-aggregates`
 
@@ -2270,6 +2288,8 @@ curl -X POST http://localhost:4000/rest/atscale-import-aggregates \
 ```
 
 ---
+
+#### Utilities
 
 ### `version`
 

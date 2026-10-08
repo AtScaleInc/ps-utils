@@ -95,7 +95,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
-  - [`applySharedModelPlanOption`](#generatesmlFromsharedmodelplan)
+  - [`applySharedModelPlanOption`](#applysharedmodelplanoption)
   - [`applyStyleToSML`](#applystyletosml)
   - [`generateSMLDocs`](#generatesmldocs)
   - [`cleanUnusedSMLObjects`](#cleanunusedsmlobjects)
@@ -111,6 +111,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateNamespaceFromModel`](#generatenamespacefrommodel)
   - [`generateTableauFromNamespace`](#generatetableaufromnamespace)
   - [`generateExcelFromNamespace`](#generateexcelfromnamespace)
+  - [`generatePowerBIFromNamespace`](#generatepowerbifromnamespace)
   - [`generateNotebookFromConnection`](#generatenotebookfromconnection)
 - [Testing / Query Processing](#testing--query-processing)
   - [`generateQueriesFromSML`](#generatequeriesfromsml)
@@ -130,7 +131,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`atScaleListDeployments`](#atscalelistdeployments)
   - [`atScaleDeployCatalog`](#atscaledeploycatalog)
   - [`atScaleListModelErrors`](#atscalelistmodelerrors)
-  - [`getDsoCount`](#getDsoCount)
+  - [`getDsoCount`](#getdsocount)
 - [Aggregate Management](#aggregate-management)
   - [`atScaleListAggregates`](#atscalelistaggregates)
   - [`atScaleRebuildAggregates`](#atscalerebuildaggregates)
@@ -690,7 +691,7 @@ function applyStyleToSML(
 
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `smlDir` | `DirInput` | Yes | | Path to the SML output directory to update, or a `Readable` ZIP archive of it |
+| `smlDir` | `string` | Yes | | Path to the SML directory to update. Files are rewritten in place, so a path is required rather than a stream |
 | `smlConfigFile` | `FileInput` | No | `"<smlDir>/sml.style.yaml"` | Path to SML style configuration file, or a `Readable` of its contents |
 | `labelStyle` | `"title-case" \| "camel-case" \| "none"` | No | `"title-case"` | Label style for all SML object labels; overrides `camelCaseMeasures` |
 | `catalogName` | `string` | No | | Catalog display name for `STYLE.md` |
@@ -1091,17 +1092,50 @@ function generateExcelFromNamespace(
 
 ---
 
+### `generatePowerBIFromNamespace`
+
+[↑ Table of Contents](#table-of-contents)
+
+Generates a Power BI project folder (`.pbip`) from a namespace YAML and a model YAML. The output can be opened directly in Power BI Desktop.
+
+```typescript
+import { generatePowerBIFromNamespace } from "@atscale-ps/ps-utils";
+
+await generatePowerBIFromNamespace({
+  targetFolder: "./output/powerbi",
+});
+```
+
+```typescript
+function generatePowerBIFromNamespace(
+  params: GeneratePowerBIFromNamespaceParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `namespaceFile` | `FileInput` | No | `"analysis/namespace.yaml"` | Path to namespace YAML, or a `Readable` of its contents |
+| `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
+| `modelFile` | `FileInput` | No | `"model.yaml"` | Path to `model.yaml`, or a `Readable` of its contents |
+| `targetFolder` | `DirOutput` | No | `"powerbi"` | Output folder for the Power BI project, or a `Writable` to receive it as a ZIP archive |
+| `connectionName` | `string` | No | `"default"` | Connection name |
+| `aliasesFile` | `FileInput` | No | | Optional aliases YAML path, or a `Readable` of its contents |
+
+---
+
 ### `generateNotebookFromConnection`
 
 [↑ Table of Contents](#table-of-contents)
 
-Generates a Jupyter notebook from a namespace and model YAML.
+Writes a starter Jupyter notebook for the `atscale` Python package from a connection's `mdx:` block: it installs the package, connects with the connection user's credentials, prompts for a project (Installer, `installer: true`) or a repo and catalog (Container) and a data model, and lists the model's folders, features, dimensions and hierarchies. The notebook contains the user's password in plain text.
 
 ```typescript
 import { generateNotebookFromConnection } from "@atscale-ps/ps-utils";
 
 await generateNotebookFromConnection({
-  targetFile: "./output/analysis.ipynb",
+  connectionName: "my_atscale",
+  targetFile: "./atscale.ipynb",
 });
 ```
 
@@ -1114,12 +1148,12 @@ function generateNotebookFromConnection(
 
 | Key | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `namespaceFile` | `FileInput` | No | `"analysis/namespace.yaml"` | Path to namespace YAML, or a `Readable` of its contents |
 | `connectionFile` | `FileInput` | No | `"connections.yaml"` | Path to connections file, or a `Readable` of its contents |
-| `modelFile` | `FileInput` | No | `"model.yaml"` | Path to `model.yaml`, or a `Readable` of its contents |
-| `targetFile` | `FileOutput` | No | `"notebook.ipynb"` | Output path for the notebook, or a `Writable` to receive it |
-| `connectionName` | `string` | No | `"default"` | Connection name |
-| `aliasesFile` | `FileInput` | No | | Optional aliases YAML path, or a `Readable` of its contents |
+| `connectionName` | `string` | No | `"default"` | Connection whose `mdx:` block (`url`, `user`, and `organization_id` on Installer) is used |
+| `targetFile` | `FileOutput` | No | `"notebook.ipynb"` | Output path for the notebook (its folder must already exist), or a `Writable` to receive it |
+| `namespaceFile` | `FileInput` | No | `"analysis/namespace.yaml"` | Accepted for consistency with the other template operations; not used |
+| `modelFile` | `FileInput` | No | `"model.yaml"` | Accepted for consistency with the other template operations; not used |
+| `aliasesFile` | `FileInput` | No | | Accepted for consistency with the other template operations; not used |
 
 ---
 

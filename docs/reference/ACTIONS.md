@@ -148,6 +148,7 @@ flowchart LR
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
     - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
+    - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -156,8 +157,9 @@ flowchart LR
     - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-sml-docs`](#generate-sml-docs)
     - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
-    - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
+    - [`generate-metrics-from-model`](#generate-metrics-from-model)
+    - [`echo-connection-metadata`](#echo-connection-metadata)
   - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
     - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
@@ -168,6 +170,7 @@ flowchart LR
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+    - [`generate-notebook-from-connection`](#generate-notebook-from-connection)
   - Testing / Query Processing
     - [`generate-queries-from-sml`](#generate-queries-from-sml)
     - [`generate-queries-from-model`](#generate-queries-from-model)
@@ -573,6 +576,33 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 
 ---
 
+### `analyze-powerbi-dax-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+Analyses a Power BI `.pbix` and reports which of its report-scoped DAX measures AtScale can evaluate, judging each measure against both AtScale's client-side DAX support and the server-side DAX whitelist. No connection is required — everything is read from the file. See the [README section](../../README.md#analyze-powerbi-dax-gaps) for how the verdicts and recommendations are derived.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: analyze-powerbi-dax-gaps
+    pbix-file: reports/sales.pbix
+    output-dir: gap-report
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `pbix-file` | Yes | | Path to the Power BI `.pbix` file to analyse |
+| `output-dir` | Yes | | Directory for the gap report |
+
+**Output:** `PBIX_GAP_REPORT.md` (for people), plus `.json` and `.csv` versions for tooling, in `output-dir`.
+
+---
+
 ### `generate-sml-from-ssas-multidimensional`
 
 [↑ Table of Contents](#table-of-contents)
@@ -824,70 +854,6 @@ Reads an SML directory and reports every connection, dataset, dimension, metric,
 
 ---
 
-### `generate-metrics-from-model`
-
-[↑ Table of Contents](#table-of-contents)
-
-Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql` sections, and runs the analysis-suggestions engine to produce a ranked list of suggested metric × dimension combinations. Each suggestion includes a relevance score, analysis type, measure details, and the dimensions to slice by. Useful for quickly discovering the most analytically valuable queries a model supports.
-
-**Output formats:**
-- `text` (default) — human-readable numbered list
-- `yaml` — structured YAML suitable for downstream processing
-
-**Requires:** No secrets — only a `model.yaml` file produced by a prior step or committed to the repo.
-
-#### Parameters
-
-| Parameter | Default | Description |
-|---|---|---|
-| `model-file` | — | Path to the `model.yaml` file (**required**) |
-| `model-name` | first model | Model name when `model.yaml` contains multiple models |
-| `sml-config-file` | `sml.style.yaml` | Path to the SML style config to read settings from. Effective settings are written to `sml.style.yaml` in the output file's directory after generation. |
-| `max-suggestions` | `25` | Maximum number of suggestions to output. Can also be set in `sml.style.yaml`. |
-| `min-score` | `0.5` | Minimum relevance score [0–1]. Can also be set in `sml.style.yaml`. |
-| `include-tuples` | `true` | Include multi-dimension suggestions. Can also be set in `sml.style.yaml`. |
-| `format` | `text` | Output format: `text` or `yaml` |
-| `output-file` | stdout | File to write output to (omit to print to stdout) |
-
-#### Using the composite action
-
-```yaml
-- uses: actions/checkout@v4
-
-- uses: AtScaleInc/ps-utils@v1
-  with:
-    operation: generate-metrics-from-model
-    model-file: model.yaml
-    max-suggestions: "20"         # optional, default 25
-    min-score: "0.6"              # optional, default 0.5
-    include-tuples: "true"        # optional, default true
-    output-file: suggestions.txt  # optional, prints to stdout if omitted
-```
-
-**Using a style config file** (persist settings between runs):
-
-```yaml
-- uses: AtScaleInc/ps-utils@v1
-  with:
-    operation: generate-metrics-from-model
-    model-file: model.yaml
-    sml-config-file: sml.style.yaml   # optional, default "sml.style.yaml"
-    output-file: suggestions.txt
-```
-
-**YAML output** (for downstream scripting):
-
-```yaml
-- uses: AtScaleInc/ps-utils@v1
-  with:
-    operation: generate-metrics-from-model
-    model-file: model.yaml
-    format: yaml
-    output-file: suggestions.yaml
-```
-
----
-
 ### `generate-ddl-from-atscale`
 
 [↑ Table of Contents](#table-of-contents)
@@ -957,6 +923,100 @@ connections:
       apiToken: "<Design Center API token>"   # recommended
       # or: username / password with Keycloak
 ```
+
+---
+
+### `generate-metrics-from-model`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql` sections, and runs the analysis-suggestions engine to produce a ranked list of suggested metric × dimension combinations. Each suggestion includes a relevance score, analysis type, measure details, and the dimensions to slice by. Useful for quickly discovering the most analytically valuable queries a model supports.
+
+**Output formats:**
+- `text` (default) — human-readable numbered list
+- `yaml` — structured YAML suitable for downstream processing
+
+**Requires:** No secrets — only a `model.yaml` file produced by a prior step or committed to the repo.
+
+#### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `model-file` | — | Path to the `model.yaml` file (**required**) |
+| `model-name` | first model | Model name when `model.yaml` contains multiple models |
+| `sml-config-file` | `sml.style.yaml` | Path to the SML style config to read settings from. Effective settings are written to `sml.style.yaml` in the output file's directory after generation. |
+| `max-suggestions` | `25` | Maximum number of suggestions to output. Can also be set in `sml.style.yaml`. |
+| `min-score` | `0.5` | Minimum relevance score [0–1]. Can also be set in `sml.style.yaml`. |
+| `include-tuples` | `true` | Include multi-dimension suggestions. Can also be set in `sml.style.yaml`. |
+| `format` | `text` | Output format: `text` or `yaml` |
+| `output-file` | stdout | File to write output to (omit to print to stdout) |
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    max-suggestions: "20"         # optional, default 25
+    min-score: "0.6"              # optional, default 0.5
+    include-tuples: "true"        # optional, default true
+    output-file: suggestions.txt  # optional, prints to stdout if omitted
+```
+
+**Using a style config file** (persist settings between runs):
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    sml-config-file: sml.style.yaml   # optional, default "sml.style.yaml"
+    output-file: suggestions.txt
+```
+
+**YAML output** (for downstream scripting):
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    format: yaml
+    output-file: suggestions.yaml
+```
+
+---
+
+### `echo-connection-metadata`
+
+[↑ Table of Contents](#table-of-contents)
+
+Prints the schemas, tables, columns and foreign keys visible through a database connection, as JSON in the job log. Useful for checking that a connection entry is configured correctly before running `generate-sml-from-connection` or `extract-ddl-from-connection` against it.
+
+The schema name is upper-cased before it is queried, which suits Snowflake. On databases with case-sensitive lower-case schema names, such as PostgreSQL, the lookup will not match.
+
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block on the named connection.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: echo-connection-metadata
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | Yes | | Connection name in the file |
+| `schema` | No | connection's `sql.schema`, else `PUBLIC` | Schema to read metadata from |
+
+**Output:** a JSON object with `schemas`, `tables`, `columns` and `foreignKeys` arrays read from `INFORMATION_SCHEMA`.
 
 ---
 
@@ -1322,6 +1382,50 @@ The output is written to `output/<target-folder>/` and can be opened directly in
 | `model-file` | No | `model.yaml` | Path to the model YAML |
 | `aliases-file` | No | | Path to an optional column aliases YAML |
 | `target-folder` | No | `powerbi` | Report folder name (written under `output/`) |
+
+---
+
+### `generate-notebook-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Writes a starter Jupyter notebook for the [`atscale` Python package](https://pypi.org/project/atscale/), pre-filled with the connection details from a connection's `mdx:` block. The notebook:
+
+1. installs the `atscale` package,
+2. connects to the AtScale instance with the connection user's credentials,
+3. prompts you to pick what to explore — a project on Installer, or a repo and then a catalog on Container — and then a data model,
+4. lists the model's folders, numeric and categorical features, dimensions and hierarchies, and
+5. ends with an empty `data_model.get_data(feature_list=[])` query for you to fill in.
+
+The connection entry decides which flavour of notebook is written:
+
+| Connection | `atscale` version | Connects with | Selection |
+|---|---|---|---|
+| `installer: true` | `atscale < 3` | `mdx.url`, `mdx.organization_id`, user | `client.select_project()` |
+| otherwise (Container) | latest | `mdx.url`, user | `client.select_repo()` → `repo.select_catalog()` |
+
+The `mdx.user` key must name an entry under `users:` with a `username` and `password`.
+
+**Security:** the notebook contains that password in plain text. Do not upload it as a build artifact or commit it.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block on the named connection.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-notebook-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: my_atscale
+    target-file: atscale.ipynb
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | No | `default` | Connection whose `mdx:` block is used |
+| `target-file` | No | `notebook.ipynb` | Output path for the notebook. Its folder must already exist |
 
 ---
 

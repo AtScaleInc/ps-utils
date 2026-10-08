@@ -364,6 +364,23 @@ export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, 
   } finally { cleanup(); }
 }
 
+export type ApplyStyleToSMLParams = {
+  smlDir:         string;   // rewritten in place, so a path rather than a stream
+  smlConfigFile?: FileInput; // default: <smlDir>/sml.style.yaml
+  labelStyle?:    "title-case" | "camel-case" | "none"; // default: from sml.style.yaml, else "title-case"
+  catalogName?:   string;   // default: from sml.style.yaml
+};
+
+export async function applyStyleToSML(p: ApplyStyleToSMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["smlConfigFile"],
+  });
+  try {
+    await run("apply-style-to-sml", Object.assign({}, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLDocsParams = {
   smlDir:       DirInput;
   outputFile?:  string;   // default: "README.md" (relative → written inside smlDir)
@@ -678,6 +695,32 @@ export async function generateExcelFromNamespace(p: GenerateExcelFromNamespacePa
       "connection-file": "connections.yaml",
       "model-file": "model.yaml",
       "target-file": "analysis/workbook.xlsx",
+      "connection-name": "default",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GeneratePowerBIFromNamespaceParams = {
+  namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  modelFile?: FileInput;   // default: "model.yaml"
+  targetFolder?: DirOutput;   // default: "powerbi"
+  connectionName?: string;      // default: "default"
+  aliasesFile?: FileInput;
+};
+
+export async function generatePowerBIFromNamespace(p: GeneratePowerBIFromNamespaceParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
+    outputDirs: ["targetFolder"],
+  });
+  try {
+    await run("generate-powerbi-from-namespace", Object.assign({
+      "namespace-file": "analysis/namespace.yaml",
+      "connection-file": "connections.yaml",
+      "model-file": "model.yaml",
+      "target-folder": "powerbi",
       "connection-name": "default",
     }, cc2kebab(params)), o);
     await flush();

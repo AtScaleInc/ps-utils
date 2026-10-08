@@ -20,10 +20,20 @@
     - [`generateSmlFromConnection`](#generatesmlfromconnection)
     - [`generateSmlFromDdl`](#generatesmlfromddl)
     - [`generateSmlFromXml`](#generatesmlfromxml)
+    - [`generateSmlFromBundle`](#generatesmlfrombundle)
+    - [`generateSmlFromTabular`](#generatesmlfromtabular)
+    - [`analyzePowerbiDaxGaps`](#analyzepowerbidaxgaps)
+    - [`generateSmlFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
+    - [`generateReportFromXml`](#generatereportfromxml)
+    - [`generateReportFromSml`](#generatereportfromsml)
     - [`generateSharedModelPlan`](#generatesharedmodelplan)
     - [`applySharedModelPlanOption`](#applysharedmodelplanoption)
+    - [`applyStyleToSml`](#applystyletosml)
+    - [`generateSmlDocs`](#generatesmldocs)
+    - [`cleanUnusedSmlObjects`](#cleanunusedsmlobjects)
     - [`generateDdlFromAtscale`](#generateddlfromatscale)
     - [`generateMetricsFromModel`](#generatemetricsfrommodel)
+    - [`echoConnectionMetadata`](#echoconnectionmetadata)
   - Synthetic Data Generation
     - [`extractDataShapeFromConnection`](#extractdatashapefromconnection)
     - [`generateDdlFromDataShape`](#generateddlfromdatashape)
@@ -54,7 +64,15 @@
     - [`atscaleDeployCatalog`](#atscaledeploycatalog)
     - [`atscaleListModelErrors`](#atscalelistmodelerrors)
     - [`getDsoCount`](#getdsocount)
+  - Aggregate Management
+    - [`atscaleListAggregates`](#atscalelistaggregates)
+    - [`atscaleRebuildAggregates`](#atscalerebuildaggregates)
+    - [`atscaleListAggregateBuildHistory`](#atscalelistaggregatebuildhistory)
+    - [`atscaleExportAggregates`](#atscaleexportaggregates)
+    - [`atscaleImportAggregates`](#atscaleimportaggregates)
   - Web Services
+  - Utilities
+    - [`version`](#version)
 - [Full SDL](#full-sdl)
 
 ---
@@ -528,6 +546,294 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+### `generateSmlFromBundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
+
+**CLI name:** `generate-sml-from-bundle`  |  **REST:** `POST /rest/generate-sml-from-bundle`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
+| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
+| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
+| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
+| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
+| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
+| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromBundle(input: {
+    bundles: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromBundle(input:{bundles: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
+### `generateSmlFromTabular`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
+
+**CLI name:** `generate-sml-from-tabular`  |  **REST:** `POST /rest/generate-sml-from-tabular`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
+| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
+| `database` | `String` | Yes | Primary connection database/catalog name |
+| `schema` | `String` | Yes | Primary connection schema name |
+| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
+| `currency` | `String` | No | Currency code used for currency-formatted metrics |
+| `description` | `String` | No | Optional catalog/model description override |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromTabular(input: {
+    xmlaFileContent: "--- # file content"
+    warehouse: "value"
+    database: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromTabular(input:{xmlaFileContent: \"--- # file content\", warehouse: \"value\", database: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromTabular(input:{xmlaFileUpload:$f,warehouse:\"value\",database:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `analyzePowerbiDaxGaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports
+
+**CLI name:** `analyze-powerbi-dax-gaps`  |  **REST:** `POST /rest/analyze-powerbi-dax-gaps`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `pbixFile` | `String` | Yes\* | Path to the Power BI .pbix file to analyse |
+| `pbixFileUpload` | `Upload` | No | Multipart upload — alternative to `pbixFile` |
+| `pbixFileContent` | `String` | No | Raw string content — alternative to `pbixFile` |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  analyzePowerbiDaxGaps(input: {
+    pbixFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{analyzePowerbiDaxGaps(input:{pbixFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){analyzePowerbiDaxGaps(input:{pbixFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateSmlFromSsasMultidimensional`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Convert an SSAS Multidimensional XMLA export to AtScale SML files
+
+**CLI name:** `generate-sml-from-ssas-multidimensional`  |  **REST:** `POST /rest/generate-sml-from-ssas-multidimensional`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlaFile` | `String` | Yes\* | Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert |
+| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
+| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `catalogName` | `String` | No | Override the catalog label (defaults to a name derived from the XMLA file) |
+| `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
+| `connectionDb` | `String` | No | Database name written into the connection file |
+| `connectionSchema` | `String` | No | Schema name written into the connection file |
+| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlFromSsasMultidimensional(input: {
+    xmlaFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlFromSsasMultidimensional(input:{xmlaFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromSsasMultidimensional(input:{xmlaFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateReportFromXml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more
+
+**CLI name:** `generate-report-from-xml`  |  **REST:** `POST /rest/generate-report-from-xml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `xmlFile` | `String` | Yes\* | Path to the AtScale XML project file to report on |
+| `xmlFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlFile` |
+| `xmlFileContent` | `String` | No | Raw string content — alternative to `xmlFile` |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the report. Defaults to the XML schema name. |
+
+\* Required when neither the `Upload` nor `Content` variant is provided.
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateReportFromXml(input: {
+    xmlFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateReportFromXml(input:{xmlFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){generateReportFromXml(input:{xmlFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateReportFromSml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more
+
+**CLI name:** `generate-report-from-sml`  |  **REST:** `POST /rest/generate-report-from-sml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateReportFromSml(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateReportFromSml(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
 ### `generateSharedModelPlan`
 
 [↑ Table of Contents](#table-of-contents)
@@ -613,6 +919,130 @@ curl -X POST http://localhost:4000/graphql \
   -F 'operations={"query":"mutation($f:Upload!){applySharedModelPlanOption(input:{planFileUpload:$f,sharedDir:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
+```
+
+---
+
+### `applyStyleToSml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md
+
+**CLI name:** `apply-style-to-sml`  |  **REST:** `POST /rest/apply-style-to-sml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories) |
+| `smlConfigFile` | `String` | No | Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml |
+| `smlConfigFileUpload` | `Upload` | No | Multipart upload — alternative to `smlConfigFile` |
+| `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
+| `labelStyle` | `String` | No | Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml. |
+| `catalogName` | `String` | No | Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  applyStyleToSml(input: {
+    smlDir: "value"
+    smlConfigFileContent: "--- # file content"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{applyStyleToSml(input:{smlDir: \"value\", smlConfigFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){applyStyleToSml(input:{smlConfigFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateSmlDocs`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
+
+**CLI name:** `generate-sml-docs`  |  **REST:** `POST /rest/generate-sml-docs`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateSmlDocs(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateSmlDocs(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+---
+
+### `cleanUnusedSmlObjects`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit
+
+**CLI name:** `clean-unused-sml-objects`  |  **REST:** `POST /rest/clean-unused-sml-objects`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
+| `apply` | `Boolean` | No | Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it. |
+| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  cleanUnusedSmlObjects(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{cleanUnusedSmlObjects(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ---
@@ -722,6 +1152,54 @@ curl -X POST http://localhost:4000/graphql \
 # With file upload (GraphQL multipart request spec):
 curl -X POST http://localhost:4000/graphql \
   -F 'operations={"query":"mutation($f:Upload!){generateMetricsFromModel(input:{modelFileUpload:$f}){success output error}}","variables":{"f":null}}' \
+  -F 'map={"f":["variables.f"]}' \
+  -F 'f=@/path/to/file'
+```
+
+---
+
+### `echoConnectionMetadata`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Print schemas, tables, columns, and foreign keys for a connection
+
+**CLI name:** `echo-connection-metadata`  |  **REST:** `POST /rest/echo-connection-metadata`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `connectionFile` | `String` | No | File that defines all the connections |
+| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
+| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
+| `connectionName` | `String` | Yes | The name of the connection in the connection file |
+| `schema` | `String` | No | Override schema name for metadata queries |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  echoConnectionMetadata(input: {
+    connectionFileContent: "--- # file content"
+    connectionName: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{echoConnectionMetadata(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
+```
+
+```bash
+# With file upload (GraphQL multipart request spec):
+curl -X POST http://localhost:4000/graphql \
+  -F 'operations={"query":"mutation($f:Upload!){echoConnectionMetadata(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
 ```
@@ -1180,7 +1658,7 @@ curl -X POST http://localhost:4000/graphql \
 
 [↑ Table of Contents](#table-of-contents)
 
-> Generate a Notebook from a namespace (stub)
+> Generate a Notebook from a connection
 
 **CLI name:** `generate-notebook-from-connection`  |  **REST:** `POST /rest/generate-notebook-from-connection`
 
@@ -1198,8 +1676,8 @@ curl -X POST http://localhost:4000/graphql \
 | `aliasesFile` | `String` | No | Optional YAML file containing column aliases (global / worksheets / dashboards sections) |
 | `aliasesFileUpload` | `Upload` | No | Multipart upload — alternative to `aliasesFile` |
 | `aliasesFileContent` | `String` | No | Raw string content — alternative to `aliasesFile` |
-| `connectionName` | `String` | No | The name of the connection to use |
-| `targetFile` | `String` | No | Target file to output the notebook |
+| `connectionName` | `String` | No | Connection whose mdx: block (url, user, and organization_id on Installer) the notebook connects with |
+| `targetFile` | `String` | No | Output path for the notebook (.ipynb); its folder must already exist |
 | `targetFileUpload` | `Upload` | No | Multipart upload — alternative to `targetFile` |
 | `targetFileContent` | `String` | No | Raw string content — alternative to `targetFile` |
 
@@ -2155,467 +2633,7 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
-#### Other
-
-### `echoConnectionMetadata`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Print schemas, tables, columns, and foreign keys for a connection
-
-**CLI name:** `echo-connection-metadata`  |  **REST:** `POST /rest/echo-connection-metadata`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `connectionFile` | `String` | No | File that defines all the connections |
-| `connectionFileUpload` | `Upload` | No | Multipart upload — alternative to `connectionFile` |
-| `connectionFileContent` | `String` | No | Raw string content — alternative to `connectionFile` |
-| `connectionName` | `String` | Yes | The name of the connection in the connection file |
-| `schema` | `String` | No | Override schema name for metadata queries |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  echoConnectionMetadata(input: {
-    connectionFileContent: "--- # file content"
-    connectionName: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{echoConnectionMetadata(input:{connectionFileContent: \"--- # file content\", connectionName: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){echoConnectionMetadata(input:{connectionFileUpload:$f,connectionName:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `generateSmlFromBundle`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Convert every AtScale project.xml inside one or more support bundles to SML, one repository per project, with a summary
-
-**CLI name:** `generate-sml-from-bundle`  |  **REST:** `POST /rest/generate-sml-from-bundle`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `bundles` | `String` | Yes | Comma-separated support bundle paths: the engine's support-bundle .zip, a directory containing metadata/ or metadata.zip, or a zip of such a directory |
-| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
-| `force` | `Boolean` | No | Re-convert projects whose output directory already exists |
-| `org` | `String` | No | Comma-separated organisation folder names to include (installer bundles); default is all |
-| `connectionName` | `String` | No | SML connection unique_name to embed in generated files (auto-detected from each XML if omitted) |
-| `connectionType` | `String` | No | Database dialect for the connection files (e.g. "snowflake", "bigquery") |
-| `connectionDb` | `String` | No | Database name written into the connection files; when set, every dataset shares one connection |
-| `connectionSchema` | `String` | No | Schema name written into the connection files; when set, every dataset shares one connection |
-| `modelMode` | `String` | No | Model compatibility policy applied to every project when query-name collisions occur: "new" renames colliding objects; "existing" preserves names and marks the project failed for review. Pass "new" for unattended runs. |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  generateSmlFromBundle(input: {
-    bundles: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateSmlFromBundle(input:{bundles: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
----
-
-### `generateSmlFromTabular`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Convert an SSAS Tabular model export (TMSL/XMLA) to AtScale SML files
-
-**CLI name:** `generate-sml-from-tabular`  |  **REST:** `POST /rest/generate-sml-from-tabular`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `xmlaFile` | `String` | Yes\* | Path to the TMSL/XMLA export (createOrReplace JSON) to convert |
-| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
-| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
-| `warehouse` | `String` | Yes | Target warehouse dialect: Snowflake, Databricks, BigQuery, or Postgres |
-| `database` | `String` | Yes | Primary connection database/catalog name |
-| `schema` | `String` | Yes | Primary connection schema name |
-| `modelName` | `String` | Yes | SML model_unique_name (snake_case recommended) |
-| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
-| `catalogName` | `String` | No | Override the catalog unique_name (defaults to '{model-name}_catalog') |
-| `currency` | `String` | No | Currency code used for currency-formatted metrics |
-| `description` | `String` | No | Optional catalog/model description override |
-| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
-
-\* Required when neither the `Upload` nor `Content` variant is provided.
-
-**GraphQL:**
-
-```graphql
-mutation {
-  generateSmlFromTabular(input: {
-    xmlaFileContent: "--- # file content"
-    warehouse: "value"
-    database: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateSmlFromTabular(input:{xmlaFileContent: \"--- # file content\", warehouse: \"value\", database: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromTabular(input:{xmlaFileUpload:$f,warehouse:\"value\",database:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `analyzePowerbiDaxGaps`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports
-
-**CLI name:** `analyze-powerbi-dax-gaps`  |  **REST:** `POST /rest/analyze-powerbi-dax-gaps`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `pbixFile` | `String` | Yes\* | Path to the Power BI .pbix file to analyse |
-| `pbixFileUpload` | `Upload` | No | Multipart upload — alternative to `pbixFile` |
-| `pbixFileContent` | `String` | No | Raw string content — alternative to `pbixFile` |
-| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
-
-\* Required when neither the `Upload` nor `Content` variant is provided.
-
-**GraphQL:**
-
-```graphql
-mutation {
-  analyzePowerbiDaxGaps(input: {
-    pbixFileContent: "--- # file content"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{analyzePowerbiDaxGaps(input:{pbixFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){analyzePowerbiDaxGaps(input:{pbixFileUpload:$f}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `generateSmlFromSsasMultidimensional`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Convert an SSAS Multidimensional XMLA export to AtScale SML files
-
-**CLI name:** `generate-sml-from-ssas-multidimensional`  |  **REST:** `POST /rest/generate-sml-from-ssas-multidimensional`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `xmlaFile` | `String` | Yes\* | Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert |
-| `xmlaFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlaFile` |
-| `xmlaFileContent` | `String` | No | Raw string content — alternative to `xmlaFile` |
-| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
-| `catalogName` | `String` | No | Override the catalog label (defaults to a name derived from the XMLA file) |
-| `connectionType` | `String` | No | Database dialect for the connection file (e.g. "snowflake", "postgresql") |
-| `connectionDb` | `String` | No | Database name written into the connection file |
-| `connectionSchema` | `String` | No | Schema name written into the connection file |
-| `modelMode` | `String` | No | Model compatibility policy used only when query-name collisions occur: "new" may rename colliding objects; "existing" preserves established names and reports a blocking conflict. |
-
-\* Required when neither the `Upload` nor `Content` variant is provided.
-
-**GraphQL:**
-
-```graphql
-mutation {
-  generateSmlFromSsasMultidimensional(input: {
-    xmlaFileContent: "--- # file content"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateSmlFromSsasMultidimensional(input:{xmlaFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateSmlFromSsasMultidimensional(input:{xmlaFileUpload:$f}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `generateReportFromXml`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more
-
-**CLI name:** `generate-report-from-xml`  |  **REST:** `POST /rest/generate-report-from-xml`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `xmlFile` | `String` | Yes\* | Path to the AtScale XML project file to report on |
-| `xmlFileUpload` | `Upload` | No | Multipart upload — alternative to `xmlFile` |
-| `xmlFileContent` | `String` | No | Raw string content — alternative to `xmlFile` |
-| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
-| `title` | `String` | No | H1 title for the report. Defaults to the XML schema name. |
-
-\* Required when neither the `Upload` nor `Content` variant is provided.
-
-**GraphQL:**
-
-```graphql
-mutation {
-  generateReportFromXml(input: {
-    xmlFileContent: "--- # file content"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateReportFromXml(input:{xmlFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){generateReportFromXml(input:{xmlFileUpload:$f}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `generateReportFromSml`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more
-
-**CLI name:** `generate-report-from-sml`  |  **REST:** `POST /rest/generate-report-from-sml`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML directory to report on (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
-| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
-| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  generateReportFromSml(input: {
-    smlDir: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateReportFromSml(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
----
-
-### `applyStyleToSml`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md
-
-**CLI name:** `apply-style-to-sml`  |  **REST:** `POST /rest/apply-style-to-sml`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories) |
-| `smlConfigFile` | `String` | No | Path to sml.style.yaml. Defaults to <sml-dir>/sml.style.yaml |
-| `smlConfigFileUpload` | `Upload` | No | Multipart upload — alternative to `smlConfigFile` |
-| `smlConfigFileContent` | `String` | No | Raw string content — alternative to `smlConfigFile` |
-| `labelStyle` | `String` | No | Label style to apply: "title-case" (default), "camel-case", or "none" (raw source names). Overrides sml.style.yaml. |
-| `catalogName` | `String` | No | Catalog display name written into STYLE.md. Defaults to the value in sml.style.yaml. |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  applyStyleToSml(input: {
-    smlDir: "value"
-    smlConfigFileContent: "--- # file content"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{applyStyleToSml(input:{smlDir: \"value\", smlConfigFileContent: \"--- # file content\"}){success output error file{filename content mimeType}}}"}'
-```
-
-```bash
-# With file upload (GraphQL multipart request spec):
-curl -X POST http://localhost:4000/graphql \
-  -F 'operations={"query":"mutation($f:Upload!){applyStyleToSml(input:{smlConfigFileUpload:$f,smlDir:\"value\"}){success output error}}","variables":{"f":null}}' \
-  -F 'map={"f":["variables.f"]}' \
-  -F 'f=@/path/to/file'
-```
-
----
-
-### `generateSmlDocs`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more
-
-**CLI name:** `generate-sml-docs`  |  **REST:** `POST /rest/generate-sml-docs`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML directory to document (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
-| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
-| `title` | `String` | No | H1 title for the document. Defaults to the catalog label / unique_name. |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  generateSmlDocs(input: {
-    smlDir: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{generateSmlDocs(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
----
-
-### `cleanUnusedSmlObjects`
-
-[↑ Table of Contents](#table-of-contents)
-
-> Read an SML directory and report (optionally remove) every connection, dataset, dimension, metric, and calculation that no model reaches — a structural dead-code check, not a live usage audit
-
-**CLI name:** `clean-unused-sml-objects`  |  **REST:** `POST /rest/clean-unused-sml-objects`
-
-| Input field | GraphQL type | Required | Description |
-|-------------|-------------|----------|-------------|
-| `smlDir` | `String` | Yes | Path to the SML directory to clean (contains catalog.yml plus datasets/, dimensions/, metrics/, models/, and optionally connections/ and calculations/) |
-| `apply` | `Boolean` | No | Actually delete the unused files. Defaults to false — a preview report only, so nothing is removed until you've reviewed it. |
-| `outputFile` | `String` | — | *Server-managed output path — do not pass* |
-| `title` | `String` | No | H1 title for the report. Defaults to the catalog label / unique_name. |
-
-**GraphQL:**
-
-```graphql
-mutation {
-  cleanUnusedSmlObjects(input: {
-    smlDir: "value"
-  }) {
-    success output error
-    file { filename content mimeType }
-  }
-}
-```
-
-**curl:**
-
-```bash
-curl -X POST http://localhost:4000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"mutation{cleanUnusedSmlObjects(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
-```
-
----
+#### Aggregate Management
 
 ### `atscaleListAggregates`
 
@@ -2883,6 +2901,8 @@ curl -X POST http://localhost:4000/graphql \
 
 ---
 
+#### Utilities
+
 ### `version`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2984,7 +3004,7 @@ input GeneratePowerbiFromNamespaceInput {
   connectionName: String
 }
 
-"""Generate a Notebook from a namespace (stub)"""
+"""Generate a Notebook from a connection"""
 input GenerateNotebookFromConnectionInput {
   """The file where the namespace is contained"""
   namespaceFile: String
@@ -3010,9 +3030,9 @@ input GenerateNotebookFromConnectionInput {
   aliasesFileUpload: Upload
   """Raw file content as a string — alternative to aliasesFile"""
   aliasesFileContent: String
-  """The name of the connection to use"""
+  """Connection whose mdx: block (url, user, and organization_id on Installer) the notebook connects with"""
   connectionName: String
-  """Target file to output the notebook"""
+  """Output path for the notebook (.ipynb); its folder must already exist"""
   targetFile: String
   """Uploaded file — alternative to targetFile"""
   targetFileUpload: Upload
@@ -4158,7 +4178,7 @@ type Mutation {
   extractModelFromAtscale(input: ExtractModelFromAtscaleInput): OperationResult!
   """Generate a PowerBI workbook from a namespace (stub)"""
   generatePowerbiFromNamespace(input: GeneratePowerbiFromNamespaceInput): OperationResult!
-  """Generate a Notebook from a namespace (stub)"""
+  """Generate a Notebook from a connection"""
   generateNotebookFromConnection(input: GenerateNotebookFromConnectionInput): OperationResult!
   """Generate a Tableau workbook from a namespace (stub)"""
   generateTableauFromNamespace(input: GenerateTableauFromNamespaceInput): OperationResult!
