@@ -226,6 +226,38 @@ When in doubt about which group an operation belongs to, match what is already i
 
 Use `example/connections.yaml` in the project root when a connections file is needed for testing or development. Do not use paths outside the project directory.
 
+## Secrets and environment details — never commit them
+
+This repository is shared, and anything committed stays in git history even after a later commit deletes it. Never commit credentials or details of a real environment, and never write them into a file that is about to be committed.
+
+**What counts as sensitive** — not just passwords:
+
+- Credentials: passwords, API tokens, personal access tokens (PATs), JWTs, private keys (`.p8`, `.pem`, `.key`, `.p12`), service-account JSON key files, and connection strings or URLs with embedded credentials.
+- Environment details: real hostnames, IP addresses, Snowflake account identifiers, Databricks `http_path` values, BigQuery project IDs, AtScale organization IDs, and real database, schema, warehouse, user and role names.
+- Customer material: customer names, real table and column names, query logs, support bundles, and data samples.
+
+**Where real values may live** — only in the git-ignored locations: `example/` (e.g. `example/connections.yaml`), `resources/keys/`, `output/`, `queries/`, `run_results/`, and `.env`. Do not create a real-credential file anywhere else in the repository, and never copy real values out of these locations into tracked files.
+
+**Docs, examples, tests and fixtures use placeholders**, the same style the repository already uses: `<password>`, `my-account`, `myorg.snowflakecomputing.com`, `example.com`, `database_name`, `my_connection`. That applies to README and `docs/` examples, `action.yml` descriptions, test fixtures (`src/**/__tests__/fixtures/`), and the sample SML under `resources/`. Synthetic names only — never a "lightly edited" real one.
+
+**Generated output can embed sensitive values.** Write it under `output/` or `example/` (both git-ignored), and never commit it:
+
+- `generate-notebook-from-connection` writes the connection user's password into the notebook in plain text.
+- `generate-powerbi-from-namespace` embeds the MDX user's `token` in the XMLA connection URL of the generated project.
+- `generate-tableau-from-namespace` and `generate-excel-from-namespace` embed the server URL (Tableau also the username).
+- `extract-data-shape-from-connection --preserve-meta-data true` stores real table and column names in the fingerprint.
+- DDL, SML and reports extracted from a customer's system (`extract-ddl-from-connection`, `generate-sml-from-xml`, `generate-sml-from-bundle`, and so on) carry that customer's schema.
+
+**Code must not leak secrets either.** Never log a password, token or private key — not even at `--verbose` — and never include one in an error message, a report, or a security artifact under `_reports/`. Read credentials from the connections file or the environment; never hard-code them, including as test defaults.
+
+**Before every commit:**
+
+1. Stage files by name rather than with `git add -A` / `git add .`, so a stray credential file is not swept in.
+2. Review `git diff --cached` for anything in the lists above.
+3. If a change introduces a new kind of file that can hold secrets (a new key format, a new output type), add its pattern to `.gitignore` in the same change.
+
+**If a secret is committed anyway**, stop and tell the user. Deleting it in a follow-up commit does not remove it from history: the credential must be treated as exposed and rotated, and whether to rewrite history is the user's decision. Do not push the commit.
+
 ## Branded document styling — standalone Markdown deliverables
 
 When generating a **standalone Markdown document** meant to be read or converted to PDF (onboarding guides, engagement deliverables, runbooks, design docs — i.e. not the repo's auto-generated `docs/*.md` reference files), apply the AtScale brand style below instead of plain default Markdown. These rules match the house PDF template.

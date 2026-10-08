@@ -21,13 +21,13 @@ class GenerateNotebookParameterSet extends TemplateParameterSet {
     ...this.baseParameters(),
     new (class extends StringParameter {
       name = "connection-name";
-      description = "The name of the connection to use";
+      description = "Connection whose mdx: block (url, user, and organization_id on Installer) the notebook connects with";
       required = false;
       defaultValue = "default";
     })(),
     new (class extends StringParameter {
       name = "target-file";
-      description = "Target file to output the notebook";
+      description = "Output path for the notebook (.ipynb); its folder must already exist";
       required = false;
       defaultValue = "notebook.ipynb";
     })(),
@@ -40,11 +40,11 @@ type GenerateNotebookParams = TemplateOperationParams & {
 export type GenerateNotebookFromConnectionParams = GenerateNotebookParams;
 
 /**
- * Stub operation to generate Notebook workbook from a namespace.
+ *  Operation to generate Notebook workbook from a namespace.
  */
 export class GenerateNotebookFromConnectionOperation extends TemplateOperation<GenerateNotebookParams> {
   name = "generate-notebook-from-connection";
-  description = "Generate a Notebook from a namespace (stub)";
+  description = "Generate a Notebook from a connection";
   parameters = new GenerateNotebookParameterSet();
 
   constructor(services: ServiceRegistry, logger: Logger) {
@@ -87,7 +87,7 @@ export class GenerateNotebookFromConnectionOperation extends TemplateOperation<G
       fs.writeFileSync(targetFile, output, "utf8");
       this.logger.info(`Wrote Notebook workbook to ${targetFile}`);
     } catch (error) {
-      this.logger.error(`Failed to generate Notebook workbook: ${error}`);
+      this.logger.error(`Failed to generate Notebook: ${error}`);
     }
   }
 

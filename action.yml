@@ -19,8 +19,10 @@ inputs:
         generate-tableau-from-namespace
         generate-excel-from-namespace
         generate-powerbi-from-namespace
+        generate-notebook-from-connection
         execute-sql-on-connection
         extract-ddl-from-connection
+        echo-connection-metadata
         generate-atscale-install-yaml
         atscale-list-data-sources
         atscale-create-data-source
@@ -69,7 +71,8 @@ inputs:
       Used by: extract-model-from-atscale, generate-sml-from-connection,
                generate-tableau-from-namespace, execute-sql-on-connection,
                extract-ddl-from-connection, extract-data-shape-from-connection,
-               generate-data-from-data-shape-to-connection, get-dso-count.
+               generate-data-from-data-shape-to-connection, get-dso-count,
+               echo-connection-metadata, generate-notebook-from-connection.
     required: false
   connection-name:
     description: >
@@ -78,7 +81,8 @@ inputs:
                generate-sml-from-ddl, generate-tableau-from-namespace,
                execute-sql-on-connection, extract-ddl-from-connection,
                extract-data-shape-from-connection, get-dso-count,
-               generate-data-from-data-shape-to-connection.
+               generate-data-from-data-shape-to-connection,
+               echo-connection-metadata, generate-notebook-from-connection.
     required: false
 
   # ── extract-model-from-atscale / get-dso-count────────────────────────────────────────────
@@ -128,9 +132,13 @@ inputs:
       Output directory.
       For generate-sml-from-connection / generate-sml-from-ddl: SML output directory (default: sml/).
       For generate-data-from-data-shape: CSV output directory (default: data/).
+      For analyze-powerbi-dax-gaps: directory for the gap report (required).
     required: false
   schema:
-    description: Database schema to scope SML generation to.
+    description: >
+      Database schema to scope SML generation to.
+      For echo-connection-metadata: schema to read metadata from (default: the
+      connection's sql.schema, else PUBLIC; upper-cased before querying).
     required: false
   catalog-name:
     description: >
@@ -384,7 +392,10 @@ inputs:
     required: false
     default: "2025"
   target-file:
-    description: "Output path for the generated Tableau or Excel workbook."
+    description: >
+      Output path for the generated Tableau or Excel workbook, or for the notebook
+      written by generate-notebook-from-connection (default: notebook.ipynb; the
+      folder must already exist).
     required: false
   target-folder:
     description: >
@@ -1055,7 +1066,9 @@ runs:
          inputs.operation == 'generate-tableau-from-namespace' ||
          inputs.operation == 'generate-excel-from-namespace' ||
          inputs.operation == 'generate-powerbi-from-namespace' ||
+         inputs.operation == 'generate-notebook-from-connection' ||
          inputs.operation == 'execute-sql-on-connection' ||
+         inputs.operation == 'echo-connection-metadata' ||
          inputs.operation == 'extract-ddl-from-connection' ||
          inputs.operation == 'atscale-list-data-sources' ||
          inputs.operation == 'atscale-create-data-source' ||
@@ -1215,6 +1228,16 @@ runs:
         [[ -n "${{ inputs.description }}"  ]] && ARGS+=(--description  "${{ inputs.description }}")
         [[ -n "${{ inputs.model-mode }}"   ]] && ARGS+=(--model-mode   "${{ inputs.model-mode }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-tabular "${ARGS[@]}"
+      shell: bash
+
+    # ── analyze-powerbi-dax-gaps ──────────────────────────────────────────────
+    - name: Analyze Power BI DAX gaps
+      if: inputs.operation == 'analyze-powerbi-dax-gaps'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" analyze-powerbi-dax-gaps \
+          --pbix-file  "${{ inputs.pbix-file }}" \
+          --output-dir "${{ inputs.output-dir }}" \
+          --verbose true
       shell: bash
 
     # ── generate-sml-from-ssas-multidimensional ───────────────────────────────
@@ -1410,6 +1433,19 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" generate-powerbi-from-namespace "${ARGS[@]}"
       shell: bash
 
+    # ── generate-notebook-from-connection ────────────────────────────────────
+    - name: Generate Jupyter notebook from connection
+      if: inputs.operation == 'generate-notebook-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.target-file }}" ]] && ARGS+=(--target-file "${{ inputs.target-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-notebook-from-connection "${ARGS[@]}"
+      shell: bash
+
     # ── execute-sql-on-connection ─────────────────────────────────────────────
     - name: Execute SQL on connection
       if: inputs.operation == 'execute-sql-on-connection'
@@ -1439,6 +1475,19 @@ runs:
         [[ "${{ inputs.case-insensitive }}" == "true" ]] && ARGS+=(--case-insensitive true)
         [[ -n "${{ inputs.output-file }}" ]]       && ARGS+=(--output-file      "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── echo-connection-metadata ──────────────────────────────────────────────
+    - name: Echo connection metadata
+      if: inputs.operation == 'echo-connection-metadata'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.schema }}" ]] && ARGS+=(--schema "${{ inputs.schema }}")
+        node "${{ github.action_path }}/dist/cli.js" echo-connection-metadata "${ARGS[@]}"
       shell: bash
 
     # ── generate-atscale-install-yaml ────────────────────────────────────────
