@@ -269,10 +269,20 @@ def load_shared():
     })
 
 
+def import_marker(root: Path) -> Path:
+    """Set next to (not inside - a push commits the whole directory) a working
+    copy converted by Build › Import & convert (routes/importer.py): read-only here."""
+    return root.parent / f".{root.name}.imported"
+
+
 def _read_only(root: Path, dialect: str | None = None) -> Any:
     """409 when `root` already holds SML that Build can't write back (support.py):
     regenerating over it would drop semi-additive metrics, row security, ... -
     the UI opens such a model read-only, this stops a direct call too."""
+    if import_marker(root).exists():
+        return jsonify({"error": f"'{root.name}' was converted from another model's export - it is read-only in Build; "
+                                 "import it again to change it, or edit it in Design Center",
+                        "readOnly": True, "unsupported": []}), 409
     existing = _read_sml_directory(root) if root.is_dir() else {}
     found = unsupported_features(existing, dialect) if existing else []
     if not found:
@@ -585,7 +595,7 @@ def import_path():
     files = _read_sml_directory(root)
     if not files:
         return jsonify({"error": f"No .yml/.yaml files found under '{raw_path}'"}), 400
-    return jsonify(_parse_with_packages(files))
+    return jsonify({**_parse_with_packages(files), "imported": import_marker(root).exists()})
 
 
 @build_bp.post("/sml/import-git")
@@ -777,7 +787,7 @@ def _push(payload: dict, files: dict[str, str], private: bool) -> dict[str, Any]
         if shared:
             commit = fake.register_shared_repo(url, files)
         else:
-            fake.register_built_model(url, model_name, payload.get("catalogName") or model_name)
+            fake.register_built_model(url, payload.get("models") or model_name, payload.get("catalogName") or model_name)
             commit = "demo"
         return {"repoUrl": url, "branch": payload.get("gitBranch") or "main", "commit": commit, "created": False,
                 "path": str(staging)}

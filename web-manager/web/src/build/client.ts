@@ -249,6 +249,13 @@ export interface ImportedModel {
   shared?: boolean
   /** package.yml entries that couldn't be fetched. */
   packageWarnings?: string[]
+  /** A working copy made by Import & convert (routes/importer.py) - read-only. */
+  imported?: boolean
+}
+
+/** Parse SML files already in hand (an XML import's conversion) onto the canvas. */
+export function importSmlFiles(files: SmlFile[]) {
+  return request<ImportedModel>('/sml/import', { method: 'POST', body: JSON.stringify({ files }) })
 }
 
 export function importSmlPath(path: string) {
@@ -576,4 +583,138 @@ export function runDataPreview(body: {
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+// -- Import & convert: another model's export -> SML (api/routes/importer.py) ---------------
+
+/** xml: AtScale project_2_0 XML; ssas: SSAS Multidimensional XMLA; tabular: SSAS Tabular TMSL JSON. */
+export type ImportKind = 'xml' | 'ssas' | 'tabular'
+
+export interface ImportConnection {
+  name: string
+  file: string
+  database: string | null
+  schema: string | null
+  asConnection: string | null
+  datasets: number
+}
+
+export interface ImportSummary {
+  counts: Record<string, number>
+  connections: ImportConnection[]
+  models: { name: string; file: string; visible: boolean }[]
+}
+
+export interface ImportInspection extends ImportSummary {
+  kind: ImportKind
+  project: string
+  caption: string | null
+  cubes: { name: string; caption: string | null; visible: boolean }[]
+  datasets: number
+  /** Tabular: the warehouses it converts for, and the one its own data sources name (if any). */
+  warehouses?: string[]
+  warehouse?: string | null
+}
+
+/** Which ps-utils ran the conversion (api/smlgen/converters.py cli_info). */
+export interface ImportConverter {
+  source: 'repo' | 'npm'
+  label: string
+  version: string | null
+  path: string
+  builtAt?: string
+}
+
+export interface ImportConversion extends ImportSummary {
+  files: SmlFile[]
+  report: string
+  log: string
+  converter: ImportConverter
+}
+
+export interface ImportConnected extends ImportSummary {
+  files: SmlFile[]
+  validation: { passed: boolean; returncode: number | null; output: string }
+  workspaceExists: boolean
+}
+
+/** A failed conversion carries the ps-utils CLI's log. */
+export class ConversionFailure extends Error {
+  log: string
+  constructor(message: string, log: string) {
+    super(message)
+    this.log = log
+  }
+}
+
+async function importRequest<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}/build/import/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const out = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    if (typeof out?.log === 'string') throw new ConversionFailure(out.error ?? 'Conversion failed', out.log)
+    throw new Error(out?.error ?? `Import ${path} failed with ${res.status}`)
+  }
+  return out as T
+}
+
+export function inspectImport(kind: ImportKind, text: string, fileName: string) {
+  return importRequest<ImportInspection>('inspect', { kind, text, fileName })
+}
+
+export function convertImport(payload: {
+  kind: ImportKind
+  text: string
+  fileName: string
+  repoName: string
+  catalogName?: string
+  modelMode: 'new' | 'existing'
+  warehouse?: string
+  models: Record<string, string>
+}) {
+  return importRequest<ImportConversion>('convert', payload)
+}
+
+/** The converted files, every connection pointed at the picked data source, validated with sml-cli. */
+export function connectImport(payload: {
+  repoName: string
+  files: SmlFile[]
+  asConnection: string
+  connections: Record<string, { database: string; schema: string }>
+}) {
+  return importRequest<ImportConnected>('connect', payload)
+}
+
+export function saveImport(repoName: string, files: SmlFile[], replace: boolean) {
+  return importRequest<{ ok: boolean; path: string; count: number }>('save', { repoName, files, replace })
+}
+
+export interface ImportPublishResult {
+  git: DeployResult['git']
+  fileCount: number
+  results: (HostDeployResult & { linked?: number })[]
+  action: 'link' | 'deploy'
+}
+
+/** Push to Git once, then link each model or deploy the branch on every host. */
+export async function publishImport(body: {
+  repoName: string
+  catalogName?: string
+  files: SmlFile[]
+  models: string[]
+  asConnection: string
+  hostIds: string[]
+  action: 'link' | 'deploy'
+  replace: boolean
+}): Promise<ImportPublishResult> {
+  let job = await importRequest<Job<ImportPublishResult>>('publish', body)
+  while (job.status === 'running') {
+    await new Promise((r) => setTimeout(r, 1000))
+    job = await request<Job<ImportPublishResult>>(`/jobs/${job.id}`)
+  }
+  if (job.status === 'failed' || !job.result) throw new Error(job.error ?? `${body.action} failed`)
+  return job.result
 }

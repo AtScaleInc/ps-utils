@@ -63,14 +63,31 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
     }
   }
 
+  // Any branch, on every gate: the server says whether its head can go now.
+  const check = useQuery({
+    queryKey: ['pipeline', 'check', model.name, env, branch],
+    queryFn: () => pipelineApi.check(model.name, env, branch),
+    enabled: kind === 'promote' && fi >= 0,
+    retry: false,
+  })
+  const sameBranch = gateKind === 'promote' && branch === src?.branch
+  const short = (c?: string | null) => (c && /^[0-9a-f]{12,}$/i.test(c) ? c.slice(0, 7) : c ?? '…')
+  const blocked = kind === 'promote' && (check.isLoading || !!check.data?.problems.length || check.isError)
+
   const verb = kind === 'promote' ? `Deploy to ${stage.label}` : kind === 'test' ? `Run test on ${stage.label}` : `Rollback ${stage.label}`
   const title = kind === 'promote'
-    ? (gateKind === 'merge' ? `Deploy ${branch}'s head to ${stage.label}.` : `Deploy ${src?.version ?? ''} to ${stage.label}.`)
+    ? (sameBranch && (!check.data?.head || check.data.head === src?.commit)
+      ? `Deploy ${src?.version ?? ''} to ${stage.label}.`
+      : `Deploy ${branch}'s head${check.data?.head ? ` (${short(check.data.head)})` : ''} to ${stage.label}.`)
     : kind === 'test' ? `Test ${model.name} on ${stage.label}.` : `Redeploy ${model.name}'s previous commit.`
   const note = kind === 'promote'
     ? (gateKind === 'merge'
       ? `${stage.label} deploys the head of the branch you pick.`
-      : `${model.name} ${src?.version ?? ''} passed on ${board.stages[fi].label}. That commit deploys - if ${src?.branch ?? 'its branch'} has moved since, the deploy is refused.`)
+      : sameBranch
+        ? (check.data?.head && check.data.head !== src?.commit
+          ? `${branch} has moved since ${board.stages[fi].label} tested ${src?.version ?? ''}: its head ${short(check.data.head)} is what would deploy, so it has to run and pass on ${board.stages[fi].label} first.`
+          : `${model.name} ${src?.version ?? ''} passed on ${board.stages[fi].label}. That commit deploys - if ${src?.branch ?? 'its branch'} has moved since, the deploy is refused.`)
+        : `${stage.label} deploys ${branch}'s head. ${board.stages[fi].label} has to run that commit and have passed its test first${board.policy.requireTest ? '' : ' (not required by the gate policy)'}.`)
       + (final ? ' System aggregates are not in Git: the package moves them after the deploy; from the Board, use Move system aggregates.' : '')
     : kind === 'test'
       ? `Queries generated from the model run on the host you pick and on the baseline (${board.stages[board.stages.length - 1].env === env ? 'this stage\'s previous test' : board.stages[board.stages.length - 1].label}), then compare.`
@@ -120,9 +137,32 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
         {kind === 'promote' && (
           <div className="col" style={{ gap: 6, flex: '0 0 auto' }}>
             <span className="label">Branch</span>
-            {gateKind === 'merge' && model.repoUrl && stage.hosts[0]
-              ? <BranchSelect hostId={stage.hosts[0].id} repoUrl={model.repoUrl} value={branch} onChange={setBranch} />
-              : <span className="mono">{branch} · {src?.version ?? '—'} <span className="muted">- the commit {fi >= 0 ? board.stages[fi].label : ''} tested; another branch has to be tested there first</span></span>}
+            <div className="row" style={{ gap: 10 }}>
+              {model.repoUrl && stage.hosts[0]
+                ? <BranchSelect hostId={stage.hosts[0].id} repoUrl={model.repoUrl} value={branch} onChange={setBranch} />
+                : <span className="mono">{branch}</span>}
+              {gateKind === 'promote' && src?.branch && branch !== src.branch && (
+                <button type="button" className="btn xs ghost" onClick={() => setBranch(src.branch!)}>Back to {src.branch} (tested)</button>
+              )}
+            </div>
+            {check.isLoading && <span className="hint">Checking {branch}…</span>}
+            {check.isError && <span className="err-text">{errMsg(check.error)}</span>}
+            {check.data && (check.data.problems.length
+              ? (
+                <div className="pl-err">
+                  <span className="label" style={{ color: 'var(--danger)' }}>
+                    {branch} @ {short(check.data.head)} can't go to {stage.label} yet
+                  </span>
+                  <pre>{check.data.problems.join('\n')}</pre>
+                </div>
+              )
+              : (
+                <span className="mono" style={{ color: 'var(--qa)', fontSize: 11.5 }}>
+                  {branch} @ {short(check.data.head)} · {check.data.kind === 'merge'
+                    ? `any branch can be deployed to ${stage.label}`
+                    : check.data.tested ? `passed on ${board.stages[fi].label} - ready` : 'the gate policy needs no test'}
+                </span>
+              ))}
           </div>
         )}
 
@@ -152,7 +192,7 @@ export function ActionDialog({ kind, board, model, env, from, onRun, onClose }: 
 
         <div className="actions">
           <button type="button" className="btn lg ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn lg solid" disabled={!hosts.length || (kind !== 'test' && !pickable.length)}
+          <button type="button" className="btn lg solid" disabled={!hosts.length || (kind !== 'test' && !pickable.length) || blocked}
             style={{ background: kind === 'rollback' ? 'var(--danger)' : envOf(env).color }}
             onClick={() => { onRun({ hosts: all && kind !== 'test' ? [] : hosts, branch: kind === 'promote' ? branch : undefined }); onClose() }}>
             {verb}{kind !== 'test' && !all ? ` (${hosts.length} of ${pickable.length})` : ''}

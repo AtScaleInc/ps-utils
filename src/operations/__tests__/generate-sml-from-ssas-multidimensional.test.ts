@@ -120,6 +120,12 @@ const FIXTURE_XMLA = `<Create xmlns="http://schemas.microsoft.com/analysisservic
                   </Source>
                 </KeyColumn>
               </KeyColumns>
+              <AttributeRelationships>
+                <AttributeRelationship>
+                  <AttributeID>Country</AttributeID>
+                  <Name>Country</Name>
+                </AttributeRelationship>
+              </AttributeRelationships>
             </Attribute>
             <Attribute>
               <ID>City</ID>
@@ -134,6 +140,12 @@ const FIXTURE_XMLA = `<Create xmlns="http://schemas.microsoft.com/analysisservic
                   </Source>
                 </KeyColumn>
               </KeyColumns>
+              <AttributeRelationships>
+                <AttributeRelationship>
+                  <AttributeID>State</AttributeID>
+                  <Name>State</Name>
+                </AttributeRelationship>
+              </AttributeRelationships>
             </Attribute>
             <Attribute>
               <ID>State Abbr</ID>
@@ -427,5 +439,23 @@ describe("generate-sml-from-ssas-multidimensional converter", () => {
     const citySecondaryNames = (cityLevel.secondary_attributes ?? []).map((a: any) => a.unique_name);
     expect(stateSecondaryNames).toContain("State_Abbr");
     expect(citySecondaryNames).not.toContain("State_Abbr");
+  });
+
+  it("never attaches a hierarchy's own level as a secondary attribute of another level", async () => {
+    // Levels used to be marked taken only as the loop reached them, so an upper level
+    // claimed the next one down (State took City) and SML rejected the duplicate name.
+    const { sml } = await convert();
+    for (const [file, body] of sml) {
+      if (!file.startsWith("dimensions/")) continue;
+      const dim = load(body) as any;
+      for (const h of dim.hierarchies ?? []) {
+        const levelNames = new Set(h.levels.map((l: any) => l.unique_name));
+        for (const l of h.levels) {
+          for (const sa of l.secondary_attributes ?? []) {
+            expect(levelNames.has(sa.unique_name), `${file}: ${sa.unique_name} on ${l.unique_name}`).toBe(false);
+          }
+        }
+      }
+    }
   });
 });

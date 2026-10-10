@@ -10,7 +10,7 @@ export type PipelineSection = 'board' | 'runs' | 'setup'
 /** The board's selected model, and the stage whose commit the path panel acts on. */
 export interface PipelinePick { model: string; env: EnvId | null }
 /** Build's left-rail sections: table discovery / profiling, the wizard canvas, and the cube data preview. */
-export type BuildSection = 'discover' | 'model' | 'preview'
+export type BuildSection = 'import' | 'discover' | 'model' | 'preview'
 /** Test's left-rail sections: set up + run, past runs by model, baseline-vs-candidate result and model compares. */
 export type TestSection = 'run' | 'results' | 'compare' | 'model'
 /** Monitor's left-rail sections: charts, the query list, where to act. */

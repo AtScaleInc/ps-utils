@@ -251,7 +251,8 @@ def main(argv: list[str] | None = None) -> int:
     sp = add("promote", cmd_promote, "built-in gate: promote a model into a stage when its gate is open")
     sp.add_argument("--env", required=True)
     sp.add_argument("--model", required=True)
-    sp.add_argument("--branch", help="over a merge gate: the branch to deploy (a promotion takes the tested commit's)")
+    sp.add_argument("--branch", help="the branch to promote (default: the one the stage before runs); another branch's "
+                                     "head must have passed its test on the stage before")
     sp.add_argument("--host", action="append", help="a host id of the stage (repeat it; default: every host)")
     sp = add("report", cmd_report, "report a step Env Manager didn't run")
     sp.add_argument("--verdict", choices=["pass", "fail"], required=True)

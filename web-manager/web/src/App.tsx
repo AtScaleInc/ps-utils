@@ -114,6 +114,7 @@ function Sidebar() {
     <aside className="sidebar">
       <nav className="side-nav">
         {view === 'build' && ([
+          { id: 'import', label: 'Import & convert', note: 'Bring an existing model in as SML' },
           { id: 'discover', label: 'Discovery', note: 'Profile a warehouse table' },
           { id: 'model', label: 'Develop', note: 'Sources, canvas, SML' },
           { id: 'preview', label: 'Preview', note: 'Query a deployed cube' },

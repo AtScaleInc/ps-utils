@@ -1334,3 +1334,32 @@
 
 .bar .shared-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--as-dimension, currentColor); border-radius: 3px; color: var(--text, inherit); }
 .bar .shared-chip .chip-x { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; font-size: 11px; }
+
+/* Import & convert (panels/ImportView.tsx, ImportWizard.tsx) */
+.wiz .import-map { display: flex; flex-direction: column; gap: 10px; }
+.wiz .import-map-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr); align-items: center; gap: 10px; }
+.wiz .import-map-conn .import-map-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.wiz .import-map-conn { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--as-hairline); background: var(--as-panel); }
+.wiz .import-map-from { font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wiz .import-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.wiz .import-hosts { display: flex; flex-wrap: wrap; gap: 18px; }
+.wiz .import-log { max-height: 260px; overflow: auto; white-space: pre-wrap; }
+.wiz .import-page { flex: 1; min-height: 0; min-width: 0; overflow: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
+.wiz .import-head { display: flex; flex-direction: column; gap: 8px; max-width: 860px; }
+.wiz .import-title { font-family: var(--font-display); font-size: 32px; line-height: 1.1; color: var(--as-ink-strong); }
+.wiz .import-steps { display: flex; flex-wrap: wrap; gap: 8px; }
+.wiz .import-step { padding: 6px 12px; border: 1px solid var(--as-hairline); font-size: 12.5px; }
+.wiz .import-grid { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.wiz .import-cards { flex: 2 1 460px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.wiz .import-card { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px 18px; background: var(--as-panel);
+  border: 1px solid var(--as-hairline); color: var(--as-ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.wiz .import-card b { font-size: 14px; color: var(--as-ink-strong); }
+.wiz .import-card:hover { background: var(--as-hover); }
+.wiz .import-card.on { border-color: var(--as-fact); background: rgba(42, 165, 199, 0.08); }
+.wiz .import-card.off { opacity: .6; }
+.wiz .import-side { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 18px; background: var(--as-panel); border: 1px solid var(--as-hairline); font-size: 13px; }
+.wiz .import-side-title { font-size: 18px; color: var(--as-ink-strong); font-weight: 600; }
+.wiz .import-side-sub { margin-top: 8px; color: var(--as-ink-strong); }
+.wiz .import-op { color: var(--as-fact); }
+.wiz .import-side .btn { align-self: flex-start; margin-top: 8px; }
+.wiz .sml-modal.wizard-page { width: 100%; max-width: none; height: auto; min-height: 560px; flex: 1; }

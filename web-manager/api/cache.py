@@ -32,6 +32,14 @@ WORKSPACE = Path(os.environ.get("ENV_MANAGER_WORKSPACE", _REPO_ROOT / "workspace
 # mixes with real hosts' cached lists.
 DIR = WORKSPACE / ("cache-demo" if os.environ.get("ENV_MANAGER_FAKE") == "1" else "cache")
 
+
+def work_tmp() -> Path:
+    """Scratch space for short-lived files (conversions, sml-cli validation) inside
+    the working folder instead of the OS temp dir, so they sit with everything else."""
+    path = WORKSPACE / "tmp"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
 _entries: dict[tuple, tuple[float, float, Any]] = {}  # key -> (loaded_at, expires_at, value)
 _lock = threading.Lock()
 _key_locks: dict[tuple, threading.Lock] = {}

@@ -1,0 +1,11 @@
+{"createOrReplace": {"object": {"database": "Shop"}, "database": {"name": "Shop", "compatibilityLevel": 1500, "model": {
+  "name": "Shop", "dataSources": [{"name": "WH", "connectionString": "Provider=MSOLEDBSQL;Initial Catalog=SHOPDB"}],
+  "tables": [
+    {"name": "Sales", "columns": [{"name": "Amount", "dataType": "decimal", "sourceColumn": "AMOUNT"}, {"name": "ProductKey", "dataType": "int64", "sourceColumn": "PRODUCT_KEY"}],
+     "partitions": [{"name": "p", "source": {"type": "query", "query": "SELECT * FROM dbo.SALES", "dataSource": "WH"}}],
+     "measures": [{"name": "Total Amount", "expression": "SUM(Sales[Amount])"}]},
+    {"name": "Product", "columns": [{"name": "ProductKey", "dataType": "int64", "sourceColumn": "PRODUCT_KEY"}, {"name": "Name", "dataType": "string", "sourceColumn": "NAME"}],
+     "partitions": [{"name": "p", "source": {"type": "query", "query": "SELECT * FROM dbo.PRODUCT", "dataSource": "WH"}}]}
+  ],
+  "relationships": [{"name": "r1", "fromTable": "Sales", "fromColumn": "ProductKey", "toTable": "Product", "toColumn": "ProductKey"}]
+}}}}

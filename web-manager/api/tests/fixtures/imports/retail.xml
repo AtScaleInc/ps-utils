@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema xmlns="http://www.atscale.com/xsd/project_2_0" name="Retail Project">
+  <properties><caption>Retail Project</caption></properties>
+  <data-sets>
+    <data-set id="ds-sales" name="fact_sales">
+      <physical>
+        <connection id="SNOW" />
+        <table><database>PROD</database><schema>SALES</schema><name>FACT_SALES</name></table>
+        <column><name>amount</name><type>Decimal</type></column>
+        <column><name>qty</name><type>Integer</type></column>
+      </physical>
+      <logical>
+        <key-ref id="k-amount" complete="true"><column>amount</column></key-ref>
+        <key-ref id="k-qty" complete="true"><column>qty</column></key-ref>
+      </logical>
+    </data-set>
+    <data-set id="ds-returns" name="fact_returns">
+      <physical>
+        <connection id="SNOW" />
+        <table><database>PROD</database><schema>RETURNS</schema><name>FACT_RETURNS</name></table>
+        <column><name>refund</name><type>Decimal</type></column>
+      </physical>
+      <logical>
+        <key-ref id="k-refund" complete="true"><column>refund</column></key-ref>
+      </logical>
+    </data-set>
+  </data-sets>
+  <cubes>
+    <cube id="c-sales" name="Sales Cube">
+      <data-sets><data-set-ref id="ds-sales" /></data-sets>
+      <attributes>
+        <attribute id="m-amount" name="Amount"><properties><type><measure><key-ref id="k-amount" /></measure></type></properties></attribute>
+        <attribute id="m-qty" name="Quantity"><properties><type><measure><key-ref id="k-qty" /></measure></type></properties></attribute>
+      </attributes>
+    </cube>
+    <cube id="c-returns" name="Returns Cube">
+      <data-sets><data-set-ref id="ds-returns" /></data-sets>
+      <attributes>
+        <attribute id="m-refund" name="Refund"><properties><type><measure><key-ref id="k-refund" /></measure></type></properties></attribute>
+      </attributes>
+    </cube>
+  </cubes>
+</schema>

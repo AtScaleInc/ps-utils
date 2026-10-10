@@ -148,9 +148,11 @@ def _num(v: str | None) -> int:
 
 
 def _head(model: str, branch: str) -> int:
-    """Fake Git: main is the newest version any host has; develop is one ahead."""
+    """Fake Git: main is the newest version any host has off develop; develop is
+    one ahead of main (and stays put when deployed)."""
     with _lock:
-        top = max([1, *(_num(m["commit"]) for i in _INV.values() for m in i["models"] if m["name"] == model)])
+        top = max([1, *(_num(m["commit"]) for i in _INV.values() for m in i["models"]
+                        if m["name"] == model and m.get("branch") != "develop")])
     return top + (1 if branch == "develop" else 0)
 
 
@@ -620,11 +622,14 @@ def _fake_query(host_id: str, slot: int, now_ms: int) -> dict[str, Any] | None:
     }
 
 
-def register_built_model(repo_url: str, model: str, catalog: str) -> None:
-    """A model pushed by Build becomes a repo the fake hosts can deploy."""
+def register_built_model(repo_url: str, model: str | list[str], catalog: str) -> None:
+    """A model pushed by Build (or every model of an XML import) becomes a
+    repo the fake hosts can deploy."""
+    models = [model] if isinstance(model, str) else list(model)
     with _lock:
-        FAKE_REPOS[repo_url] = [model]
-        CATALOG[model] = catalog
+        FAKE_REPOS[repo_url] = models
+        for m in models:
+            CATALOG[m] = catalog
 
 
 #: Shared-dimension repos in demo mode: url -> [(sha, files)], newest last.

@@ -609,7 +609,14 @@ export async function convertSsasMultidimensionalToXml(
       continue;
     }
 
-    const usedAttrIds = new Set<string>();
+    // Every attribute that is a level of ANY hierarchy is taken before secondary attributes
+    // are handed out: marking levels only as the loop reaches them let an upper level claim
+    // the next level down (Country took State-Province, State-Province took City, ...) as a
+    // secondary attribute, and SML rejects a level and a secondary attribute sharing a name.
+    const usedAttrIds = new Set<string>(
+      hierarchies.flatMap((h) => h.levels.map((l) => l.sourceAttributeId))
+        .filter((id) => dimensionAttributeKeyUuid.has(`${dim.id}::${id}`)),
+    );
     const hierNodes: XmlNode[] = [];
     for (const hier of hierarchies) {
       const levelNodes: XmlNode[] = [];

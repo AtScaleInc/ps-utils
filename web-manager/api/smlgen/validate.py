@@ -19,6 +19,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from cache import work_tmp
+
 from .packages import flatten_packages
 
 
@@ -50,7 +52,7 @@ def validate_sml(files: dict[str, str], packages: list[dict] | None = None, shar
     if packages:
         files = flatten_packages(files, packages)
 
-    with tempfile.TemporaryDirectory(prefix="env-manager-validate-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="validate-", dir=work_tmp()) as tmp:
         root = Path(tmp)
         for rel_path, content in files.items():
             p = root / rel_path

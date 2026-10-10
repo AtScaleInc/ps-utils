@@ -21,6 +21,7 @@ from routes.objects import objects_bp
 from routes.promote import promote_bp
 from routes.pipeline import pipeline_bp
 from routes.settings import settings_bp
+from routes.importer import importer_bp
 
 # Container hosts commonly run self-signed certs; `insecure: true` per host
 # (sml-wizard convention) disables verification, so silence the per-call noise.
@@ -110,6 +111,7 @@ def create_app() -> Flask:
     app.register_blueprint(promote_bp, url_prefix="/api")
     app.register_blueprint(pipeline_bp, url_prefix="/api")
     app.register_blueprint(build_bp, url_prefix="/api")
+    app.register_blueprint(importer_bp, url_prefix="/api")
     app.register_blueprint(discovery_bp, url_prefix="/api")
     app.register_blueprint(testing_bp, url_prefix="/api")
     app.register_blueprint(monitor_bp, url_prefix="/api")

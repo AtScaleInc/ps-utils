@@ -157,7 +157,11 @@ export function ManageModelModal({ onClose }: Props) {
         joins: result.joins as never[],
         cfg: result.cfg as never,
         calculations: result.calculations as never[],
-        loadedFrom: { builtHere: !!result.builtHere, unsupported: result.unsupported ?? [] },
+        loadedFrom: {
+          builtHere: !!result.builtHere,
+          unsupported: result.unsupported ?? [],
+          ...(result.imported ? { importedFrom: `workspace/${model.name}` } : {}),
+        },
         shared: !!result.shared,
       })
       if (result.packageWarnings?.length) window.alert(result.packageWarnings.join('\n'))

@@ -150,6 +150,9 @@ export interface UnsupportedFeature {
 export interface LoadedFrom {
   builtHere: boolean
   unsupported: UnsupportedFeature[]
+  /** Converted from this export by Import & convert - always read-only: the
+   *  conversion's output is beyond what the canvas can write back. */
+  importedFrom?: string
 }
 
 export interface ModelState {
@@ -655,6 +658,9 @@ export { columnKey }
 
 /** Why Save / Deploy are off for the current canvas, or null when they're allowed. */
 export function readOnlyReason(state: Pick<ModelState, 'loadedFrom'>): string | null {
+  if (state.loadedFrom?.importedFrom) {
+    return `Read-only: converted from ${state.loadedFrom.importedFrom}. Import it again to change it, or edit it in Design Center.`
+  }
   const n = state.loadedFrom?.unsupported.length ?? 0
   if (!n) return null
   return `Read-only: this model uses SML Build can't write back (${n} item${n === 1 ? '' : 's'}). Saving or deploying from here would remove them - edit it in Design Center.`

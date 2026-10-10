@@ -16,6 +16,7 @@ import { SharedDimsModal } from './panels/SharedDimsModal'
 import { SmlViewerModal } from './panels/SmlViewerModal'
 import { SourcePanel } from './panels/SourcePanel'
 import { WizardModal } from './panels/WizardModal'
+import { ImportView } from './panels/ImportView'
 import './tokens.css'
 import './build.css'
 
@@ -186,6 +187,11 @@ export function BuildView() {
         </div>
       ) : buildSection === 'preview' ? (
         <PreviewTab key={host.id} />
+      ) : buildSection === 'import' ? (
+        <ImportView key={host.id} hostId={host.id}
+          onDone={() => { setGenError(null); setBuildSection('model') }}
+          onLoadSml={() => { setBuildSection('model'); setShowManage(true) }}
+          onWizard={() => { setBuildSection('model'); setShowWizard(true) }} />
       ) : buildSection === 'discover' ? (
         <DiscoveryTab key={host.id} hostId={host.id} />
       ) : (

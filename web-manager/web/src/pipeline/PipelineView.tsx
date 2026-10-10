@@ -291,10 +291,14 @@ function CommitPath({ b, m, env, onDone }: { b: Board; m: BoardModel; env: EnvId
           <button type="button" className="btn lg ghost" disabled={!cell || !!busy} onClick={() => setDialog({ kind: 'rollback', env: stage.env })}>
             {busy === 'rollback' ? 'Rolling back…' : `Rollback ${stage.label}`}
           </button>
+          {/* Always opens the dialog when there's something on this stage: any branch can be
+              picked there, and the server checks that branch's head against the gate. */}
           {next && (
-            <button type="button" className="btn lg solid" disabled={!canPromote || !!busy} onClick={() => next && setDialog({ kind: 'promote', env: next.env, from: stage.env })}
+            <button type="button" className={`btn lg ${canPromote ? 'solid' : 'ghost'}`} disabled={!cell || !!busy}
+              onClick={() => next && setDialog({ kind: 'promote', env: next.env, from: stage.env })}
+              title={canPromote ? undefined : `${promoteLabel} for ${cell ? shortSha(cell) : 'this commit'} - pick a branch to deploy to ${next.label}`}
               style={{ background: canPromote ? envOf(next.env).color : undefined }}>
-              {busy === 'promote' ? 'Deploying…' : promoteLabel}
+              {busy === 'promote' ? 'Deploying…' : canPromote ? promoteLabel : `Deploy a branch to ${next.label}…`}
             </button>
           )}
         </div>

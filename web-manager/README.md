@@ -62,6 +62,48 @@ Build is the SML wizard that used to be the separate `sml-wizard` repo. It
 works on the host picked in the Build bar, using that host's credentials from
 Settings. There's no separate login.
 
+- **Import & convert.** Bring an existing model in as SML. Pick what it comes
+  from (each converter is a ps-utils operation). It runs this branch's own
+  ps-utils build (`vscode-extension/cli/cli.cjs`, written by `npm run build`
+  at the repo root) so converter fixes made here apply before they are
+  published; without a build, or with `ENV_MANAGER_PS_UTILS=npm`, the pinned
+  npm package `@atscale-ps/ps-utils`. The Convert step shows which one ran
+  and when it was built. Rebuild after pulling converter changes.
+  - **Legacy AtScale model**: an AtScale `project_2_0` XML export
+    (`generate-sml-from-xml`)
+  - **SSAS Multidimensional cube**: an XMLA Create / ObjectDefinition /
+    Database script (`generate-sml-from-ssas-multidimensional`)
+  - **Tabular model**: a TMSL `createOrReplace` JSON export
+    (`generate-sml-from-tabular`). DAX is translated to SQL at conversion, so
+    the warehouse (Snowflake, Databricks, BigQuery, Postgres) is picked up
+    front. It is pre-filled when the export's own data source names one.
+
+  A step-by-step wizard then:
+  1. reads the file and shows its project and cubes
+  2. names the repository (Git repo + working copy), the catalog label and
+     each model (one per cube), and picks the collision mode: **Rename**
+     colliding query names, or **Keep names** and fail with the list
+  3. converts, with the converter's report (what it renamed, truncated or
+     left out) and log. A failed conversion shows the CLI's output.
+  4. **connects**: on the converted files, pick a data source on the Build
+     host, then the schema its tables are in. Every emitted connection gets
+     that data source as `as_connection`, its database and the schema. Each
+     connection can be pointed at another database / schema.
+  5. validates the remapped SML with sml-cli
+  6. **Save** (working copy only), **Link** (push to Git, register each
+     model on the hosts you pick - deploy later from Manage) or **Deploy**
+     (push, deploy the catalog). Hosts without the data source are greyed
+     out. An existing working copy of that name is replaced only after you
+     confirm.
+
+  **Open in Develop** puts the model on the canvas **read-only**: a converted
+  model is beyond what the canvas writes back, so Save and Deploy are off
+  there, and the API refuses (409) Build's own save / deploy over that
+  working copy (a marker next to it, `.<repo>.imported`). Loading it again
+  from Save / Load opens it read-only too. To change it, import again or edit
+  it in Design Center. **Live database schema** opens the Wizard and
+  **Existing SML** opens Save / Load. **Database DDL** (`generate-sml-from-ddl`)
+  is listed but not wired yet.
 - **Discovery.** See what a table holds before modeling it. Pick a warehouse,
   database and schema, then click a table (the same Source panel as Develop,
   which keeps the choice). The profile runs on the first visit:
@@ -536,9 +578,16 @@ reason.
   **Promote / Approve** into the next stage (re-checked on the server, refused
   with 409 when the gate isn't open). Each opens a dialog to pick **which hosts**
   of the stage (all by default; the ones left out keep what they run and show as
-  drift - a test runs on one host) and, over a merge gate, **which branch** (a
-  promotion always deploys the commit the stage before tested, so another branch
-  has to be tested there first). The dialog names the other models of the repo,
+  drift - a test runs on one host) and **which branch** - any branch, on every
+  gate (Dev → Test, Test → QA, QA → Prod, Dev → Prod). The default is the branch
+  the stage before runs, pinned to the commit it tested. Another branch deploys
+  its head, so the dialog checks it live (`POST /pipeline/check`): over a
+  promotion gate the stage before must run that commit and have passed its test
+  (every model of the repo - the whole catalog moves), as the gate policy
+  requires; a merge gate takes any branch; neither redeploys what the target
+  already runs. Deploy stays disabled with the reasons until the branch can go,
+  and the server re-checks it. The button is there even when the current
+  commit's gate is shut or in sync ("Deploy a branch to QA…"). The dialog names the other models of the repo,
   since the whole catalog moves with them. It also gives the same action as a
   **ps-utils package** (**Download .zip**, `POST /pipeline/script/zip`): a
   folder whose `run.sh` runs the step with the ps-utils CLI alone - no call to
@@ -612,7 +661,7 @@ envmgr deploy --env qa --branch main --commit <sha> [--host qa-1 --host qa-2]
 envmgr test --env qa --baseline prod [--host qa-2] --junit results.xml
 envmgr promote-aggs --from qa --to prod --system-only
 envmgr rollback --model "Internet Sales" --env prod [--host prod-east]
-envmgr promote --model "Internet Sales" --env prod [--host ...] [--branch ...]   # built-in gate
+envmgr promote --model "Internet Sales" --env prod [--host ...] [--branch release]   # built-in gate, any branch
 envmgr status
 ```
 
@@ -832,6 +881,7 @@ Environment variables:
 | `ENV_MANAGER_WORKSPACE` | `./workspace` | Location of the working folder |
 | `ENV_MANAGER_CACHE_TTL` | `7200` | How long cached lists stay valid, in seconds |
 | `ENV_MANAGER_MODELS_DIR` | `workspace/models` | Where Build keeps each model's working copy |
+| `ENV_MANAGER_PS_UTILS` | unset | `npm` makes Import & convert use the published `@atscale-ps/ps-utils` instead of this branch's build |
 | `ENV_MANAGER_TESTS_DB` | `workspace/tests.db` | Location of the Validate database |
 | `ENV_MANAGER_TEST_KEEP` | `100` | Runs kept per model; older ones are pruned after each run |
 | `ENV_MANAGER_TEST_MAX_AGE_DAYS` | `90` | Runs older than this are pruned after each run |
@@ -965,6 +1015,7 @@ Pipeline        GET /pipeline/board[?refresh=1] · /pipeline/runs · /pipeline/s
                 PUT /pipeline/policy · GET/POST /pipeline/tokens · DELETE /pipeline/tokens/:id
                 POST /pipeline/validate · deploy · test · promote-aggs · rollback · promote -> {jobId}
                   (deploy / rollback / promote take hosts: [ids], test host: id; promote branch over a merge gate)
+                POST /pipeline/check {model, env, branch} -> {head, problems[]} (can that branch be promoted now)
                 POST /pipeline/script {action: promote|rollback|test, env, model, hosts?, branch?} -> {folder, filename, sh, gha, jenkins}
                 POST /pipeline/script/zip (same body) -> the ps-utils package · GET /pipeline/runs/:id (one run in full)
                 GET /pipeline/jobs/:id · /pipeline/jobs/:id/junit · /pipeline/cli (the envmgr CLI)
@@ -977,6 +1028,13 @@ Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (po
                    {readOnly, unsupported} over a working copy Build can't write back)
                 POST /build/deploy {…model, hostIds, shared?} (shared: push, then attach only) · GET /build/preflight?connection=&hostIds=
                 GET /build/shared-repos?hostId= · POST /build/shared/load {repoUrl, branch, taken: [package names]}
+                POST /build/import/inspect {kind: xml|ssas|tabular, text, fileName} -> project, cubes, models
+                POST /build/import/convert {kind, text, fileName, repoName, catalogName?, modelMode?, warehouse? (tabular),
+                  models: {emitted: new}} -> files + report + log (422 + log when the converter fails)
+                POST /build/import/connect {repoName, files, asConnection, connections: {name: {database, schema}}}
+                  -> remapped files + sml-cli validation
+                POST /build/import/save {repoName, files, replace?} · /build/import/publish {…, models, asConnection,
+                  hostIds, action: link|deploy, replace?} -> job (import-path answers `imported` for such a copy)
 Discovery       GET /hosts/:id/discovery/table · /discovery/profile[?id=] · /discovery/top-values?column=
                   (table args: ?source=<connectionId::database>&schema=&table=)
                 POST /hosts/:id/discovery/join-check {…table, column, toSchema, toTable, toColumn}

@@ -152,6 +152,60 @@ function od(obj: Record<string, unknown>): Record<string, unknown> {
   return obj;
 }
 
+/**
+ * Drops or renames secondary attributes whose unique_name is already taken in the dimension
+ * (by a level, or an earlier secondary attribute). One over the same column as the level of
+ * that name is a redundant copy and is dropped; any other is renamed "<name> Attribute"
+ * (then "<name> Attribute 2", ...). Returns whether anything changed.
+ */
+export function dedupeLevelAttributeNames(
+  dim: Record<string, unknown>,
+  report: (severity: "info" | "warning", message: string) => void,
+): boolean {
+  type Attr = { unique_name?: string; label?: string; key_columns?: string[]; name_column?: string };
+  const levelAttrs = new Map<string, Attr>();
+  for (const la of (dim.level_attributes as Attr[] | undefined) ?? []) {
+    if (la.unique_name) levelAttrs.set(la.unique_name, la);
+  }
+  const taken = new Set(levelAttrs.keys());
+  let changed = false;
+  for (const h of (dim.hierarchies as Array<{ levels?: Array<{ unique_name?: string; secondary_attributes?: Attr[] }> }> | undefined) ?? []) {
+    for (const level of h.levels ?? []) {
+      if (level.unique_name) taken.add(level.unique_name);
+    }
+  }
+  const seen = new Set<string>();
+  for (const h of (dim.hierarchies as Array<{ levels?: Array<{ unique_name?: string; secondary_attributes?: Attr[] }> }> | undefined) ?? []) {
+    for (const level of h.levels ?? []) {
+      if (!level.secondary_attributes?.length) continue;
+      const kept: Attr[] = [];
+      for (const sa of level.secondary_attributes) {
+        const name = sa.unique_name ?? "";
+        if (!taken.has(name) && !seen.has(name)) {
+          seen.add(name);
+          kept.push(sa);
+          continue;
+        }
+        changed = true;
+        const same = levelAttrs.get(name);
+        const col = sa.name_column;
+        if (same && col && (col === same.name_column || (same.key_columns ?? []).includes(col))) {
+          report("info", `Secondary attribute "${name}" on level "${level.unique_name}" repeats level "${name}" over the same column (${col}) - dropped.`);
+          continue;
+        }
+        let renamed = `${name} Attribute`;
+        for (let i = 2; taken.has(renamed) || seen.has(renamed); i++) renamed = `${name} Attribute ${i}`;
+        report("warning", `Secondary attribute "${name}" on level "${level.unique_name}" shares its name with another level or attribute - renamed "${renamed}".`);
+        seen.add(renamed);
+        kept.push({ ...sa, unique_name: renamed, ...(sa.label === name ? { label: renamed } : {}) });
+      }
+      if (kept.length) level.secondary_attributes = kept;
+      else delete level.secondary_attributes;
+    }
+  }
+  return changed;
+}
+
 function toYaml(obj: unknown): string {
   return dump(obj, {
     indent: 2,
@@ -329,6 +383,9 @@ function getPartitionType(table: TmslTable): string | null {
 /** Return [(physical_col, alias_or_null), ...] from a simple flat SELECT
  * list. Handles `col "Alias"` and `col AS "Alias"` styles. Returns [] if the
  * SELECT/FROM shape isn't found (caller should treat that as unparseable). */
+/** Marks a parseSelectCols entry whose "physical column" is a SQL expression, not a column. */
+const SELECT_EXPRESSION = "\u0000expr:";
+
 function parseSelectCols(query: string): Array<[string, string | null]> {
   const m = /SELECT\s+([\s\S]*?)\n\s*FROM\s/i.exec(query);
   if (!m) return [];
@@ -342,6 +399,17 @@ function parseSelectCols(query: string): Array<[string, string | null]> {
     const mm = /^([A-Za-z0-9_]+)\s*(?:AS\s+)?("([^"]*)")?\s*$/i.exec(item);
     if (mm) {
       cols.push([mm[1], mm[3] ?? null]);
+      continue;
+    }
+    // An expression with a trailing alias - `CASE ... END e_time`, `x + y AS "Total"`,
+    // `ISNULL(a, 0) [A]`. The alias is the column's name; the expression becomes a
+    // calculated column (see SELECT_EXPRESSION). Without one, keep the old behavior.
+    // Anchored at the end only (no lazy prefix group), so a long item can't backtrack.
+    const ex = /\s(?:AS\s+)?(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))$/i.exec(item);
+    const alias = ex ? (ex[1] ?? ex[2] ?? ex[3]) : undefined;
+    const expression = ex ? item.slice(0, ex.index).replace(/\s+AS$/i, "").trim() : "";
+    if (ex && alias && !/^(END|AS)$/i.test(alias) && /[^A-Za-z0-9_.\s"[\]]/.test(expression)) {
+      cols.push([`${SELECT_EXPRESSION}${expression}`, alias]);
     } else {
       cols.push([item, null]);
     }
@@ -543,6 +611,8 @@ type FamilyMeta = {
   members: string[];
   isTime: boolean;
   physCols: Map<string, string>; // physical column -> dtype
+  /** Dataset columns that are partition-query expressions (named by alias) -> the SQL. */
+  physExprs: Map<string, string>;
   keyCol: string;
   nameCol: string;
   hier: FamilyHier | null;
@@ -707,11 +777,21 @@ export function convertTabularToSml(
   }
 
   /** alias-or-physical -> resolved physical column name, for one table. */
+  /** table -> dataset column name -> the partition query's SQL expression for it. */
+  const selectExpressions = new Map<string, Map<string, string>>();
   function colPhysMap(t: string): Map<string, string> {
     const src = physicalSource[t];
     const mapping = new Map<string, string>();
     if (src.kind === "query" && src.selectCols) {
       for (const [physcol, alias] of src.selectCols) {
+        if (physcol.startsWith(SELECT_EXPRESSION) && alias) {
+          // Not a column of the source table: a calculated column named after its alias.
+          const name = phys(alias);
+          mapping.set(alias, name);
+          if (!selectExpressions.has(t)) selectExpressions.set(t, new Map());
+          selectExpressions.get(t)!.set(name, physcol.slice(SELECT_EXPRESSION.length));
+          continue;
+        }
         mapping.set(alias ?? physcol, phys(physcol));
       }
     }
@@ -784,6 +864,7 @@ export function convertTabularToSml(
     let isTimeFamily = members.some((m) => detectDatePrefix(tables.get(m)!));
 
     const physCols = new Map<string, string>();
+    const physExprs = new Map<string, string>();
     for (const m of members) {
       const src = physicalSource[m];
       const aliasToDtype = new Map<string, string>();
@@ -791,8 +872,11 @@ export function convertTabularToSml(
       if (src.kind === "query" && src.selectCols) {
         for (const [physcol, alias] of src.selectCols) {
           const dtype = (alias ? aliasToDtype.get(alias) : undefined) ?? aliasToDtype.get(physcol) ?? "string";
-          const key = phys(physcol);
+          // An aliased expression is a calculated column named after its alias (colPhysMap).
+          const isExpr = physcol.startsWith(SELECT_EXPRESSION) && alias;
+          const key = isExpr ? phys(alias) : phys(physcol);
           if (!physCols.has(key)) physCols.set(key, dtype);
+          if (isExpr && !physExprs.has(key)) physExprs.set(key, physcol.slice(SELECT_EXPRESSION.length));
         }
       } else {
         for (const c of tables.get(m)!.columns) {
@@ -862,6 +946,7 @@ export function convertTabularToSml(
       members,
       isTime: isTimeFamily,
       physCols,
+      physExprs,
       keyCol: keyColPhys,
       nameCol: nameColPhys,
       hier,
@@ -942,9 +1027,20 @@ export function convertTabularToSml(
 
   function datasetColumnsFor(t: string): Array<Record<string, unknown>> {
     const cmap = colPhysMap(t);
-    return tables.get(t)!.columns.map((c) =>
-      od({ name: cmap.get(c.name), data_type: smlDtype(c.dataType) }),
-    );
+    const exprs = selectExpressions.get(t);
+    // Two Tabular columns can read the same physical column (a partition query that
+    // selects `asa_code` and `asa_code AS "ASA Code"`) - SML allows one dataset column per
+    // name ("Duplicate column name"), and attributes reference it by that name either way.
+    const seen = new Set<string>();
+    const out: Array<Record<string, unknown>> = [];
+    for (const c of tables.get(t)!.columns) {
+      const name = cmap.get(c.name)!;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const sql = exprs?.get(name);
+      out.push(od({ name, data_type: smlDtype(c.dataType), ...(sql ? { sql } : {}) }));
+    }
+    return out;
   }
 
   for (const t of [...factTables, ...dimTables.filter((d) => !familyOfMember.has(d))]) {
@@ -988,7 +1084,7 @@ export function convertTabularToSml(
       const src = physicalSource[m];
       if (!(src.kind === "query" && src.selectCols)) continue;
       for (const [physcol, alias] of src.selectCols) {
-        const key = phys(physcol);
+        const key = physcol.startsWith(SELECT_EXPRESSION) && alias ? phys(alias) : phys(physcol);
         if (!physToAlias.has(key) && alias) physToAlias.set(key, [m, alias]);
       }
     }
@@ -1015,7 +1111,10 @@ export function convertTabularToSml(
     const [db, schema, obj] = splitQualified(fromObject);
     const connId = connectionFor(db);
     const tablePhysName = W.toLowerCase() === "snowflake" ? obj.toUpperCase() : obj.toLowerCase();
-    const dsColumns = [...meta.physCols].map(([pcol, dt]) => od({ name: pcol, data_type: smlDtype(dt) }));
+    const dsColumns = [...meta.physCols].map(([pcol, dt]) => {
+      const sql = meta.physExprs.get(pcol);
+      return od({ name: pcol, data_type: smlDtype(dt), ...(sql ? { sql } : {}) });
+    });
     sml.set(
       `datasets/${label}.yml`,
       toYaml(
@@ -1469,16 +1568,32 @@ export function convertTabularToSml(
     }
   }
 
-  // A converted calculation that references a measure which did NOT convert
-  // would publish and then fail to resolve at query time, so flag it here.
+  // A converted calculation that references a measure which did NOT convert is
+  // rejected by SML's validator ("expression contains a non-existing metric"), and
+  // with it the whole repository - so it is deferred too, with the reason. Repeated
+  // until nothing converted depends on something deferred (a calc over a deferred calc).
   const convertedNames = new Set(allMetricNames);
-  for (const a of assessments) {
-    if (a.verdict !== "daxNative" && a.verdict !== "mdxTranslated") continue;
-    const missing = a.referencedMeasures.filter((r) => !convertedNames.has(r));
-    if (missing.length) {
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const a of assessments) {
+      if (a.verdict !== "daxNative" && a.verdict !== "mdxTranslated") continue;
+      if (!convertedNames.has(a.name)) continue;
+      const missing = a.referencedMeasures.filter((r) => !convertedNames.has(r));
+      if (!missing.length) continue;
+      changed = true;
+      convertedNames.delete(a.name);
+      sml.delete(`calculations/${fileSafe(a.name)}.yml`);
+      const i = allMetricNames.indexOf(a.name);
+      if (i >= 0) allMetricNames.splice(i, 1);
+      const c = convertedCalcs.findIndex((x) => x.name === a.name);
+      const ft = c >= 0 ? convertedCalcs[c].fact : metricFolder.get(a.name) ?? "";
+      if (c >= 0) convertedCalcs.splice(c, 1);
+      metricFolder.delete(a.name);
+      if (!factDeferred.has(ft)) factDeferred.set(ft, []);
+      factDeferred.get(ft)!.push([a.name, a.expression]);
       logIssue("warning", "calculation_references_deferred_measure", a.name,
-        `References ${missing.map((x) => `"${x}"`).join(", ")}, which did not convert. ` +
-          "The calculation will publish but not resolve until those are modeled.");
+        `References ${missing.map((x) => `"${x}"`).join(", ")}, which did not convert - deferred with them ` +
+          "(SML rejects a calculation over a metric that doesn't exist). Model those first, then this one.");
     }
   }
 
@@ -1841,6 +1956,22 @@ detected role-play families, unresolved physical sources, and any extra connecti
 model (the conversion is deterministic).
 `;
   sml.set("README.md", readme);
+
+  // ======================================================= LEVEL / ATTRIBUTE NAME CLASHES
+  // SML wants a dimension's level and secondary-attribute unique_names distinct (sml-cli:
+  // "Duplicate unique_names"). Two builder shapes break that: a table with a column named
+  // like the table itself (the level is named after the table, and that column becomes a
+  // secondary attribute over the very key column the level uses), and a natural hierarchy
+  // whose fallback key level is added after its last level already listed the key column
+  // as a secondary attribute. One pass over every dimension catches both, and any future
+  // builder that repeats them.
+  for (const [path, body] of sml) {
+    if (!path.startsWith("dimensions/")) continue;
+    const dim = load(body) as Record<string, unknown>;
+    if (dedupeLevelAttributeNames(dim, (severity, message) => logIssue(severity, "attribute_name_clash", String(dim.unique_name), message))) {
+      sml.set(path, toYaml(dim));
+    }
+  }
 
   // ======================================================= CONVERSION REPORT
   const sevOrder: Record<Severity, number> = { error: 0, action_needed: 1, warning: 2, info: 3 };

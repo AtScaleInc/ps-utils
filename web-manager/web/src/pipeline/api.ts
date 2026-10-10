@@ -117,6 +117,17 @@ export interface Setup {
 
 export interface ApiToken { id: string; name: string; scope: string[]; prefix: string; created: string; lastUsed: string | null }
 
+export interface BranchCheck {
+  kind: 'merge' | 'promote'
+  branch: string
+  head: string | null
+  from?: EnvId
+  sourceBranch?: string | null
+  sourceCommit?: string | null
+  tested?: boolean
+  problems: string[]
+}
+
 export type ActionKind = 'promote' | 'test' | 'rollback'
 export interface ScriptRequest { action: ActionKind; env: EnvId; model: string; hosts?: string[]; branch?: string }
 /** The action as a ps-utils package (api/pipeline/script_bundle.py): its run.sh, and the
@@ -139,6 +150,9 @@ export const pipelineApi = {
   promote: (env: EnvId, model: string, hosts?: string[], branch?: string) =>
     req<{ jobId: string }>('POST', '/pipeline/promote', { env, model, hosts, branch }),
   rollback: (env: EnvId, model: string, hosts?: string[]) => req<{ jobId: string }>('POST', '/pipeline/rollback', { env, model, hosts }),
+  /** Can `branch` be promoted into `env` now: its head, and the gate's problems with it (none = go). */
+  check: (model: string, env: EnvId, branch: string) =>
+    req<BranchCheck>('POST', '/pipeline/check', { model, env, branch }),
   /** One Board action as a shell script, a GitHub Actions job and a Jenkins stage. */
   script: (body: ScriptRequest) => req<ActionScript>('POST', '/pipeline/script', body),
   scriptZip: (body: ScriptRequest) => zipReq('/pipeline/script/zip', body, 'pipeline-step.zip'),

@@ -17,6 +17,8 @@
   POST   /pipeline/promote-aggs        {from, to, model?, includeReplacements?}       scope promote
   POST   /pipeline/rollback            {env, model, hosts?}                           scope deploy
   POST   /pipeline/promote             {model, env, hosts?, branch?} - built-in gate; 409 if closed  scope promote
+                                       (branch: any; another than the stage before runs must have passed there)
+  POST   /pipeline/check               {model, env, branch} -> {head, problems[]}: can that branch go now
   POST   /pipeline/script              {action: promote|rollback|test, env, model, hosts?, branch?} -> the
                                        action as a ps-utils package: run.sh + a GitHub Actions job / Jenkins
                                        stage that runs it (/pipeline/script/zip: the package)
@@ -376,19 +378,33 @@ def promote():
     steps._pick_hosts(stage, host_ids)
     if idx == 0:
         raise steps.StepError("The first stage has no gate in front of it")
-    bd = stages.board(hosts, rows, steps.compare_fn(hosts), steps.test_lookup(), config.settings()["policy"])
-    m = next((x for x in bd["models"] if x["name"] == b["model"]), None)
-    if not m:
+    kind = stages.gate_kinds(st)[idx - 1]["kind"]
+    src = stages.cell(st[idx - 1], rows, b["model"])
+    tgt = stages.cell(stage, rows, b["model"])
+    if not src and not tgt:
         raise steps.StepError(f"{b['model']} isn't in the pipeline")
-    gate, kind = m["gates"][idx - 1], bd["gates"][idx - 1]["kind"]
-    if gate["k"] != ("merge" if kind == "merge" else "open"):
-        raise steps.GateClosed(gate["label"] or "Nothing to promote")
-    src = m["cells"][idx - 1]
-    if kind == "promote" and b.get("branch") and src and b["branch"] != src["branch"]:
-        raise steps.StepError(f"A promotion deploys the commit {st[idx - 1]['label']} tested, on {src['branch']} - "
-                              f"not {b['branch']}. Deploy {b['branch']} to {st[idx - 1]['label']} and test it there first.")
-    return _submit("promote", lambda: steps.promote(b["model"], b["env"], ci, host_ids=host_ids, branch=b.get("branch")),
+    if not src and kind == "promote":
+        raise steps.StepError(f"{b['model']} isn't on {st[idx - 1]['label']}")
+    # Any branch; the default is what the stage before (merge gate: the target) runs.
+    branch = b.get("branch") or ((tgt or {}).get("branch") if kind == "merge" else src["branch"]) or "main"
+    problems = steps.check_branch(b["model"], b["env"], branch)["problems"]
+    if problems:
+        raise steps.GateClosed("; ".join(problems))
+    return _submit("promote", lambda: steps.promote(b["model"], b["env"], ci, host_ids=host_ids, branch=branch),
                    ci, env=b["env"], model=b["model"])
+
+
+@pipeline_bp.post("/pipeline/check")
+@needs("any")
+@host_errors
+@_step_errors
+def check_branch():
+    """{model, env, branch} -> can that branch be promoted into env now: its
+    head, and the gate's problems with it (none = go). The Board's dialog
+    calls it as the branch picker changes."""
+    b = _body()
+    _need(b, "model", "env", "branch")
+    return jsonify(steps.check_branch(b["model"], b["env"], b["branch"]))
 
 
 def _bundle(b: dict[str, Any]) -> dict[str, Any]:

@@ -1655,6 +1655,14 @@ export async function convertXmlToSml(
         recommendation: "Add this metric manually to the dimension's level metrics after verifying the source column.",
       });
     }
+    for (const dropped of dimMeta.droppedStringFormats) {
+      rptOmissions.push({
+        category: "Format",
+        item: `${dropped.attribute} in dimension "${dimName}" (format "${dropped.format}")`,
+        reason: `Its name_column "${dropped.nameColumn}" is a string column, and SML allows no format on one.`,
+        recommendation: "Format the value in the column's own SQL, or point name_column at a typed (date / numeric) column and keep the format there.",
+      });
+    }
     for (const dropped of dimMeta.droppedSecondaryAttrsForSharedDegenerate) {
       rptOmissions.push({
         category: "Secondary Attribute",
@@ -1869,6 +1877,14 @@ export async function convertXmlToSml(
 
       // Report tracking
       const physRpt = parseDatasetPhysical(ds as Record<string, unknown>);
+      for (const d of physRpt?.droppedDialects ?? []) {
+        rptOmissions.push({
+          category: "SQL Dialect",
+          item: `${dsName}${d.column ? ` → ${d.column}` : ""} (${d.dialect})`,
+          reason: `SML has no "${d.dialect}" dialect (it accepts ${SML_DIALECTS.join(", ")}), so this alternate SQL was dropped; the base SQL is kept.`,
+          recommendation: "If the model runs on that engine, check the base SQL works there, or rewrite it in a dialect SML accepts.",
+        });
+      }
       const allColumnNames = new Set(physRpt?.columns?.map((c) => c.name) ?? []);
       for (const col of referencedColumnsByDataset.get(dsName) ?? []) allColumnNames.add(col);
 
@@ -2053,6 +2069,8 @@ interface DatasetPhysical {
   sql?: string;
   /** Per-dialect overrides of `sql` (e.g. Snowflake vs. Postgres variants of the same query). */
   dialects?: Array<{ dialect: string; sql: string }>;
+  /** `<sql dialect>` variants SML has no value for (see smlDialect) - dropped, reported. */
+  droppedDialects?: Array<{ column?: string; dialect: string }>;
   connectionName?: string;
   columns?: Array<{
     name: string;
@@ -2200,6 +2218,8 @@ interface DimMeta {
   /** Secondary attributes dropped from a level that ended up using shared_degenerate_columns
    *  (multi-dataset) — the engine disallows secondary attributes there entirely. */
   droppedSecondaryAttrsForSharedDegenerate: Array<{ level: string; secondaryAttrName: string }>;
+  /** Formats left off an attribute whose name_column is a string (see formatForNameColumn). */
+  droppedStringFormats: Array<{ attribute: string; nameColumn: string; format: string }>;
 }
 
 /** A metrical attribute (dimension-level metric) resolved for one hierarchy level. */
@@ -2709,6 +2729,39 @@ function mapDataType(xmlType: string | undefined): string {
   }
 }
 
+/**
+ * The `dialects[].dialect` values SML accepts - SML-develop
+ * packages/models/src/schemas/dataset.schema.json (resources/sml-reference/dataset.md lists
+ * four of them; the schema also takes Iris). An AtScale XML project can carry `<sql
+ * dialect>` variants for engines SML has no value for (Redshift, AzureSynapseAnalyticsSql,
+ * Oracle, ...): sml-cli rejects the whole file over one, so those are dropped and reported.
+ */
+const SML_DIALECTS = ["Snowflake", "BigQuery", "Iris", "Postgresql", "DatabricksSQL"];
+const SML_DIALECT_ALIASES: Record<string, string> = { databricks: "DatabricksSQL", postgres: "Postgresql" };
+
+function smlDialect(xmlDialect: string): string | undefined {
+  const key = xmlDialect.trim().toLowerCase();
+  return SML_DIALECTS.find((d) => d.toLowerCase() === key) ?? SML_DIALECT_ALIASES[key];
+}
+
+/** Splits `<sql dialect="...">` variants into what SML accepts and what it doesn't. */
+function parseDialectSql(
+  sqlEls: Record<string, unknown>[],
+  column?: string,
+): { dialects: Array<{ dialect: string; sql: string }>; dropped: Array<{ column?: string; dialect: string }> } {
+  const dialects: Array<{ dialect: string; sql: string }> = [];
+  const dropped: Array<{ column?: string; dialect: string }> = [];
+  for (const el of sqlEls) {
+    const dialect = a(el, "dialect");
+    const sqlText = s(el);
+    if (!dialect || !sqlText) continue;
+    const sml = smlDialect(dialect);
+    if (sml) dialects.push({ dialect: sml, sql: unescapeHtml(sqlText).replace(/\t/g, "  ") });
+    else dropped.push({ column, dialect });
+  }
+  return { dialects, dropped };
+}
+
 function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | undefined {
   const physSec = first(arr(dsEl.physical)) as Record<string, unknown> | undefined;
   if (!physSec) return undefined;
@@ -2750,6 +2803,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   // passthrough column.
   type ColEntry = DatasetPhysical["columns"] extends Array<infer T> | undefined ? T : never;
   const columnsByName = new Map<string, ColEntry>();
+  const droppedDialects: Array<{ column?: string; dialect: string }> = [];
   const columnOrder: string[] = [];
   function addColumn(name: string, entry: ColEntry, preferOverExisting: boolean): void {
     const existing = columnsByName.get(name);
@@ -2770,15 +2824,9 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     // definition is the one with no dialect attribute; other variants become dialects:.
     const colSqlRaw = pickBaseSql(colSqlEls);
     const colSql = colSqlRaw ? unescapeHtml(colSqlRaw).replace(/\t/g, "  ") : undefined;
-    const colDialectEls = colSqlEls.filter((el) => a(el, "dialect"));
-    const colDialects = colDialectEls
-      .map((el) => {
-        const dialect = a(el, "dialect");
-        const sqlText = s(el);
-        return dialect && sqlText ? { dialect, sql: unescapeHtml(sqlText).replace(/\t/g, "  ") } : undefined;
-      })
-      .filter((d): d is { dialect: string; sql: string } => Boolean(d));
     if (!colName) continue;
+    const { dialects: colDialects, dropped } = parseDialectSql(colSqlEls, colName);
+    droppedDialects.push(...dropped);
     addColumn(
       colName,
       { name: colName, dataType: mapDataType(colType), sql: colSql, dialects: colDialects.length ? colDialects : undefined },
@@ -2836,6 +2884,8 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
   const columns = columnOrder.map((name) => columnsByName.get(name)!);
   const colsResult = columns.length ? columns : undefined;
   const aggFlags = { allowAggregates, allowLocalAggs, allowPeerAggs, allowPreferredAggs };
+  const dropFlag = (): Pick<DatasetPhysical, "droppedDialects"> =>
+    (droppedDialects.length ? { droppedDialects } : {});
 
   const tableEl = first(arr(physSec.table)) as Record<string, unknown> | undefined;
   // A dataset can declare multiple <query> elements: the base query (no "alternate"
@@ -2849,25 +2899,20 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     const db = s(first(arr(tableEl.database)));
     const schema = s(first(arr(tableEl.schema)));
     const tableName = s(first(arr(tableEl.name)));
-    return { db, schema, tableName, connectionName, columns: colsResult, immutable, ...aggFlags };
+    return { db, schema, tableName, connectionName, columns: colsResult, immutable, ...aggFlags, ...dropFlag() };
   }
 
   if (queryEl) {
     const sqlEls = arr(queryEl.sql);
     const rawSql = pickBaseSql(sqlEls);
     if (rawSql) {
-      const dialectEls = sqlEls.filter((el) => a(el, "dialect"));
-      const dialects = dialectEls
-        .map((el) => {
-          const dialect = a(el, "dialect");
-          const sqlText = s(el);
-          return dialect && sqlText ? { dialect, sql: unescapeHtml(sqlText).replace(/\t/g, "  ") } : undefined;
-        })
-        .filter((d): d is { dialect: string; sql: string } => Boolean(d));
+      const { dialects, dropped } = parseDialectSql(sqlEls);
+      droppedDialects.push(...dropped);
       // Replace tabs with spaces so js-yaml can use block literal (| style) rather than quoted
       return {
         sql: unescapeHtml(rawSql).replace(/\t/g, "  "),
         dialects: dialects.length ? dialects : undefined,
+        ...dropFlag(),
         connectionName,
         columns: colsResult,
         immutable,
@@ -2876,7 +2921,7 @@ function parseDatasetPhysical(dsEl: Record<string, unknown>): DatasetPhysical | 
     }
   }
 
-  return { connectionName, columns: colsResult, immutable, ...aggFlags };
+  return { connectionName, columns: colsResult, immutable, ...aggFlags, ...dropFlag() };
 }
 
 /** Pick the base (no dialect attribute) <sql> element's text from a set of dialect variants. */
@@ -3340,6 +3385,23 @@ function buildDimensionYaml(
   const metaSkippedMetricalUnresolved: string[] = [];
   const metaSnowflakeRelationships: DimMeta["snowflakeRelationships"] = [];
   const metaDroppedSecondaryAttrsForSharedDegenerate: DimMeta["droppedSecondaryAttrsForSharedDegenerate"] = [];
+  const metaDroppedStringFormats: DimMeta["droppedStringFormats"] = [];
+  /**
+   * SML checks an attribute's `format` against its name_column's data_type and allows none
+   * on a string column (SML-develop validator YamlDimensionValidator.validateFormatProperty;
+   * models/src/yaml/YamlDatasetUtil.ts formatStringMap: string -> []). An XML attribute can
+   * carry a date/number format over a display column the dataset holds as text (e.g. a
+   * `date_format(...)` calculated column), so the format is left off there. A column the
+   * dataset doesn't declare is emitted as string by buildDatasetYaml, so it counts as one.
+   */
+  const formatForNameColumn = (attribute: string, dataset: string | undefined, nameColumn: string | undefined,
+                               format: string | undefined): string | undefined => {
+    if (!format || !dataset || !nameColumn) return format;
+    const col = datasetNameToPhysical.get(dataset.replace(/\.dataset$/, ""))?.columns?.find((c) => c.name === nameColumn);
+    if (col?.map || (col?.dataType && col.dataType !== "string")) return format;
+    metaDroppedStringFormats.push({ attribute, nameColumn, format });
+    return undefined;
+  };
 
   // Once ANY level of this degenerate dimension is bound to more than one fact dataset (see
   // degenerateBindingsForDim), the engine requires EVERY level of the same dimension to use
@@ -3373,7 +3435,7 @@ function buildDimensionYaml(
     filterEmpty?: string;
     folder?: string;
     description?: string;
-    defaultMember?: { literal_value: string; apply_in_query?: boolean };
+    defaultMember?: { expression: string; apply_only_when_in_query?: boolean };
     levels: Array<{
       uniqueName: string;
       timeUnit?: string;
@@ -3397,22 +3459,24 @@ function buildDimensionYaml(
         ? filterEmptyRaw.toLowerCase()
         : undefined;
 
-    // Default member — structured object with literal_value (and apply_in_query only when true)
+    // Default member — the <literal-member> MDX, applied only-when-in-query when applyInQuery=true
     const defaultMemberEl = hierProps
       ? (first(arr(hierProps["default-member"])) as Record<string, unknown> | undefined)
       : undefined;
     const literalMember = defaultMemberEl
       ? s(first(arr(defaultMemberEl["literal-member"])))
       : undefined;
-    let defaultMember: { literal_value: string; apply_in_query?: boolean } | undefined;
+    // SML's default_member is {expression, apply_only_when_in_query}
+    // (resources/sml-reference/dimension.md "default_member"; SML-develop dimension.schema.json).
+    let defaultMember: { expression: string; apply_only_when_in_query?: boolean } | undefined;
     if (literalMember) {
       const applyRaw =
         a(defaultMemberEl!, "applyInQuery") ??
         s(first(arr((defaultMemberEl as Record<string, unknown>).applyInQuery)));
       const applyInQuery = applyRaw === "true";
       defaultMember = {
-        literal_value: unescapeHtml(literalMember),
-        ...(applyInQuery ? { apply_in_query: true } : {}),
+        expression: unescapeHtml(literalMember),
+        ...(applyInQuery ? { apply_only_when_in_query: true } : {}),
       };
       metaHasDefaultMembers = true;
     }
@@ -3826,7 +3890,8 @@ function buildDimensionYaml(
             // columns level once it's set on any one of them, so suppressing a coincidental
             // match here can leave a sibling dataset's real override without a required peer.
             if (sa.sortColumn) saObj.sort_column = sa.sortColumn;
-            if (sa.format) saObj.format = sa.format;
+            const saFormat = formatForNameColumn(sa.uniqueName, sa.dataset, sa.nameColumn, sa.format);
+            if (saFormat) saObj.format = saFormat;
             if (sa.folder) saObj.folder = sa.folder;
             if (sa.description) saObj.description = sa.description;
             if (sa.allowedCalcsForDma?.length) {
@@ -3888,7 +3953,12 @@ function buildDimensionYaml(
       if (la.timeUnit) laObj.time_unit = la.timeUnit;
       if (la.isUniqueKey) laObj.is_unique_key = true;
       if (la.folder) laObj.folder = la.folder;
-      if (la.format) laObj.format = la.format;
+      // A shared-degenerate level has a name_column per dataset; keep its format unless every one is a string.
+      const laFormat = la.sharedDegenerateColumns
+        ? (la.sharedDegenerateColumns.every((sdc) => !formatForNameColumn(la.uniqueName, sdc.dataset, sdc.nameColumn, la.format))
+          ? undefined : la.format)
+        : formatForNameColumn(la.uniqueName, la.dataset, la.nameColumn, la.format);
+      if (laFormat) laObj.format = laFormat;
       if (la.isHiddenFromUi) laObj.is_hidden = true;
       if (la.allowedCalcsForDma?.length) laObj.allowed_calcs_for_dma = la.allowedCalcsForDma;
       return laObj;
@@ -3914,6 +3984,7 @@ function buildDimensionYaml(
     skippedMetricalUnresolved: metaSkippedMetricalUnresolved,
     snowflakeRelationships: metaSnowflakeRelationships,
     droppedSecondaryAttrsForSharedDegenerate: metaDroppedSecondaryAttrsForSharedDegenerate,
+    droppedStringFormats: metaDroppedStringFormats,
   };
 
   return { yaml: toYaml(obj), meta };

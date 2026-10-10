@@ -1,0 +1,17 @@
+<Create xmlns="http://schemas.microsoft.com/analysisservices/2003/engine"><ObjectDefinition>
+<Database><ID>Shop</ID><Name>Shop</Name>
+<DataSources><DataSource><ID>WH</ID><Name>WH</Name><ConnectionString>Provider=SQLNCLI11;Data Source=x;Initial Catalog=SHOPDB</ConnectionString></DataSource></DataSources>
+<DataSourceViews><DataSourceView><ID>DSV</ID><Name>DSV</Name><DataSourceID>WH</DataSourceID>
+<Schema><xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" xmlns:msprop="urn:schemas-microsoft-com:xml-msprop" id="DSV">
+<xs:element name="DSV" msdata:IsDataSet="true"><xs:complexType><xs:choice maxOccurs="unbounded">
+<xs:element name="dbo_SALES" msprop:DbTableName="SALES" msprop:DbSchemaName="dbo" msprop:TableType="Table"><xs:complexType><xs:sequence>
+<xs:element name="AMOUNT" msprop:DbColumnName="AMOUNT" type="xs:decimal" minOccurs="0"/>
+</xs:sequence></xs:complexType></xs:element>
+</xs:choice></xs:complexType></xs:element></xs:schema></Schema>
+</DataSourceView></DataSourceViews>
+<Cubes><Cube><ID>Sales</ID><Name>Sales</Name>
+<MeasureGroups><MeasureGroup><ID>Sales</ID><Name>Sales</Name>
+<Measures><Measure><ID>Amount</ID><Name>Amount</Name><AggregateFunction>Sum</AggregateFunction>
+<Source><DataType>Double</DataType><Source xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="ColumnBinding"><TableID>dbo_SALES</TableID><ColumnID>AMOUNT</ColumnID></Source></Source></Measure></Measures>
+</MeasureGroup></MeasureGroups></Cube></Cubes>
+</Database></ObjectDefinition></Create>

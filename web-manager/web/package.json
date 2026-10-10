@@ -16,6 +16,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@atscale-ps/ps-utils": "4.0.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

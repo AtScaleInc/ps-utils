@@ -207,11 +207,10 @@ def test_test_step_opens_the_gate_then_promote_deploys(client):
     assert client.post("/api/pipeline/promote", json={"model": "Customer 360", "env": "prod"}, headers=H).status_code == 409
     client.put("/api/pipeline/policy", json={"policy": {"variance": 5}}, headers=H)
     assert model(client.get("/api/pipeline/board", headers=H).get_json(), "Customer 360")["gates"][2]["k"] == "open"
-    # Open, but QA's v10 isn't main's head any more: the tested commit can't be deployed.
+    # Open, but QA's v10 isn't main's head (v12) any more: refused before anything deploys.
     r = client.post("/api/pipeline/promote", json={"model": "Customer 360", "env": "prod"}, headers=H)
-    assert r.status_code == 202 and "has moved" in wait(client, r.get_json()["jobId"])["summary"]
-    kinds = [x["kind"] for x in client.get("/api/pipeline/runs", headers=H).get_json()["runs"][:2]]
-    assert kinds == ["deploy", "test"]
+    assert r.status_code == 409 and "Customer 360: QA runs v10, not v12" in r.get_json()["error"]
+    assert client.get("/api/pipeline/runs", headers=H).get_json()["runs"][0]["kind"] == "test"
 
 
 def test_a_catalog_crosses_a_gate_together(client):
@@ -344,9 +343,9 @@ def test_rollback_one_host_leaves_drift(client):
 def test_promote_to_picked_hosts_and_branch_rule(client):
     fh = {"X-BU": "finance"}
     client.get("/api/pipeline/board", headers=fh)  # the demo's test history is seeded on first view
-    # A promotion deploys the tested commit's branch only.
+    # Any branch can be promoted - but develop's head (v7) never ran on Dev, so the gate holds it.
     r = client.post("/api/pipeline/promote", json={"model": "Finance Ledger", "env": "prod", "branch": "develop"}, headers=fh)
-    assert r.status_code == 400 and "deploys the commit Dev tested" in r.get_json()["error"]
+    assert r.status_code == 409 and "Dev runs v6, not v7" in r.get_json()["error"]
     r = client.post("/api/pipeline/promote", json={"model": "Finance Ledger", "env": "prod", "hosts": ["fin-prod"]}, headers=fh)
     j = wait(client, r.get_json()["jobId"], fh)
     assert j["verdict"] == "pass" and [h["hostId"] for h in j["result"]["hosts"]] == ["fin-prod"]
@@ -468,3 +467,38 @@ def test_summary_and_reported_errors_are_stored(client):
                                                         "error": "atscale-deploy-catalog: 500 boom", "env": "qa"})
     rep = client.get("/api/pipeline/runs", headers=H).get_json()["runs"][0]
     assert rep["kind"] == "report" and rep["error"] == "atscale-deploy-catalog: 500 boom"
+
+
+def test_any_branch_promotes_once_it_passed_the_stage_before(client):
+    """Pick a branch other than main for a promotion: check -> deploy + test it
+    on the stage before -> check passes -> promote deploys that branch's head."""
+    fh = {"X-BU": "finance"}
+    client.get("/api/pipeline/board", headers=fh)
+    c = client.post("/api/pipeline/check", json={"model": "Finance Ledger", "env": "prod", "branch": "develop"}, headers=fh).get_json()
+    assert c["kind"] == "promote" and c["head"] == "v7" and c["problems"] == ["Finance Ledger: Dev runs v6, not v7 - deploy and test it there first"]
+    assert client.post("/api/pipeline/check", json={"model": "Finance Ledger", "env": "prod", "branch": "main"}, headers=fh).get_json()["problems"] == []
+
+    r = client.post("/api/pipeline/deploy", json={"env": "dev", "branch": "develop", "model": "Finance Ledger"}, headers=fh)
+    assert wait(client, r.get_json()["jobId"], fh)["verdict"] == "pass"
+    # The whole catalog went to Dev: Marketing Attribution (same repo) needs its test too.
+    c = client.post("/api/pipeline/check", json={"model": "Finance Ledger", "env": "prod", "branch": "develop"}, headers=fh).get_json()
+    assert c["problems"] == ["Finance Ledger: no test for v7 on Dev", "Marketing Attribution: no test for v4 on Dev"]
+    for m in ("Finance Ledger", "Marketing Attribution"):
+        r = client.post("/api/pipeline/test", json={"env": "dev", "model": m}, headers=fh)
+        assert wait(client, r.get_json()["jobId"], fh)["verdict"] == "pass"
+    c = client.post("/api/pipeline/check", json={"model": "Finance Ledger", "env": "prod", "branch": "develop"}, headers=fh).get_json()
+    assert c["problems"] == [] and c["tested"]
+
+    r = client.post("/api/pipeline/promote", json={"model": "Finance Ledger", "env": "prod", "branch": "develop"}, headers=fh)
+    j = wait(client, r.get_json()["jobId"], fh)
+    assert j["verdict"] == "pass" and j["result"]["branch"] == "develop", j
+    prod = model(client.get("/api/pipeline/board", headers=fh).get_json(), "Finance Ledger")["cells"][1]
+    assert prod["version"] == "v7" and prod["branch"] == "develop"
+
+
+def test_merge_gate_takes_any_branch(client):
+    c = client.post("/api/pipeline/check", json={"model": "Inventory Snapshot", "env": "test", "branch": "release"}, headers=H).get_json()
+    assert c["kind"] == "merge" and c["problems"] == []
+    s = client.post("/api/pipeline/script", json={"action": "promote", "env": "test", "model": "Inventory Snapshot",
+                                                  "branch": "release"}, headers=H).get_json()
+    assert 'BRANCH="release"' in s["sh"]

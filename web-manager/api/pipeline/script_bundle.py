@@ -2,8 +2,9 @@
 step with the ps-utils CLI alone - no call to Env Manager, so it runs by hand,
 from cron, or from a pipeline that can't reach Env Manager.
 
-  promote   the SML at the commit (git clone of the branch; refused when its
-            head isn't the commit the Board showed, unless COMMIT says another)
+  promote   the SML at the commit (git clone of the picked branch - any branch;
+            refused when its head isn't the commit the Board showed, the
+            tested commit or the picked branch's head, unless COMMIT says another)
             -> atscale-deploy-catalog on each picked host, as the
             <catalog unique_name>_<branch> catalog (the app's own project name,
             atscale/legacy_deploy.py). Into the last stage, then the system
@@ -153,8 +154,11 @@ def _deploy(action, st, idx, picked, rows, model, branch, folder, final) -> dict
             branch, commit = branch or (target_cell or {}).get("branch") or "main", ""
         else:
             if branch and branch != src_cell["branch"]:
-                raise steps.StepError(f"A promotion deploys the commit {st[idx - 1]['label']} tested, on {src_cell['branch']}")
-            branch, commit = src_cell["branch"] or "main", src_cell["commit"] or ""
+                # Another branch: pinned to its head now - what the Board's check looked at.
+                head = registry.backend(stage["hosts"][0]["id"]).head_commit(repo, branch, model)
+                commit = head or ""
+            else:
+                branch, commit = src_cell["branch"] or "main", src_cell["commit"] or ""
         title = f"Deploy to {stage['label']} · {model}"
     # Commits in the demo are "v14", not SHAs: a script can't pin those.
     if commit and not re.fullmatch(r"[0-9a-fA-F]{7,40}", commit):

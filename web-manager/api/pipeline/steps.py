@@ -200,22 +200,25 @@ def validate(files: dict[str, str], ci: dict[str, Any]) -> dict[str, Any]:
             "runId": run_id, **result}
 
 
-def _gate_problems(st, idx: int, rows, models: list[str], commit: str | None, policy: dict[str, Any],
-                   test_of) -> list[str]:
-    """Why a stage behind a promotion gate can't take `commit` (empty: it can)."""
+def _gate_problems(st, idx: int, rows, models: list[str], commit: str | Callable[[str], str | None] | None,
+                   policy: dict[str, Any], test_of) -> list[str]:
+    """Why a stage behind a promotion gate can't take `commit` (empty: it can).
+    `commit` may be a function of the model: a branch head, which in Git is one
+    commit for the whole repo (the demo's fake Git versions each model)."""
     kinds = stages.gate_kinds(st)
     if idx == 0 or kinds[idx - 1]["kind"] != "promote" or not policy.get("requireTest"):
         return []
     prev = st[idx - 1]
     out = []
     for m in models:
+        want = commit(m) if callable(commit) else commit
         c = stages.cell(prev, rows, m)
         if not c:
             # The deploy takes the repo's whole catalog: this model would arrive untested.
             out.append(f"{m}: not on {prev['label']} - the deploy would bring it to {st[idx]['label']} untested")
             continue
-        if commit and not same_commit(c["commit"], commit):
-            out.append(f"{m}: {prev['label']} runs {stages.short(c['row'])}, not {commit[:7]} - deploy and test it there first")
+        if want and not same_commit(c["commit"], want):
+            out.append(f"{m}: {prev['label']} runs {stages.short(c['row'])}, not {want[:7]} - deploy and test it there first")
             continue
         v = stages.summarize(test_of(m, c["commit"], prev["env"]), policy)["verdict"]
         if v != "pass":
@@ -246,7 +249,11 @@ def deploy(env: str, branch: str | None, ci: dict[str, Any], commit: str | None 
     # The whole catalog deploys, so every model of the repo has to pass the gate.
     models = _models_of(rows, repo_url) or ([model] if model else [])
     if not force:
-        problems = _gate_problems(st, idx, rows, models, commit or head, config.settings()["policy"], test_lookup())
+        # A pinned commit is the branch head by now (a moved branch was refused
+        # above), so every model is checked against the head - one commit in Git.
+        problems = _gate_problems(st, idx, rows, models,
+                                  (lambda m: first.head_commit(repo_url, branch, m)) if head else commit,
+                                  config.settings()["policy"], test_lookup())
         if problems:
             msg = f"Blocked at the gate into {stage['label']}: " + "; ".join(problems)
             _finish(run_id, t0, "fail", error=msg)
@@ -653,32 +660,59 @@ def _catalog_id(rows, host_id: str, model: str) -> str | None:
 
 def promote(model: str, env: str, ci: dict[str, Any], host_ids: list[str] | None = None,
             branch: str | None = None) -> dict[str, Any]:
-    """The built-in gate's Promote: re-check the gate into `env` server-side
-    (raises GateClosed), then deploy to `host_ids` of the stage (default: all).
-    Over a promotion gate it deploys the previous stage's commit - its branch,
-    whose head must still be that commit, so another branch is refused. Over a
-    merge gate, `branch`'s head (default: the branch the target stage runs)."""
+    """The built-in gate's Promote into `env`, on `host_ids` of the stage
+    (default: all), from any `branch` (default: the branch the stage before
+    runs; over a merge gate, the one the target stage runs). check_branch is
+    the gate (raises GateClosed with its problems): over a promotion gate the
+    stage before must run the branch head and have passed its test - for every
+    model of the repo - so no untested commit goes, whichever branch."""
     hosts, rows, _ = load(refresh=True)
     st = stages.stages(hosts)
     idx, stage = _stage(st, env)
     if idx == 0:
         raise StepError(f"{stage['label']} is the first stage - deploy to it from Build or CI")
-    b = stages.board(hosts, rows, compare_fn(hosts), test_lookup(), config.settings()["policy"])
-    m = next((x for x in b["models"] if x["name"] == model), None)
-    if not m:
-        raise StepError(f"{model} isn't in the pipeline")
-    gate, kind = m["gates"][idx - 1], b["gates"][idx - 1]["kind"]
-    src = m["cells"][idx - 1]
-    if kind == "promote" and gate["k"] != "open":
-        raise GateClosed(gate["label"] or "Nothing to promote")
-    if kind == "merge" and gate["k"] != "merge":
-        raise GateClosed(gate["label"] or "Nothing to promote")
+    kind = stages.gate_kinds(st)[idx - 1]["kind"]
+    src = stages.cell(st[idx - 1], rows, model)
+    tgt = stages.cell(stage, rows, model)
+    if not src and kind == "promote":
+        raise StepError(f"{model} isn't on {st[idx - 1]['label']}")
+    branch = branch or ((tgt or {}).get("branch") if kind == "merge" else src["branch"]) or "main"
+    chk = check_branch(model, env, branch)
+    if chk["problems"]:
+        raise GateClosed("; ".join(chk["problems"]))
+    repo = (src or tgt or {}).get("repoUrl") or resolve_repo(rows, None, model)
     ci = {**ci, "orchestrator": ci.get("orchestrator") or "builtin", "stage": f"Promote · {st[idx - 1]['label']} → {stage['label']}"}
-    if kind == "merge":
-        tgt = m["cells"][idx]
-        return deploy(env, branch or (tgt or {}).get("branch") or "main", ci, repo=src["repoUrl"], model=model,
-                      force=True, host_ids=host_ids)
-    if branch and branch != src["branch"]:
-        raise StepError(f"{st[idx - 1]['label']} tested {stages.short(src)} on {src['branch']}: a promotion deploys that "
-                        f"commit, not {branch}'s head. Deploy {branch} to {st[idx - 1]['label']} and test it there first.")
-    return deploy(env, src["branch"], ci, commit=src["commit"], repo=src["repoUrl"], model=model, host_ids=host_ids)
+    # The tested commit, pinned: the deploy is refused if the branch moves under it.
+    pinned = src["commit"] if kind == "promote" and src and branch == src["branch"] else None
+    return deploy(env, branch, ci, commit=pinned, repo=repo, model=model, host_ids=host_ids, force=kind == "merge")
+
+
+def check_branch(model: str, env: str, branch: str) -> dict[str, Any]:
+    """Can `branch` be promoted into `env` now? Its head commit, and why not:
+    over a promotion gate (with requireTest) the stage before must run that
+    commit and have passed a test of it - for every model of the repo, since
+    the whole catalog deploys. A merge gate takes any branch. Either way, not
+    when the target already runs that branch at that commit."""
+    hosts, rows, _ = load()
+    st = stages.stages(hosts)
+    idx, stage = _stage(st, env)
+    if idx == 0:
+        raise StepError(f"{stage['label']} is the first stage - it has no gate in front of it")
+    kind = stages.gate_kinds(st)[idx - 1]["kind"]
+    prev = st[idx - 1]
+    src = stages.cell(prev, rows, model)
+    repo = resolve_repo(rows, None, model)
+    try:
+        head = registry.backend(stage["hosts"][0]["id"]).head_commit(repo, branch, model)
+    except Exception as e:  # noqa: BLE001 - a missing branch / no Git access is the answer
+        return {"kind": kind, "branch": branch, "head": None, "problems": [f"Can't read {branch}: {e}"]}
+    backend = registry.backend(stage["hosts"][0]["id"])
+    problems = [] if kind == "merge" else _gate_problems(st, idx, rows, _models_of(rows, repo) or [model],
+                                                         lambda m: backend.head_commit(repo, branch, m),
+                                                         config.settings()["policy"], test_lookup())
+    tgt = stages.cell(stage, rows, model)
+    if tgt and tgt.get("branch") == branch and same_commit(tgt.get("commit"), head):
+        problems = [f"{stage['label']} already runs {branch} @ {stages.short(tgt['row'])} - nothing to deploy"]
+    return {"kind": kind, "branch": branch, "head": head, "from": prev["env"],
+            "sourceBranch": (src or {}).get("branch"), "sourceCommit": (src or {}).get("commit"),
+            "tested": not problems and kind == "promote", "problems": problems}

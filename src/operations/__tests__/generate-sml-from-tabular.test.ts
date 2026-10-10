@@ -14,7 +14,8 @@ import { convertTabularToSml, type TmslDocument } from "../generate-sml-from-tab
  *   - a whitelisted DAX measure (GrowthPct = DIVIDE(...)) that now converts
  *     verbatim as an AtScale server-side DAX calculation.
  *   - a measure with no cube-side equivalent (LastServiceDate = FIRSTDATE(...))
- *     that must still be deferred.
+ *     that must still be deferred, and a calculation over it (ServiceRatio) that
+ *     is deferred with it - SML rejects a calculation naming a missing metric.
  *   - a table with a measure but no outgoing relationship ("Lookup") --
  *     modeled as a dimension only, its measure excluded/deferred.
  *   - an orphan table ("Staging") with no relationships at all -- excluded.
@@ -81,9 +82,13 @@ const fixture: TmslDocument = {
             ],
             measures: [
               { name: "SalesAmount", expression: "SUM([Amount])" },
+              { name: "PriorSalesAmount", expression: "SUM([Amount])" },
+              { name: "Units", expression: "SUM([Amount])" },
               { name: "GrowthPct", expression: "DIVIDE([SalesAmount],[PriorSalesAmount])" },
               { name: "LastServiceDate", expression: "FIRSTDATE('Order Date'[Order Dte])" },
               { name: "Sales/Unit", expression: "DIVIDE([SalesAmount],[Units])" },
+              // Converts on its own, but its measure doesn't - so it is deferred with it.
+              { name: "ServiceRatio", expression: "DIVIDE([SalesAmount],[LastServiceDate])" },
             ],
             partitions: [{
               source: {
@@ -206,6 +211,14 @@ describe("generate-sml-from-tabular converter", () => {
     expect(calc.unique_name).toBe("Sales/Unit");
   });
 
+  it("defers a calculation whose referenced measure was deferred", () => {
+    const { sml } = convert();
+    expect(sml.has("calculations/ServiceRatio.yml")).toBe(false);
+    expect(sml.get("DEFERRED_MEASURES.md")).toContain("ServiceRatio");
+    const report = JSON.parse(sml.get("CONVERSION_REPORT.json")!);
+    expect(report.issues.some((i: any) => i.category === "calculation_references_deferred_measure" && i.object === "ServiceRatio")).toBe(true);
+  });
+
   it("still defers a measure with no cube-side equivalent", () => {
     const { sml } = convert();
     expect(sml.has("calculations/LastServiceDate.yml")).toBe(false);
@@ -222,8 +235,88 @@ describe("generate-sml-from-tabular converter", () => {
     expect(report.excludedMeasureTables).toEqual(["Lookup"]);
     expect(report.summary.rolePlayFamilies).toBe(1);
     expect(report.summary.rolePlaySourceTablesCollapsed).toBe(2);
-    expect(report.summary.measuresDeferred).toBe(1);
-    expect(report.summary.metricsConverted).toBe(1);
+    expect(report.summary.measuresDeferred).toBe(2); // LastServiceDate, and ServiceRatio over it
+    expect(report.summary.metricsConverted).toBe(3);
     expect(report.summary.calculationsConverted).toBe(2);
+  });
+});
+
+/**
+ * Shapes from a real Tabular export that SML's validator rejected:
+ *   - a table with a column named like the table ("Code" in table "Code"): the level is
+ *     named after the table, so that column must not come back as a same-named
+ *     secondary attribute (it reads the level's own key column - a redundant copy)
+ *   - a partition query selecting one physical column twice (`code` and
+ *     `code "Code"`): one dataset column per name
+ *   - a select item that is an expression with an implicit alias
+ *     (`CASE ... END code_bucket`): a calculated column named by the alias
+ */
+const codeFixture: TmslDocument = {
+  createOrReplace: {
+    database: {
+      model: {
+        tables: [
+          {
+            name: "Code",
+            columns: [
+              { name: "code", dataType: "int64", isHidden: true },
+              { name: "Code", dataType: "int64" },
+              { name: "Code Descr", dataType: "string" },
+              { name: "code_bucket", dataType: "string" },
+            ],
+            partitions: [{
+              source: {
+                type: "query",
+                query: 'SELECT\n\t code\n\t,code\t\t"Code"\n\t,code_descr\t"Code Descr"\n' +
+                  "\t,CASE WHEN code <> -1\n        THEN 'known' END\tcode_bucket\n\nFROM EDW.dbo.d_code ;",
+              },
+            }],
+          },
+          {
+            name: "Claims",
+            columns: [
+              { name: "CodeKey", dataType: "int64" },
+              { name: "Amount", dataType: "decimal" },
+            ],
+            measures: [{ name: "Claim Amount", expression: "SUM([Amount])" }],
+            partitions: [{
+              source: { type: "query", query: 'SELECT code_key "CodeKey", amount "Amount"\nFROM EDW.dbo.f_claims' },
+            }],
+          },
+        ],
+        relationships: [{ fromTable: "Claims", fromColumn: "CodeKey", toTable: "Code", toColumn: "code" }],
+      },
+    },
+  },
+};
+
+describe("generate-sml-from-tabular SML conformance", () => {
+  const { sml } = convertTabularToSml(codeFixture, {
+    tmslFileName: "codes.xmla", warehouse: "Postgres", database: "edw", schema: "dbo", modelName: "claims_model",
+    tmslRawContent: JSON.stringify(codeFixture),
+  });
+
+  it("drops a secondary attribute that repeats its level over the same column", () => {
+    const dim = load(sml.get("dimensions/Code.yml")!) as any;
+    const level = dim.hierarchies[0].levels[0];
+    const names = (level.secondary_attributes ?? []).map((a: any) => a.unique_name);
+    expect(level.unique_name).toBe("Code");
+    expect(names).not.toContain("Code");
+    expect(names).toContain("Code Descr");
+    const report = JSON.parse(sml.get("CONVERSION_REPORT.json")!);
+    expect(report.issues.some((i: any) => i.category === "attribute_name_clash")).toBe(true);
+  });
+
+  it("emits a physical column read twice only once", () => {
+    const dataset = load(sml.get("datasets/Code.yml")!) as any;
+    const names = dataset.columns.map((c: any) => c.name);
+    expect(names.filter((n: string) => n === "code")).toHaveLength(1);
+  });
+
+  it("turns an implicitly aliased expression into a calculated column named by its alias", () => {
+    const dataset = load(sml.get("datasets/Code.yml")!) as any;
+    const bucket = dataset.columns.find((c: any) => c.name === "code_bucket");
+    expect(bucket.sql).toMatch(/^CASE WHEN code <> -1\s+THEN 'known' END$/);
+    expect(dataset.columns.some((c: any) => /case_when/.test(c.name))).toBe(false);
   });
 });

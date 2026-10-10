@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema name="SML Conformance Fixture">
+  <data-sets>
+    <data-set id="fact-sales" name="fact_sales">
+      <physical>
+        <connection id="fixture_connection" />
+        <table><database>fixture_db</database><schema>fixture_schema</schema><name>fact_sales</name></table>
+        <column><name>region_id</name><type>Integer</type></column>
+        <column><name>amount</name><type>Decimal</type></column>
+      </physical>
+      <logical>
+        <key-ref id="amount-key" complete="true"><column>amount</column></key-ref>
+      </logical>
+    </data-set>
+    <data-set id="region-dataset" name="region">
+      <physical>
+        <connection id="fixture_connection" />
+        <table><database>fixture_db</database><schema>fixture_schema</schema><name>region</name></table>
+        <column><name>region_id</name><type>Integer</type></column>
+        <column><name>opened_on</name><type>Date</type></column>
+        <column>
+          <name>opened_label</name><type>String</type>
+          <sql>to_char(opened_on, 'Mon DD, YYYY')</sql>
+          <sql dialect="Snowflake">TO_CHAR(opened_on, 'Mon DD, YYYY')</sql>
+          <sql dialect="Redshift">TO_CHAR(opened_on, 'Mon DD, YYYY')</sql>
+          <sql dialect="Oracle">TO_CHAR(opened_on, 'Mon DD, YYYY')</sql>
+        </column>
+      </physical>
+      <logical>
+        <key-ref id="region-key" complete="true" unique="true"><column>region_id</column></key-ref>
+        <key-ref id="opened-key" complete="true"><column>opened_on</column></key-ref>
+        <attribute-ref id="opened-attribute" complete="true"><column>opened_label</column></attribute-ref>
+      </logical>
+    </data-set>
+  </data-sets>
+
+  <attributes>
+    <keyed-attribute id="region-attribute" name="Region" key-ref="region-key">
+      <properties><caption>Region</caption></properties>
+    </keyed-attribute>
+    <!-- A date format over a display column the dataset holds as text. -->
+    <keyed-attribute id="opened-attribute" name="Opened" key-ref="opened-key">
+      <properties>
+        <caption>Opened</caption>
+        <formatting><format-string>MMM d, yyyy</format-string></formatting>
+      </properties>
+    </keyed-attribute>
+  </attributes>
+
+  <dimensions>
+    <dimension id="region-dimension" name="Region">
+      <properties><caption>Region</caption></properties>
+      <hierarchy name="Region Hierarchy">
+        <properties>
+          <default-member>
+            <literal-member>[Region].[Region Hierarchy].[Region].&amp;[1]</literal-member>
+          </default-member>
+        </properties>
+        <level primary-attribute="region-attribute">
+          <keyed-attribute-ref attribute-id="opened-attribute" />
+        </level>
+      </hierarchy>
+    </dimension>
+  </dimensions>
+
+  <cubes>
+    <cube id="sales-model" name="Sales Model">
+      <data-sets>
+        <data-set-ref id="fact-sales">
+          <logical>
+            <key-ref id="region-key" complete="false"><column>region_id</column></key-ref>
+          </logical>
+        </data-set-ref>
+        <data-set-ref id="region-dataset" />
+      </data-sets>
+      <dimensions><dimension-ref id="region-dimension" /></dimensions>
+      <attributes>
+        <attribute id="amount-measure" name="Amount">
+          <properties><type><measure><key-ref id="amount-key" /></measure></type></properties>
+        </attribute>
+      </attributes>
+    </cube>
+  </cubes>
+</schema>

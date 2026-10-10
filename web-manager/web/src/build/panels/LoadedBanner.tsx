@@ -33,6 +33,7 @@ export function LoadedBanner() {
   return (
     <div className={`loaded-banner${reason ? ' ro' : ''}`}>
       <div className="loaded-head">
+        {loadedFrom.importedFrom && <span className="loaded-tag" title="Converted by a ps-utils generate-sml-from-* operation">Imported</span>}
         <span className={`loaded-tag${loadedFrom.builtHere ? ' here' : ''}`}
           title={loadedFrom.builtHere
             ? 'catalog.yml carries the "Built with AtScale Environment Manager" comment'
@@ -40,11 +41,11 @@ export function LoadedBanner() {
           {loadedFrom.builtHere ? 'Built here' : 'Built elsewhere'}
         </span>
         {reason ? <span>{reason}</span> : <span className="muted">Build can write this model back as-is.</span>}
-        {reason && (
+        {reason && groups.size > 0 && (
           <span className="link-btn" onClick={() => setOpen((v) => !v)}>{open ? 'hide details' : `show ${groups.size} feature${groups.size === 1 ? '' : 's'}`}</span>
         )}
       </div>
-      {reason && !open && (
+      {reason && !open && groups.size > 0 && (
         <div className="loaded-chips">
           {complex.map(([feature, rows]) => (
             <span key={feature} className="loaded-chip complex">{feature}{rows.length > 1 ? ` ×${rows.length}` : ''}</span>
