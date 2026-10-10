@@ -194,3 +194,54 @@ def test_converter_prefers_this_branchs_build(monkeypatch, tmp_path):
 def test_convert_reports_the_converter(client):
     r = client.post("/api/build/import/convert", json=convert_body())
     assert r.get_json()["converter"]["source"] in ("repo", "npm")
+
+
+# -- Database DDL --------------------------------------------------------------
+
+from smlgen.ddl import atscale_type, parse_ddl  # noqa: E402
+
+
+def _ddl() -> str:
+    return (FIXTURES / "shop.ddl.sql").read_text()
+
+
+def test_parse_ddl_tables_columns_and_keys():
+    parsed = parse_ddl(_ddl())
+    by = {t["name"]: t for t in parsed["tables"]}
+    assert set(by) == {"dim_date", "dim_product", "dim_customer", "fact_sales", "v_sales"}
+    assert parsed["schemas"] == ["sales"]
+    assert by["v_sales"]["kind"] == "view" and by["v_sales"]["columns"] == []
+    cols = {c["name"]: c for c in by["fact_sales"]["columns"]}
+    assert list(cols) == ["sale_id", "date_key", "product_key", "cust_key", "quantity", "sales_amount", "discount", "updated_at"]
+    assert cols["date_key"]["type"] == "Long" and cols["date_key"]["ddlType"] == "NUMBER(38,0)"
+    assert cols["sales_amount"]["type"] == "Decimal"
+    assert cols["discount"]["type"] == "Double"
+    assert cols["updated_at"]["type"] == "DateTime"
+    assert {(f["column"], f["toTable"], f["toColumn"]) for f in by["fact_sales"]["foreignKeys"]} == {
+        ("date_key", "dim_date", "date_key"),
+        ("product_key", "dim_product", "product_key"),
+        ("cust_key", "dim_customer", "customer_key"),
+    }
+    assert {c["name"] for c in by["dim_product"]["columns"] if c["primaryKey"]} == {"product_key"}
+    assert {c["name"] for c in by["dim_customer"]["columns"] if c["primaryKey"]} == {"customer_key"}
+    assert "customer name" in {c["name"] for c in by["dim_customer"]["columns"]}
+    assert by["dim_date"]["columns"][0]["primaryKey"] is True
+
+
+def test_atscale_type_mapping():
+    assert atscale_type("NUMBER(9,0)") == "Int"
+    assert atscale_type("NUMBER(10)") == "Long"
+    assert atscale_type("NUMBER") == "Decimal"
+    assert atscale_type("VARCHAR(10)") == "String"
+    assert atscale_type("TIMESTAMP WITH TIME ZONE") == "DateTime"
+    assert atscale_type("BOOLEAN") == "Boolean"
+
+
+def test_ddl_endpoint(client):
+    r = client.post("/api/build/import/ddl", json={"text": _ddl(), "fileName": "shop.ddl.sql"})
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["fileName"] == "shop.ddl.sql" and len(body["tables"]) == 5
+    r = client.post("/api/build/import/ddl", json={"text": "SELECT 1;"})
+    assert r.status_code == 422
+    assert client.post("/api/build/import/ddl", json={}).status_code == 400

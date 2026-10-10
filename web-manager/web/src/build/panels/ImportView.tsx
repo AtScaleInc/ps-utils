@@ -9,8 +9,9 @@ interface Props {
   onDone: () => void
   /** Existing SML: Develop's Save / Load. */
   onLoadSml: () => void
-  /** Live database schema: the new-model Wizard. */
-  onWizard: () => void
+  /** Live database schema / Database DDL: the new-model Wizard, planning from
+   *  the warehouse's table listing or from a DDL file's CREATE TABLEs. */
+  onWizard: (mode: 'live' | 'ddl') => void
 }
 
 type Card =
@@ -28,8 +29,8 @@ const CARDS: Card[] = [
     note: 'Pick tables from a warehouse and generate a starter model.' },
   { id: 'sml', title: 'Existing SML', file: 'SML files or an existing Git repository', elsewhere: 'Opens Develop › Save / Load',
     note: 'Continue work on a model that is already written in SML.' },
-  { id: 'ddl', title: 'Database DDL', file: 'SQL CREATE TABLE / CREATE VIEW definitions', operation: 'generate-sml-from-ddl',
-    elsewhere: 'Not wired here yet - run it with the ps-utils CLI', note: 'Generate a starter semantic model from the database structure.' },
+  { id: 'ddl', title: 'Database DDL', file: 'SQL CREATE TABLE definitions (.sql)', elsewhere: 'Opens the new-model Wizard with the DDL\'s tables',
+    note: 'Plan a starter model from the database structure - declared primary and foreign keys become the joins.' },
 ]
 
 /** Build › Import & convert: pick what the model comes from, then walk it
@@ -49,8 +50,8 @@ export function ImportView({ hostId, onDone, onLoadSml, onWizard }: Props) {
 
   function start() {
     if (card.id === 'sml') onLoadSml()
-    else if (card.id === 'live') onWizard()
-    else if (card.id !== 'ddl') setRunning(card.id)
+    else if (card.id === 'live' || card.id === 'ddl') onWizard(card.id)
+    else setRunning(card.id)
   }
 
   return (
@@ -71,8 +72,8 @@ export function ImportView({ hostId, onDone, onLoadSml, onWizard }: Props) {
       <div className="import-grid">
         <div className="import-cards">
           {CARDS.map((c) => (
-            <button key={c.id} type="button" className={`import-card ${selected === c.id ? 'on' : ''} ${c.id === 'ddl' ? 'off' : ''}`}
-              onClick={() => setSelected(c.id)} onDoubleClick={() => { setSelected(c.id); if (c.id !== 'ddl') start() }}>
+            <button key={c.id} type="button" className={`import-card ${selected === c.id ? 'on' : ''}`}
+              onClick={() => setSelected(c.id)} onDoubleClick={() => { setSelected(c.id); start() }}>
               <b>{c.title}</b>
               <span className="muted">{c.file}</span>
               <span>{c.note}</span>
@@ -99,8 +100,17 @@ export function ImportView({ hostId, onDone, onLoadSml, onWizard }: Props) {
               </span>
             </>
           )}
-          <button type="button" className="btn btn-primary" onClick={start} disabled={card.id === 'ddl'}>
-            {card.id === 'sml' ? 'Open Save / Load' : card.id === 'live' ? 'Open the Wizard' : card.id === 'ddl' ? 'Not wired yet' : 'Start import'}
+          {(card.id === 'ddl' || card.id === 'live') && (
+            <>
+              <b className="import-side-sub">Editable, not read-only</b>
+              <span className="field-note">
+                The Wizard puts the plan on the canvas like any model you build by hand. Pick the data source and schema the
+                tables live in; tables found there can be profiled before planning.
+              </span>
+            </>
+          )}
+          <button type="button" className="btn btn-primary" onClick={start}>
+            {card.id === 'sml' ? 'Open Save / Load' : card.id === 'live' || card.id === 'ddl' ? 'Open the Wizard' : 'Start import'}
           </button>
         </aside>
       </div>

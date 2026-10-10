@@ -46,12 +46,22 @@ const fmtN = (n: number | null | undefined) => (n == null ? '?' : n.toLocaleStri
 export interface WizardColumn {
   name: string
   type: string
+  /** Declared PRIMARY KEY (a DDL import) - ranked first as the table's key. */
+  primaryKey?: boolean
+}
+
+/** A declared FOREIGN KEY / REFERENCES (a DDL import). */
+export interface WizardForeignKey {
+  column: string
+  toTable: string
+  toColumn: string
 }
 
 export interface WizardTable {
   schema: string
   table: string
   columns: WizardColumn[]
+  foreignKeys?: WizardForeignKey[]
 }
 
 // Coarse-to-fine order kept only for the picker preview text shown while
@@ -64,7 +74,7 @@ const GEO_HINTS_FINEST_TO_COARSEST = [...GEO_HINTS_COARSE_TO_FINE].reverse()
 
 const TIME_HINTS_FINEST_TO_COARSEST = ['week', 'month', 'quarter', 'halfyear', 'year']
 
-const NUMERIC_TYPE_RE = /^(int|integer|bigint|smallint|tinyint|decimal|numeric|float|double|real|money|number)/i
+const NUMERIC_TYPE_RE = /^(int|integer|bigint|smallint|tinyint|long|decimal|numeric|float|double|real|money|number)/i
 const TEXT_TYPE_RE = /(char|text|string|varchar)/i
 
 function tableStem(name: string): string {
@@ -92,7 +102,8 @@ function rankKeyCandidates(dim: WizardTable, prof?: TableFacts): WizardColumn[] 
       generic.push(c)
     }
   }
-  const ranked = [...exact, ...generic]
+  const declared = dim.columns.filter((c) => c.primaryKey)
+  const ranked = [...declared, ...[...exact, ...generic].filter((c) => !c.primaryKey)]
   if (prof) {
     // Profiled: only a unique, never-NULL column can be the dimension's key
     // (a `*key` column that repeats is a foreign key to another table).
@@ -118,9 +129,10 @@ function rangeInside(a: ColFacts, b: ColFacts): boolean {
 export interface JoinGuess {
   factColumn: string
   dimColumn: string
-  /** name: same column name · suffix: role-played (orderdatekey → datekey) ·
-   *  values: profiled value ranges fit (no name match). */
-  basis: 'name' | 'suffix' | 'values'
+  /** fk: a foreign key the DDL declares · name: same column name · suffix:
+   *  role-played (orderdatekey → datekey) · values: profiled value ranges fit
+   *  (no name match). */
+  basis: 'fk' | 'name' | 'suffix' | 'values'
   /** Orphans / target uniqueness, when the wizard ran the join check. */
   check?: JoinCheck
 }
@@ -145,6 +157,16 @@ export function guessJoin(
 ): JoinGuess | null {
   const typesMatch = (f: WizardColumn, d: WizardColumn) =>
     !joinTypeMismatch({ table: fact.table, column: f.name, type: f.type }, { table: dim.table, column: d.name, type: d.type })
+  // A declared foreign key wins over any guess - the first one to this table
+  // whose column no other dimension has taken (two to one date table are
+  // role-played).
+  const lower = (s: string) => s.toLowerCase()
+  for (const fk of fact.foreignKeys ?? []) {
+    if (lower(fk.toTable) !== lower(dim.table) || claimed.has(lower(fk.column))) continue
+    const f = fact.columns.find((c) => lower(c.name) === lower(fk.column))
+    const d = dim.columns.find((c) => lower(c.name) === lower(fk.toColumn))
+    if (f && d && typesMatch(f, d)) return { factColumn: f.name, dimColumn: d.name, basis: 'fk' }
+  }
   const factProf = profiles[factsKey(fact)]
   const dimProf = profiles[factsKey(dim)]
   const candidates = rankKeyCandidates(dim, dimProf)

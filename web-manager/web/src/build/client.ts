@@ -661,6 +661,44 @@ async function importRequest<T>(path: string, body: unknown): Promise<T> {
   return out as T
 }
 
+export interface DdlColumn {
+  name: string
+  /** The AtScale metadata type a live source would report (Int, Long, Decimal, String, ...). */
+  type: string
+  /** The type as the DDL wrote it, e.g. NUMBER(38,0). */
+  ddlType: string
+  nullable: boolean
+  primaryKey: boolean
+}
+
+export interface DdlForeignKey {
+  column: string
+  toSchema: string | null
+  toTable: string
+  toColumn: string
+}
+
+export interface DdlTable {
+  schema: string | null
+  name: string
+  kind: 'table' | 'view'
+  columns: DdlColumn[]
+  foreignKeys: DdlForeignKey[]
+}
+
+/** A parsed DDL file - Build › Import & convert › Database DDL. */
+export interface DdlSchema {
+  fileName: string
+  tables: DdlTable[]
+  schemas: string[]
+  statements: number
+  skipped: number
+}
+
+export function parseDdl(text: string, fileName: string) {
+  return importRequest<DdlSchema>('ddl', { text, fileName })
+}
+
 export function inspectImport(kind: ImportKind, text: string, fileName: string) {
   return importRequest<ImportInspection>('inspect', { kind, text, fileName })
 }

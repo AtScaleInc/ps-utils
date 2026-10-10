@@ -18,6 +18,9 @@ tabular (SSAS Tabular TMSL JSON) - each converted by its ps-utils operation
                               action: link|deploy, private?} -> job: push to Git
                               once, then link each model (Manage's Link) or deploy
                               the branch on every host
+  POST /build/import/ddl      {text, fileName} -> the DDL's tables, columns and
+                              foreign keys (smlgen/ddl.py), which the new-model
+                              Wizard plans from instead of a live table listing
 
 Save / push reuse Build's working copy + Git path (routes/build.py); an
 imported working copy is read-only for Build's own Save / Deploy."""
@@ -36,6 +39,7 @@ from routes.build import (_has_connection, _push, _read_sml_directory, model_wor
                           import_marker)
 from routes.objects import host_errors
 from smlgen import converters
+from smlgen.ddl import parse_ddl
 from smlgen.naming import is_valid_model_name, slugify_model_name
 from smlgen.validate import SmlCliNotFound, validate_sml
 
@@ -103,6 +107,20 @@ def inspect():
         return jsonify({"error": str(e), "log": e.log, "converter": converters.cli_info()}), 422
     except converters.ConverterNotFound as e:
         return jsonify({"error": str(e)}), 500
+
+
+@importer_bp.post("/build/import/ddl")
+def ddl():
+    b = _body()
+    text = _text(b)
+    if not text:
+        return jsonify({"error": "Missing 'text' - the DDL file's contents"}), 400
+    if len(text) > _MAX_TEXT:
+        return jsonify({"error": "The file is larger than 50 MB"}), 413
+    parsed = parse_ddl(text)
+    if not any(t["columns"] for t in parsed["tables"]):
+        return jsonify({"error": "No CREATE TABLE statements with columns found in this file", **parsed}), 422
+    return jsonify({**parsed, "fileName": b.get("fileName")})
 
 
 @importer_bp.post("/build/import/convert")

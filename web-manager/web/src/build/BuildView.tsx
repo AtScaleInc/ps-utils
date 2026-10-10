@@ -38,7 +38,7 @@ export function BuildView() {
   const [genError, setGenError] = useState<string | null>(null)
   const [showManage, setShowManage] = useState(false)
   const [showCalculations, setShowCalculations] = useState(false)
-  const [showWizard, setShowWizard] = useState(false)
+  const [showWizard, setShowWizard] = useState<false | 'live' | 'ddl'>(false)
   const [showShared, setShowShared] = useState(false)
 
   // Reads the store fresh via getState(): the Wizard's "Build & Deploy" writes
@@ -157,7 +157,7 @@ export function BuildView() {
             <button type="button" className="btn ghost" onClick={() => setShowCalculations(true)}>Calculations</button>
             <button type="button" className="btn ghost" onClick={() => setShowManage(true)}>Save / Load</button>
             <button type="button" className="btn ghost" onClick={() => { state.reset(); setGenError(null) }}>Reset</button>
-            <button type="button" className="btn ghost" onClick={() => setShowWizard(true)}>Wizard</button>
+            <button type="button" className="btn ghost" onClick={() => setShowWizard('live')}>Wizard</button>
             <button type="button" className="btn ghost" onClick={() => setShowShared(true)} disabled={state.shared}
               title={state.shared ? 'A shared dimensions repo can\'t use another package' : 'Add dimensions from a shared dimensions repo'}>
               Shared dims
@@ -191,7 +191,7 @@ export function BuildView() {
         <ImportView key={host.id} hostId={host.id}
           onDone={() => { setGenError(null); setBuildSection('model') }}
           onLoadSml={() => { setBuildSection('model'); setShowManage(true) }}
-          onWizard={() => { setBuildSection('model'); setShowWizard(true) }} />
+          onWizard={(mode) => { setBuildSection('model'); setShowWizard(mode) }} />
       ) : buildSection === 'discover' ? (
         <DiscoveryTab key={host.id} hostId={host.id} />
       ) : (
@@ -219,7 +219,7 @@ export function BuildView() {
       {showManage && <ManageModelModal onClose={() => setShowManage(false)} />}
       {showCalculations && <CalculationsModal onClose={() => setShowCalculations(false)} />}
       {showShared && host && <SharedDimsModal hostId={host.id} onClose={() => setShowShared(false)} />}
-      {showWizard && host && <WizardModal hostId={host.id} onClose={() => setShowWizard(false)} onGenerate={handleGenerate} onDone={() => setBuildSection('model')} />}
+      {showWizard && host && <WizardModal key={showWizard} hostId={host.id} fromDdl={showWizard === 'ddl'} onClose={() => setShowWizard(false)} onGenerate={handleGenerate} onDone={() => setBuildSection('model')} />}
       </div>
     </div>
   )

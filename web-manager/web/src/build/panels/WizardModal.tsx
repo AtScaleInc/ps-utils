@@ -5,6 +5,8 @@ import {
   fetchSchemas,
   fetchSources,
   fetchTablesColumns,
+  parseDdl,
+  type DdlSchema,
   type DiscoveryTableRef,
   type JoinCheck,
   type TableProfile,
@@ -25,6 +27,10 @@ import { PickList, type PickOption } from './PickList'
 
 interface Props {
   hostId: string
+  /** Plan from a DDL file's CREATE TABLEs (Import & convert › Database DDL)
+   *  instead of the source's table listing. The data source + schema are still
+   *  picked: they are where the datasets read, and where profiling runs. */
+  fromDdl?: boolean
   onClose: () => void
   /** Runs the app's existing generate -> validate -> SmlViewerModal -> Deploy
    *  pipeline (BuildView's handleGenerate) - the wizard never deploys on its
@@ -46,6 +52,8 @@ const STEPS: { id: Step; title: string; help: string }[] = [
   { id: 'review', title: 'Review', help: 'What the wizard will put on the canvas. Click a metric to leave it out.' },
 ]
 
+const DDL_SETUP_HELP = 'Choose the DDL file, name the model, and pick the data source and schema its tables live in. Declared primary and foreign keys decide the joins.'
+
 const FACT_RE = /^(fct|fact|f_)|_(fact|fct)$|fact/i
 const TIME_RE = /date|time|calendar|period|day/i
 const DIM_RE = /^(dim|d_|lkp|lookup|ref)|_dim$/i
@@ -65,6 +73,7 @@ function ago(iso: string) {
 type ProfState =
   | { state: 'checking' }
   | { state: 'missing' }
+  | { state: 'absent' }
   | { state: 'running'; since: number }
   | { state: 'ready'; profile: TableProfile }
   | { state: 'error'; error: string }
@@ -87,7 +96,7 @@ function suggestDims(factCols: WizardColumn[], tables: string[], exclude: Set<st
   return [...out]
 }
 
-export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
+export function WizardModal({ hostId, fromDdl = false, onClose, onGenerate, onDone }: Props) {
   const store = useModelStore()
   const [step, setStep] = useState<Step>('setup')
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +115,11 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
   const [checkNote, setCheckNote] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [metricOff, setMetricOff] = useState<Set<string>>(new Set())
+  // -- DDL mode: the tables come from the file, not the source's listing.
+  const [ddl, setDdl] = useState<DdlSchema | null>(null)
+  const [ddlFilter, setDdlFilter] = useState<string | null>(null) // a DDL schema, or null = every table
+  const [parsing, setParsing] = useState(false)
+  const ddlInput = useRef<HTMLInputElement>(null)
 
   // -- sources, schemas, tables -------------------------------------------------
   const sources = useQuery({ queryKey: ['wizard-sources', hostId], queryFn: fetchSources, staleTime: 2 * 3600e3 })
@@ -119,7 +133,26 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
     refetchInterval: (q) => (q.state.data?.some((s) => s.loading) ? 2000 : false),
   })
   const schemaEntry = schemas.data?.find((s) => s.name === schema) ?? null
-  const tables = useMemo(() => (schemaEntry?.tables ?? []).map((t) => t.name).sort((a, b) => a.localeCompare(b)), [schemaEntry])
+  // DDL tables with columns (a view's DDL carries none), in the picked DDL schema.
+  const ddlTables = useMemo(
+    () => (ddl?.tables ?? []).filter((t) => t.columns.length && (!ddlFilter || (t.schema ?? '').toLowerCase() === ddlFilter.toLowerCase())),
+    [ddl, ddlFilter],
+  )
+  const tables = useMemo(
+    () => (fromDdl ? ddlTables.map((t) => t.name) : (schemaEntry?.tables ?? []).map((t) => t.name)).sort((a, b) => a.localeCompare(b)),
+    [fromDdl, ddlTables, schemaEntry],
+  )
+  /** The source's own spelling of a DDL table (DIM_DATE for dim_date), or null
+   *  while the schema is listing / when it isn't there. Live mode: itself. */
+  const liveTables = useMemo(() => new Map((schemaEntry?.tables ?? []).map((t) => [t.name.toLowerCase(), t.name])), [schemaEntry])
+  const liveName = (t: string): string | null => (fromDdl ? liveTables.get(t.toLowerCase()) ?? null : t)
+  const onSource = (t: string) => liveName(t) ?? t
+  const ddlColumns = useMemo(() => {
+    const out: Record<string, WizardColumn[]> = {}
+    for (const t of ddlTables) out[`${schema}.${t.name}`] = t.columns.map((c) => ({ name: c.name, type: c.type, primaryKey: c.primaryKey }))
+    return out
+  }, [ddlTables, schema])
+  const colMap = fromDdl ? ddlColumns : columns
 
   // A store source that no longer exists on this host isn't preselected.
   useEffect(() => {
@@ -129,17 +162,20 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
   useEffect(() => {
     if (schema || !schemas.data?.length) return
     const canvasSchema = store.nodes[0]?.schema
-    if (schemas.data.length === 1) setSchema(schemas.data[0].name)
+    const ddlMatch = ddl && schemas.data.find((s) => ddl.schemas.some((d) => d.toLowerCase() === s.name.toLowerCase()))
+    if (ddlMatch) setSchema(ddlMatch.name)
+    else if (schemas.data.length === 1) setSchema(schemas.data[0].name)
     else if (canvasSchema && schemas.data.some((s) => s.name === canvasSchema)) setSchema(canvasSchema)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schemas.data, schema])
+  }, [schemas.data, schema, ddl])
 
-  const ref = (table: string): DiscoveryTableRef => ({ source: sourceId!, schema: schema!, table, dialect: source?.dialect })
+  const ref = (table: string): DiscoveryTableRef => ({ source: sourceId!, schema: schema!, table: onSource(table), dialect: source?.dialect })
   const key = (table: string) => `${schema}.${table}`
   const timeTable = time && time !== 'none' ? time : null
   const picked = [fact, timeTable, ...dims].filter((t): t is string => !!t)
 
   async function loadColumns(names: string[]) {
+    if (fromDdl) return colMap
     const missing = names.filter((t) => !columns[key(t)])
     if (!sourceId || !schema || !missing.length) return columns
     const got = await fetchTablesColumns(sourceId, missing.map((table) => ({ schema, table })))
@@ -156,7 +192,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
 
   // -- options ------------------------------------------------------------------
   const tableCount = (t: string) => {
-    const cols = columns[key(t)] ?? schemaEntry?.tables.find((x) => x.name === t)?.columns
+    const cols = colMap[key(t)] ?? schemaEntry?.tables.find((x) => x.name === t)?.columns
     return cols ? `${cols.length} cols` : undefined
   }
   const factOptions: PickOption[] = useMemo(() => {
@@ -166,7 +202,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
       ...tables.filter((t) => !FACT_RE.test(t)).map((t) => ({ value: t, label: t, group: looks.length ? 'Other tables' : undefined, hint: tableCount(t) })),
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, columns])
+  }, [tables, colMap])
   const timeOptions: PickOption[] = useMemo(() => {
     const rest = tables.filter((t) => t !== fact)
     const looks = rest.filter((t) => TIME_RE.test(t))
@@ -176,11 +212,11 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
       ...rest.filter((t) => !TIME_RE.test(t)).map((t) => ({ value: t, label: t, group: 'Other tables', hint: tableCount(t) })),
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, fact, columns])
+  }, [tables, fact, colMap])
   const suggested = useMemo(
-    () => (fact && columns[key(fact)] ? suggestDims(columns[key(fact)], tables, new Set([fact, timeTable ?? ''])) : []),
+    () => (fact && colMap[key(fact)] ? suggestDims(colMap[key(fact)], tables, new Set([fact, timeTable ?? ''])) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fact, timeTable, columns, tables],
+    [fact, timeTable, colMap, tables],
   )
   const dimOptions: PickOption[] = useMemo(() => {
     const rest = tables.filter((t) => t !== fact && t !== timeTable)
@@ -191,13 +227,16 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
       .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
       .map((t) => ({ value: t, label: t, group: group(t), hint: tableCount(t) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tables, fact, timeTable, suggested, columns])
+  }, [tables, fact, timeTable, suggested, colMap])
 
   // -- profiling ----------------------------------------------------------------
   async function enterProfile() {
     const cols = await loadColumns(picked)
     void cols
-    const todo = picked.filter((t) => !profiles[key(t)] || profiles[key(t)].state === 'error')
+    // A DDL table the schema doesn't have can't be profiled - planned from its DDL.
+    const absent = (t: string) => fromDdl && !!schemaEntry && !schemaEntry.loading && !liveName(t)
+    setProfiles((p) => ({ ...p, ...Object.fromEntries(picked.filter(absent).map((t) => [key(t), { state: 'absent' } as ProfState])) }))
+    const todo = picked.filter((t) => !absent(t) && (!profiles[key(t)] || ['error', 'absent'].includes(profiles[key(t)].state)))
     setProfiles((p) => ({ ...p, ...Object.fromEntries(todo.map((t) => [key(t), { state: 'checking' } as ProfState])) }))
     await Promise.all(
       todo.map(async (t) => {
@@ -218,12 +257,15 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
     return out
   }, [profiles, useProfiles])
 
-  const wizardTable = (t: string): WizardTable => ({ schema: schema!, table: t, columns: columns[key(t)] ?? [] })
-  const colsReady = picked.every((t) => columns[key(t)])
+  const wizardTable = (t: string): WizardTable => ({
+    schema: schema!, table: t, columns: colMap[key(t)] ?? [],
+    foreignKeys: ddlTables.find((x) => x.name === t)?.foreignKeys,
+  })
+  const colsReady = picked.every((t) => colMap[key(t)])
   const basePlan: ModelPlan | null = useMemo(
     () => (fact && colsReady ? planModel(wizardTable(fact), timeTable ? wizardTable(timeTable) : null, dims.map(wizardTable), profileFacts) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fact, timeTable, dims, columns, profileFacts, colsReady],
+    [fact, timeTable, dims, colMap, profileFacts, colsReady],
   )
   const plan = basePlan && useProfiles ? applyJoinChecks(basePlan, checks) : basePlan
 
@@ -257,8 +299,12 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
   // Joins are checked as soon as the plan (from the profiles at hand) has them.
   const pendingChecks = useMemo(() => {
     if (!basePlan || !useProfiles) return []
-    return [...(basePlan.timeDim ? [basePlan.timeDim] : []), ...basePlan.dims].filter((d) => d.join && !(joinCheckKey(basePlan.fact, d) in checks))
-  }, [basePlan, checks, useProfiles])
+    const onHost = (t: string) => !fromDdl || !!liveName(t)
+    if (!onHost(basePlan.fact.table)) return []
+    return [...(basePlan.timeDim ? [basePlan.timeDim] : []), ...basePlan.dims]
+      .filter((d) => d.join && onHost(d.table) && !(joinCheckKey(basePlan.fact, d) in checks))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basePlan, checks, useProfiles, liveTables])
   const checking = useRef(false)
   useEffect(() => {
     if (step !== 'profile' || running || checking.current || !pendingChecks.length || !basePlan) return
@@ -270,7 +316,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
         const k = joinCheckKey(basePlan.fact, d)
         try {
           const r = await discoveryApi.joinCheck(ref(basePlan.fact.table), {
-            column: d.join!.factColumn, toSchema: d.schema, toTable: d.table, toColumn: d.join!.dimColumn,
+            column: d.join!.factColumn, toSchema: d.schema, toTable: onSource(d.table), toColumn: d.join!.dimColumn,
           })
           setChecks((c) => ({ ...c, [k]: r }))
         } catch {
@@ -283,11 +329,36 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, running, pendingChecks])
 
+  async function readDdl(f: File) {
+    setError(null)
+    setParsing(true)
+    try {
+      const got = await parseDdl(await f.text(), f.name)
+      setDdl(got)
+      setDdlFilter(got.schemas.length > 1 ? got.schemas[0] : null)
+      setFact(null)
+      setTime(null)
+      setDims([])
+      setProfiles({})
+      setChecks({})
+      if (!modelName) setModelName(slugifyModelName(f.name.replace(/\.[^.]+$/, '')))
+      // A live schema the DDL names is picked for you (once the schemas load).
+      if (schema && !got.schemas.some((d) => d.toLowerCase() === schema.toLowerCase())) setSchema(null)
+    } catch (e) {
+      setDdl(null)
+      setError(errMsg(e))
+    } finally {
+      setParsing(false)
+    }
+  }
+  const ddlFound = fromDdl && schemaEntry && !schemaEntry.loading ? tables.filter((t) => liveName(t)).length : null
+
   // -- navigation ---------------------------------------------------------------
   const idx = STEPS.findIndex((s) => s.id === step)
   const [loading, setLoading] = useState(false)
   const canNext =
-    (step === 'setup' && !!modelName.trim() && !!sourceId && !!schema && !!schemaEntry && !schemaEntry.loading) ||
+    (step === 'setup' && !!modelName.trim() && !!sourceId && !!schema && !!schemaEntry &&
+      (fromDdl ? tables.length > 0 : !schemaEntry.loading)) ||
     (step === 'fact' && !!fact) ||
     (step === 'time' && !!time) ||
     step === 'dims' ||
@@ -325,6 +396,9 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
     resetTables()
   }
   function resetTables() {
+    setProfiles({})
+    setChecks({})
+    if (fromDdl) return // the tables come from the DDL - the picks stand
     setFact(null)
     setTime(null)
     setDims([])
@@ -335,7 +409,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
 
   // -- materialize --------------------------------------------------------------
   function materializeDim(factId: string, d: DimPlan) {
-    const dimId = store.addNode(d.schema, d.table, 0, 0, columns[key(d.table)] ?? [])
+    const dimId = store.addNode(d.schema, onSource(d.table), 0, 0, colMap[key(d.table)] ?? [])
     // addNode only guesses a role from the table name - set it explicitly, or
     // a picked table like "datecustom" lands role: null and fails generation.
     store.setNodeRole(dimId, 'dimension')
@@ -363,7 +437,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
     if (clearCanvas) s.reset()
     s.setModelName(modelName)
     s.setSourceId(source.id, { dialect: source.dialect, connectionId: source.connectionId, database: source.database })
-    const factId = s.addNode(plan.fact.schema, plan.fact.table, 0, 0, plan.fact.columns)
+    const factId = s.addNode(plan.fact.schema, onSource(plan.fact.table), 0, 0, plan.fact.columns)
     s.setNodeRole(factId, 'fact')
     if (plan.timeDim) materializeDim(factId, plan.timeDim)
     for (const d of plan.dims) materializeDim(factId, d)
@@ -386,7 +460,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
 
   // -- step summaries (the rail) ------------------------------------------------
   const summary: Record<Step, string | null> = {
-    setup: modelName ? `${modelName}${schema ? ` · ${schema}` : ''}` : null,
+    setup: modelName ? `${modelName}${schema ? ` · ${schema}` : ''}${fromDdl && ddl ? ` · ${ddl.fileName}` : ''}` : null,
     fact: fact,
     time: time === 'none' ? 'none' : time,
     dims: idx > 3 || dims.length ? (dims.length ? `${dims.length} table${dims.length === 1 ? '' : 's'}` : 'none') : null,
@@ -399,7 +473,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
     <div className="modal-scrim" onClick={onClose}>
       <div className="sml-modal wizard" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
         <nav className="wizard-rail">
-          <div className="eyebrow">New model wizard</div>
+          <div className="eyebrow">{fromDdl ? 'New model from DDL' : 'New model wizard'}</div>
           <ol>
             {STEPS.map((s, i) => (
               <li
@@ -422,7 +496,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
           <header className="wizard-head">
             <span className="eyebrow">Step {idx + 1} of {STEPS.length}</span>
             <span className="headline">{cur.title}</span>
-            <span className="field-note">{cur.help}</span>
+            <span className="field-note">{fromDdl && step === 'setup' ? DDL_SETUP_HELP : cur.help}</span>
           </header>
 
           <div className="wizard-body">
@@ -430,6 +504,47 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
 
             {step === 'setup' && (
               <div className="wizard-form">
+                {fromDdl && (
+                  <div className="field">
+                    DDL file
+                    <input ref={ddlInput} type="file" accept=".sql,.ddl,.txt" style={{ display: 'none' }} data-testid="ddl-file"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) readDdl(f); e.target.value = '' }} />
+                    <div className="wizard-run">
+                      <button type="button" className="btn btn-primary btn-sm" disabled={parsing} onClick={() => ddlInput.current?.click()}>
+                        {ddl ? 'Choose another file…' : 'Choose file…'}
+                      </button>
+                      {ddl ? <span className="mono">{ddl.fileName}</span> : <span className="field-note">SQL CREATE TABLE statements (.sql)</span>}
+                    </div>
+                    {parsing && <span className="field-note wizard-inline"><span className="spinner" /> Reading the DDL…</span>}
+                    {ddl && (() => {
+                      const all = ddl.tables.filter((t) => t.columns.length)
+                      const views = ddl.tables.length - all.length
+                      const fks = all.reduce((n, t) => n + t.foreignKeys.length, 0)
+                      return (
+                        <span className="field-note">
+                          {all.length} table{all.length === 1 ? '' : 's'}, {fks} foreign key{fks === 1 ? '' : 's'}
+                          {views > 0 && ` · ${views} view${views === 1 ? '' : 's'} left out (no columns in DDL)`}
+                          {ddl.skipped > 0 && ` · ${ddl.skipped} other statement${ddl.skipped === 1 ? '' : 's'} ignored`}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                )}
+                {fromDdl && ddl && ddl.schemas.length > 1 && (
+                  <div className="field">
+                    Schema in the DDL
+                    <PickList
+                      options={[
+                        { value: '', label: 'Every table in the file' },
+                        ...ddl.schemas.map((d) => ({ value: d, label: d, hint: `${ddl.tables.filter((t) => t.columns.length && t.schema === d).length} tables` })),
+                      ]}
+                      value={ddlFilter ?? ''}
+                      onChange={(v) => setDdlFilter(v || null)}
+                      placeholder="Pick a schema…"
+                      searchPlaceholder="Search schemas"
+                    />
+                  </div>
+                )}
                 <label className="field">
                   Model name
                   <input autoFocus value={modelName} title={MODEL_NAME_HINT} placeholder="e.g. internet_sales"
@@ -469,8 +584,15 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
                   {schemaEntry?.loading && (
                     <span className="field-note wizard-inline"><span className="spinner" /> Listing tables in {schema}… large schemas can take AtScale a few minutes.</span>
                   )}
-                  {schemaEntry && !schemaEntry.loading && (
+                  {schemaEntry && !schemaEntry.loading && !fromDdl && (
                     <span className="field-note">{schemaEntry.tables.length.toLocaleString()} tables in {schema}.</span>
+                  )}
+                  {ddlFound != null && ddl && (
+                    <span className={`field-note ${ddlFound < tables.length ? 'warn' : ''}`}>
+                      {ddlFound === tables.length
+                        ? `All ${tables.length} DDL tables are in ${schema}.`
+                        : `${ddlFound} of ${tables.length} DDL tables are in ${schema}. The rest are planned from the DDL only, and can't be profiled until they exist there.`}
+                    </span>
                   )}
                   {schemas.error && <span className="login-error">{errMsg(schemas.error)}</span>}
                 </div>
@@ -493,7 +615,7 @@ export function WizardModal({ hostId, onClose, onGenerate, onDone }: Props) {
                     if (time === t) setTime(null)
                   }} placeholder={`Pick one of ${tables.length.toLocaleString()} tables…`} searchPlaceholder="Search tables" />
                 </div>
-                {fact && <TablePeek cols={columns[key(fact)]} />}
+                {fact && <TablePeek cols={colMap[key(fact)]} />}
               </div>
             )}
 
@@ -646,6 +768,7 @@ function ProfileStep({ picked, role, profiles, useProfiles, setUseProfiles, runn
                   <span className="wizard-prof-state">
                     {!p || p.state === 'checking' ? <span className="muted">looking for a profile…</span>
                       : p.state === 'missing' ? <span className="warn">not profiled yet</span>
+                      : p.state === 'absent' ? <span className="muted">not in this schema - planned from the DDL</span>
                       : p.state === 'running' ? <><span className="spinner" /> profiling… {Math.round((Date.now() - p.since) / 1000)}s</>
                       : p.state === 'error' ? <span className="login-error" title={p.error}>failed: {p.error}</span>
                       : <span className="ok">✓ {fmtN(p.profile.rowCount)} rows · profiled {ago(p.profile.profiledAt)}</span>}
@@ -671,7 +794,7 @@ function ProfileStep({ picked, role, profiles, useProfiles, setUseProfiles, runn
   )
 }
 
-const BASIS: Record<string, string> = { name: 'same column name', suffix: 'role-played key', values: 'value ranges match' }
+const BASIS: Record<string, string> = { fk: 'foreign key in the DDL', name: 'same column name', suffix: 'role-played key', values: 'value ranges match' }
 
 function JoinBadge({ d }: { d: DimPlan }) {
   const c = d.join?.check
