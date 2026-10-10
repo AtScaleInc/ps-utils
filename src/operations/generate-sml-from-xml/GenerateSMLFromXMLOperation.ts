@@ -3,7 +3,7 @@
  *
  * Reads an AtScale XML project file (schema version project_2_0) and converts
  * it to AtScale SML YAML files by applying the algorithm documented in
- * CONVERSION.md.  No database connection is required — the conversion runs
+ * docs/workflows/CONVERSION.md.  No database connection is required — the conversion runs
  * entirely from the XML model definition.
  *
  * Output files are written to the specified directory following the SML layout:

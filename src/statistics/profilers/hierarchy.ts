@@ -21,7 +21,7 @@ import type {
   RollupTierProfile,
   SamplingConfig,
 } from "../types.js";
-import { q, qualifyTable, num } from "../sql-helpers.js";
+import { num, quoter, type Quoter } from "../sql-helpers.js";
 import { classifyShape } from "../distribution.js";
 import type { IdMapper } from "../id-mapper.js";
 
@@ -30,9 +30,11 @@ import type { IdMapper } from "../id-mapper.js";
 export async function profileHierarchies(
   runner:    DatabaseQueryRunner,
   dim:       DimensionNode,
-  _config:   SamplingConfig,   // reserved for future per-level sampling
+  config:    SamplingConfig,
   idMapper:  IdMapper,
 ): Promise<HierarchyFingerprint[]> {
+  const qt = quoter(config.dialect);
+  const { q, qualifyTable } = qt;
   const results: HierarchyFingerprint[] = [];
   const defaultTableRef = qualifyTable(dim.sourceSchema, dim.sourceTable);
 
@@ -88,7 +90,7 @@ export async function profileHierarchies(
       if (parentLevel) {
         const parentKeyCol = level.parentKeyColumn ?? parentLevel.keyColumns[0]!;
         rollupFromParent = await profileRollupEdge(
-          runner, tableRef, parentKeyCol, keyCol,
+          runner, tableRef, parentKeyCol, keyCol, qt,
         );
       }
 
@@ -126,7 +128,9 @@ async function profileRollupEdge(
   tableRef:     string,
   parentKeyCol: string,
   childKeyCol:  string,
+  qt:           Quoter,
 ): Promise<RollupEdgeFingerprint> {
+  const { q } = qt;
   const rows = await runner.query(`
     SELECT
       AVG(children_per_parent)    AS avg_ratio,
@@ -152,7 +156,7 @@ async function profileRollupEdge(
 
   // ── Tier buckets ─────────────────────────────────────────────────────────
   // Meaningful only when there are enough parents to form four distinct tiers.
-  const tiers = await profileRollupTiers(runner, tableRef, parentKeyCol, childKeyCol);
+  const tiers = await profileRollupTiers(runner, tableRef, parentKeyCol, childKeyCol, qt);
 
   return {
     avgRatio:    avg,
@@ -180,7 +184,9 @@ async function profileRollupTiers(
   tableRef:     string,
   parentKeyCol: string,
   childKeyCol:  string,
+  qt:           Quoter,
 ): Promise<RollupTierProfile | undefined> {
+  const { q } = qt;
   try {
     const rows = await runner.query(`
       SELECT

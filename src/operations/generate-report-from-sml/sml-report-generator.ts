@@ -188,9 +188,22 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
         dimDatasets.add(ds);
         datasetAttrCount.set(ds, (datasetAttrCount.get(ds) ?? 0) + 1);
       }
-      for (const sec of asArray<Raw>(la?.secondary_attributes)) {
-        const secDs = normDataset(sec?.dataset);
-        if (secDs) datasetAttrCount.set(secDs, (datasetAttrCount.get(secDs) ?? 0) + 1);
+    }
+    // Secondary attributes live on hierarchies[].levels[].secondary_attributes, not on
+    // level_attributes (see renderDimension's own "Secondary attributes" table and the
+    // Summary's attrCount rollup above, which already walk this nesting) — la?.secondary_attributes
+    // above is always empty, so this tally needs its own pass over the same shape.
+    for (const h of asArray<Raw>(d.raw.hierarchies)) {
+      for (const lvl of asArray<Raw>(h?.levels)) {
+        for (const sec of asArray<Raw>(lvl?.secondary_attributes)) {
+          const shared = asArray<Raw>(sec?.shared_degenerate_columns);
+          const secDatasets = shared.length ? shared.map((s) => normDataset(s?.dataset)) : [normDataset(sec?.dataset)];
+          for (const secDs of secDatasets) {
+            if (!secDs) continue;
+            dimDatasets.add(secDs);
+            datasetAttrCount.set(secDs, (datasetAttrCount.get(secDs) ?? 0) + 1);
+          }
+        }
       }
     }
     for (const rel of asArray<Raw>(d.raw.relationships)) {
@@ -221,6 +234,20 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     (n, d) => n + asArray<Raw>(d.raw.hierarchies).reduce((k, h) => k + asArray(h.levels).length, 0),
     0,
   );
+  // SML has no separate schema-level attribute library — level and secondary attributes
+  // live inline inside each dimension — but the XML report's "Attributes used by a cube"
+  // Summary row counts exactly this same population (the converter only ever emits
+  // attributes at least one cube references), so roll both up here for parity.
+  const attrCount = c.dimensions.reduce(
+    (n, d) =>
+      n +
+      asArray(d.raw.level_attributes).length +
+      asArray<Raw>(d.raw.hierarchies).reduce(
+        (k, h) => k + asArray<Raw>(h.levels).reduce((j, lvl) => j + asArray(lvl?.secondary_attributes).length, 0),
+        0,
+      ),
+    0,
+  );
   const perspectives = c.models.flatMap((m) => asArray<Raw>(m.raw.perspectives));
   const aggregateCount = c.models.reduce((n, m) => n + asArray<Raw>(m.raw.aggregates).length, 0);
 
@@ -232,6 +259,7 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
         ["Models", String(c.models.length)],
         ["Datasets", String(c.datasets.length)],
         ["Connections", String(c.connections.length)],
+        ["Attributes", String(attrCount)],
         ["Dimensions", String(c.dimensions.length)],
         ["Hierarchies", String(hierCount)],
         ["Levels", String(levelCount)],
@@ -405,17 +433,30 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     if (raw.unique_name && raw.unique_name !== label(d)) o.push(`\`${raw.unique_name}\``, "");
     if (raw.description) o.push(cell(raw.description), "");
 
+    const attrs = asArray<Raw>(raw.level_attributes);
+    // xml-converter.ts's truncateUniqueName() shortens an over-length unique_name to
+    // `${head}_${8-hex sha1}_${tail}` — recognizable by that exact interior segment, unlike
+    // any ordinary sanitized name. Only fall back to the sibling level_attributes[].label for
+    // a level whose own unique_name matches this signature; substituting a label for every
+    // level would surface unrelated label/unique_name mismatches elsewhere in the SML as if
+    // they were this report's own bug.
+    const truncatedHashPattern = /_[0-9a-f]{8}_/;
+    const attrLabelByName = new Map(attrs.map((a) => [a?.unique_name, a?.label]));
+
     const hierarchies = asArray<Raw>(raw.hierarchies);
     if (hierarchies.length) {
       o.push("**Hierarchies**", "");
       for (const h of hierarchies) {
-        const levels = asArray<Raw>(h.levels).map((l) => cell(l?.unique_name ?? l));
+        const levels = asArray<Raw>(h.levels).map((l) => {
+          const uniqueName = l?.unique_name;
+          const isTruncated = typeof uniqueName === "string" && truncatedHashPattern.test(uniqueName);
+          return cell(isTruncated ? attrLabelByName.get(uniqueName) ?? uniqueName : uniqueName ?? l);
+        });
         o.push(`- **${cell(h?.label ?? h?.unique_name)}**: ${levels.map((l) => `\`${l}\``).join(" → ") || "_(no levels)_"}`);
       }
       o.push("");
     }
 
-    const attrs = asArray<Raw>(raw.level_attributes);
     if (attrs.length) {
       o.push("**Level attributes**", "");
       o.push(
@@ -463,9 +504,13 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     const rels = asArray<Raw>(raw.relationships);
     if (rels.length) {
       o.push("**Snowflake / embedded joins**", "");
+      // For a dimension-embedded relationship, SML's `to.level` is validated by the engine
+      // as a level of THIS (the host) dimension, not of `to.dimension` — the host level that
+      // owns the join's key arity, not a level living on the target dimension. Label the
+      // column accordingly so it doesn't read as though it mis-names the target's level.
       o.push(
         ...table(
-          ["From dataset", "Join columns", "To dimension", "To level", "Type"],
+          ["From dataset", "Join columns", "To dimension", "Host level", "Type"],
           rels.map((rel) => [
             code(normDataset(rel?.from?.dataset)),
             code(asArray(rel?.from?.join_columns).join(", ")),
@@ -500,11 +545,19 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
    * a model's `relationships[]` (see factBindingsByDimLevel above) — matches the XML
    * report's merged "dimension-column, fact-column (cube)" cell instead of showing only
    * the dimension-side half of the join.
+   *
+   * A model can legitimately record a relationship from the level's OWN dataset (e.g. a
+   * cube that joins a dimension to itself from more than one fact table, one of which is
+   * the dimension's own source table) — that relationship's `from.dataset`+`from.join_columns`
+   * is then identical to the level's native binding, and listing it again would print the
+   * same `dataset.column` twice. Drop any fact binding that duplicates the native one.
    */
   function levelBindingLabel(dimUniqueName: unknown, a: Raw): string {
     const own = bindingLabel(a);
+    const ownBindings = new Set(own.split(", ").filter(Boolean));
     const factBindings = factBindingsByDimLevel.get(`${dimUniqueName}::${a?.unique_name}`) ?? [];
-    return [own, ...factBindings].filter(Boolean).join(", ");
+    const extra = factBindings.filter((fb) => !ownBindings.has(fb.replace(/ \([^)]*\)$/, "")));
+    return [own, ...extra].filter(Boolean).join(", ");
   }
 
   /** Every physical dataset a dimension's level attributes bind to, across single- and shared/multi-dataset bindings. */

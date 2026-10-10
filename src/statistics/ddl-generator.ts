@@ -15,7 +15,9 @@
  * in the fingerprint).  Names are derived deterministically from the opaque
  * IDs so that the same fingerprint always produces the same DDL.
  *
- * BigQuery dialect omits PRIMARY KEY / FOREIGN KEY constraints (not supported).
+ * BigQuery and Databricks dialects omit PRIMARY KEY / FOREIGN KEY constraints:
+ * BigQuery requires them to be declared NOT ENFORCED, and Databricks accepts
+ * them only on Unity Catalog tables, so a plain CREATE TABLE would fail.
  */
 
 import type {
@@ -30,7 +32,10 @@ import type {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export type SqlDialect = "ansi" | "postgresql" | "snowflake" | "mysql" | "bigquery";
+export type SqlDialect = "ansi" | "postgresql" | "snowflake" | "mysql" | "bigquery" | "databricks";
+
+/** Dialects whose CREATE TABLE output omits PRIMARY KEY / FOREIGN KEY constraints. */
+const NO_CONSTRAINT_DIALECTS: ReadonlySet<SqlDialect> = new Set(["bigquery", "databricks"]);
 
 export interface DdlOptions {
   dialect?:  SqlDialect;
@@ -236,7 +241,7 @@ function renderDimensionTable(
   }
 
   // PRIMARY KEY
-  if (primaryKeyCol && dialect !== "bigquery") {
+  if (primaryKeyCol && !NO_CONSTRAINT_DIALECTS.has(dialect)) {
     constraintLines.push(`    PRIMARY KEY (${primaryKeyCol})`);
   }
 
@@ -288,7 +293,7 @@ function renderFactTable(
       : "NOT NULL";
     colLines.push(col(fkCol, leafType, null, `→ ${join.toDimensionId} leaf; ${nullNote}`));
 
-    if (dialect !== "bigquery") {
+    if (!NO_CONSTRAINT_DIALECTS.has(dialect)) {
       constraintLines.push(`    FOREIGN KEY (${fkCol}) REFERENCES ${dimTable} (${leafColRef})`);
     }
   }
@@ -371,6 +376,12 @@ function mapType(baseType: string, dialect: SqlDialect): string {
   if (dialect === "bigquery") {
     if (baseType === "SMALLINT" || baseType === "INTEGER" || baseType === "BIGINT") return "INT64";
     if (baseType === "DECIMAL(18,4)") return "FLOAT64";
+    if (baseType.startsWith("VARCHAR")) return "STRING";
+    return baseType;
+  }
+  if (dialect === "databricks") {
+    // SMALLINT / INTEGER / BIGINT / DECIMAL are native. VARCHAR(n) is accepted
+    // only on Delta tables, so use STRING, which works everywhere.
     if (baseType.startsWith("VARCHAR")) return "STRING";
     return baseType;
   }

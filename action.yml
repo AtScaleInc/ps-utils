@@ -13,13 +13,16 @@ inputs:
         extract-model-from-sml
         generate-sml-from-connection
         generate-sml-from-ddl
+        generate-sml-from-bundle
         generate-namespace-from-model
         generate-metrics-from-model
         generate-tableau-from-namespace
         generate-excel-from-namespace
         generate-powerbi-from-namespace
+        generate-notebook-from-connection
         execute-sql-on-connection
         extract-ddl-from-connection
+        echo-connection-metadata
         generate-atscale-install-yaml
         atscale-list-data-sources
         atscale-create-data-source
@@ -68,7 +71,8 @@ inputs:
       Used by: extract-model-from-atscale, generate-sml-from-connection,
                generate-tableau-from-namespace, execute-sql-on-connection,
                extract-ddl-from-connection, extract-data-shape-from-connection,
-               generate-data-from-data-shape-to-connection, get-dso-count.
+               generate-data-from-data-shape-to-connection, get-dso-count,
+               echo-connection-metadata, generate-notebook-from-connection.
     required: false
   connection-name:
     description: >
@@ -77,20 +81,21 @@ inputs:
                generate-sml-from-ddl, generate-tableau-from-namespace,
                execute-sql-on-connection, extract-ddl-from-connection,
                extract-data-shape-from-connection, get-dso-count,
-               generate-data-from-data-shape-to-connection.
+               generate-data-from-data-shape-to-connection,
+               echo-connection-metadata, generate-notebook-from-connection.
     required: false
 
   # ── extract-model-from-atscale / get-dso-count────────────────────────────────────────────
   model:
-    description: 
-      AtScale model identifier (cube name).
+    description: >
+      AtScale model identifier (cube name), or the model name to restrict the DSO count to.
       Used by: extract-model-from-atscale, get-dso-count.
     required: false
 
-# ── get-dso-count ────────────────────────────────────────────
-  model:
-    description: 
-      AtScale catalog identifier.
+  # ── get-dso-count ────────────────────────────────────────────
+  catalog:
+    description: >
+      AtScale catalog name to restrict the DSO count to. Omit to count all catalogs.
       Used by: get-dso-count.
     required: false
 
@@ -127,9 +132,13 @@ inputs:
       Output directory.
       For generate-sml-from-connection / generate-sml-from-ddl: SML output directory (default: sml/).
       For generate-data-from-data-shape: CSV output directory (default: data/).
+      For analyze-powerbi-dax-gaps: directory for the gap report (required).
     required: false
   schema:
-    description: Database schema to scope SML generation to.
+    description: >
+      Database schema to scope SML generation to.
+      For echo-connection-metadata: schema to read metadata from (default: the
+      connection's sql.schema, else PUBLIC; upper-cased before querying).
     required: false
   catalog-name:
     description: >
@@ -204,6 +213,25 @@ inputs:
   # ── generate-sml-from-ddl ────────────────────────────────────────────────
   ddl-file:
     description: Path to the DDL SQL file to parse for SML generation.
+    required: false
+
+  # ── generate-sml-from-bundle ─────────────────────────────────────────────
+  bundles:
+    description: >
+      Comma-separated AtScale support bundle paths: the engine's support-bundle
+      .zip, a directory containing metadata/ or metadata.zip, or a zip of such a
+      directory. Used by: generate-sml-from-bundle.
+    required: false
+  force:
+    description: >
+      Re-convert projects whose output directory already exists ("true"/"false").
+      Used by: generate-sml-from-bundle.
+    required: false
+    default: "false"
+  org:
+    description: >
+      Comma-separated organisation folder names to include (installer bundles).
+      Used by: generate-sml-from-bundle.
     required: false
 
   # ── generate-sml-from-xml / generate-report-from-xml ────────────────────
@@ -364,7 +392,10 @@ inputs:
     required: false
     default: "2025"
   target-file:
-    description: "Output path for the generated Tableau or Excel workbook."
+    description: >
+      Output path for the generated Tableau or Excel workbook, or for the notebook
+      written by generate-notebook-from-connection (default: notebook.ipynb; the
+      folder must already exist).
     required: false
   target-folder:
     description: >
@@ -382,8 +413,8 @@ inputs:
       Database dialect.
       For generate-sml-from-ddl: e.g. snowflake, postgresql — auto-detected from filename if omitted;
       when snowflake, dataset table names are uppercased.
-      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, or bigquery.
-      BigQuery omits PRIMARY KEY / FOREIGN KEY constraints.
+      For generate-ddl-from-data-shape: ansi (default), postgresql, snowflake, mysql, bigquery, or databricks.
+      BigQuery and Databricks omit PRIMARY KEY / FOREIGN KEY constraints.
       For generate-data-from-data-shape-to-connection: when omitted, the dialect is read from
       the connection configuration (sql.dialect); falls back to ansi.
     required: false
@@ -615,7 +646,8 @@ inputs:
       database and fetches an execution plan (EXPLAIN) for each outbound query,
       stored in the 'run_outbound_execution_plan' column.
       Supported dialects: snowflake (SYSTEM$EXPLAIN_PLAN_JSON), postgres
-      (EXPLAIN FORMAT JSON), redshift (EXPLAIN).
+      (EXPLAIN FORMAT JSON), redshift (EXPLAIN), databricks (EXPLAIN FORMATTED),
+      bigquery (dry-run job statistics; BigQuery has no EXPLAIN).
       Used by: generate-enhanced-query-results.
     required: false
 
@@ -1034,7 +1066,9 @@ runs:
          inputs.operation == 'generate-tableau-from-namespace' ||
          inputs.operation == 'generate-excel-from-namespace' ||
          inputs.operation == 'generate-powerbi-from-namespace' ||
+         inputs.operation == 'generate-notebook-from-connection' ||
          inputs.operation == 'execute-sql-on-connection' ||
+         inputs.operation == 'echo-connection-metadata' ||
          inputs.operation == 'extract-ddl-from-connection' ||
          inputs.operation == 'atscale-list-data-sources' ||
          inputs.operation == 'atscale-create-data-source' ||
@@ -1139,6 +1173,25 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-ddl "${ARGS[@]}"
       shell: bash
 
+    # ── generate-sml-from-bundle ─────────────────────────────────────────────
+    - name: Generate SML from support bundles
+      if: inputs.operation == 'generate-sml-from-bundle'
+      run: |
+        ARGS=(
+          --bundles    "${{ inputs.bundles }}"
+          --output-dir "${{ inputs.output-dir }}"
+          --verbose true
+        )
+        [[ "${{ inputs.force }}" == "true" ]]       && ARGS+=(--force true)
+        [[ -n "${{ inputs.org }}" ]]                && ARGS+=(--org               "${{ inputs.org }}")
+        [[ -n "${{ inputs.connection-name }}"   ]]  && ARGS+=(--connection-name   "${{ inputs.connection-name }}")
+        [[ -n "${{ inputs.connection-type }}"   ]]  && ARGS+=(--connection-type   "${{ inputs.connection-type }}")
+        [[ -n "${{ inputs.connection-db }}"     ]]  && ARGS+=(--connection-db     "${{ inputs.connection-db }}")
+        [[ -n "${{ inputs.connection-schema }}" ]]  && ARGS+=(--connection-schema "${{ inputs.connection-schema }}")
+        [[ -n "${{ inputs.model-mode }}"        ]]  && ARGS+=(--model-mode        "${{ inputs.model-mode }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-sml-from-bundle "${ARGS[@]}"
+      shell: bash
+
     # ── generate-sml-from-xml ────────────────────────────────────────────────
     - name: Generate SML from XML
       if: inputs.operation == 'generate-sml-from-xml'
@@ -1175,6 +1228,16 @@ runs:
         [[ -n "${{ inputs.description }}"  ]] && ARGS+=(--description  "${{ inputs.description }}")
         [[ -n "${{ inputs.model-mode }}"   ]] && ARGS+=(--model-mode   "${{ inputs.model-mode }}")
         node "${{ github.action_path }}/dist/cli.js" generate-sml-from-tabular "${ARGS[@]}"
+      shell: bash
+
+    # ── analyze-powerbi-dax-gaps ──────────────────────────────────────────────
+    - name: Analyze Power BI DAX gaps
+      if: inputs.operation == 'analyze-powerbi-dax-gaps'
+      run: |
+        node "${{ github.action_path }}/dist/cli.js" analyze-powerbi-dax-gaps \
+          --pbix-file  "${{ inputs.pbix-file }}" \
+          --output-dir "${{ inputs.output-dir }}" \
+          --verbose true
       shell: bash
 
     # ── generate-sml-from-ssas-multidimensional ───────────────────────────────
@@ -1370,6 +1433,19 @@ runs:
         node "${{ github.action_path }}/dist/cli.js" generate-powerbi-from-namespace "${ARGS[@]}"
       shell: bash
 
+    # ── generate-notebook-from-connection ────────────────────────────────────
+    - name: Generate Jupyter notebook from connection
+      if: inputs.operation == 'generate-notebook-from-connection'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.target-file }}" ]] && ARGS+=(--target-file "${{ inputs.target-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-notebook-from-connection "${ARGS[@]}"
+      shell: bash
+
     # ── execute-sql-on-connection ─────────────────────────────────────────────
     - name: Execute SQL on connection
       if: inputs.operation == 'execute-sql-on-connection'
@@ -1399,6 +1475,19 @@ runs:
         [[ "${{ inputs.case-insensitive }}" == "true" ]] && ARGS+=(--case-insensitive true)
         [[ -n "${{ inputs.output-file }}" ]]       && ARGS+=(--output-file      "${{ inputs.output-file }}")
         node "${{ github.action_path }}/dist/cli.js" extract-ddl-from-connection "${ARGS[@]}"
+      shell: bash
+
+    # ── echo-connection-metadata ──────────────────────────────────────────────
+    - name: Echo connection metadata
+      if: inputs.operation == 'echo-connection-metadata'
+      run: |
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
+          --connection-name "${{ inputs.connection-name }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.schema }}" ]] && ARGS+=(--schema "${{ inputs.schema }}")
+        node "${{ github.action_path }}/dist/cli.js" echo-connection-metadata "${ARGS[@]}"
       shell: bash
 
     # ── generate-atscale-install-yaml ────────────────────────────────────────
@@ -1618,15 +1707,14 @@ runs:
     - name: Get DSO Count
       if: inputs.operation == 'get-dso-count'
       run: |
-         ARGS=(
-          --connection-file         "${{ github.action_path }}/connection.yml"
+        ARGS=(
+          --connection-file "${{ github.action_path }}/connection.yml"
           --connection-name "${{ inputs.connection-name }}"
-          --insecure                "${{ inputs.insecure }}"
           --verbose true
         )
         [[ -n "${{ inputs.catalog }}"  ]] && ARGS+=(--catalog  "${{ inputs.catalog }}")
         [[ -n "${{ inputs.model }}"    ]] && ARGS+=(--model    "${{ inputs.model }}")
-        node "${{ github.action_path }}/dist/cli.js" atscale-list-model-errors "${ARGS[@]}"
+        node "${{ github.action_path }}/dist/cli.js" get-dso-count "${ARGS[@]}"
       shell: bash
 
     # ── generate-ddl-from-atscale ────────────────────────────────────────────

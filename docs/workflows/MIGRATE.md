@@ -98,13 +98,13 @@ flowchart TD
     A([Start]) --> B["Phase 1: Environment Setup (DEV / UAT / PROD instances + Git repo)"]
     B --> C["Phase 2: Extract Query Baseline (extract-queries-from-atscale)"]
     C --> D["Phase 3: Convert XML to SML (generate-sml-from-xml)"]
-    D --> E["Phase 4: Validate and Commit (deploy-model to DEV, BI tool validation, review)"]
+    D --> E["Phase 4: Validate and Commit (atscale-deploy-catalog to DEV, BI tool validation, review)"]
     E --> F["Phase 5: Set Up Promotion Pipeline (GitHub Actions workflows)"]
     F --> G["Phase 6: Automated Query Harness (execute-atscale-query-harness on each deploy)"]
     G --> H([Migration Complete])
 ```
 
-After migration, all model changes follow the GitOps workflow described in [docs/GIT.md](GIT.md): feature branches are reviewed, deployed to DEV, merged to `development` (which auto-deploys to UAT), and finally promoted to `main` (which auto-deploys to PROD after a manual approval gate). The query harness runs automatically on every UAT and PROD deploy to catch outright query failures; regression analysis (row counts, elapsed time) requires manual review of the downloaded artifact.
+After migration, all model changes follow the GitOps workflow described in [docs/workflows/GIT.md](GIT.md): feature branches are reviewed, deployed to DEV, merged to `development` (which auto-deploys to UAT), and finally promoted to `main` (which auto-deploys to PROD after a manual approval gate). The query harness runs automatically on every UAT and PROD deploy to catch outright query failures; regression analysis (row counts, elapsed time) requires manual review of the downloaded artifact.
 
 ---
 
@@ -231,13 +231,13 @@ You need three independent AtScale instances, one per environment. They should b
 | **UAT** | Business sign-off before PROD | `development` | Merge to `development` |
 | **PROD** | Live traffic | `main` | Merge to `main` (manual gate) |
 
-Record the hostname and API token for each instance — you will store them as GitHub Secrets in step 1.3.
+Record the URL and API token for each instance — you will store them in each environment's `CONNECTIONS_FILE` secret in step 1.3.
 
 ### 1.2 Initialise the Git Repository
 
 [↑ Table of Contents](#table-of-contents)
 
-Follow the **Administrator: Repository Setup** steps in [docs/GIT.md](GIT.md#administrator-repository-setup). In brief:
+Follow the **Administrator: Repository Setup** steps in [docs/workflows/GIT.md](GIT.md#administrator-repository-setup). In brief:
 
 ```bash
 git init atscale-sml-models
@@ -271,16 +271,32 @@ Add the following secrets to **each** environment (**GitHub → Settings → Env
 
 | Secret | Description |
 |---|---|
-| `ATSCALE_HOST` | Hostname of the AtScale instance (e.g. `atscale-dev.example.com`) |
-| `ATSCALE_API_TOKEN` | API token for the AtScale instance |
-| `ATSCALE_ORG` | AtScale organisation name |
-| `ATSCALE_SQL_HOST` | Hostname for the AtScale Postgres backend (may be the same as `ATSCALE_HOST`) |
-| `ATSCALE_SQL_PORT` | Postgres port for AtScale backend (typically `10520`) |
-| `ATSCALE_SQL_PASSWORD` | Password for the AtScale Postgres backend |
+| `CONNECTIONS_FILE` | The complete ps-utils connections file for this environment, with one connection named after the environment (`dev`, `uat`, or `prod`). Include a `sql:` block on `uat` and `prod` for the query harness. |
 | `ATSCALE_DATABASE` | Data warehouse database name written into the SML `.env` file at deploy time (e.g. the Snowflake database) |
 | `ATSCALE_SCHEMA` | Data warehouse schema name written into the SML `.env` file at deploy time |
 
-`ATSCALE_SQL_HOST`, `ATSCALE_SQL_PORT`, `ATSCALE_SQL_PASSWORD` are only used in query extraction and harness workflows; they only need to be set on the environment(s) where those operations run (typically `uat` and `prod`).
+Also add an `ATSCALE_URL` **variable** to each environment (the Design Center URL, posted in pull request comments). Example `CONNECTIONS_FILE` for `uat`:
+
+```yaml
+# CONNECTIONS_FILE for the uat environment (format: README "Connection YAML")
+users:
+  atscale_ci:
+    apiToken: "<API token for the uat AtScale instance>"
+    username: "<service account>"   # atscale-deploy-catalog also needs a username and password
+    password: "<password>"
+connections:
+  uat:                             # connection name used by the workflows in this environment
+    atscale:
+      url: https://atscale-uat.example.com
+      user: atscale_ci
+      insecure: false
+    sql:                             # AtScale SQL endpoint, used by the query harness
+      dialect: postgres
+      server: atscale-uat.example.com
+      port: 15432
+      database: <catalog name>
+      user: atscale_ci
+```
 
 Add the following secret at **repository level** (**GitHub → Settings → Secrets and variables → Actions → Repository secrets**):
 
@@ -294,7 +310,7 @@ This secret is repository-level (not per-environment) because it targets the leg
 
 [↑ Table of Contents](#table-of-contents)
 
-See [docs/GIT.md — Configure branch protection rules](GIT.md#3-configure-branch-protection-rules) for the exact GitHub settings. The key rules:
+See [docs/workflows/GIT.md — Configure branch protection rules](GIT.md#3-configure-branch-protection-rules) for the exact GitHub settings. The key rules:
 
 - `development`: 1 required reviewer (Model Administrator), status checks `validate-sml` must pass
 - `main`: 2 required reviewers (Model Administrator + Administrator), status checks `validate-sml` and `deploy-dev` must pass, only Administrators may push
@@ -611,12 +627,16 @@ Before committing, do a one-time manual deploy to DEV to confirm the converted m
 ```bash
 # Write a temporary local connections file (do not commit this file)
 cat > /tmp/connections-dev.yaml <<EOF
+users:
+  atscale_dev:
+    apiToken: "${ATSCALE_DEV_API_TOKEN}"
+    username: "${ATSCALE_DEV_USER}"       # atscale-deploy-catalog also needs a username and password
+    password: "${ATSCALE_DEV_PASSWORD}"
 connections:
-  - name: dev
+  dev:
     atscale:
-      host: atscale-dev.example.com
-      apiToken: "${ATSCALE_DEV_API_TOKEN}"
-      org: my-org
+      url: https://atscale-dev.example.com
+      user: atscale_dev
 EOF
 
 npx @atscale-ps/ps-utils atscale-deploy-catalog \
@@ -977,6 +997,7 @@ jobs:
   validate-sml:
     name: Validate SML
     runs-on: ubuntu-latest
+    environment: dev
     steps:
       - uses: actions/checkout@v4
 
@@ -988,11 +1009,22 @@ jobs:
       - name: Install ps-utils
         run: npm install -g @atscale-ps/ps-utils
 
-      - name: Validate SML schema
+      - name: Write connections file
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
+
+      - name: Validate SML
         run: |
-          ps-utils validate-sml \
-            --sml-root ./models \
-            --fail-on-warning
+          atscale-utils atscale-list-model-errors \
+            --connection-file connections.yaml \
+            --atscale-connection-name dev \
+            --sml-dir ./models \
+            --skip-engine-checks \
+            --insecure false > model-errors.json
+          cat model-errors.json
+          # The operation exits 0 even when it reports problems, so gate on its JSON output
+          jq -e '(.summary.errors // 0) == 0' model-errors.json
 
   deploy-dev:
     name: Deploy to DEV AtScale
@@ -1004,17 +1036,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: dev
-              atscale:
-                host: ${{ secrets.ATSCALE_HOST }}
-                apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-                org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Write SML .env file
         run: |
           echo "DATABASE=${{ secrets.ATSCALE_DATABASE }}" >> models/.env
@@ -1024,7 +1045,7 @@ jobs:
         uses: AtScaleInc/ps-utils@v1
         with:
           operation: atscale-deploy-catalog
-          connection-file: /tmp/connections.yaml
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
           atscale-connection-name: dev
           sml-dir: ./models
           repo-name: ${{ github.event.repository.name }}
@@ -1037,7 +1058,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `✅ **DEV deploy complete.** Review the model at: https://${{ secrets.ATSCALE_HOST }}/ui`
+              body: `✅ **DEV deploy complete.** Review the model at: ${{ vars.ATSCALE_URL }}`
             })
 ```
 
@@ -1068,17 +1089,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: uat
-              atscale:
-                host: ${{ secrets.ATSCALE_HOST }}
-                apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-                org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Write SML .env file
         run: |
           echo "DATABASE=${{ secrets.ATSCALE_DATABASE }}" >> models/.env
@@ -1088,7 +1098,7 @@ jobs:
         uses: AtScaleInc/ps-utils@v1
         with:
           operation: atscale-deploy-catalog
-          connection-file: /tmp/connections.yaml
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
           atscale-connection-name: uat
           sml-dir: ./models
           repo-name: ${{ github.event.repository.name }}
@@ -1110,22 +1120,16 @@ jobs:
         run: npm install -g @atscale-ps/ps-utils
 
       - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: uat
-              atscale:
-                host: ${{ secrets.ATSCALE_HOST }}
-                apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-                org: ${{ secrets.ATSCALE_ORG }}
-          EOF
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
 
       - name: Run SQL query harness
         run: |
           for f in queries/*_sql_queries.json; do
             [ -f "$f" ] || continue
-            ps-utils execute-atscale-query-harness \
-              --connection-file /tmp/connections.yaml \
+            atscale-utils execute-atscale-query-harness \
+              --connection-file connections.yaml \
               --connection-name uat \
               --query-file "$f" \
               --protocol sql \
@@ -1137,8 +1141,8 @@ jobs:
         run: |
           for f in queries/*_xmla_queries.json; do
             [ -f "$f" ] || continue
-            ps-utils execute-atscale-query-harness \
-              --connection-file /tmp/connections.yaml \
+            atscale-utils execute-atscale-query-harness \
+              --connection-file connections.yaml \
               --connection-name uat \
               --query-file "$f" \
               --protocol xmla \
@@ -1155,11 +1159,8 @@ jobs:
 
       - name: Check for query failures
         run: |
-          if awk -F',' '
-            FNR==1 { col=0; for(i=1;i<=NF;i++) if($i=="status") col=i; next }
-            col && $col=="error" { found=1 }
-            END { exit (found ? 1 : 0) }
-          ' run_results/*.csv; then
+          # The harness writes status SUCCEEDED or FAILED and exits 0 either way
+          if python3 -c 'import csv,glob,sys; rows=[r for f in glob.glob("run_results/*.csv") for r in csv.DictReader(open(f, newline=""))]; bad=[r["query_name"] for r in rows if r["status"]!="SUCCEEDED"]; print(len(rows), "queries,", len(bad), "failed:", bad); sys.exit(1 if bad or not rows else 0)'; then
             echo "All queries passed."
           else
             echo "::error::One or more queries failed in UAT. Check the uploaded harness results artifact."
@@ -1194,17 +1195,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: prod
-              atscale:
-                host: ${{ secrets.ATSCALE_HOST }}
-                apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-                org: ${{ secrets.ATSCALE_ORG }}
-          EOF
-
       - name: Write SML .env file
         run: |
           echo "DATABASE=${{ secrets.ATSCALE_DATABASE }}" >> models/.env
@@ -1214,7 +1204,7 @@ jobs:
         uses: AtScaleInc/ps-utils@v1
         with:
           operation: atscale-deploy-catalog
-          connection-file: /tmp/connections.yaml
+          connection-file: ${{ secrets.CONNECTIONS_FILE }}
           atscale-connection-name: prod
           sml-dir: ./models
           repo-name: ${{ github.event.repository.name }}
@@ -1242,22 +1232,16 @@ jobs:
         run: npm install -g @atscale-ps/ps-utils
 
       - name: Write connections file
-        run: |
-          cat > /tmp/connections.yaml <<EOF
-          connections:
-            - name: prod
-              atscale:
-                host: ${{ secrets.ATSCALE_HOST }}
-                apiToken: ${{ secrets.ATSCALE_API_TOKEN }}
-                org: ${{ secrets.ATSCALE_ORG }}
-          EOF
+        run: printf '%s' "$CONNECTIONS_FILE" > connections.yaml
+        env:
+          CONNECTIONS_FILE: ${{ secrets.CONNECTIONS_FILE }}
 
       - name: Run SQL query harness
         run: |
           for f in queries/*_sql_queries.json; do
             [ -f "$f" ] || continue
-            ps-utils execute-atscale-query-harness \
-              --connection-file /tmp/connections.yaml \
+            atscale-utils execute-atscale-query-harness \
+              --connection-file connections.yaml \
               --connection-name prod \
               --query-file "$f" \
               --protocol sql \
@@ -1269,8 +1253,8 @@ jobs:
         run: |
           for f in queries/*_xmla_queries.json; do
             [ -f "$f" ] || continue
-            ps-utils execute-atscale-query-harness \
-              --connection-file /tmp/connections.yaml \
+            atscale-utils execute-atscale-query-harness \
+              --connection-file connections.yaml \
               --connection-name prod \
               --query-file "$f" \
               --protocol xmla \
@@ -1287,11 +1271,8 @@ jobs:
 
       - name: Check for query failures
         run: |
-          if awk -F',' '
-            FNR==1 { col=0; for(i=1;i<=NF;i++) if($i=="status") col=i; next }
-            col && $col=="error" { found=1 }
-            END { exit (found ? 1 : 0) }
-          ' run_results/*.csv; then
+          # The harness writes status SUCCEEDED or FAILED and exits 0 either way
+          if python3 -c 'import csv,glob,sys; rows=[r for f in glob.glob("run_results/*.csv") for r in csv.DictReader(open(f, newline=""))]; bad=[r["query_name"] for r in rows if r["status"]!="SUCCEEDED"]; print(len(rows), "queries,", len(bad), "failed:", bad); sys.exit(1 if bad or not rows else 0)'; then
             echo "All queries passed."
           else
             echo "::error::One or more queries failed in PROD. Review the harness results artifact immediately."
@@ -1310,7 +1291,7 @@ jobs:
 
 [↑ Table of Contents](#table-of-contents)
 
-`.github/workflows/release-pr.yml` — runs full SML validation on PRs from `development` → `main`. No deploy — validation only. See [docs/GIT.md — release-pr.yml](GIT.md#githubworkflowsrelease-pryml) for the complete file.
+`.github/workflows/release-pr.yml` — runs full SML validation on PRs from `development` → `main`. No deploy — validation only. See [docs/workflows/GIT.md — release-pr.yml](GIT.md#githubworkflowsrelease-pryml) for the complete file.
 
 ---
 
@@ -1331,7 +1312,7 @@ Every merge to `development` triggers `deploy-uat.yml`, which:
 3. Uploads the CSV results as a GitHub Actions artifact (retained 30 days)
 4. Fails the workflow if any query returned a `status` of `error`, blocking the release pipeline
 
-**What CI catches automatically:** outright query errors (`status == "error"`).
+**What CI catches automatically:** outright query failures (`status == "FAILED"` in the harness results).
 
 **Aggregate warm-up:** container environments start with empty aggregate schemas. The first harness run after a fresh deploy will miss all aggregates and will be materially slower than steady state — making elapsed-time comparison against the legacy baseline unreliable. Before treating performance results as valid:
 
@@ -1365,7 +1346,7 @@ As with UAT, PROD starts with an empty aggregate schema. Wait for aggregate buil
 A PROD harness failure does not roll back the deploy automatically. The on-call Model Administrator must:
 
 1. Download the artifact and identify the failing queries
-2. Determine whether the failure is a model issue (open a `hotfix/*` branch per [docs/GIT.md](GIT.md#patch-hotfix-workflow)) or a data issue (investigate the warehouse directly)
+2. Determine whether the failure is a model issue (open a `hotfix/*` branch per [docs/workflows/GIT.md](GIT.md#patch-hotfix-workflow)) or a data issue (investigate the warehouse directly)
 3. If the model must be rolled back immediately, redeploy the previous Git tag via `workflow_dispatch` on `deploy-prod.yml`
 
 > **Milestone M4 — Migration Complete**
@@ -1400,7 +1381,7 @@ Compare the `elapsed_seconds` and `row_count` columns against the baseline `elap
 
 [↑ Table of Contents](#table-of-contents)
 
-All ongoing model development after the initial migration follows the strategy defined in [docs/GIT.md](GIT.md).
+All ongoing model development after the initial migration follows the strategy defined in [docs/workflows/GIT.md](GIT.md).
 
 Key points relevant to migration:
 
@@ -1410,7 +1391,7 @@ Key points relevant to migration:
 - The branch `main` always reflects PROD. The branch `development` always reflects UAT. Feature branches are ephemeral.
 - Hotfixes to the SML (e.g. a broken measure discovered post-migration) follow the [Patch (Hotfix) Workflow](GIT.md#patch-hotfix-workflow) in GIT.md — branch from `main`, not from `development`.
 
-For the full branch diagram, persona responsibilities, PR templates, and hotfix procedures, refer to [docs/GIT.md](GIT.md).
+For the full branch diagram, persona responsibilities, PR templates, and hotfix procedures, refer to [docs/workflows/GIT.md](GIT.md).
 
 ---
 
@@ -1534,8 +1515,7 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] Git repository initialised with `main` and `development` permanent branches
 - [ ] Branch protection rules configured on `main` (2 required reviewers) and `development` (1 required reviewer)
 - [ ] GitHub Environments `dev`, `uat`, `prod` created; `prod` has required-reviewer protection rule
-- [ ] Secrets `ATSCALE_HOST`, `ATSCALE_API_TOKEN`, `ATSCALE_ORG` added to each environment
-- [ ] Secrets `ATSCALE_SQL_HOST`, `ATSCALE_SQL_PORT`, `ATSCALE_SQL_PASSWORD` added to `uat` and `prod`
+- [ ] Secret `CONNECTIONS_FILE` and variable `ATSCALE_URL` added to each environment; `uat` and `prod` files include a `sql:` block
 - [ ] Secrets `ATSCALE_DATABASE`, `ATSCALE_SCHEMA` (or equivalent SML env vars) added per environment
 - [ ] Identity provider (OIDC/SAML) configured in Keycloak; IdP group mappings verified for all three environments
 - [ ] SSO login verified for each persona (admin, model-admin, designer) in DEV

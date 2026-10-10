@@ -38,6 +38,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    BUNDLE["Support bundles"] --> GB["generate-sml-from-bundle"] --> SMLB["SML repos + summary"]
     TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
@@ -49,7 +50,9 @@ flowchart LR
     MODEL["model.yaml"] --> F["generate-metrics-from-model"] --> METRICS["metrics/*.yml"]
     SML --> J["apply-style-to-sml"] --> SML
     SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
-    SML --> L["clean-unused-sml-objects"] --> SML
+    SML --> CL["clean-unused-sml-objects"] --> SML
+    PBIX["Power BI .pbix"] --> P["analyze-powerbi-dax-gaps"] --> GAP["Gap report (.md, .json, .csv)"]
+    DB --> Q["echo-connection-metadata"] --> META["Schema metadata (JSON, stdout)"]
 ```
 
 ### Synthetic Data Generation
@@ -74,6 +77,7 @@ flowchart LR
     NS --> B["generate-tableau-from-namespace"] --> TWB["tableau.twb"]
     NS --> C["generate-excel-from-namespace"] --> XLSX["workbook.xlsx"]
     NS --> D["generate-powerbi-from-namespace"] --> PBI["output/powerbi/"]
+    CONN --> E["generate-notebook-from-connection"] --> NB["notebook.ipynb"]
     CONN["connections.yaml"] --> B & C & D
     ALIASES["aliases.yaml (opt.)"] -.-> B & C & D
 ```
@@ -100,22 +104,6 @@ flowchart TD
     F --> OUTLIERS["outliers.csv"]
 ```
 
-### Web Services
-
-Expose every operation as a GraphQL mutation and REST endpoint via an embedded HTTP server.
-
-```mermaid
-flowchart LR
-    CLIENT["HTTP Client"] --> A["execute-web-services"] --> OPS["All Operations (GraphQL / REST)"]
-```
-
-### Utilities
-
-```mermaid
-flowchart LR
-    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
-```
-
 ### AtScale Config
 
 Bootstrap and manage an AtScale instance — generate Helm install values, register data sources and SML repositories, deploy catalogs, and inspect live configuration state.
@@ -130,6 +118,7 @@ flowchart LR
     ATS --> F["atscale-list-repos"] --> INFO
     ATS --> G["atscale-list-deployments"] --> INFO
     ATS --> H["atscale-list-model-errors"] --> INFO
+    ATS --> I["get-dso-count"] --> INFO
 ```
 
 ### Aggregate Management
@@ -150,6 +139,22 @@ flowchart LR
     E --> ATS2["AtScale Instance (target)"]
 ```
 
+### Web Services
+
+Expose every operation as a GraphQL mutation and REST endpoint via an embedded HTTP server.
+
+```mermaid
+flowchart LR
+    CLIENT["HTTP Client"] --> A["execute-web-services"] --> OPS["All Operations (GraphQL / REST)"]
+```
+
+### Utilities
+
+```mermaid
+flowchart LR
+    A["version"] --> VER["@atscale-ps/ps-utils@x.y.z (stdout)"]
+```
+
 ## Table of Contents
 
 - [Setup](#setup)
@@ -163,7 +168,9 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
+    - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -174,6 +181,7 @@ flowchart LR
     - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
     - [`generate-metrics-from-model`](#generate-metrics-from-model)
+    - [`echo-connection-metadata`](#echo-connection-metadata)
   - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
     - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
@@ -185,6 +193,7 @@ flowchart LR
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+    - [`generate-notebook-from-connection`](#generate-notebook-from-connection)
   - Testing / Query Processing
     - [`generate-queries-from-sml`](#generate-queries-from-sml)
     - [`generate-queries-from-model`](#generate-queries-from-model)
@@ -203,6 +212,7 @@ flowchart LR
     - [`atscale-list-deployments`](#atscale-list-deployments)
     - [`atscale-deploy-catalog`](#atscale-deploy-catalog)
     - [`atscale-list-model-errors`](#atscale-list-model-errors)
+    - [`get-dso-count`](#get-dso-count)
   - Aggregate Management
     - [`atscale-list-aggregates`](#atscale-list-aggregates)
     - [`atscale-rebuild-aggregates`](#atscale-rebuild-aggregates)
@@ -252,21 +262,25 @@ The `docs/` directory contains extended reference material:
 
 | File | Description |
 |------|-------------|
-| [docs/ACTIONS.md](docs/ACTIONS.md) | GitHub Actions guide — run any operation as a composite workflow step |
-| [docs/NODE.md](docs/NODE.md) | Node.js library API reference — typed `async` functions for every operation |
-| [docs/GRAPHQL.md](docs/GRAPHQL.md) | GraphQL API reference for the web services server (auto-generated) |
-| [docs/REST.md](docs/REST.md) | REST API reference for the web services server (auto-generated) |
-| [docs/DEVELOPER.md](docs/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
-| [docs/CONVERSION.md](docs/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
+| [docs/reference/ACTIONS.md](docs/reference/ACTIONS.md) | GitHub Actions guide — run any operation as a composite workflow step |
+| [docs/reference/NODE.md](docs/reference/NODE.md) | Node.js library API reference — typed `async` functions for every operation |
+| [docs/reference/GRAPHQL.md](docs/reference/GRAPHQL.md) | GraphQL API reference for the web services server (auto-generated) |
+| [docs/reference/REST.md](docs/reference/REST.md) | REST API reference for the web services server (auto-generated) |
+| [docs/reference/DEVELOPER.md](docs/reference/DEVELOPER.md) | Developer guide — CLI framework architecture and how to add new operations |
+| [docs/reference/README.md](docs/reference/README.md) | API reference index — GitHub Actions, Node.js, GraphQL, REST, and developer guide |
+| [docs/workflows/CONVERSION.md](docs/workflows/CONVERSION.md) | Algorithm documentation for converting AtScale XML projects to SML |
 | [docs/workflows/README.md](docs/workflows/README.md) | Professional Services delivery workflows for existing-model conversion and net-new SML development |
-| [docs/STATISTICS.md](docs/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
-| [docs/VERTICALS.md](docs/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+| [docs/system/STATISTICS.md](docs/system/STATISTICS.md) | Statistical fingerprint algorithm used for synthetic data generation |
+| [docs/system/VERTICALS.md](docs/system/VERTICALS.md) | Pre-built DDL schemas and SML models for 15 industry verticals |
+| [docs/system/README.md](docs/system/README.md) | System reference index — architecture, naming style guide, synthetic-data statistics, and industry verticals |
 | [vscode-extension/README.md](vscode-extension/README.md) | VS Code extension — run operations from the Explorer context menu, plus SML schema validation and highlighting (install & usage) |
 | [resources/sml-reference/UPSTREAM.md](resources/sml-reference/UPSTREAM.md) | Vendored SML language specification — source, pinned revision, and how to refresh it |
 
 ---
 
 ## Operations
+
+#### Model Extraction
 
 ### `extract-model-from-atscale`
 
@@ -289,7 +303,7 @@ Connects to a live AtScale instance via MDX and extracts a model's metrics and a
 | `--connection-name` | Yes | | Connection name in the file |
 | `--output-model-file` | No | stdout | Output path for the model YAML |
 
-**GitHub Actions workflow:** See [Extract AtScale Model Workflow](#extract-model-from-atscale-workflow).
+**GitHub Actions workflow:** See [Extract AtScale Model Workflow](#extract-atscale-model-workflow).
 
 ---
 
@@ -323,6 +337,8 @@ With optional overrides:
 | `--output-model-file` | No | stdout | Output path for the model YAML |
 
 ---
+
+#### SML Creation and Manipulation
 
 ### `execute-sql-on-connection`
 
@@ -587,6 +603,46 @@ With optional overrides:
 
 ---
 
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every AtScale project inside one or more **support bundles** to SML in one run, using the same converter as `generate-sml-from-xml`. Two bundle shapes are accepted: the archive the engine's **Download support bundle** button produces (a zip of per-area zips, with projects inside `metadata.zip` at `metadata/<id>/project.xml`), and an unpacked tree with a `metadata/` directory (`metadata/<id>/project.xml` for the container edition, `metadata/<org>/<id>/project.xml` for the installer edition), or a zip of such a tree, with or without a wrapper folder. Only `metadata.zip` and `metadata/**` entries are extracted, so the log archives that dominate a real bundle are never read. No database connection is required.
+
+Each project becomes its own SML repository under `<output-dir>/<bundle>/<org>/<project>__<id8>/`. Projects are named from the XML root's `name` attribute, with the first eight characters of the project id appended so same-named projects never collide; two bundles with the same basename get `-2`, `-3` suffixes. Re-runs skip projects whose output already exists unless `--force` is given. A conversion is staged beside its destination and only replaces the previous output when it succeeds, so a failing forced re-run never destroys a good repository. Converter output is kept only while a project is failing, under `<output-dir>/.logs/`. `summary.csv` merges with the summary already in the output directory, so a filtered or partial re-run still describes everything on disk. The operation attempts every project before it reports, writes the summary either way, and exits non-zero if any project failed or a bundle held no metadata.
+
+```bash
+./atscale-utils generate-sml-from-bundle \
+  --bundles    "./customer-bundle.zip,./customer-bundle-prod" \
+  --output-dir "./sml-out" \
+  --model-mode new
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--bundles` | Yes | | Comma-separated support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory |
+| `--output-dir` | Yes | | Directory that receives one SML repository per project plus `summary.csv` and `summary.md` |
+| `--force` | No | `false` | Re-convert projects whose output directory already exists |
+| `--org` | No | all | Comma-separated organisation folder names to include (installer bundles) |
+| `--connection-name` | No | Auto-detected per XML | Connection `unique_name` to embed in generated files |
+| `--connection-type` | No | | Database dialect written to the connection files |
+| `--connection-db` | No | | Database name written to the connection files; when set, every dataset shares one connection |
+| `--connection-schema` | No | | Schema name written to the connection files; when set, every dataset shares one connection |
+| `--model-mode` | No | | Compatibility policy applied to every project when query-name collisions occur. Pass `new` for unattended runs; `existing` marks a colliding project as failed for review |
+
+**Output layout:**
+```
+<output-dir>/
+  summary.csv                       one row per project: bundle, org, project, id, status, counts, paths
+  summary.md                        the same table, readable
+  <bundle>/<org>/<project>__<id8>/  catalog.yml, connections/, datasets/, dimensions/, metrics/, calculations/, models/, README.md
+  .logs/<bundle>/<org>/<project>.log   converter transcript, kept only while the project is failing
+```
+
+Statuses: `ok`, `ok-no-model` (the XML had no cube), `skipped` (already present, counts read from disk), `FAILED`, `NO-METADATA` (a bundle with neither `metadata/` nor `metadata.zip`).
+
+---
+
 ### `generate-sml-from-tabular`
 
 [↑ Table of Contents](#table-of-contents)
@@ -743,6 +799,8 @@ Translating a structurally new function from DAX to **MDX** is separate work. A 
 The parity tests pin each list's size and a sample of entries, so an accidental partial edit fails loudly rather than silently changing every verdict.
 
 ### `analyze-powerbi-dax-gaps`
+
+[↑ Table of Contents](#table-of-contents)
 
 Analyse a Power BI `.pbix` and report which of its report-scoped DAX measures AtScale can evaluate. No connection is required — everything is read from the file.
 
@@ -1160,13 +1218,39 @@ The suggestion-tuning parameters (`--max-suggestions`, `--min-score`, `--include
 
 ---
 
+### `echo-connection-metadata`
+
+[↑ Table of Contents](#table-of-contents)
+
+Prints the schemas, tables, columns and foreign keys visible through a database connection, as JSON on stdout. Useful for checking that a connection entry is configured correctly before pointing `generate-sml-from-connection` or `extract-ddl-from-connection` at it.
+
+```bash
+./atscale-utils echo-connection-metadata \
+  --connection-file "./connections.yaml" \
+  --connection-name "snow_demo"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Name of the connection in the connections file |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--schema` | No | connection's `sql.schema`, else `PUBLIC` | Schema to read metadata from |
+
+The schema name is upper-cased before it is queried, which suits Snowflake. On databases with case-sensitive lower-case schema names, such as PostgreSQL, the lookup will not match.
+
+**Output:** a JSON object with `schemas` (current database and schema), `tables`, `columns` and `foreignKeys` arrays read from `INFORMATION_SCHEMA`.
+
+---
+
+#### Synthetic Data Generation
+
 ### `extract-data-shape-from-connection`
 
 [↑ Table of Contents](#table-of-contents)
 
 Connects to a live database, reads an SML model to understand the semantic layer structure, and extracts a statistical fingerprint of the data — capturing hierarchy level cardinalities, rollup ratios, leaf-level fact densities, measure distributions, and conformed dimension overlap.
 
-Supports both star-schema (every hierarchy level denormalized into one dimension table) and snowflake-schema (each level normalized into its own physical table, resolved from the SML model's per-level datasets and `relationships` block) layouts — see [Snowflake-schema hierarchies](docs/STATISTICS.md#snowflake-schema-hierarchies) in STATISTICS.md.
+Supports both star-schema (every hierarchy level denormalized into one dimension table) and snowflake-schema (each level normalized into its own physical table, resolved from the SML model's per-level datasets and `relationships` block) layouts — see [Snowflake-schema hierarchies](docs/system/STATISTICS.md#snowflake-schema-hierarchies) in STATISTICS.md.
 
 No actual data values are written. The output is a YAML fingerprint file that fully describes the _statistical shape_ of the model without divulging any specific records. The file contains enough information to reconstruct plausible DDL and generate synthetic data that is statistically equivalent to the original.
 
@@ -1212,7 +1296,7 @@ With sampling tuning:
 
 By default, all entity names are replaced with opaque sequential IDs (`D1`, `D1.H1`, `D1.H1.L3`, `F1`, `F1.M2`) and the mapping is discarded. Pass `--preserve-meta-data` to retain the original physical names in a `metadata:` block so that downstream `generate-data-from-data-shape-to-connection` runs create tables that match the SML model schema.
 
-See [STATISTICS.md](docs/STATISTICS.md) for the full algorithm description.
+See [STATISTICS.md](docs/system/STATISTICS.md) for the full algorithm description.
 
 ---
 
@@ -1243,7 +1327,7 @@ With dialect selection:
 |---|---|---|---|
 | `--input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `--output-file` | No | stdout | Output path for the generated DDL |
-| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `--dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. BigQuery and Databricks omit `PRIMARY KEY` / `FOREIGN KEY` constraints |
 | `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
 **Output:** One `CREATE TABLE` statement per dimension and fact. Dimension tables are emitted first so `FOREIGN KEY` references resolve correctly.
@@ -1253,7 +1337,7 @@ With dialect selection:
 - `snowflake` — integer types are mapped to `NUMBER(n,0)`, decimals to `NUMBER(18,4)`
 - All other dialects — standard ANSI SQL types (`SMALLINT`, `INTEGER`, `BIGINT`, `DECIMAL(18,4)`, `VARCHAR(200)`)
 
-See [STATISTICS.md](docs/STATISTICS.md) §Phase 7 for the reconstruction algorithm.
+See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 7 for the reconstruction algorithm.
 
 ---
 
@@ -1289,7 +1373,7 @@ With a scale factor and reproducible seed:
 
 **Output:** One CSV per table — dimensions first, then facts. Column names match those produced by `generate-ddl-from-data-shape`.
 
-See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
 
@@ -1331,16 +1415,18 @@ With scale factor and batch tuning:
 | `--seed` | No | — | Integer random seed for reproducible output |
 | `--create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `--drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `--create-tables` |
-| `--dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection configuration (`sql.dialect`); falls back to `ansi` |
+| `--dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE` and `INSERT`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. When omitted, the dialect is read from the connection configuration (`sql.dialect`); falls back to `ansi` |
 | `--batch-size` | No | `500` | Rows per `INSERT` statement |
-| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `--schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`; a dataset on BigQuery). On BigQuery, defaults to the connection's `sql.schema` (or `sql.dataset`) and is required if neither is set |
 | `--preserve-meta-data` | No | `false` | `true` / `false`. Use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `--preserve-meta-data true` |
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimensions are inserted in parallel since they have no inter-table FK dependencies. Facts are inserted in parallel after all dimension inserts complete, ensuring FK constraints are respected throughout.
 
-See [STATISTICS.md](docs/STATISTICS.md) §Phase 8 for the generation algorithm.
+See [STATISTICS.md](docs/system/STATISTICS.md) §Phase 8 for the generation algorithm.
 
 ---
+
+#### Visualization and Namespace Processing
 
 ### BI Tool Feature Comparison
 
@@ -1566,6 +1652,50 @@ connections:
 ```
 
 ---
+
+### `generate-notebook-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Writes a starter Jupyter notebook for the [`atscale` Python package](https://pypi.org/project/atscale/), pre-filled with the connection details from a connection's `mdx:` block. The notebook:
+
+1. installs the `atscale` package,
+2. connects to the AtScale instance with the connection user's credentials,
+3. prompts you to pick what to explore — a project on Installer, or a repo and then a catalog on Container — and then a data model,
+4. lists the model's folders, numeric and categorical features, dimensions and hierarchies, and
+5. ends with an empty `data_model.get_data(feature_list=[])` query for you to fill in.
+
+The connection entry decides which flavour of notebook is written:
+
+| Connection | `atscale` version | Connects with | Selection |
+|---|---|---|---|
+| `installer: true` | `atscale < 3` | `mdx.url`, `mdx.organization_id`, user | `client.select_project()` |
+| otherwise (Container) | latest | `mdx.url`, user | `client.select_repo()` → `repo.select_catalog()` |
+
+The `mdx.user` key must name an entry under `users:` with a `username` and `password`.
+
+**Security:** the notebook contains that password in plain text. Treat the output as a secret and do not commit or share it.
+
+```bash
+./atscale-utils generate-notebook-from-connection \
+  --connection-file "./connections.yaml" \
+  --connection-name "my_atscale" \
+  --target-file "atscale.ipynb"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | No | `default` | Connection whose `mdx:` block (`url`, `user`, and `organization_id` on Installer) is used |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--target-file` | No | `notebook.ipynb` | Output path for the notebook. Its folder must already exist |
+
+The shared template parameters (`--namespace-file`, `--model-file`, `--aliases-file`) are accepted but not used.
+
+**Output:** a `.ipynb` notebook.
+
+---
+
+#### Testing / Query Processing
 
 ### `generate-queries-from-sml`
 
@@ -1985,7 +2115,7 @@ The operation connects to the AtScale internal Postgres backend, searches the `q
 | `--output-file` | No | `{stem}_enhanced.csv` | Output file path |
 | `--db-schema` | No | auto | Postgres schema for AtScale backend tables (`atscale` or `engine`) |
 | `--days` | No | `7` | Look-back window when searching the AtScale query log |
-| `--target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan for each outbound query via `EXPLAIN` and stores it in `execution_plan`. Supports `snowflake`, `postgres`, `redshift`. |
+| `--target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan for each outbound query via `EXPLAIN` and stores it in `execution_plan`. Supports `snowflake`, `postgres`, `redshift`, `databricks`, and `bigquery` (dry run — see below). |
 
 **Output:** The input CSV with the following columns appended on the right. Rows with no AtScale match have empty values.
 
@@ -1994,7 +2124,7 @@ The operation connects to the AtScale internal Postgres backend, searches the `q
 | `run_atscale_query_id` | Always | AtScale's internal `query_id` for the inbound query |
 | `run_inbound_query_id` | Always | AtScale's `query_id` for the inbound annotated query (same source as `run_atscale_query_id`) |
 | `run_outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
-| `run_outbound_execution_plan` | When `--target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_outbound_execution_plan` | When `--target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift and Databricks (`EXPLAIN FORMATTED`). BigQuery has no `EXPLAIN`, so its column holds the JSON job statistics from a dry run (bytes that would be processed, referenced tables, result schema); the query is validated but not executed or billed |
 | `run_used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
 | `run_duration_ms` | When matched | Total wall-clock time from query receipt to last result row (ms). Computed as `query_results.finished − queries.received`. Falls back to `finished − planning_started` if `received` is unavailable. |
 | `run_inbound_ms` | Best-effort | **INBOUND phase** — time from query receipt to start of planning (ms). Computed as `queries_planned.planning_started − queries.received`. Matches the "INBOUND" metric in the AtScale query monitor. |
@@ -2072,6 +2202,8 @@ When the same join-key value appears multiple times in a file (e.g. the same que
 | `--outliers-file` | Yes | | Path to write the filtered outliers CSV (row-count and duration mismatches only) |
 
 ---
+
+#### AtScale Config
 
 ### `generate-atscale-install-yaml`
 
@@ -2394,6 +2526,33 @@ Supports two source modes — provide exactly one of `--sml-dir`, `--repo-name`,
 
 ---
 
+### `get-dso-count`
+
+[↑ Table of Contents](#table-of-contents)
+
+Gets the DSO count for a specified model or catalog if supplied, or for the entire system if neither is specified.
+
+**Requires:** a `sql:` block on the named connection pointing at the AtScale SQL endpoint. The operation reads `information_schema` through that endpoint, treating each schema as a catalog and each table as a model; every column of a model counts as one DSO.
+
+```bash
+./atscale-utils get-dso-count \
+  --connection-file "./connections.yaml" \
+  --connection-name "my_atscale" \
+  --catalog "sales" \
+  --model "sales_demo"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--connection-name` | Yes | | Name of the connection entry whose `sql:` block points at the AtScale SQL endpoint |
+| `--connection-file` | No | `connections.yaml` | Path to the connections file |
+| `--catalog` | No | all available catalogs | Count only models from the specified catalog |
+| `--model` | No | all available models | Count only the specified model |
+
+**Output:** Logs the DSO count for each matching model, then the total DSO count and the unique DSO count (distinct column names across the matching models).
+
+---
+
 #### Aggregate Management
 
 ### `atscale-list-aggregates`
@@ -2554,6 +2713,8 @@ It also applies AtScale's promotion rules: an aggregate already active on the ta
 
 ---
 
+#### Web Services
+
 ### `execute-web-services`
 
 [↑ Table of Contents](#table-of-contents)
@@ -2562,7 +2723,7 @@ Starts a GraphQL HTTP server that dynamically exposes every registered operation
 
 File parameters (names ending in `-file`) accept either a local path string or a multipart-uploaded file via the `Upload` scalar.
 
-See [GRAPHQL.md](docs/GRAPHQL.md) for the full schema reference and per-operation documentation.
+See [GRAPHQL.md](docs/reference/GRAPHQL.md) for the full schema reference and per-operation documentation.
 
 ```bash
 ./atscale-utils execute-web-services
@@ -2922,10 +3083,10 @@ connections:
     sql:
       dialect: databricks
       host: adb-1234567890123456.7.azuredatabricks.net
-      path: /sql/1.0/warehouses/abc1234567890def
+      http_path: /sql/1.0/warehouses/abc1234567890def
       catalog: main
       schema: sales
-      databricks_user: databricks_user
+      user: databricks_user
 ```
 
 ---
@@ -3085,9 +3246,9 @@ An optional YAML file that stores SML generation parameters so you don't have to
 
 **Input vs. output:** `--sml-config-file` is the *input* path only. After generation, the **effective settings** (all values including defaults) are always written to `<output-dir>/sml.style.yaml` — a fixed location independent of the input path. If `--sml-config-file` points to the same file (e.g. you pass `--sml-config-file sml-output/sml.style.yaml`), it is simply overwritten.
 
-**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`docs/sml.style.yaml`](docs/sml.style.yaml). Copy it to your working directory as a starting point.
+**Reference copy:** A fully annotated reference file with all parameters and their defaults lives at [`docs/system/sml.style.yaml`](docs/system/sml.style.yaml). Copy it to your working directory as a starting point.
 
-**Style guide:** [`docs/STYLE.md`](docs/STYLE.md) documents the naming conventions, casing rules, and generation settings that `sml.style.yaml` controls.
+**Style guide:** [`docs/system/STYLE.md`](docs/system/STYLE.md) documents the naming conventions, casing rules, and generation settings that `sml.style.yaml` controls.
 
 ### All fields
 

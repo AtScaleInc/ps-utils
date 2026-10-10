@@ -20,7 +20,7 @@ import type {
   JoinFingerprint,
   SamplingConfig,
 } from "../types.js";
-import { q, qualifyTable, num } from "../sql-helpers.js";
+import { num, quoter } from "../sql-helpers.js";
 import { buildSampleClause } from "../sampling.js";
 import { classifyShape } from "../distribution.js";
 import { countRows } from "../sql-helpers.js";
@@ -40,11 +40,12 @@ export async function profileFactJoins(
   config:     SamplingConfig,
   idMapper:   IdMapper,
 ): Promise<{ joins: JoinFingerprint[]; coldMembers: Map<string, number>; fkAssociations?: FkAssociation[] }> {
+  const { q, qualifyTable } = quoter(config.dialect);
   const joins: JoinFingerprint[]       = [];
   const coldMembers = new Map<string, number>();
 
   // Estimate row count once (used for sample clause decisions)
-  const factRowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable);
+  const factRowCount = await countRows(runner, fact.sourceSchema, fact.sourceTable, config.dialect);
 
   for (const edge of fact.joins) {
     const dim = dimByName.get(edge.toDimension);
@@ -197,6 +198,7 @@ async function profileFkAssociations(
   config:       SamplingConfig,
   idMapper:     IdMapper,
 ): Promise<FkAssociation[]> {
+  const { q } = quoter(config.dialect);
   const eligibleJoins = fact.joins
     .filter((j) => j.fromColumns[0])
     .slice(0, 6);

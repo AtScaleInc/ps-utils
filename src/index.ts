@@ -222,6 +222,29 @@ export async function generateSMLFromXML(p: GenerateSMLFromXMLParams, o: Library
   } finally { cleanup(); }
 }
 
+export type GenerateSMLFromBundleParams = {
+  bundles: string[] | string;
+  outputDir: DirOutput;
+  force?: boolean;
+  org?: string;
+  connectionName?: string;
+  connectionType?: string;
+  connectionDb?: string;
+  connectionSchema?: string;
+  modelMode?: "new" | "existing";
+};
+
+export async function generateSMLFromBundle(p: GenerateSMLFromBundleParams, o: LibraryOptions = {}) {
+  const normalized = { ...p, bundles: Array.isArray(p.bundles) ? p.bundles.join(",") : p.bundles };
+  const { params, flush, cleanup } = await resolveIO(normalized as Record<string, unknown>, {
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("generate-sml-from-bundle", cc2kebab(params), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLFromTabularParams = {
   xmlaFile: FileInput;
   warehouse: "Snowflake" | "Databricks" | "BigQuery" | "Postgres";
@@ -337,6 +360,23 @@ export async function generateSharedModelPlan(p: GenerateSharedModelPlanParams, 
       threshold: 0.5,
       "max-per-subject": 3,
     }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type ApplyStyleToSMLParams = {
+  smlDir:         string;   // rewritten in place, so a path rather than a stream
+  smlConfigFile?: FileInput; // default: <smlDir>/sml.style.yaml
+  labelStyle?:    "title-case" | "camel-case" | "none"; // default: from sml.style.yaml, else "title-case"
+  catalogName?:   string;   // default: from sml.style.yaml
+};
+
+export async function applyStyleToSML(p: ApplyStyleToSMLParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["smlConfigFile"],
+  });
+  try {
+    await run("apply-style-to-sml", Object.assign({}, cc2kebab(params)), o);
     await flush();
   } finally { cleanup(); }
 }
@@ -655,6 +695,32 @@ export async function generateExcelFromNamespace(p: GenerateExcelFromNamespacePa
       "connection-file": "connections.yaml",
       "model-file": "model.yaml",
       "target-file": "analysis/workbook.xlsx",
+      "connection-name": "default",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
+export type GeneratePowerBIFromNamespaceParams = {
+  namespaceFile?: FileInput;   // default: "analysis/namespace.yaml"
+  connectionFile?: FileInput;   // default: "connections.yaml"
+  modelFile?: FileInput;   // default: "model.yaml"
+  targetFolder?: DirOutput;   // default: "powerbi"
+  connectionName?: string;      // default: "default"
+  aliasesFile?: FileInput;
+};
+
+export async function generatePowerBIFromNamespace(p: GeneratePowerBIFromNamespaceParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputFiles: ["namespaceFile", "connectionFile", "modelFile", "aliasesFile"],
+    outputDirs: ["targetFolder"],
+  });
+  try {
+    await run("generate-powerbi-from-namespace", Object.assign({
+      "namespace-file": "analysis/namespace.yaml",
+      "connection-file": "connections.yaml",
+      "model-file": "model.yaml",
+      "target-folder": "powerbi",
       "connection-name": "default",
     }, cc2kebab(params)), o);
     await flush();

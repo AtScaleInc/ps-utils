@@ -5,11 +5,11 @@
 When making any code change, update the following files as part of the same change (not as a separate follow-up):
 
 - **README.md** — update if the change adds/modifies operations, parameters, or behavior
-- **docs/ACTIONS.md** — update if the change affects GitHub Actions usage
+- **docs/reference/ACTIONS.md** — update if the change affects GitHub Actions usage
 - **action.yml** — update if the change adds/modifies operations or parameters exposed to the composite action
-- **docs/NODE.md** — update if the change adds/modifies operations, parameters, or their descriptions (the Node.js library API reference). Also update `src/index.ts` to export any new operation function with appropriate defaults from `Object.assign`.
-- **docs/GRAPHQL.md** — auto-generated; regenerate via `npm run generate:graphql-docs` (runs automatically during `npm run build`)
-- **docs/REST.md** — auto-generated; regenerate via `npm run generate:rest-docs` (runs automatically during `npm run build`)
+- **docs/reference/NODE.md** — update if the change adds/modifies operations, parameters, or their descriptions (the Node.js library API reference). Also update `src/index.ts` to export any new operation function with appropriate defaults from `Object.assign`.
+- **docs/reference/GRAPHQL.md** — auto-generated; regenerate via `npm run generate:graphql-docs` (runs automatically during `npm run build`)
+- **docs/reference/REST.md** — auto-generated; regenerate via `npm run generate:rest-docs` (runs automatically during `npm run build`)
 
 All six files must reflect every operation change before the change is considered complete.
 
@@ -61,25 +61,25 @@ Two invariants worth preserving:
   When that sweep fails, the key is either a real typo in the fixture or a genuine spec gap. Gaps go in `KNOWN_UNDOCUMENTED` in `generate-sml-schema.ts` with `doc`, `class` and evidence in `where`; the generator emits them into `index.json` as the linter's allowlist, scoped by object type and class, and `checkKnownUndocumented()` fails the build if an entry names a missing class or one that upstream has since documented. Never allowlist a key that is documented elsewhere without the `class` scope — that would suppress real typos of it everywhere.
 - **Reference-typed properties carry an `x-sml-ref` annotation.** Validators ignore unknown keywords, so these are inert today; they exist so a future cross-file reference resolver (workspace-wide `unique_name` checking, go-to-definition) is driven by the schema rather than a second hand-maintained list. Add the annotation when adding a property that names another SML object.
 
-## docs/NODE.md — Node.js library API reference
+## docs/reference/NODE.md — Node.js library API reference
 
-`docs/NODE.md` documents the typed `async` function exported from `src/index.ts` for every operation. It is written by hand and must be kept in sync with the code. When adding or modifying an operation:
+`docs/reference/NODE.md` documents the typed `async` function exported from `src/index.ts` for every operation. It is written by hand and must be kept in sync with the code. When adding or modifying an operation:
 
 1. Add the export type alias at the bottom of the operation's `Params` type block (e.g. `export type GenerateFooParams = Params;`).
 2. Import the type in `src/index.ts` (both the `export type` block and the `import type` block).
 3. Add an exported function in `src/index.ts` that calls `run("operation-name", Object.assign({...defaults}, p), o)`.
-4. Add the operation to the correct `#### <Group Name>` section in `docs/NODE.md` with:
+4. Add the operation to the correct `#### <Group Name>` section in `docs/reference/NODE.md` with:
    - A TypeScript code example showing a minimal call
    - A `function` signature block
    - A parameter table with columns: Key, Type, Required, Default, Description
    - `[↑ Table of Contents](#table-of-contents)` immediately after the `###` heading
-5. Add the operation to the TOC in `docs/NODE.md`.
+5. Add the operation to the TOC in `docs/reference/NODE.md`.
 
 Use the same group names and ordering as README.md.
 
-## docs/GRAPHQL.md and docs/REST.md — regenerate when operations change
+## docs/reference/GRAPHQL.md and docs/reference/REST.md — regenerate when operations change
 
-`docs/GRAPHQL.md` and `docs/REST.md` are auto-generated and **must never be edited by hand**. After any change to an operation definition, its parameters, or its description, regenerate both:
+`docs/reference/GRAPHQL.md` and `docs/reference/REST.md` are auto-generated and **must never be edited by hand**. After any change to an operation definition, its parameters, or its description, regenerate both:
 
 ```bash
 npm run generate:graphql-docs
@@ -90,17 +90,17 @@ Both run automatically as part of `npm run build`. The scripts live at:
 - `src/scripts/generate-graphql-docs.ts` — builds GraphQL API docs via `buildOpMetas()` / `buildSdl()` in `graphql-server.ts`
 - `src/scripts/generate-rest-docs.ts` — builds REST API docs via `buildOpMetas()` in `graphql-server.ts`
 
-The generated output must follow the same documentation structure as README.md and docs/ACTIONS.md: operations grouped under `#### <Group Name>` section headers matching the TOC, with a `[↑ Table of Contents](#table-of-contents)` link after each operation heading. If the generator scripts do not produce this structure, update them.
+The generated output must follow the same documentation structure as README.md and docs/reference/ACTIONS.md: operations grouped under `#### <Group Name>` section headers matching the TOC, with a `[↑ Table of Contents](#table-of-contents)` link after each operation heading. If the generator scripts do not produce this structure, update them.
 
 ## Adding a new SML style parameter
 
 Three files must always be updated together:
 
 1. `src/operations/sml-style-config.ts` — add the field to `SmlStyleConfig`, `MergedSmlStyle`, `SML_STYLE_DEFAULTS`, and `mergeSmlStyle()`
-2. `docs/sml.style.yaml` — add the parameter with its default value and an explanatory comment
+2. `docs/system/sml.style.yaml` — add the parameter with its default value and an explanatory comment
 3. `src/algorithm/report-generator.ts` → `buildStyleGuide()` — extend the generated STYLE.md to reflect the new parameter
 
-`docs/sml.style.yaml` is the canonical reference that users copy as a starting point; the generated STYLE.md must stay consistent with it.
+`docs/system/sml.style.yaml` is the canonical reference that users copy as a starting point; the generated STYLE.md must stay consistent with it.
 
 ## Closing a pg Client connected to AtScale's SQL port
 
@@ -191,7 +191,7 @@ lines.push(`  ${id}["${name} (${project})"]`);
 
 ## Operation body structure — group headers and back-to-TOC links
 
-Inside the `## Operations` section of every documentation file (README.md, docs/ACTIONS.md, and generated docs/GRAPHQL.md / docs/REST.md), operations must be organized under group section headers that exactly match the TOC groupings. Add a `#### <Group Name>` heading before the first operation in each group. The group name must be identical to how it appears in the TOC.
+Inside the `## Operations` section of every documentation file (README.md, docs/reference/ACTIONS.md, and generated docs/reference/GRAPHQL.md / docs/reference/REST.md), operations must be organized under group section headers that exactly match the TOC groupings. Add a `#### <Group Name>` heading before the first operation in each group. The group name must be identical to how it appears in the TOC.
 
 Every operation heading must be immediately followed by a back-to-TOC link on the next line:
 
@@ -216,7 +216,7 @@ The CLI, README, and action.yml all define operation groups. Whenever you add, m
 2. **`README.md` — `### <Group Name>` sections** — each section has a Mermaid `flowchart` diagram showing the operations and their data flow. Add the new operation to the correct section diagram and the operation's own reference anchor (`click X href "#..."`). Group names and membership must match `OPERATION_GROUPS`.
 3. **`action.yml` — composite action steps** — each operation has a corresponding `if: inputs.operation == '<name>'` step. Add a step for any new operation in the appropriate logical position.
 
-Also update the TOC and body in **`docs/ACTIONS.md`** to add the operation in the correct group.
+Also update the TOC and body in **`docs/reference/ACTIONS.md`** to add the operation in the correct group.
 
 **Diagrams at the top of README.md** are one per group. Each diagram must include every operation in that group — no operation may be present in `OPERATION_GROUPS` but absent from the corresponding README diagram, and vice versa.
 
@@ -225,6 +225,38 @@ When in doubt about which group an operation belongs to, match what is already i
 ## Connections file
 
 Use `example/connections.yaml` in the project root when a connections file is needed for testing or development. Do not use paths outside the project directory.
+
+## Secrets and environment details — never commit them
+
+This repository is shared, and anything committed stays in git history even after a later commit deletes it. Never commit credentials or details of a real environment, and never write them into a file that is about to be committed.
+
+**What counts as sensitive** — not just passwords:
+
+- Credentials: passwords, API tokens, personal access tokens (PATs), JWTs, private keys (`.p8`, `.pem`, `.key`, `.p12`), service-account JSON key files, and connection strings or URLs with embedded credentials.
+- Environment details: real hostnames, IP addresses, Snowflake account identifiers, Databricks `http_path` values, BigQuery project IDs, AtScale organization IDs, and real database, schema, warehouse, user and role names.
+- Customer material: customer names, real table and column names, query logs, support bundles, and data samples.
+
+**Where real values may live** — only in the git-ignored locations: `example/` (e.g. `example/connections.yaml`), `resources/keys/`, `output/`, `queries/`, `run_results/`, and `.env`. Do not create a real-credential file anywhere else in the repository, and never copy real values out of these locations into tracked files.
+
+**Docs, examples, tests and fixtures use placeholders**, the same style the repository already uses: `<password>`, `my-account`, `myorg.snowflakecomputing.com`, `example.com`, `database_name`, `my_connection`. That applies to README and `docs/` examples, `action.yml` descriptions, test fixtures (`src/**/__tests__/fixtures/`), and the sample SML under `resources/`. Synthetic names only — never a "lightly edited" real one.
+
+**Generated output can embed sensitive values.** Write it under `output/` or `example/` (both git-ignored), and never commit it:
+
+- `generate-notebook-from-connection` writes the connection user's password into the notebook in plain text.
+- `generate-powerbi-from-namespace` embeds the MDX user's `token` in the XMLA connection URL of the generated project.
+- `generate-tableau-from-namespace` and `generate-excel-from-namespace` embed the server URL (Tableau also the username).
+- `extract-data-shape-from-connection --preserve-meta-data true` stores real table and column names in the fingerprint.
+- DDL, SML and reports extracted from a customer's system (`extract-ddl-from-connection`, `generate-sml-from-xml`, `generate-sml-from-bundle`, and so on) carry that customer's schema.
+
+**Code must not leak secrets either.** Never log a password, token or private key — not even at `--verbose` — and never include one in an error message, a report, or a security artifact under `_reports/`. Read credentials from the connections file or the environment; never hard-code them, including as test defaults.
+
+**Before every commit:**
+
+1. Stage files by name rather than with `git add -A` / `git add .`, so a stray credential file is not swept in.
+2. Review `git diff --cached` for anything in the lists above.
+3. If a change introduces a new kind of file that can hold secrets (a new key format, a new output type), add its pattern to `.gitignore` in the same change.
+
+**If a secret is committed anyway**, stop and tell the user. Deleting it in a follow-up commit does not remove it from history: the credential must be treated as exposed and rotated, and whether to rewrite history is the user's decision. Do not push the commit.
 
 ## Branded document styling — standalone Markdown deliverables
 

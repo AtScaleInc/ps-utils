@@ -23,6 +23,7 @@ flowchart LR
     DDL --> C["generate-sml-from-ddl"] --> SML["SML Files"]
     DB --> D["generate-sml-from-connection"] --> SML
     XML["AtScale XML"] --> G["generate-sml-from-xml"] --> SML
+    BUNDLE["Support bundles"] --> GB["generate-sml-from-bundle"] --> SMLB["SML repos + summary"]
     TMSL["TMSL/XMLA Export"] --> N["generate-sml-from-tabular"] --> SML
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
@@ -145,7 +146,9 @@ flowchart LR
     - [`generate-sml-from-connection`](#generate-sml-from-connection)
     - [`generate-sml-from-ddl`](#generate-sml-from-ddl)
     - [`generate-sml-from-xml`](#generate-sml-from-xml)
+    - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
+    - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -154,8 +157,9 @@ flowchart LR
     - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-sml-docs`](#generate-sml-docs)
     - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
-    - [`generate-metrics-from-model`](#generate-metrics-from-model)
     - [`generate-ddl-from-atscale`](#generate-ddl-from-atscale)
+    - [`generate-metrics-from-model`](#generate-metrics-from-model)
+    - [`echo-connection-metadata`](#echo-connection-metadata)
   - Synthetic Data Generation
     - [`extract-data-shape-from-connection`](#extract-data-shape-from-connection)
     - [`generate-ddl-from-data-shape`](#generate-ddl-from-data-shape)
@@ -166,6 +170,7 @@ flowchart LR
     - [`generate-tableau-from-namespace`](#generate-tableau-from-namespace)
     - [`generate-excel-from-namespace`](#generate-excel-from-namespace)
     - [`generate-powerbi-from-namespace`](#generate-powerbi-from-namespace)
+    - [`generate-notebook-from-connection`](#generate-notebook-from-connection)
   - Testing / Query Processing
     - [`generate-queries-from-sml`](#generate-queries-from-sml)
     - [`generate-queries-from-model`](#generate-queries-from-model)
@@ -218,7 +223,7 @@ Add secrets at **Settings → Secrets and variables → Actions → New reposito
 | `CONNECTIONS_FILE` | `extract-model-from-atscale`, `generate-sml-from-connection`, `generate-tableau-from-namespace`, `generate-excel-from-namespace`, `generate-powerbi-from-namespace`, `execute-sql-on-connection`, `extract-ddl-from-connection`, `extract-query-stats-from-atscale`, `extract-queries-from-atscale`, `execute-atscale-query-harness`, `atscale-list-data-sources`, `atscale-create-data-source`, `atscale-list-repos`, `atscale-create-repo`, `atscale-list-deployments`, `atscale-deploy-catalog`, `atscale-list-model-errors`, `atscale-list-aggregates`, `atscale-rebuild-aggregates`, `atscale-list-aggregate-build-history`, `atscale-export-aggregates`, `atscale-import-aggregates` | Full contents of your `connections.yaml` file (or a `systems.properties` file for the query harness operations) |
 | `VM_ADMIN_PASSWORD` | `deploy-atscale-microk8s` | Password for the `atscale` OS user on the target VM |
 
-A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](../README.md#connection-yaml-connectionsyaml) for the full format reference.
+A single `CONNECTIONS_FILE` secret can serve all operations because they all read from the same connections YAML format. See [Connection YAML](../../README.md#connection-yaml-connectionsyaml) for the full format reference.
 
 > **Security:** Never commit `connections.yaml` to source control. Always supply it via a secret.
 
@@ -377,7 +382,7 @@ Connects to a live database, introspects its schema, runs semantic model inferen
 
 **Requires:** `CONNECTIONS_FILE` secret with a `sql:` block in the named connection.
 
-Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `sample-size`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -413,7 +418,7 @@ All inference capabilities from `generate-sml-from-connection` apply — composi
 
 **Requires:** No secrets — the DDL file must be present in the repository.
 
-Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
+Style parameters (`pii-severity`, `model-mode`, `fact-tables`, `catalog-name`, `camel-case-files`, `camel-case-measures`, `label-style`, `min-hierarchies-per-dim`, `max-hierarchies-per-dim`) can also be set in `sml.style.yaml` (see [SML Style Config](../../README.md#sml-style-config-smlstyleyaml)). CLI inputs take priority over the file. Effective settings are always written to `<output-dir>/sml.style.yaml` regardless of the input config path.
 
 #### Using the composite action
 
@@ -481,6 +486,44 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 
 ---
 
+### `generate-sml-from-bundle`
+
+[↑ Table of Contents](#table-of-contents)
+
+Converts every project inside one or more AtScale support bundles to SML, one repository per project, and writes `summary.csv` / `summary.md`. Accepts the engine's own support-bundle zip (projects inside its `metadata.zip`), an unpacked tree with a `metadata/` directory, or a zip of such a tree. Uses the `generate-sml-from-xml` converter per project. Exits non-zero if any project failed, after attempting all of them. Pass `model-mode: new` so a query-name collision in one project cannot stall an unattended run.
+
+**Requires:** No secrets — the bundles must be present in the workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-sml-from-bundle
+    bundles: bundles/customer-prod.zip,bundles/customer-dev   # comma-separated
+    output-dir: sml-out
+    model-mode: new                   # recommended in CI
+    org: default                      # optional — installer bundles only
+    force: "false"                    # optional — re-convert existing output
+    connection-type: snowflake        # optional — written to connection files
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `bundles` | Yes | | Comma-separated support bundle paths: the engine's support-bundle `.zip`, a directory containing `metadata/` or `metadata.zip`, or a zip of such a directory |
+| `output-dir` | Yes | | Directory for the per-project SML repositories and the summary files |
+| `force` | No | `false` | Re-convert projects whose output already exists |
+| `org` | No | all | Comma-separated organisation folders to include |
+| `connection-name` | No | Auto-detected | Connection `unique_name` to embed in generated files |
+| `connection-type` | No | | Database dialect written to the connection files |
+| `connection-db` | No | | Database name written to the connection files |
+| `connection-schema` | No | | Schema name written to the connection files |
+| `model-mode` | No | | `new` renames collision members; `existing` marks the project failed for review |
+
+---
+
 ### `generate-sml-from-tabular`
 
 [↑ Table of Contents](#table-of-contents)
@@ -530,6 +573,33 @@ When a cross-dimension level-attribute query-name collision occurs, set `model-m
 | `model-mode` | No | Collision-time decision | `new` renames all collision members; `existing` preserves names and reports a blocking conflict |
 
 **Output:** `catalog.yml`, `connections/*.yml`, `datasets/*.yml`, `dimensions/*.yml`, `metrics/*.yml`, `models/<model-name>.yml`, `README.md`, `DEFERRED_MEASURES.md`, `CONVERSION_REPORT.md`/`.json`, and a `context/` folder (verbatim source copy + derived `ddl.sql`/`erd.mmd`/`use_case.md`/`build.yaml`).
+
+---
+
+### `analyze-powerbi-dax-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+Analyses a Power BI `.pbix` and reports which of its report-scoped DAX measures AtScale can evaluate, judging each measure against both AtScale's client-side DAX support and the server-side DAX whitelist. No connection is required — everything is read from the file. See the [README section](../../README.md#analyze-powerbi-dax-gaps) for how the verdicts and recommendations are derived.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: analyze-powerbi-dax-gaps
+    pbix-file: reports/sales.pbix
+    output-dir: gap-report
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `pbix-file` | Yes | | Path to the Power BI `.pbix` file to analyse |
+| `output-dir` | Yes | | Directory for the gap report |
+
+**Output:** `PBIX_GAP_REPORT.md` (for people), plus `.json` and `.csv` versions for tooling, in `output-dir`.
 
 ---
 
@@ -784,70 +854,6 @@ Reads an SML directory and reports every connection, dataset, dimension, metric,
 
 ---
 
-### `generate-metrics-from-model`
-
-[↑ Table of Contents](#table-of-contents)
-
-Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql` sections, and runs the analysis-suggestions engine to produce a ranked list of suggested metric × dimension combinations. Each suggestion includes a relevance score, analysis type, measure details, and the dimensions to slice by. Useful for quickly discovering the most analytically valuable queries a model supports.
-
-**Output formats:**
-- `text` (default) — human-readable numbered list
-- `yaml` — structured YAML suitable for downstream processing
-
-**Requires:** No secrets — only a `model.yaml` file produced by a prior step or committed to the repo.
-
-#### Parameters
-
-| Parameter | Default | Description |
-|---|---|---|
-| `model-file` | — | Path to the `model.yaml` file (**required**) |
-| `model-name` | first model | Model name when `model.yaml` contains multiple models |
-| `sml-config-file` | `sml.style.yaml` | Path to the SML style config to read settings from. Effective settings are written to `sml.style.yaml` in the output file's directory after generation. |
-| `max-suggestions` | `25` | Maximum number of suggestions to output. Can also be set in `sml.style.yaml`. |
-| `min-score` | `0.5` | Minimum relevance score [0–1]. Can also be set in `sml.style.yaml`. |
-| `include-tuples` | `true` | Include multi-dimension suggestions. Can also be set in `sml.style.yaml`. |
-| `format` | `text` | Output format: `text` or `yaml` |
-| `output-file` | stdout | File to write output to (omit to print to stdout) |
-
-#### Using the composite action
-
-```yaml
-- uses: actions/checkout@v4
-
-- uses: AtScaleInc/ps-utils@v1
-  with:
-    operation: generate-metrics-from-model
-    model-file: model.yaml
-    max-suggestions: "20"         # optional, default 25
-    min-score: "0.6"              # optional, default 0.5
-    include-tuples: "true"        # optional, default true
-    output-file: suggestions.txt  # optional, prints to stdout if omitted
-```
-
-**Using a style config file** (persist settings between runs):
-
-```yaml
-- uses: AtScaleInc/ps-utils@v1
-  with:
-    operation: generate-metrics-from-model
-    model-file: model.yaml
-    sml-config-file: sml.style.yaml   # optional, default "sml.style.yaml"
-    output-file: suggestions.txt
-```
-
-**YAML output** (for downstream scripting):
-
-```yaml
-- uses: AtScaleInc/ps-utils@v1
-  with:
-    operation: generate-metrics-from-model
-    model-file: model.yaml
-    format: yaml
-    output-file: suggestions.yaml
-```
-
----
-
 ### `generate-ddl-from-atscale`
 
 [↑ Table of Contents](#table-of-contents)
@@ -920,6 +926,100 @@ connections:
 
 ---
 
+### `generate-metrics-from-model`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads a `model.yaml` file, reconstructs a SemanticModel from its `mdx` and `sql` sections, and runs the analysis-suggestions engine to produce a ranked list of suggested metric × dimension combinations. Each suggestion includes a relevance score, analysis type, measure details, and the dimensions to slice by. Useful for quickly discovering the most analytically valuable queries a model supports.
+
+**Output formats:**
+- `text` (default) — human-readable numbered list
+- `yaml` — structured YAML suitable for downstream processing
+
+**Requires:** No secrets — only a `model.yaml` file produced by a prior step or committed to the repo.
+
+#### Parameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `model-file` | — | Path to the `model.yaml` file (**required**) |
+| `model-name` | first model | Model name when `model.yaml` contains multiple models |
+| `sml-config-file` | `sml.style.yaml` | Path to the SML style config to read settings from. Effective settings are written to `sml.style.yaml` in the output file's directory after generation. |
+| `max-suggestions` | `25` | Maximum number of suggestions to output. Can also be set in `sml.style.yaml`. |
+| `min-score` | `0.5` | Minimum relevance score [0–1]. Can also be set in `sml.style.yaml`. |
+| `include-tuples` | `true` | Include multi-dimension suggestions. Can also be set in `sml.style.yaml`. |
+| `format` | `text` | Output format: `text` or `yaml` |
+| `output-file` | stdout | File to write output to (omit to print to stdout) |
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    max-suggestions: "20"         # optional, default 25
+    min-score: "0.6"              # optional, default 0.5
+    include-tuples: "true"        # optional, default true
+    output-file: suggestions.txt  # optional, prints to stdout if omitted
+```
+
+**Using a style config file** (persist settings between runs):
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    sml-config-file: sml.style.yaml   # optional, default "sml.style.yaml"
+    output-file: suggestions.txt
+```
+
+**YAML output** (for downstream scripting):
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-metrics-from-model
+    model-file: model.yaml
+    format: yaml
+    output-file: suggestions.yaml
+```
+
+---
+
+### `echo-connection-metadata`
+
+[↑ Table of Contents](#table-of-contents)
+
+Prints the schemas, tables, columns and foreign keys visible through a database connection, as JSON in the job log. Useful for checking that a connection entry is configured correctly before running `generate-sml-from-connection` or `extract-ddl-from-connection` against it.
+
+The schema name is upper-cased before it is queried, which suits Snowflake. On databases with case-sensitive lower-case schema names, such as PostgreSQL, the lookup will not match.
+
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block on the named connection.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: echo-connection-metadata
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: snow_demo
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | Yes | | Connection name in the file |
+| `schema` | No | connection's `sql.schema`, else `PUBLIC` | Schema to read metadata from |
+
+**Output:** a JSON object with `schemas`, `tables`, `columns` and `foreignKeys` arrays read from `INFORMATION_SCHEMA`.
+
+---
+
 #### Synthetic Data Generation
 
 ### `extract-data-shape-from-connection`
@@ -980,7 +1080,7 @@ With sampling tuning and MySQL (`--no-tablesample`):
 | `serial` | No | `"false"` | Set to `"true"` to profile dimensions one at a time instead of in parallel. Use when the database enforces a low per-user connection limit |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to store original table and column names in the fingerprint so that subsequent data generation creates tables matching the SML model schema |
 
-**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. Pass `preserve-meta-data: "true"` to also embed a `metadata:` block containing the original physical names. See [STATISTICS.md](STATISTICS.md) for the full algorithm description.
+**Output:** A `data-shape.yaml` fingerprint file with obfuscated statistics. Pass `preserve-meta-data: "true"` to also embed a `metadata:` block containing the original physical names. See [STATISTICS.md](../system/STATISTICS.md) for the full algorithm description.
 
 ---
 
@@ -1028,7 +1128,7 @@ With Snowflake dialect:
 |---|---|---|---|
 | `input-file` | No | `data-shape.yaml` | Path to the fingerprint YAML file |
 | `output-file` | No | stdout | Output path for the generated DDL |
-| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery` |
+| `dialect` | No | `ansi` | SQL dialect: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. BigQuery and Databricks omit `PRIMARY KEY` / `FOREIGN KEY` constraints |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
 **Dialect notes:** `bigquery` omits `PRIMARY KEY`/`FOREIGN KEY` constraints. `snowflake` maps integers to `NUMBER(n,0)`. All others use standard ANSI types.
@@ -1074,7 +1174,7 @@ With scale factor and seed:
 | `reports-dir` | No | `<output-dir>/_reports` | Directory for security audit artifacts |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
-**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls)).
+**Output:** One CSV per table — dimensions first (`dim_1.csv`, …), facts second (`fact_1.csv`, …). A `_reports/` subdirectory also receives `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json` — the audit artifacts required by the cube promotion checklist (see [STATISTICS.md §Security & Compliance Controls](../system/STATISTICS.md#security--compliance-controls)).
 
 ---
 
@@ -1132,15 +1232,15 @@ Full pipeline — extract shape, generate DDL, populate:
 | `seed` | No | — | Integer seed for reproducible output |
 | `create-tables` | No | `false` | Emit `CREATE TABLE` before inserting |
 | `drop-if-exists` | No | `false` | `DROP TABLE IF EXISTS` before creating — implies `create-tables` |
-| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
+| `dialect` | No | auto / `ansi` | SQL dialect for `CREATE TABLE` and `INSERT`: `ansi`, `postgresql`, `snowflake`, `mysql`, `bigquery`, `databricks`. When omitted, the dialect is read from the connection config (`sql.dialect`); falls back to `ansi` |
 | `batch-size` | No | `500` | Rows per `INSERT` statement |
-| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`) |
+| `schema` | No | — | Schema prefix to qualify table names (e.g. `PUBLIC`; a dataset on BigQuery). On BigQuery, defaults to the connection's `sql.schema` (or `sql.dataset`) and is required if neither is set |
 | `reports-dir` | No | `_reports` | Directory for security audit artifacts |
 | `preserve-meta-data` | No | `"false"` | Set to `"true"` to use original table and column names from the fingerprint metadata block. Only has effect when the fingerprint was extracted with `preserve-meta-data: "true"` |
 
 **Operation order:** DROP facts → DROP dims → CREATE dims → CREATE facts → INSERT dims (parallel) → INSERT facts (parallel). Dimension inserts run in parallel; fact inserts run in parallel after all dimensions complete, ensuring FK constraints are respected throughout.
 
-**Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](STATISTICS.md#security--compliance-controls) for the full list.
+**Security artifacts:** a `_reports/` directory is emitted alongside the working directory containing `pipeline_isolation_report.json`, `generation_manifest.json`, and `integrity_report.json`. These satisfy the cube promotion checklist and confirm (a) no real data was accessed during generation, (b) every `_key` column value is a positive integer allocated in-process, and (c) every fact FK value resolves to a dimension leaf key. See [STATISTICS.md §Security & Compliance Controls](../system/STATISTICS.md#security--compliance-controls) for the full list.
 
 ---
 
@@ -1282,6 +1382,50 @@ The output is written to `output/<target-folder>/` and can be opened directly in
 | `model-file` | No | `model.yaml` | Path to the model YAML |
 | `aliases-file` | No | | Path to an optional column aliases YAML |
 | `target-folder` | No | `powerbi` | Report folder name (written under `output/`) |
+
+---
+
+### `generate-notebook-from-connection`
+
+[↑ Table of Contents](#table-of-contents)
+
+Writes a starter Jupyter notebook for the [`atscale` Python package](https://pypi.org/project/atscale/), pre-filled with the connection details from a connection's `mdx:` block. The notebook:
+
+1. installs the `atscale` package,
+2. connects to the AtScale instance with the connection user's credentials,
+3. prompts you to pick what to explore — a project on Installer, or a repo and then a catalog on Container — and then a data model,
+4. lists the model's folders, numeric and categorical features, dimensions and hierarchies, and
+5. ends with an empty `data_model.get_data(feature_list=[])` query for you to fill in.
+
+The connection entry decides which flavour of notebook is written:
+
+| Connection | `atscale` version | Connects with | Selection |
+|---|---|---|---|
+| `installer: true` | `atscale < 3` | `mdx.url`, `mdx.organization_id`, user | `client.select_project()` |
+| otherwise (Container) | latest | `mdx.url`, user | `client.select_repo()` → `repo.select_catalog()` |
+
+The `mdx.user` key must name an entry under `users:` with a `username` and `password`.
+
+**Security:** the notebook contains that password in plain text. Do not upload it as a build artifact or commit it.
+
+**Requires:** `CONNECTIONS_FILE` secret with an `mdx:` block on the named connection.
+
+#### Using the composite action
+
+```yaml
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-notebook-from-connection
+    connection-file: ${{ secrets.CONNECTIONS_FILE }}
+    connection-name: my_atscale
+    target-file: atscale.ipynb
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
+| `connection-name` | No | `default` | Connection whose `mdx:` block is used |
+| `target-file` | No | `notebook.ipynb` | Output path for the notebook. Its folder must already exist |
 
 ---
 
@@ -1575,7 +1719,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `output-file` | No | `{stem}_enhanced.csv` | Output file path |
 | `db-schema` | No | auto | Postgres schema for AtScale backend tables (`atscale` or `engine`) |
 | `days` | No | `7` | Look-back window when searching the AtScale query log |
-| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`. |
+| `target-connection-name` | No | | Connection name for the target data source. When provided, fetches an execution plan (EXPLAIN) for each outbound query and stores it in the `execution_plan` column. Supports `snowflake`, `postgres`, `redshift`, `databricks`, and `bigquery` (dry run). |
 
 **Output:** Input CSV with the following columns appended on the right. Rows with no match have empty values.
 
@@ -1584,7 +1728,7 @@ Enriches a run-results CSV from `execute-atscale-query-harness` with the AtScale
 | `run_atscale_query_id` | Always | AtScale's internal `query_id` for the inbound query |
 | `run_inbound_query_id` | Always | AtScale's `query_id` for the inbound annotated query (same source as `run_atscale_query_id`) |
 | `run_outbound_text` | Always | SQL AtScale sent to the underlying data source (multiple subqueries joined by `\n---\n`) |
-| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift |
+| `run_outbound_execution_plan` | When `target-connection-name` is set | Dialect-specific EXPLAIN output: JSON for Snowflake (`SYSTEM$EXPLAIN_PLAN_JSON`) and PostgreSQL (`EXPLAIN (FORMAT JSON)`), text for Redshift and Databricks (`EXPLAIN FORMATTED`), JSON dry-run job statistics for BigQuery (no `EXPLAIN` exists; the query is validated but not executed) |
 | `run_used_agg` | Always | `true` if any subquery references an AtScale aggregate table (`as_agg_*`), `false` otherwise |
 | `run_duration_ms` | When matched | Total wall-clock time from query receipt to last result row (ms). Computed as `query_results.finished − queries.received`. Falls back to `finished − planning_started` if `received` is unavailable. |
 | `run_inbound_ms` | Best-effort | **INBOUND phase** — time from query receipt to start of planning (ms). Computed as `queries_planned.planning_started − queries.received`. Matches the "INBOUND" metric in the AtScale query monitor. |
@@ -1694,7 +1838,7 @@ Generates a Helm `values.yaml` for deploying AtScale on Kubernetes. If no TLS ce
 
 Lists the data warehouses (data sources) registered in an AtScale instance and writes the result as JSON to stdout.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block in the named connection. Set `apiToken` to a Design Center API token (profile icon → API Token → Generate) — it is automatically exchanged for a JWT via `POST /v1/token`. See [Connection YAML](../README.md#atscale-rest-atscale-fields).
+**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block in the named connection. Set `apiToken` to a Design Center API token (profile icon → API Token → Generate) — it is automatically exchanged for a JWT via `POST /v1/token`. See [Connection YAML](../../README.md#atscale-rest-atscale-fields).
 
 #### Using the composite action
 
@@ -2003,7 +2147,7 @@ out is reported as a Phase 2 warning, so structural results are still produced.
 
 Gets the DSO count for a specified model or catalog if supplied or the entire system if none are specified.
 
-**Requires:** `CONNECTIONS_FILE` secret with an `atscale:` block (including `apiToken`) on the AtScale connection entry and a `sql:` block on the SQL connection entry. The API token is automatically exchanged for a JWT via `POST /v1/token`.
+**Requires:** `CONNECTIONS_FILE` secret with a `sql:` block on the named connection pointing at the AtScale SQL endpoint. The operation reads `information_schema` through that endpoint, treating each schema as a catalog and each table as a model.
 
 #### Using the composite action
 
@@ -2019,7 +2163,7 @@ Gets the DSO count for a specified model or catalog if supplied or the entire sy
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `connection-name` | Yes | | Name of the AtScale connection entry in the connections file |
+| `connection-name` | Yes | | Name of the connection entry whose `sql:` block points at the AtScale SQL endpoint |
 | `connection-file` | Yes | | Contents of the connections YAML (pass via secret) |
 | `catalog` | No | all available catalogs | Count only models from the specified catalog |
 | `model` | No | all available models | Count only the specified model |
