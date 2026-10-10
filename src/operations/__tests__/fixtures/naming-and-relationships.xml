@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Regression fixture for the XML converter's naming / relationship rules:
+  - Customer -> Gender is a cross-dimension reference (keyed-attribute-ref ref-id): an
+    embedded relationship, to.level = Gender's key level.
+  - "Answers" and "Answers %" slug to the same file name; both must survive.
+  - A calculated member references another by its verbatim name - copied as-is.
+  - "Empty Cube" has nothing; "Dims Only Cube" has a dimension but no measures.
+  - Level "Gender Code" repeats level "Gender Name"'s dataset + key.
+-->
+<schema name="Naming And Relationships">
+  <data-sets>
+    <data-set id="ds-fact" name="fact_sales">
+      <physical>
+        <connection id="pg" />
+        <table><database>db</database><schema>public</schema><name>fact_sales</name></table>
+        <column><name>customer_key</name><type>Integer</type></column>
+        <column><name>sales_amount</name><type>Decimal</type></column>
+      </physical>
+      <logical>
+        <key-ref id="kr-amount" complete="true"><column>sales_amount</column></key-ref>
+      </logical>
+    </data-set>
+    <data-set id="ds-customer" name="customer">
+      <physical>
+        <connection id="pg" />
+        <table><database>db</database><schema>public</schema><name>customer</name></table>
+        <column><name>customer_key</name><type>Integer</type></column>
+        <column><name>customer_name</name><type>String</type></column>
+        <column><name>gender</name><type>String</type></column>
+      </physical>
+      <logical>
+        <key-ref id="kr-customer" unique="true" complete="true"><column>customer_key</column></key-ref>
+        <key-ref id="kr-gender" unique="false" complete="false">
+          <ref-path><ref id="rp-gender" /></ref-path>
+          <column>gender</column>
+        </key-ref>
+        <attribute-ref id="ka-customer" complete="true"><column>customer_name</column></attribute-ref>
+      </logical>
+    </data-set>
+    <data-set id="ds-gender" name="gender">
+      <physical>
+        <connection id="pg" />
+        <table><database>db</database><schema>public</schema><name>gender</name></table>
+        <column><name>gender</name><type>String</type></column>
+        <column><name>gender_name</name><type>String</type></column>
+        <column><name>gender_label</name><type>String</type></column>
+      </physical>
+      <logical>
+        <key-ref id="kr-gender" unique="true" complete="true"><column>gender</column></key-ref>
+        <key-ref id="kr-gender-code" unique="true" complete="true"><column>gender</column></key-ref>
+        <attribute-ref id="ka-gender" complete="true"><column>gender_name</column></attribute-ref>
+        <attribute-ref id="ka-gender-code" complete="true"><column>gender_label</column></attribute-ref>
+      </logical>
+    </data-set>
+  </data-sets>
+
+  <attributes>
+    <keyed-attribute id="ka-customer" name="Customer Name" key-ref="kr-customer"><properties><caption>Customer Name</caption></properties></keyed-attribute>
+    <keyed-attribute id="ka-gender" name="Gender Name" key-ref="kr-gender"><properties><caption>Gender Name</caption></properties></keyed-attribute>
+    <keyed-attribute id="ka-gender-code" name="Gender Code" key-ref="kr-gender-code"><properties><caption>Gender Code</caption></properties></keyed-attribute>
+  </attributes>
+
+  <dimensions>
+    <dimension id="dim-customer" name="Customer Dimension">
+      <hierarchy name="Customer Hierarchy">
+        <level primary-attribute="ka-customer">
+          <keyed-attribute-ref attribute-id="ka-gender" ref-id="rp-gender"><properties><multiplicity /></properties></keyed-attribute-ref>
+        </level>
+      </hierarchy>
+    </dimension>
+    <dimension id="dim-gender" name="Gender Dimension">
+      <hierarchy name="Gender Hierarchy"><level primary-attribute="ka-gender" /></hierarchy>
+      <hierarchy name="Gender Code Hierarchy"><level primary-attribute="ka-gender-code" /></hierarchy>
+    </dimension>
+  </dimensions>
+
+  <calculated-members>
+    <calculated-member name="Answers" id="cm-answers">
+      <properties><caption>Answers</caption></properties>
+      <expression>[Measures].[Sales Amount] * 2</expression>
+    </calculated-member>
+    <calculated-member name="Answers %" id="cm-answers-pct">
+      <properties><caption>Answers %</caption></properties>
+      <expression>[Measures].[Answers] / [Measures].[Sales Amount]</expression>
+    </calculated-member>
+  </calculated-members>
+
+  <cubes>
+    <cube id="cube-sales" name="Sales Cube">
+      <attributes>
+        <attribute id="m-amount" name="Sales Amount"><properties><type><measure><key-ref id="kr-amount" /></measure></type></properties></attribute>
+      </attributes>
+      <data-sets>
+        <data-set-ref id="ds-fact">
+          <logical><key-ref id="kr-customer" complete="false"><column>customer_key</column></key-ref></logical>
+        </data-set-ref>
+        <data-set-ref id="ds-customer" />
+        <data-set-ref id="ds-gender" />
+      </data-sets>
+      <dimensions><dimension-ref id="dim-customer" /><dimension-ref id="dim-gender" /></dimensions>
+      <calculated-members>
+        <calculated-member-ref id="cm-answers" />
+        <calculated-member-ref id="cm-answers-pct" />
+      </calculated-members>
+    </cube>
+    <cube id="cube-dims" name="Dims Only Cube">
+      <data-sets>
+        <data-set-ref id="ds-fact">
+          <logical><key-ref id="kr-customer" complete="false"><column>customer_key</column></key-ref></logical>
+        </data-set-ref>
+        <data-set-ref id="ds-customer" />
+      </data-sets>
+      <dimensions><dimension-ref id="dim-customer" /></dimensions>
+    </cube>
+    <cube id="cube-empty" name="Empty Cube" />
+  </cubes>
+</schema>

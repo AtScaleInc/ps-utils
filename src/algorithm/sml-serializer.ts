@@ -419,7 +419,9 @@ function buildCatalog(model: SemanticModel, opts: SmlSerializerOptions): string 
       unique_name: `${label}.catalog`,
       object_type: "catalog",
       label,
-      version: 1.5,
+      // The latest SML version sml-cli supports - versions only add properties, so a
+      // newer one is safe; an older one draws its "different from the latest" warning.
+      version: 1.7,
       aggressive_agg_promotion: false,
       build_speculative_aggs: false,
     },

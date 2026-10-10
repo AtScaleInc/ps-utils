@@ -75,7 +75,7 @@
       </data-sets>
       <dimensions><dimension-ref id="region-dimension" /></dimensions>
       <attributes>
-        <attribute id="amount-measure" name="Amount">
+        <attribute id="amount-measure" name="Sales Amount">
           <properties><type><measure><key-ref id="amount-key" /></measure></type></properties>
         </attribute>
       </attributes>

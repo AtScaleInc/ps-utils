@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema name="Duplicate Cube Dimension Fixture">
+  <data-sets>
+    <data-set id="fact-sales" name="fact_sales">
+      <physical>
+        <connection id="fixture_connection" />
+        <table><database>fixture_db</database><schema>fixture_schema</schema><name>fact_sales</name></table>
+        <column><name>order_no</name><type>String</type></column>
+        <column><name>amount</name><type>Decimal</type></column>
+      </physical>
+      <logical>
+        <key-ref id="amount-key" complete="true"><column>amount</column></key-ref>
+      </logical>
+    </data-set>
+  </data-sets>
+  <cubes>
+    <cube id="cube-a" name="Cube A">
+      <attributes>
+        <keyed-attribute id="order-a" name="Order" key-ref="order-key-a"><properties><caption>Order</caption></properties></keyed-attribute>
+        <attribute id="amount-a" name="Amount A"><properties><type><measure><key-ref id="amount-key" /></measure></type></properties></attribute>
+      </attributes>
+      <dimensions>
+        <dimension id="order-dim-a" name="Order Details">
+          <hierarchy name="Order Details"><level primary-attribute="order-a" /></hierarchy>
+        </dimension>
+      </dimensions>
+      <data-sets>
+        <data-set-ref id="fact-sales">
+          <logical><key-ref id="order-key-a" complete="true" unique="false"><column>order_no</column></key-ref></logical>
+        </data-set-ref>
+      </data-sets>
+    </cube>
+    <cube id="cube-b" name="Cube B">
+      <attributes>
+        <keyed-attribute id="order-b" name="Order" key-ref="order-key-b"><properties><caption>Order</caption></properties></keyed-attribute>
+        <attribute id="amount-b" name="Amount B"><properties><type><measure><key-ref id="amount-key" /></measure></type></properties></attribute>
+      </attributes>
+      <dimensions>
+        <dimension id="order-dim-b" name="Order Details">
+          <hierarchy name="Order Details"><level primary-attribute="order-b" /></hierarchy>
+        </dimension>
+      </dimensions>
+      <data-sets>
+        <data-set-ref id="fact-sales">
+          <logical><key-ref id="order-key-b" complete="true" unique="false"><column>order_no</column></key-ref></logical>
+        </data-set-ref>
+      </data-sets>
+    </cube>
+  </cubes>
+</schema>
