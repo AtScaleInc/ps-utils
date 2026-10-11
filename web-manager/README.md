@@ -102,8 +102,26 @@ Settings. There's no separate login.
   working copy (a marker next to it, `.<repo>.imported`). Loading it again
   from Save / Load opens it read-only too. To change it, import again or edit
   it in Design Center. **Live database schema** opens the Wizard and
-  **Existing SML** opens Save / Load. **Database DDL** (`generate-sml-from-ddl`)
-  is listed but not wired yet.
+  **Existing SML** opens Save / Load.
+
+  **Database DDL** opens the same Wizard with a `.sql` file of `CREATE TABLE`s
+  as its table list instead of the warehouse's. Step 1 takes the file, the
+  model name (from the file name) and the data source + schema the tables
+  live in (preselected when the DDL names a schema the source has); a file
+  with several schemas also picks which one. From there it is the Wizard:
+  - **Declared keys first**: a DDL `FOREIGN KEY` / `REFERENCES` is the join
+    (Review says "foreign key in the DDL") and a `PRIMARY KEY` is the
+    dimension's key; without them the joins are guessed by name as usual.
+  - **Tables the source has** take its column spelling (the DDL's
+    `CUSTOMERKEY` becomes Postgres' `customerkey`), can be profiled, and their
+    joins are checked against the data. Step 1 says how many of the DDL's
+    tables are there; the rest are planned from the DDL alone.
+  - **Types** are mapped to what a live column reports (`NUMBER(38,0)` ->
+    Long, `NUMBER(18,2)` -> Decimal, `TIMESTAMP_NTZ` -> DateTime). Views
+    carry no columns in DDL and are left out.
+
+  Unlike the converters, the result is an ordinary canvas model: editable,
+  saved and deployed like anything built by hand.
 - **Discovery.** See what a table holds before modeling it. Pick a warehouse,
   database and schema, then click a table (the same Source panel as Develop,
   which keeps the choice). The profile runs on the first visit:
@@ -1035,6 +1053,8 @@ Build           GET /hosts/:id/sources · /sources/:sourceId/schemas?search= (po
                   -> remapped files + sml-cli validation
                 POST /build/import/save {repoName, files, replace?} · /build/import/publish {…, models, asConnection,
                   hostIds, action: link|deploy, replace?} -> job (import-path answers `imported` for such a copy)
+                POST /build/import/ddl {text, fileName} -> tables [{schema, name, kind, columns [{name, type, ddlType,
+                  nullable, primaryKey}], foreignKeys [{column, toSchema, toTable, toColumn}]}], schemas (422: no tables)
 Discovery       GET /hosts/:id/discovery/table · /discovery/profile[?id=] · /discovery/top-values?column=
                   (table args: ?source=<connectionId::database>&schema=&table=)
                 POST /hosts/:id/discovery/join-check {…table, column, toSchema, toTable, toColumn}

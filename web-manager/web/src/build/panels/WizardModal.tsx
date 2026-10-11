@@ -147,11 +147,18 @@ export function WizardModal({ hostId, fromDdl = false, onClose, onGenerate, onDo
   const liveTables = useMemo(() => new Map((schemaEntry?.tables ?? []).map((t) => [t.name.toLowerCase(), t.name])), [schemaEntry])
   const liveName = (t: string): string | null => (fromDdl ? liveTables.get(t.toLowerCase()) ?? null : t)
   const onSource = (t: string) => liveName(t) ?? t
+  // A DDL table the source has takes the source's column spelling (the DDL
+  // may say CUSTOMERKEY where Postgres has customerkey) - queries, profiles and
+  // join checks then name real columns. Keys and types stay the DDL's.
   const ddlColumns = useMemo(() => {
     const out: Record<string, WizardColumn[]> = {}
-    for (const t of ddlTables) out[`${schema}.${t.name}`] = t.columns.map((c) => ({ name: c.name, type: c.type, primaryKey: c.primaryKey }))
+    for (const t of ddlTables) {
+      const k = `${schema}.${t.name}`
+      const live = new Map((columns[k] ?? []).map((c) => [c.name.toLowerCase(), c.name]))
+      out[k] = t.columns.map((c) => ({ name: live.get(c.name.toLowerCase()) ?? c.name, type: c.type, primaryKey: c.primaryKey }))
+    }
     return out
-  }, [ddlTables, schema])
+  }, [ddlTables, schema, columns])
   const colMap = fromDdl ? ddlColumns : columns
 
   // A store source that no longer exists on this host isn't preselected.
@@ -175,7 +182,17 @@ export function WizardModal({ hostId, fromDdl = false, onClose, onGenerate, onDo
   const picked = [fact, timeTable, ...dims].filter((t): t is string => !!t)
 
   async function loadColumns(names: string[]) {
-    if (fromDdl) return colMap
+    if (fromDdl) {
+      // Only for the spelling (ddlColumns) - a failure keeps the DDL's.
+      const found = names.filter((t) => liveName(t) && !columns[key(t)])
+      if (sourceId && schema && found.length) {
+        try {
+          const got = await fetchTablesColumns(sourceId, found.map((t) => ({ schema, table: liveName(t)! })))
+          setColumns((c) => ({ ...c, ...Object.fromEntries(found.map((t) => [key(t), got[`${schema}.${liveName(t)}`] ?? []])) }))
+        } catch { /* planned with the DDL's spelling */ }
+      }
+      return colMap
+    }
     const missing = names.filter((t) => !columns[key(t)])
     if (!sourceId || !schema || !missing.length) return columns
     const got = await fetchTablesColumns(sourceId, missing.map((table) => ({ schema, table })))
