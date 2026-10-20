@@ -18,6 +18,7 @@
  * Large fact tables are automatically sampled via TABLESAMPLE SYSTEM or a
  * LIMIT-based fallback (see --target-fact-rows and --no-tablesample).
  */
+import fs from "fs";
 import path from "path";
 import { Operation } from "../Operation.js";
 import { ParameterSet, StringParameter, NumberParameter, BooleanParameter } from "../../Parameters.js";
@@ -27,9 +28,29 @@ import { YamlService } from "../../services/YamlService.js";
 import { SqlService, type ConnectionConfig, type SqlConnection } from "../../services/SqlService.js";
 import {
   extractFingerprint,
+  readModelGraph,
   writeFingerprintFile,
 } from "../../statistics/index.js";
-import type { DatabaseQueryRunner } from "../../statistics/index.js";
+import type { DatabaseQueryRunner, ModelGraph } from "../../statistics/index.js";
+
+/**
+ * The dataset/schema recorded in an SML directory's `connections/*.yml`, when
+ * every connection there agrees on one. Undefined if there is none or they differ.
+ */
+function readSmlConnectionSchema(
+  smlPath: string,
+  read: (file: string) => Record<string, any>,
+): string | undefined {
+  const dir     = fs.statSync(smlPath).isDirectory() ? smlPath : path.dirname(smlPath);
+  const connDir = path.join(dir, "connections");
+  if (!fs.existsSync(connDir)) return undefined;
+  const schemas = new Set<string>();
+  for (const f of fs.readdirSync(connDir).filter((n) => /\.ya?ml$/.test(n))) {
+    const schema = read(path.join(connDir, f))?.schema;
+    if (typeof schema === "string" && schema) schemas.add(schema);
+  }
+  return schemas.size === 1 ? [...schemas][0] : undefined;
+}
 
 // ─── Parameters ────────────────────────────────────────────────────────────────
 
@@ -190,12 +211,40 @@ export class ExtractDataShapeFromConnectionOperation extends Operation<Params> {
       );
     }
 
+    // BigQuery has no session default dataset, so a table reference without one
+    // is rejected. Datasets written by generate-sml-from-connection carry `table:`
+    // only; the dataset name lives in the SML connection file. Fill the gap from
+    // there, falling back to the connection config.
+    let modelGraph: ModelGraph | undefined;
+    if ((dialect ?? "").toLowerCase().includes("bigquery")) {
+      modelGraph = readModelGraph(smlPath);
+      const sqlCfg = config.connections?.[connectionName]?.sql;
+      const schema =
+        readSmlConnectionSchema(smlPath, (f) => yaml.readFromFile<Record<string, any>>(f)) ??
+        (sqlCfg?.schema ?? sqlCfg?.dataset as string | undefined);
+      if (schema) {
+        for (const node of [...modelGraph.facts, ...modelGraph.dimensions]) {
+          if (!node.sourceSchema) node.sourceSchema = schema;
+        }
+        // A level's own schema, when set, overrides its dimension's — and an
+        // empty string counts as set — so fill those as well.
+        for (const dim of modelGraph.dimensions) {
+          for (const hier of dim.hierarchies) {
+            for (const level of hier.levels) {
+              if (level.sourceTable && !level.sourceSchema) level.sourceSchema = schema;
+            }
+          }
+        }
+      }
+    }
+
     try {
       const runner = new SqlQueryRunner(sql, conn);
 
       // ── Extract fingerprint ─────────────────────────────────────────────────
       const fingerprint = await extractFingerprint(runner, {
         smlPath,
+        ...(modelGraph ? { modelGraph } : {}),
         sampling: {
           targetFactRows:      params["target-fact-rows"],
           targetColumnRows:    params["target-column-rows"],

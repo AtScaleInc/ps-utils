@@ -211,6 +211,8 @@ export const NUMERIC_TYPES = new Set([
   "NUMBER", "BINARY_FLOAT", "BINARY_DOUBLE",
   // MySQL / MariaDB
   "MEDIUMINT", "INT2", "INT4", "INT8",
+  // BigQuery (INFORMATION_SCHEMA reports INT64/FLOAT64, not INTEGER/FLOAT)
+  "INT64", "FLOAT64", "BIGNUMERIC", "BIGDECIMAL",
 ]);
 
 export const DATE_TYPES = new Set([
@@ -277,7 +279,7 @@ export function isNumericType(jdbcType: string): boolean {
 
 export function isIntegerType(jdbcType: string): boolean {
   const upper = jdbcType.toUpperCase();
-  return ["INTEGER", "INT", "BIGINT", "SMALLINT", "TINYINT"].includes(upper);
+  return ["INTEGER", "INT", "BIGINT", "SMALLINT", "TINYINT", "INT64"].includes(upper);
 }
 
 export function toTitleCase(s: string): string {
