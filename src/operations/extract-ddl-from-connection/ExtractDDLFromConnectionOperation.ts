@@ -115,6 +115,18 @@ type ColumnInfo = {
   isPrimaryKey:     boolean;
 };
 
+/**
+ * The INFORMATION_SCHEMA view reference for a query. BigQuery has no unqualified
+ * INFORMATION_SCHEMA: each view must be prefixed with `project.dataset`. Every
+ * other dialect keeps the plain `INFORMATION_SCHEMA.<view>` it always used.
+ */
+export function infoSchemaView(conn: SqlConnection, schema: string, view: string): string {
+  if (conn.dialect === "bigquery") {
+    return `\`${conn.client.projectId}.${schema}\`.INFORMATION_SCHEMA.${view}`;
+  }
+  return `INFORMATION_SCHEMA.${view}`;
+}
+
 /** Fetch columns and PK flags for all tables in one pair of bulk queries. */
 async function fetchAllColumns(
   sql: SqlService,
@@ -124,10 +136,15 @@ async function fetchAllColumns(
 ): Promise<Map<string, ColumnInfo[]>> {
   const inList = tableNames.map((t) => `'${t}'`).join(", ");
 
+  // BigQuery's COLUMNS view has no CHARACTER_MAXIMUM_LENGTH / NUMERIC_PRECISION.
+  const sizeColumns = conn.dialect === "bigquery"
+    ? "NULL AS CHARACTER_MAXIMUM_LENGTH, NULL AS NUMERIC_PRECISION"
+    : "CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION";
+
   const colRows = await sql.query(
     conn,
-    `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, IS_NULLABLE
-       FROM INFORMATION_SCHEMA.COLUMNS
+    `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, ${sizeColumns}, IS_NULLABLE
+       FROM ${infoSchemaView(conn, schema, "COLUMNS")}
       WHERE TABLE_SCHEMA = '${schema}'
         AND TABLE_NAME IN (${inList})
       ORDER BY TABLE_NAME, ORDINAL_POSITION`,
@@ -139,8 +156,8 @@ async function fetchAllColumns(
     const pkRows = await sql.query(
       conn,
       `SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME
-         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-         JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+         FROM ${infoSchemaView(conn, schema, "TABLE_CONSTRAINTS")} tc
+         JOIN ${infoSchemaView(conn, schema, "KEY_COLUMN_USAGE")} kcu
            ON  tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
            AND tc.TABLE_SCHEMA    = kcu.TABLE_SCHEMA
            AND tc.TABLE_NAME      = kcu.TABLE_NAME
@@ -191,6 +208,31 @@ async function fetchAllForeignKeys(
   tableNames: string[],
 ): Promise<Map<string, ForeignKeyInfo[]>> {
   const result = new Map<string, ForeignKeyInfo[]>();
+
+  // BigQuery has no REFERENTIAL_CONSTRAINTS view; SqlService reads its declared
+  // foreign keys from the constraint views directly.
+  if (conn.dialect === "bigquery") {
+    try {
+      const rows = await sql.getForeignKeys(conn, schema, "%");
+      const wanted = new Set(tableNames);
+      for (const r of rows) {
+        const tName = String(r["FKTABLE_NAME"] ?? r["fktable_name"] ?? "");
+        if (!wanted.has(tName)) continue;
+        if (!result.has(tName)) result.set(tName, []);
+        result.get(tName)!.push({
+          constraintName:   String(r["FK_NAME"]       ?? r["fk_name"]       ?? ""),
+          columnName:       String(r["FKCOLUMN_NAME"] ?? r["fkcolumn_name"] ?? ""),
+          referencedTable:  String(r["PKTABLE_NAME"]  ?? r["pktable_name"]  ?? ""),
+          referencedColumn: String(r["PKCOLUMN_NAME"] ?? r["pkcolumn_name"] ?? ""),
+          ordinalPosition:  Number(r["KEY_SEQ"]       ?? r["key_seq"]       ?? 0),
+        });
+      }
+    } catch {
+      // foreign keys are optional metadata
+    }
+    return result;
+  }
+
   try {
     const inList = tableNames.map((t) => `'${t}'`).join(", ");
     const rows = await sql.query(
@@ -314,7 +356,7 @@ export class ExtractDDLFromConnectionOperation extends Operation<Params> {
     try {
       const tableRows = await sql.query(
         conn,
-        `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+        `SELECT TABLE_NAME FROM ${infoSchemaView(conn, schema, "TABLES")}
           WHERE TABLE_SCHEMA = '${schema}'
             AND TABLE_TYPE IN (${BASE_TABLE_TYPES.map((t) => `'${t}'`).join(", ")})
           ORDER BY TABLE_NAME`,
