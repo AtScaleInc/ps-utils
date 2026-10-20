@@ -213,7 +213,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
 
     try {
       await runInferenceAndWrite(
-        new SqlSchemaAdapter(sql, conn, schema),
+        new SqlSchemaAdapter(sql, conn, schema, (m) => this.logger.log(m)),
         modelName,
         {
           schemaPattern:           schema,
