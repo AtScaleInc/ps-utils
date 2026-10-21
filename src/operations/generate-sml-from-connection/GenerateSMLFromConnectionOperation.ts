@@ -162,10 +162,15 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
     const config = yaml.readFromFile<ConnectionConfig>(connectionFile);
     const conn   = await sql.connect(config, connectionName);
 
-    // Resolve database name and dialect from connection config
+    // Resolve database name and dialect from connection config. BigQuery has no
+    // `database`; its equivalent is the GCP project.
+    const sqlConfig = config.connections?.[connectionName]?.sql;
     const database =
-      (config.connections?.[connectionName]?.sql?.database as string | undefined) ??
-      (config.connections?.[connectionName]?.sql?.dbname   as string | undefined);
+      (sqlConfig?.database as string | undefined) ??
+      (sqlConfig?.dbname   as string | undefined) ??
+      (String(sqlConfig?.dialect ?? "").toLowerCase().includes("bigquery")
+        ? ((sqlConfig?.project ?? sqlConfig?.project_id ?? sqlConfig?.projectId) as string | undefined)
+        : undefined);
 
     const dialect =
       (config.connections?.[connectionName]?.sql?.dialect as string | undefined);
@@ -208,7 +213,7 @@ export class GenerateSMLFromConnectionOperation extends Operation<Params> {
 
     try {
       await runInferenceAndWrite(
-        new SqlSchemaAdapter(sql, conn, schema),
+        new SqlSchemaAdapter(sql, conn, schema, (m) => this.logger.log(m)),
         modelName,
         {
           schemaPattern:           schema,

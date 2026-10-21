@@ -20,7 +20,7 @@ import type {
   JoinFingerprint,
   SamplingConfig,
 } from "../types.js";
-import { num, quoter } from "../sql-helpers.js";
+import { num, percentileAgg, quoter } from "../sql-helpers.js";
 import { buildSampleClause } from "../sampling.js";
 import { classifyShape } from "../distribution.js";
 import { countRows } from "../sql-helpers.js";
@@ -87,9 +87,9 @@ export async function profileFactJoins(
         AVG(rows_per_leaf)          AS avg_density,
         STDDEV(rows_per_leaf)       AS stddev_density,
         MAX(rows_per_leaf)          AS max_density,
-        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY rows_per_leaf) AS p50,
-        PERCENTILE_CONT(0.90) WITHIN GROUP (ORDER BY rows_per_leaf) AS p90,
-        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY rows_per_leaf) AS p99
+        ${percentileAgg(config.dialect, 0.5, "rows_per_leaf")} AS p50,
+        ${percentileAgg(config.dialect, 0.9, "rows_per_leaf")} AS p90,
+        ${percentileAgg(config.dialect, 0.99, "rows_per_leaf")} AS p99
       FROM (
         SELECT ${q(fkCol)}, COUNT(*) AS rows_per_leaf
         FROM ${sample.tableRef}

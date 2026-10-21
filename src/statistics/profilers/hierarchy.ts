@@ -21,7 +21,7 @@ import type {
   RollupTierProfile,
   SamplingConfig,
 } from "../types.js";
-import { num, quoter, type Quoter } from "../sql-helpers.js";
+import { isBigQuery, num, percentileAgg, quoter, type Quoter } from "../sql-helpers.js";
 import { classifyShape } from "../distribution.js";
 import type { IdMapper } from "../id-mapper.js";
 
@@ -35,6 +35,12 @@ export async function profileHierarchies(
 ): Promise<HierarchyFingerprint[]> {
   const qt = quoter(config.dialect);
   const { q, qualifyTable } = qt;
+  // BigQuery errors on 0 / 0 where other dialects were already guarded as before,
+  // so only BigQuery gets the extra zero guard.
+  const labelDenominator = (keyCol: string) =>
+    isBigQuery(config.dialect)
+      ? `NULLIF(NULLIF(COUNT(DISTINCT ${q(keyCol)}), 1), 0)`
+      : `NULLIF(COUNT(DISTINCT ${q(keyCol)}), 1)`;
   const results: HierarchyFingerprint[] = [];
   const defaultTableRef = qualifyTable(dim.sourceSchema, dim.sourceTable);
 
@@ -71,7 +77,7 @@ export async function profileHierarchies(
         const labRows = await runner.query(`
           SELECT
             COUNT(DISTINCT ${q(level.labelColumn)}) * 1.0
-              / NULLIF(COUNT(DISTINCT ${q(keyCol)}), 1) AS lbl_uniq
+              / ${labelDenominator(keyCol)} AS lbl_uniq
           FROM ${tableRef}
           WHERE ${q(keyCol)} IS NOT NULL
         `);
@@ -90,7 +96,7 @@ export async function profileHierarchies(
       if (parentLevel) {
         const parentKeyCol = level.parentKeyColumn ?? parentLevel.keyColumns[0]!;
         rollupFromParent = await profileRollupEdge(
-          runner, tableRef, parentKeyCol, keyCol, qt,
+          runner, tableRef, parentKeyCol, keyCol, qt, config.dialect,
         );
       }
 
@@ -129,6 +135,7 @@ async function profileRollupEdge(
   parentKeyCol: string,
   childKeyCol:  string,
   qt:           Quoter,
+  dialect?:     string,
 ): Promise<RollupEdgeFingerprint> {
   const { q } = qt;
   const rows = await runner.query(`
@@ -137,8 +144,8 @@ async function profileRollupEdge(
       STDDEV(children_per_parent) AS stddev_ratio,
       MIN(children_per_parent)    AS min_children,
       MAX(children_per_parent)    AS max_children,
-      PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY children_per_parent) AS p50,
-      PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY children_per_parent) AS p95
+      ${percentileAgg(dialect, 0.5, "children_per_parent")} AS p50,
+      ${percentileAgg(dialect, 0.95, "children_per_parent")} AS p95
     FROM (
       SELECT ${q(parentKeyCol)},
              COUNT(DISTINCT ${q(childKeyCol)}) AS children_per_parent

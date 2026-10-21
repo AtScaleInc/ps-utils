@@ -3098,8 +3098,8 @@ Connects via the `@google-cloud/bigquery` client. Authentication uses a service 
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `dialect` | Yes | | `bigquery` |
-| `project_id` | Yes | | GCP project ID |
-| `dataset` | Yes | | Default BigQuery dataset (equivalent to schema) |
+| `project_id` | Yes | | GCP project ID (`project` and `projectId` are also accepted) |
+| `schema` | Yes | | Default BigQuery dataset. Read by `generate-sml-from-connection`, `execute-sql-on-connection` and the other connection operations. `generate-data-from-data-shape-to-connection` also accepts `dataset` as an alias |
 | `location` | No | `US` | Dataset location (e.g. `US`, `EU`, `us-central1`) |
 | `bigquery_user` | No | | Key from `users` section. Omit to use Application Default Credentials |
 
@@ -3117,7 +3117,7 @@ connections:
     sql:
       dialect: bigquery
       project_id: my-gcp-project-123
-      dataset: analytics
+      schema: analytics
       location: US
       bigquery_user: bigquery_sa
 ```
@@ -3130,7 +3130,7 @@ connections:
     sql:
       dialect: bigquery
       project_id: my-gcp-project-123
-      dataset: analytics
+      schema: analytics
 ```
 
 ---

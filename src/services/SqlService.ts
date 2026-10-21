@@ -442,10 +442,12 @@ export class SqlService extends ServiceProvider {
     users: Record<string, any>,
     connectionUser?: string,
   ): Promise<SqlConnection> {
-    const userEntry = this.resolveUserEntry(users, sql.user ?? sql.username, connectionUser);
-    const projectId = sql.project ?? sql.projectId;
+    // `bigquery_user` mirrors how connectSnowflake accepts `snowflake_user`.
+    const userKey = sql.bigquery_user ?? sql.user ?? sql.username;
+    const userEntry = this.resolveUserEntry(users, userKey, connectionUser);
+    const projectId = sql.project ?? sql.project_id ?? sql.projectId;
     if (!projectId) {
-      throw new Error("BigQuery connection requires 'project'.");
+      throw new Error("BigQuery connection requires 'project' (or 'project_id').");
     }
 
     // Service-account key file, if given; otherwise the client library falls

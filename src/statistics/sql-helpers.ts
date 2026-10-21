@@ -57,6 +57,25 @@ export function quoter(dialect?: string): Quoter {
   };
 }
 
+/** True when `dialect` is BigQuery. */
+export function isBigQuery(dialect?: string): boolean {
+  return (dialect ?? "").toLowerCase().includes("bigquery");
+}
+
+/**
+ * A percentile aggregate over `expr`, usable next to AVG/MAX in one SELECT.
+ *
+ * Every dialect except BigQuery gets exactly the SQL:2003 ordered-set form the
+ * profilers always emitted. BigQuery has no WITHIN GROUP (its PERCENTILE_CONT is
+ * analytic-only), so it uses APPROX_QUANTILES, which is an ordinary aggregate.
+ */
+export function percentileAgg(dialect: string | undefined, fraction: number, expr: string): string {
+  if (isBigQuery(dialect)) {
+    return `APPROX_QUANTILES(${expr}, 100)[OFFSET(${Math.round(fraction * 100)})]`;
+  }
+  return `PERCENTILE_CONT(${fraction.toFixed(2)}) WITHIN GROUP (ORDER BY ${expr})`;
+}
+
 // ─── Row extraction helpers ───────────────────────────────────────────────────
 
 /**
