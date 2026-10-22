@@ -444,7 +444,11 @@ export async function convertXmlToSml(
   const dimIdToName = new Map<string, string>();
   const dimNameClaimedBy = new Map<string, string>();
   function resolveDimName(dim: Record<string, unknown>): string | undefined {
-    const rawName = a(dim, "name");
+    // Trimmed because the source schema can carry an accidental leading/trailing space on
+    // a <dimension name="..."> attribute (seen in production exports); left untrimmed, that
+    // space becomes part of unique_name itself — forcing YAML to quote it and producing an
+    // identifier that looks syntactically wrong wherever it's referenced.
+    const rawName = a(dim, "name")?.trim();
     if (!rawName) return undefined;
     const id = a(dim, "id");
     if (!id) return rawName;
@@ -2510,7 +2514,22 @@ function safeFilename(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** Unescape HTML entities from XML-encoded SQL or MDX. */
+/**
+ * Unescape HTML entities from XML-encoded SQL or MDX.
+ *
+ * Normalizes `\r\n`/lone `\r` to `\n` once every entity is decoded, and trims trailing
+ * whitespace off each line. Source XML authored on Windows (the installer/jar converter,
+ * or hand-edited SQL) often encodes its line breaks as `&#xD;&#xA;`; left as literal `\r`
+ * characters, js-yaml refuses block-scalar (`|`) style for the resulting string — it falls
+ * back to a double-quoted, fully-escaped single line (confirmed: a `\n`-only string dumps as
+ * a readable `|-` block, the same string with `\r\n` dumps as `"...\r\n..."`). That unreadable
+ * form is what got hand-edited in the field: someone adding a literal `"` inside the SQL ends
+ * the YAML string early and the file fails to parse, while an editor who removes the
+ * surrounding quotes to fix that produces SQL Snowflake never sees quoted/escaped correctly.
+ * Every SQL/MDX value in this file is decoded through this one function, so fixing it here
+ * — rather than at each of its call sites — guarantees the resulting YAML always has a
+ * chance at block-scalar style regardless of the source's line-ending convention.
+ */
 function unescapeHtml(s: string): string {
   return s
     .replace(/&#xA;/g, "\n")
@@ -2520,7 +2539,9 @@ function unescapeHtml(s: string): string {
     .replace(/&#34;/g, '"')
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&gt;/g, ">")
+    .replace(/\r\n|\r/g, "\n")
+    .replace(/[ \t]+$/gm, "");
 }
 
 /** Map XML aggregation string → SML calculation_method. */
@@ -4261,7 +4282,7 @@ function buildRelevantDims(
       // own dimension could resolve to a name a *different* cube's same-named-but-distinct
       // dimension already claimed.
       const id = a(dim, "id");
-      const name = id ? dimIdToName.get(id) : a(dim, "name");
+      const name = id ? dimIdToName.get(id) : a(dim, "name")?.trim();
       if (name) cubeLevelDims.set(name, dim as Record<string, unknown>);
     }
   }
