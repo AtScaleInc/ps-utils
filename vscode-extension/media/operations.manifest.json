@@ -26,6 +26,7 @@
         "generate-sml-from-bundle",
         "generate-sml-from-tabular",
         "analyze-powerbi-dax-gaps",
+        "analyze-tableau-hive-gaps",
         "generate-sml-from-ssas-multidimensional",
         "generate-report-from-xml",
         "generate-report-from-sml",
@@ -943,6 +944,58 @@
           "role": "output-dir",
           "required": true,
           "default": null
+        }
+      ]
+    },
+    "analyze-tableau-hive-gaps": {
+      "description": "Find Tableau workbooks and data sources affected by the Hive thrift → PGWire switch, and the RAWSQL / custom SQL in them that needs rewriting",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "output-dir"
+      },
+      "params": [
+        {
+          "name": "tableau-path",
+          "description": "Tableau file (.twb, .twbx, .tds, .tdsx) or a directory scanned recursively for them",
+          "type": "string",
+          "role": "scalar",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory where the gap report will be written",
+          "type": "string",
+          "role": "output-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "atscale-host",
+          "description": "Only count connections whose server contains this text (use when other Hive or Spark sources exist)",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "legacy-port",
+          "description": "Port of the legacy AtScale Hive thrift endpoint",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "11111"
+        },
+        {
+          "name": "pgwire-port",
+          "description": "Port of the AtScale PGWire endpoint, to recognise files already migrated",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": "15432"
         }
       ]
     },

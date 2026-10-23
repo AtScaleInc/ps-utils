@@ -23,6 +23,7 @@
     - [`generateSmlFromBundle`](#generatesmlfrombundle)
     - [`generateSmlFromTabular`](#generatesmlfromtabular)
     - [`analyzePowerbiDaxGaps`](#analyzepowerbidaxgaps)
+    - [`analyzeTableauHiveGaps`](#analyzetableauhivegaps)
     - [`generateSmlFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
     - [`generateReportFromXml`](#generatereportfromxml)
     - [`generateReportFromSml`](#generatereportfromsml)
@@ -691,6 +692,45 @@ curl -X POST http://localhost:4000/graphql \
   -F 'operations={"query":"mutation($f:Upload!){analyzePowerbiDaxGaps(input:{pbixFileUpload:$f}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
+```
+
+---
+
+### `analyzeTableauHiveGaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Find Tableau workbooks and data sources affected by the Hive thrift → PGWire switch, and the RAWSQL / custom SQL in them that needs rewriting
+
+**CLI name:** `analyze-tableau-hive-gaps`  |  **REST:** `POST /rest/analyze-tableau-hive-gaps`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `tableauPath` | `String` | Yes | Tableau file (.twb, .twbx, .tds, .tdsx) or a directory scanned recursively for them |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `atscaleHost` | `String` | No | Only count connections whose server contains this text (use when other Hive or Spark sources exist) |
+| `legacyPort` | `String` | No | Port of the legacy AtScale Hive thrift endpoint |
+| `pgwirePort` | `String` | No | Port of the AtScale PGWire endpoint, to recognise files already migrated |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  analyzeTableauHiveGaps(input: {
+    tableauPath: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{analyzeTableauHiveGaps(input:{tableauPath: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ---
@@ -3268,6 +3308,20 @@ input AnalyzePowerbiDaxGapsInput {
   outputDir: String
 }
 
+"""Find Tableau workbooks and data sources affected by the Hive thrift → PGWire switch, and the RAWSQL / custom SQL in them that needs rewriting"""
+input AnalyzeTableauHiveGapsInput {
+  """Tableau file (.twb, .twbx, .tds, .tdsx) or a directory scanned recursively for them"""
+  tableauPath: String!
+  """Directory where the gap report will be written"""
+  outputDir: String
+  """Only count connections whose server contains this text (use when other Hive or Spark sources exist)"""
+  atscaleHost: String
+  """Port of the legacy AtScale Hive thrift endpoint"""
+  legacyPort: String
+  """Port of the AtScale PGWire endpoint, to recognise files already migrated"""
+  pgwirePort: String
+}
+
 """Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
 input GenerateSmlFromSsasMultidimensionalInput {
   """Path to the SSAS Multidimensional XMLA export (Create/ObjectDefinition/Database script) to convert"""
@@ -4196,6 +4250,8 @@ type Mutation {
   generateSmlFromTabular(input: GenerateSmlFromTabularInput): OperationResult!
   """Analyse a Power BI .pbix and report which report-scoped DAX measures AtScale supports"""
   analyzePowerbiDaxGaps(input: AnalyzePowerbiDaxGapsInput): OperationResult!
+  """Find Tableau workbooks and data sources affected by the Hive thrift → PGWire switch, and the RAWSQL / custom SQL in them that needs rewriting"""
+  analyzeTableauHiveGaps(input: AnalyzeTableauHiveGapsInput): OperationResult!
   """Convert an SSAS Multidimensional XMLA export to AtScale SML files"""
   generateSmlFromSsasMultidimensional(input: GenerateSmlFromSsasMultidimensionalInput): OperationResult!
   """Read an AtScale XML project file and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, measures, calculated members, aggregates, and more"""

@@ -91,6 +91,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromBundle`](#generatesmlfrombundle)
   - [`generateSMLFromTabular`](#generatesmlfromtabular)
   - [`analyzePowerBIDaxGaps`](#analyzepowerbidaxgaps)
+  - [`analyzeTableauHiveGaps`](#analyzetableauhivegaps)
   - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
@@ -509,6 +510,39 @@ function analyzePowerBIDaxGaps(
 |---|---|---|---|---|
 | `pbixFile` | `FileInput` | Yes | | Path to the `.pbix` file, or a `Readable` of its contents |
 | `outputDir` | `DirOutput` | Yes | | Directory where the gap report will be written, or a `Writable` to receive a ZIP |
+
+---
+
+### `analyzeTableauHiveGaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+Scans Tableau workbooks and data sources for the Hive thrift (port `11111`) → PGWire (port `15432`) switch and reports which files are affected, in validation-priority order, with the `RAWSQL_*`, custom SQL and Initial SQL that contains HiveQL. No connection is required.
+
+```typescript
+import { analyzeTableauHiveGaps } from "@atscale-ps/ps-utils";
+
+await analyzeTableauHiveGaps({
+  tableauPath: "./tableau-export",
+  outputDir:   "./tableau-gap-report",
+  atscaleHost: "atscale.example.com",
+});
+```
+
+```typescript
+function analyzeTableauHiveGaps(
+  params: AnalyzeTableauHiveGapsParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `tableauPath` | `DirInput` | Yes | | A `.twb`/`.twbx`/`.tds`/`.tdsx` file or a directory of them |
+| `outputDir` | `DirOutput` | Yes | | Directory where the gap report will be written, or a `Writable` to receive a ZIP |
+| `atscaleHost` | `string` | No | | Only count connections whose server contains this text |
+| `legacyPort` | `string` | No | `"11111"` | Legacy Hive thrift port |
+| `pgwirePort` | `string` | No | `"15432"` | PGWire port, to recognise files already migrated |
 
 ---
 

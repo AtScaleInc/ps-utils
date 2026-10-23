@@ -149,6 +149,7 @@ flowchart LR
     - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
+    - [`analyze-tableau-hive-gaps`](#analyze-tableau-hive-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -600,6 +601,37 @@ Analyses a Power BI `.pbix` and reports which of its report-scoped DAX measures 
 | `output-dir` | Yes | | Directory for the gap report |
 
 **Output:** `PBIX_GAP_REPORT.md` (for people), plus `.json` and `.csv` versions for tooling, in `output-dir`.
+
+---
+
+### `analyze-tableau-hive-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+Scans Tableau workbooks and data sources for the Hive thrift (port `11111`) → PGWire (port `15432`) switch: which files connect to the legacy endpoint, in validation-priority order, and the `RAWSQL_*`, custom SQL and Initial SQL in them that contains HiveQL. No connection or secrets required. See the [README section](../../README.md#analyze-tableau-hive-gaps) for how findings and priorities are derived.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: analyze-tableau-hive-gaps
+    tableau-path: tableau-export
+    output-dir: tableau-gap-report
+    atscale-host: atscale.example.com
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `tableau-path` | Yes | | A `.twb`, `.twbx`, `.tds` or `.tdsx` file, or a directory scanned recursively for them |
+| `output-dir` | Yes | | Directory for the gap report |
+| `atscale-host` | No | | Only count connections whose server contains this text |
+| `legacy-port` | No | `11111` | Legacy Hive thrift port |
+| `pgwire-port` | No | `15432` | PGWire port, to recognise files already migrated |
+
+**Output:** `TABLEAU_GAP_REPORT.md`, `TABLEAU_GAP_REPORT.json`, `TABLEAU_GAP_FILES.csv` (one row per file) and `TABLEAU_GAP_FINDINGS.csv` (one row per finding), in `output-dir`.
 
 ---
 

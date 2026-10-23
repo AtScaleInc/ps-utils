@@ -47,6 +47,7 @@ inputs:
         generate-sml-from-xml
         generate-sml-from-tabular
         analyze-powerbi-dax-gaps
+        analyze-tableau-hive-gaps
         generate-sml-from-ssas-multidimensional
         generate-report-from-xml
         generate-report-from-sml
@@ -133,6 +134,7 @@ inputs:
       For generate-sml-from-connection / generate-sml-from-ddl: SML output directory (default: sml/).
       For generate-data-from-data-shape: CSV output directory (default: data/).
       For analyze-powerbi-dax-gaps: directory for the gap report (required).
+      For analyze-tableau-hive-gaps: directory for the gap report (required).
     required: false
   schema:
     description: >
@@ -289,6 +291,30 @@ inputs:
     description: >
       Path to the Power BI .pbix file to analyse.
       Used by: analyze-powerbi-dax-gaps.
+    required: false
+
+  # ── analyze-tableau-hive-gaps ────────────────────────────────────────────
+  tableau-path:
+    description: >
+      A Tableau .twb, .twbx, .tds or .tdsx file, or a directory scanned
+      recursively for them.
+      Used by: analyze-tableau-hive-gaps.
+    required: false
+  atscale-host:
+    description: >
+      Only count Tableau connections whose server contains this text (use when
+      other Hive, Impala or Spark sources exist).
+      Used by: analyze-tableau-hive-gaps.
+    required: false
+  legacy-port:
+    description: >
+      Port of the legacy AtScale Hive thrift endpoint (default: 11111).
+      Used by: analyze-tableau-hive-gaps.
+    required: false
+  pgwire-port:
+    description: >
+      Port of the AtScale PGWire endpoint, to recognise migrated files (default: 15432).
+      Used by: analyze-tableau-hive-gaps.
     required: false
 
   # ── apply-shared-model-plan-option ──────────────────────────────────
@@ -1238,6 +1264,21 @@ runs:
           --pbix-file  "${{ inputs.pbix-file }}" \
           --output-dir "${{ inputs.output-dir }}" \
           --verbose true
+      shell: bash
+
+    # ── analyze-tableau-hive-gaps ─────────────────────────────────────────────
+    - name: Analyze Tableau Hive gaps
+      if: inputs.operation == 'analyze-tableau-hive-gaps'
+      run: |
+        ARGS=(
+          --tableau-path "${{ inputs.tableau-path }}"
+          --output-dir   "${{ inputs.output-dir }}"
+          --verbose      true
+        )
+        [[ -n "${{ inputs.atscale-host }}" ]] && ARGS+=(--atscale-host "${{ inputs.atscale-host }}")
+        [[ -n "${{ inputs.legacy-port }}"  ]] && ARGS+=(--legacy-port  "${{ inputs.legacy-port }}")
+        [[ -n "${{ inputs.pgwire-port }}"  ]] && ARGS+=(--pgwire-port  "${{ inputs.pgwire-port }}")
+        node "${{ github.action_path }}/dist/cli.js" analyze-tableau-hive-gaps "${ARGS[@]}"
       shell: bash
 
     # ── generate-sml-from-ssas-multidimensional ───────────────────────────────

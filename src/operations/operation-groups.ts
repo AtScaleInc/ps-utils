@@ -42,6 +42,7 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "generate-sml-from-bundle",
       "generate-sml-from-tabular",
       "analyze-powerbi-dax-gaps",
+      "analyze-tableau-hive-gaps",
       "generate-sml-from-ssas-multidimensional",
       "generate-report-from-xml",
       "generate-report-from-sml",

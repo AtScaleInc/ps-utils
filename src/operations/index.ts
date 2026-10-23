@@ -12,6 +12,7 @@ import { GenerateSMLFromXMLOperation } from "./generate-sml-from-xml/GenerateSML
 import { GenerateSMLFromBundleOperation } from "./generate-sml-from-bundle/GenerateSMLFromBundleOperation.js";
 import { GenerateSMLFromTabularOperation } from "./generate-sml-from-tabular/GenerateSMLFromTabularOperation.js";
 import { AnalyzePowerBIDaxGapsOperation } from "./analyze-powerbi-dax-gaps/AnalyzePowerBIDaxGapsOperation.js";
+import { AnalyzeTableauHiveGapsOperation } from "./analyze-tableau-hive-gaps/AnalyzeTableauHiveGapsOperation.js";
 import { GenerateSMLFromSsasMultidimensionalOperation } from "./generate-sml-from-ssas-multidimensional/GenerateSMLFromSsasMultidimensionalOperation.js";
 import { GenerateReportFromXMLOperation } from "./generate-report-from-xml/GenerateReportFromXMLOperation.js";
 import { GenerateReportFromSMLOperation } from "./generate-report-from-sml/GenerateReportFromSMLOperation.js";
@@ -79,6 +80,7 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromBundleOperation(services, logger));
   registry.register(new GenerateSMLFromTabularOperation(services, logger));
   registry.register(new AnalyzePowerBIDaxGapsOperation(services, logger));
+  registry.register(new AnalyzeTableauHiveGapsOperation(services, logger));
   registry.register(new GenerateSMLFromSsasMultidimensionalOperation(services, logger));
   registry.register(new GenerateReportFromXMLOperation(services, logger));
   registry.register(new GenerateReportFromSMLOperation(services, logger));

@@ -22,6 +22,7 @@
     - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
+    - [`analyze-tableau-hive-gaps`](#analyze-tableau-hive-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -581,6 +582,33 @@ curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
 # With file upload (multipart/form-data):
 curl -X POST http://localhost:4000/rest/analyze-powerbi-dax-gaps \
   -F "pbixFileUpload=@/path/to/file"
+```
+
+---
+
+### `analyze-tableau-hive-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Find Tableau workbooks and data sources affected by the Hive thrift → PGWire switch, and the RAWSQL / custom SQL in them that needs rewriting
+
+**Endpoint:** `POST /rest/analyze-tableau-hive-gaps`  |  **GraphQL:** `analyzeTableauHiveGaps`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `tableauPath` | `String` | Yes | Tableau file (.twb, .twbx, .tds, .tdsx) or a directory scanned recursively for them |
+| `atscaleHost` | `String` | No | Only count connections whose server contains this text (use when other Hive or Spark sources exist) |
+| `legacyPort` | `String` | No | Port of the legacy AtScale Hive thrift endpoint |
+| `pgwirePort` | `String` | No | Port of the AtScale PGWire endpoint, to recognise files already migrated |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/analyze-tableau-hive-gaps \
+  -H "Content-Type: application/json" \
+  -d '{
+      "tableauPath": "value"
+  }'
 ```
 
 ---

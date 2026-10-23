@@ -287,6 +287,29 @@ export async function analyzePowerBIDaxGaps(p: AnalyzePowerBIDaxGapsParams, o: L
   } finally { cleanup(); }
 }
 
+export type AnalyzeTableauHiveGapsParams = {
+  /** A .twb/.twbx/.tds/.tdsx file, or a directory of them. */
+  tableauPath: DirInput;
+  outputDir: DirOutput;
+  atscaleHost?: string;
+  legacyPort?: string;
+  pgwirePort?: string;
+};
+
+export async function analyzeTableauHiveGaps(p: AnalyzeTableauHiveGapsParams, o: LibraryOptions = {}) {
+  const { params, flush, cleanup } = await resolveIO(p as Record<string, unknown>, {
+    inputDirs: ["tableauPath"],
+    outputDirs: ["outputDir"],
+  });
+  try {
+    await run("analyze-tableau-hive-gaps", Object.assign({
+      "legacy-port": "11111",
+      "pgwire-port": "15432",
+    }, cc2kebab(params)), o);
+    await flush();
+  } finally { cleanup(); }
+}
+
 export type GenerateSMLFromSsasMultidimensionalParams = {
   xmlaFile: FileInput;
   outputDir: DirOutput;
