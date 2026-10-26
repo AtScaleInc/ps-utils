@@ -712,7 +712,7 @@ Reads an AtScale XML project file (`project_2_0` format — the same source form
 
 [↑ Table of Contents](#table-of-contents)
 
-Reads an SML directory (`catalog.yml` plus `datasets/`, `dimensions/`, `metrics/`, `models/`, and optionally `connections/` and `calculations/`) and writes a single, human-readable Markdown report describing every object found in the model as-is: connections, datasets (tables/queries/columns), the fact-to-dimension join graph, dimensions (hierarchies, levels, secondary attributes, snowflake/embedded joins), models (relationships, metrics used, calculations used, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), the metrics library, the calculations library, and security. Mirrors `generate-report-from-xml`'s report shape and read-only intent, sourced from an SML directory instead of an AtScale XML project file. No database connection or secrets required.
+Reads an SML directory (`catalog.yml` plus `datasets/`, `dimensions/`, `metrics/`, `models/`, and optionally `connections/` and `calculations/`) and writes a single, human-readable Markdown report describing every object found in the model as-is: connections, datasets (tables/queries/columns), the fact-to-dimension join graph, dimensions (hierarchies, levels, secondary attributes, snowflake/embedded joins), models (relationships, metrics used, calculations used, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), the metrics library, the calculations library, and security — followed by a Model Mapping section (per model: metrics, fact-to-dimension relationships, dimension attributes, metric coverage) and catalog-wide Issues and Recommendations with severity and a recommended fix. Mirrors `generate-report-from-xml`'s report shape and read-only intent, sourced from an SML directory instead of an AtScale XML project file. No database connection or secrets required.
 
 **Requires:** No secrets — the SML directory must be present in the repository or workspace.
 
@@ -741,7 +741,7 @@ Reads an SML directory (`catalog.yml` plus `datasets/`, `dimensions/`, `metrics/
 
 [↑ Table of Contents](#table-of-contents)
 
-Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generate-report-from-sml`. Writes `datasets/data_catalog_relationships.yml`, four `dimensions/dc_*.yml`, five `metrics/m_dc_*.yml`, `models/data_catalog_cube.yml` and a CSV of the rows into the SML directory, ready to commit and deploy.
+Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generate-report-from-sml`. Writes `datasets/data_catalog_relationships.yml`, four `dimensions/dc_*.yml`, five `metrics/m_dc_*.yml`, `models/data_catalog_cube.yml` and a CSV of the rows into the SML directory, ready to commit and deploy — plus the report's five model mapping tables as SML datasets and CSVs, and `data_catalog/data_catalog.sql` to create and load all six tables in the warehouse.
 
 **Requires:** No secrets — the SML directory must be present in the repository or workspace.
 
@@ -770,7 +770,11 @@ Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale mo
 | `output-dir` | No | `sml-dir` | Directory the cube's SML files are written into |
 | `connection-id` | No | first fact dataset's connection | SML connection `unique_name` for the catalog dataset |
 | `dataset-table` | No | | Physical table for the catalog dataset. Omit to embed the rows as an inline `VALUES` query |
+| `schema` | No | the connection's `schema` | Schema the SQL script creates its tables in |
+| `include-mapping-datasets` | No | `true` | Also write the five mapping tables as SML query datasets |
 | `csv-output-file` | No | `data_catalog/data_catalog_relationships.csv` | Catalog rows as CSV; relative paths are written inside `output-dir` |
+| `mapping-output-dir` | No | `data_catalog/mapping` | Directory for the mapping tables as CSV |
+| `sql-output-file` | No | `data_catalog/data_catalog.sql` | SQL script that creates and loads all six tables |
 
 ---
 

@@ -141,9 +141,11 @@ inputs:
     required: false
   schema:
     description: >
-      Database schema to scope SML generation to.
+      Database schema.
+      For generate-sml-from-connection / generate-sml-from-ddl: schema to scope SML generation to.
       For echo-connection-metadata: schema to read metadata from (default: the
       connection's sql.schema, else PUBLIC; upper-cased before querying).
+      For generate-dc-cube-from-sml: schema the SQL load script creates its tables in (default: the connection's schema).
     required: false
   catalog-name:
     description: >
@@ -409,6 +411,23 @@ inputs:
     description: >
       Path for the Data Catalog Cube rows as CSV; relative paths are written inside output-dir
       (default: data_catalog/data_catalog_relationships.csv).
+      Used by: generate-dc-cube-from-sml.
+    required: false
+  mapping-output-dir:
+    description: >
+      Directory for the model mapping tables as CSV; relative paths are written inside output-dir
+      (default: data_catalog/mapping).
+      Used by: generate-dc-cube-from-sml.
+    required: false
+  sql-output-file:
+    description: >
+      SQL script that creates and loads the Data Catalog tables; relative paths are written inside output-dir
+      (default: data_catalog/data_catalog.sql).
+      Used by: generate-dc-cube-from-sml.
+    required: false
+  include-mapping-datasets:
+    description: >
+      Also write the five model mapping tables as SML query datasets (default: true).
       Used by: generate-dc-cube-from-sml.
     required: false
   apply:
@@ -1352,6 +1371,10 @@ runs:
         [[ -n "${{ inputs.connection-id }}" ]] && ARGS+=(--connection-id "${{ inputs.connection-id }}")
         [[ -n "${{ inputs.dataset-table }}" ]] && ARGS+=(--dataset-table "${{ inputs.dataset-table }}")
         [[ -n "${{ inputs.csv-output-file }}" ]]      && ARGS+=(--csv-output-file      "${{ inputs.csv-output-file }}")
+        [[ -n "${{ inputs.schema }}" ]]                   && ARGS+=(--schema                   "${{ inputs.schema }}")
+        [[ -n "${{ inputs.include-mapping-datasets }}" ]] && ARGS+=(--include-mapping-datasets "${{ inputs.include-mapping-datasets }}")
+        [[ -n "${{ inputs.mapping-output-dir }}" ]]       && ARGS+=(--mapping-output-dir       "${{ inputs.mapping-output-dir }}")
+        [[ -n "${{ inputs.sql-output-file }}" ]]          && ARGS+=(--sql-output-file          "${{ inputs.sql-output-file }}")
         node "${{ github.action_path }}/dist/cli.js" generate-dc-cube-from-sml "${ARGS[@]}"
       shell: bash
 

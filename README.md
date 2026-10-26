@@ -968,6 +968,8 @@ Mirrors `generate-report-from-xml`'s report shape and read-only intent — nothi
 - **Metrics** — the metrics library: every metric defined, whether or not a model currently references it
 - **Calculations** — the calculations library: every calculated-metric formula defined, whether or not a model currently references it
 - **Security** — any `row_security`/`dimension_security` definitions found
+- **Model Mapping** — per model: its metrics (aggregation, fact dataset and table, source column, format, folder), the fact-to-dimension relationships with join levels and key columns, every dimension attribute it can be sliced by (hierarchy, level, Level / Join Level / Secondary, dataset, key and name columns), and a metric × dimension coverage count
+- **Issues and Recommendations** — structural checks with severity, impact and a recommended fix: references to missing metrics, dimensions or datasets (error); snowflake levels no relationship joins to the fact's join level, secondary attributes that repeat their level's key column, labels shared by two attributes, and sums over price/rate columns (warning); dimensions no model uses (info). The same tables are written as SQL/CSV by [`generate-dc-cube-from-sml`](#generate-dc-cube-from-sml)
 
 ```bash
 ./atscale-utils generate-report-from-sml \
@@ -993,7 +995,7 @@ Omit `--output-file` to print the report to stdout:
 
 [↑ Table of Contents](#table-of-contents)
 
-Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generate-report-from-sml`.
+Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generate-report-from-sml`; it also writes the report's model mapping tables as SQL, CSV and SML datasets.
 
 Writes into `--output-dir` (default: `--sml-dir`, so the cube deploys with the catalog it describes):
 
@@ -1004,6 +1006,9 @@ Writes into `--output-dir` (default: `--sml-dir`, so the cube deploys with the c
 | `metrics/m_dc_*.yml` | Relationship Paths, Measure Count, Dimension Count, Fact Dataset Count, Model Count (count distinct) |
 | `models/data_catalog_cube.yml` | The Data Catalog Cube model |
 | `data_catalog/data_catalog_relationships.csv` | The same rows as CSV, for loading a physical table |
+| `datasets/model_metrics.yml`, `model_relationships.yml`, `model_dimension_attributes.yml`, `model_metric_coverage.yml`, `model_issues.yml` | The model mapping tables (the same ones `generate-report-from-sml` renders) as inline-`VALUES` query datasets; skip with `--include-mapping-datasets false` |
+| `data_catalog/mapping/model_*.csv` | The mapping tables as CSV |
+| `data_catalog/data_catalog.sql` | `DROP` / `CREATE` / `INSERT` for the catalog table and the five mapping tables, schema-qualified with the connection's schema |
 
 A metric reaches a dimension through a relationship whose `from.dataset` is the metric's own dataset; each dimension contributes its hierarchy levels (the relationship's `to.level` is marked **Join Level**) and their secondary attributes. Calculations have no dataset and are not catalogued. Missing metrics, dimensions or level attributes are logged as warnings and skipped, so a half-finished model never blocks the refresh. The cube's own model is excluded, so re-running is idempotent and produces byte-identical output for unchanged SML.
 
@@ -1022,7 +1027,11 @@ A metric reaches a dimension through a relationship whose `from.dataset` is the 
 | `--output-dir` | No | `--sml-dir` | Directory the cube's SML files are written into |
 | `--connection-id` | No | first catalogued fact dataset's connection | SML connection `unique_name` for the catalog dataset |
 | `--dataset-table` | No | | Physical table for the catalog dataset (load it from the CSV). Omit to embed the rows as an inline `VALUES` query |
+| `--schema` | No | the connection's `schema` | Schema the SQL script creates its tables in |
+| `--include-mapping-datasets` | No | `true` | Also write the five mapping tables as SML query datasets |
 | `--csv-output-file` | No | `data_catalog/data_catalog_relationships.csv` | Catalog rows as CSV; relative paths are written inside `--output-dir` |
+| `--mapping-output-dir` | No | `data_catalog/mapping` | Directory for the mapping tables as CSV, one file per table |
+| `--sql-output-file` | No | `data_catalog/data_catalog.sql` | SQL script that creates and loads all six tables |
 
 **Note:** the inline query uses `SELECT * FROM (VALUES …) AS t (…)`, which PostgreSQL, Snowflake, Databricks and SQL Server accept; for warehouses that don't (e.g. BigQuery), load the CSV and pass `--dataset-table`.
 

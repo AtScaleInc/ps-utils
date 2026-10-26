@@ -615,7 +615,7 @@ function generateReportFromXML(
 
 [↑ Table of Contents](#table-of-contents)
 
-Reads an SML directory and writes a single, human-readable Markdown report describing every object found in the model as-is — connections, datasets, the fact-to-dimension join graph, dimensions (hierarchies, levels, secondary attributes, snowflake/embedded joins), models (relationships, metrics used, calculations used, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), the metrics library, the calculations library, and security. Mirrors `generateReportFromXML`'s report shape, sourced from an SML directory instead of an AtScale XML project file.
+Reads an SML directory and writes a single, human-readable Markdown report describing every object found in the model as-is — connections, datasets, the fact-to-dimension join graph, dimensions (hierarchies, levels, secondary attributes, snowflake/embedded joins), models (relationships, metrics used, calculations used, degenerate dimensions, perspectives, aggregates, overrides, drillthrough), the metrics library, the calculations library, and security — followed by a Model Mapping section (metrics, fact-to-dimension relationships, dimension attributes, metric coverage per model) and catalog-wide Issues and Recommendations. Mirrors `generateReportFromXML`'s report shape, sourced from an SML directory instead of an AtScale XML project file.
 
 ```typescript
 import { generateReportFromSML } from "@atscale-ps/ps-utils";
@@ -667,7 +667,11 @@ function generateDCCubeFromSML(
 | `outputDir` | `string` | No | `smlDir` | Directory the cube's SML files are written into |
 | `connectionId` | `string` | No | first fact dataset's connection | SML connection `unique_name` for the catalog dataset |
 | `datasetTable` | `string` | No | | Physical table for the catalog dataset. Omit to embed the rows as an inline `VALUES` query |
+| `schema` | `string` | No | the connection's `schema` | Schema the SQL script creates its tables in |
+| `includeMappingDatasets` | `boolean` | No | `true` | Also write the five mapping tables as SML query datasets |
 | `csvOutputFile` | `string` | No | `"data_catalog/data_catalog_relationships.csv"` | Catalog rows as CSV; relative paths are written inside `outputDir` |
+| `mappingOutputDir` | `string` | No | `"data_catalog/mapping"` | Directory for the mapping tables as CSV |
+| `sqlOutputFile` | `string` | No | `"data_catalog/data_catalog.sql"` | SQL script that creates and loads all six tables |
 
 ---
 
