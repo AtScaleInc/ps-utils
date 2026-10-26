@@ -66,6 +66,7 @@ gantt
   - [4.2 Commit on a Migration Branch](#42-commit-on-a-migration-branch)
   - [4.3 Prepare BI Tool Endpoints and Go/No-Go Criteria](#43-prepare-bi-tool-endpoints-and-gono-go-criteria)
     - [Tableau: Hive Thrift → PGWire Migration](#tableau-hive-thrift--pgwire-migration)
+    - [Verified PGWire behaviour](#verified-pgwire-behaviour)
     - [HiveQL vs PostgreSQL Dialect Reference](#hiveql-vs-postgresql-dialect-reference)
   - [4.4 BI Tool Dashboard Validation](#44-bi-tool-dashboard-validation)
 - [Phase 5: Promote Through Environments with GitHub Actions](#phase-5-promote-through-environments-with-github-actions)
@@ -746,22 +747,74 @@ Switching from HiveQL (port `11111`) to PostgreSQL dialect (port `15432`) can si
 
 | Tableau feature | What to check |
 |---|---|
-| `RAWSQL_STR(...)` / `RAWSQL_INT(...)` / `RAWSQLAGG_*(...)` | The embedded SQL string is sent verbatim to AtScale's SQL layer. Any Hive-specific functions (e.g. `date_format`, `datediff`, `to_date`, `collect_list`) must be replaced with PostgreSQL equivalents (e.g. `to_char`, `age`, `to_date`, `array_agg`) |
-| Custom SQL data sources | Open the custom SQL dialog and review every function call for HiveQL syntax |
+| `RAWSQL_STR(...)` / `RAWSQL_INT(...)` / `RAWSQLAGG_*(...)` | The embedded SQL string is sent verbatim to AtScale. Some Hive functions are rejected by PGWire and must be rewritten (verified: `nvl` → `coalesce`); others are passed to the data warehouse on both endpoints and are unaffected by the migration. See [Verified PGWire behaviour](#verified-pgwire-behaviour) |
+| Custom SQL data sources | Open the custom SQL dialog and review identifiers and function calls. Backtick identifiers fail on PGWire (use double quotes), and so does `TRIM`, although it is standard SQL |
 | LOD expressions (FIXED / INCLUDE / EXCLUDE) | LODs themselves are Tableau-level; they do not pass SQL to the database. However, if the LOD expression references a calculated field that itself uses `RAWSQL_*`, that underlying calculation must be reviewed |
 | Database-specific date/time functions | `DATEPART`, `DATEDIFF`, `DATETRUNC` in Tableau are translated by the driver — test these explicitly in UAT |
 
 **How to find affected workbooks:**
 
+`analyze-tableau-hive-gaps` automates this audit. It reads downloaded workbooks and data sources and produces the list of affected files in the validation-priority order of [section 4.4](#44-bi-tool-dashboard-validation), with every `RAWSQL_*` field, custom SQL query and Initial SQL statement that contains HiveQL, a PostgreSQL rewrite for each construct it finds, and the worksheets and dashboards to test.
+
+*Step 1 — download the content from Tableau Server.* Use the [Tableau Server Client](https://tableau.github.io/server-client-python/) (`pip install tableauserverclient`) with a personal access token. Extracts are skipped; only the XML is needed. Download the published data sources too, so that workbooks connected through them can be resolved.
+
+```python
+# download_tableau.py
+import os, re
+import tableauserverclient as TSC
+
+auth = TSC.PersonalAccessTokenAuth(
+    os.environ["TABLEAU_PAT_NAME"], os.environ["TABLEAU_PAT_SECRET"],
+    site_id=os.environ.get("TABLEAU_SITE", ""),
+)
+server = TSC.Server(os.environ["TABLEAU_SERVER"], use_server_version=True)
+
+with server.auth.sign_in(auth):
+    for kind, endpoint in (("workbooks", server.workbooks), ("datasources", server.datasources)):
+        for item in TSC.Pager(endpoint):
+            # One folder per project, so same-named content in two projects does not collide.
+            target = os.path.join("tableau-export", kind, re.sub(r"[^\w.-]+", "_", item.project_name or "default"))
+            os.makedirs(target, exist_ok=True)
+            endpoint.download(item.id, filepath=target, include_extract=False)
+```
+
 ```bash
-# On Tableau Server, use the REST API or TSM content migration tool to list
-# all workbooks connected to the legacy AtScale data source by host/port.
-# Alternatively, search Tableau Server's repository database:
-# SELECT w.name, ds.name, dc.dbname, dc.port
-# FROM datasources ds
-# JOIN workbooks w ON ds.project_id = w.project_id
-# JOIN _datasources_stats dc ON ds.id = dc.datasource_id
-# WHERE dc.port = 11111;
+TABLEAU_SERVER=https://tableau.example.com TABLEAU_SITE=my-site \
+TABLEAU_PAT_NAME=<pat-name> TABLEAU_PAT_SECRET=<pat-secret> \
+python download_tableau.py
+```
+
+*Step 2 — run the scan.*
+
+```bash
+atscale-utils analyze-tableau-hive-gaps \
+  --tableau-path ./tableau-export \
+  --output-dir ./output/tableau-gap-report \
+  --atscale-host atscale.example.com
+```
+
+Pass `--atscale-host` whenever the site also has non-AtScale Hive, Impala or Spark connections: Tableau uses the same `hadoophive` / `spark` connection classes for them, and without the filter they are reported as affected.
+
+| Output | Use |
+|---|---|
+| `TABLEAU_GAP_FILES.csv` | One row per workbook / data source: status, priority, legacy connection, counts of RAWSQL / custom SQL / Initial SQL, sheets to test. This is the UAT validation list |
+| `TABLEAU_GAP_FINDINGS.csv` | One row per item to fix, with the Hive construct found and its PostgreSQL replacement |
+| `TABLEAU_GAP_REPORT.md` | The same, for people, plus the published data sources that workbooks reference but that were not in the download |
+
+The scan only checks SQL that Tableau sends verbatim. Each construct it finds is labelled with its [verified PGWire behaviour](#verified-pgwire-behaviour) (`rejected`, `passthrough`, `accepted` or `unverified`); the `verified_breaking` column counts the ones known to fail. A field with no breaking construct listed must still be run once against PGWire, and double-quoted string literals inside SQL are not detected.
+
+*Optional — a quick connection inventory from the repository.* If [repository access](https://help.tableau.com/current/server/en-us/perf_collect_server_repo.htm) is enabled, this lists every workbook and published data source with a connection on the legacy endpoint, without downloading anything. It cannot see `RAWSQL_*` or custom SQL, so it does not replace the scan; table and column names are from the `workgroup` data dictionary, so check them against your Tableau Server version.
+
+```sql
+SELECT dc.owner_type, COALESCE(w.name, d.name) AS content_name, p.name AS project,
+       s.name AS site, dc.dbclass, dc.server, dc.port
+FROM data_connections dc
+LEFT JOIN workbooks   w ON dc.owner_type = 'Workbook'   AND dc.owner_id = w.id
+LEFT JOIN datasources d ON dc.owner_type = 'Datasource' AND dc.owner_id = d.id
+JOIN projects p ON p.id = COALESCE(w.project_id, d.project_id)
+JOIN sites    s ON s.id = dc.site_id
+WHERE dc.port = 11111 OR dc.dbclass IN ('hadoophive', 'spark')
+ORDER BY site, project, content_name;
 ```
 
 Add every workbook identified by this audit to the UAT validation list. A workbook that passes a connection test but contains broken `RAWSQL_*` calculations will appear healthy until a user opens the specific sheet — catching this in UAT is far preferable to a post-cutover incident.
@@ -770,11 +823,35 @@ Add every workbook identified by this audit to the UAT validation list. A workbo
 
 If Tableau Server is configured for SSO pass-through to AtScale (so that the Tableau Server user's identity is forwarded to AtScale for row-level security), the branded AtScale Tableau connector (a `.taco` file) is required. Install it on Tableau Server following the AtScale connector installation guide and reconfigure the data source to use connector-based authentication instead of a shared service account.
 
+#### Verified PGWire behaviour
+
+[↑ Table of Contents](#table-of-contents)
+
+A HiveQL construct does not always break on PGWire. Testing the same Tableau workbook against the same model on a Snowflake warehouse, over Hive (installer 2025.7.2, port `11111`) and over PGWire (container C2026.7.0, port `15432`), showed three outcomes:
+
+| Construct | Installer (Hive) | Container (PGWire) | Breaks on migration? |
+|---|---|---|---|
+| Backtick identifiers `` `col` `` | Works | Syntax error | **Yes** — use `"col"` |
+| `nvl(x, d)` — RAWSQL or custom SQL | Works (passed to Snowflake) | `Don't understand function: nvl` | **Yes** — use `coalesce(x, d)` |
+| `TRIM(x)` (standard SQL, not HiveQL) | Works | `Don't understand function: btrim` | **Yes** — match with `LIKE 'x%'`, or trim the column in the model |
+| `x <=> y` | Works | Works | No |
+| `date_format(d, fmt)` | Passed to Snowflake, which rejects it | Passed to Snowflake, which rejects it | No — depends on the warehouse, not the endpoint |
+| `coalesce`, `IS NOT DISTINCT FROM`, `LIKE` | Works | Works | No |
+
+Two practical consequences:
+
+- **A function passed to the warehouse is unaffected by the migration.** It works only if the warehouse has it: `date_format` fails on Snowflake on both endpoints but would work on a warehouse that has it. Such a field may already be broken today.
+- **A function PGWire rejects works today and breaks at cutover.** These are the ones to fix before UAT. Constructs not in this table have not been verified; run each once against PGWire.
+
+String columns from fixed-width sources can carry trailing spaces (`'R '`). On Hive the usual fix is `TRIM`, which PGWire rejects, so a filter such as `= 'R'` that silently returns no rows needs `LIKE 'R%'` instead.
+
+In Tableau Desktop, **Preview Results** in the Edit Custom SQL dialog can show *Internal Error 44A7CD32*. That is a Tableau dialog bug, not a failed query: close the error and the results appear.
+
 #### HiveQL vs PostgreSQL Dialect Reference
 
 [↑ Table of Contents](#table-of-contents)
 
-Use this reference when migrating custom SQL, `RAWSQL_*` expressions, or any SQL that passes through directly to AtScale's SQL layer after switching from Hive thrift (port `11111`) to PGWire (port `15432`).
+Use this reference when migrating custom SQL, `RAWSQL_*` expressions, or any SQL that passes through directly to AtScale's SQL layer after switching from Hive thrift (port `11111`) to PGWire (port `15432`). Most rows are standard dialect differences and have not been verified against AtScale; the [Verified PGWire behaviour](#verified-pgwire-behaviour) table above takes precedence — `<=>`, for example, works on PGWire.
 
 **Data Types**
 
@@ -1555,7 +1632,7 @@ Items are grouped by milestone. Complete all items in a milestone before declari
 - [ ] At least one SQL and one XMLA query verified manually per model in DEV AtScale Design Center
 - [ ] BI tool switch-over documents prepared for each tool in scope (Tableau, Power BI, Excel, etc.)
 - [ ] Tableau: PostgreSQL JDBC driver version identified and tested on Desktop; driver package prepared for Tableau Server deployment
-- [ ] Tableau: all workbooks and published data sources using `RAWSQL_*`, custom SQL, or Hive-specific functions identified and flagged for validation
+- [ ] Tableau: all workbooks and published data sources using `RAWSQL_*`, custom SQL, or Hive-specific functions identified and flagged for validation (`analyze-tableau-hive-gaps` run; `TABLEAU_GAP_FILES.csv` attached to the UAT plan)
 - [ ] Power BI: all in-scope reports refreshed against DEV AtScale; all visuals load without error; key KPI values compared against legacy and confirmed matching
 - [ ] Power BI: row-level security (RLS) tested with at least one user identity per access role
 - [ ] Tableau: all in-scope workbooks connected to DEV; all fields resolve; `RAWSQL_*` and custom SQL calculated fields validated explicitly against legacy

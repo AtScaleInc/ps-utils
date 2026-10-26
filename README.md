@@ -9,7 +9,6 @@ CLI tool for extracting AtScale models, generating SML semantic models, and gene
 - graphql output not going to output
 - web interface better + REST
 - tableau, mstr conversion
-  - find Hive dialect in a workbook
 - Apply style to SML
 - Add kubectl management commands; for example reading log files, updating passwords
 - Calculation groups as shared objects
@@ -52,6 +51,7 @@ flowchart LR
     SML --> K["generate-sml-docs"] --> DOCS["README.md (docs)"]
     SML --> CL["clean-unused-sml-objects"] --> SML
     PBIX["Power BI .pbix"] --> P["analyze-powerbi-dax-gaps"] --> GAP["Gap report (.md, .json, .csv)"]
+    TWB["Tableau .twb/.twbx/.tds/.tdsx"] --> TG["analyze-tableau-hive-gaps"] --> TGAP["Gap report (.md, .json, .csv)"]
     DB --> Q["echo-connection-metadata"] --> META["Schema metadata (JSON, stdout)"]
 ```
 
@@ -171,6 +171,7 @@ flowchart LR
     - [`generate-sml-from-bundle`](#generate-sml-from-bundle)
     - [`generate-sml-from-tabular`](#generate-sml-from-tabular)
     - [`analyze-powerbi-dax-gaps`](#analyze-powerbi-dax-gaps)
+    - [`analyze-tableau-hive-gaps`](#analyze-tableau-hive-gaps)
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
@@ -837,6 +838,44 @@ The report also lists **caveats** — measures that pass the whitelist but hit a
 
 - **Live connection** reports (pointing at SSAS or AtScale) have no embedded model. Their report-scoped measures sit in `Report/Layout` in plain text, and those are exactly what this operation analyses.
 - **Import / composite** reports carry a `DataModel` part, which is an XPress9-compressed Analysis Services backup and cannot be read without Microsoft's tooling. The operation says so rather than pretending to parse it, and analyses only the report-scoped measures. For the model side, extract it with `pbi-tools` and run `generate-sml-from-tabular` on the result.
+
+### `analyze-tableau-hive-gaps`
+
+[↑ Table of Contents](#table-of-contents)
+
+Find the Tableau workbooks and data sources affected by the installer → container migration, where AtScale's Hive thrift endpoint (port `11111`) is replaced by PGWire (port `15432`). No connection is required — everything is read from the files, so download the workbooks and published data sources from Tableau Server first (see [MIGRATE.md](docs/workflows/MIGRATE.md#tableau-hive-thrift--pgwire-migration)).
+
+```bash
+atscale-utils analyze-tableau-hive-gaps \
+  --tableau-path ./tableau-export \
+  --output-dir ./tableau-gap-report \
+  --atscale-host atscale.example.com
+```
+
+| Parameter | Required | Description |
+| --- | --- | --- |
+| `--tableau-path` | Yes | A `.twb`, `.twbx`, `.tds` or `.tdsx` file, or a directory scanned recursively for them |
+| `--output-dir` | Yes | Directory for the gap report |
+| `--atscale-host` | No | Only count connections whose server contains this text. Use it when the site also has non-AtScale Hive, Impala or Spark sources, which share Tableau's `hadoophive` / `spark` connection classes |
+| `--legacy-port` | No | Legacy Hive thrift port (default `11111`) |
+| `--pgwire-port` | No | PGWire port, to recognise files already migrated (default `15432`) |
+
+Writes `TABLEAU_GAP_REPORT.md` (for people), `TABLEAU_GAP_REPORT.json`, `TABLEAU_GAP_FILES.csv` (one row per file — the list of problematic workbooks) and `TABLEAU_GAP_FINDINGS.csv` (one row per item to fix).
+
+A data source is on the legacy endpoint when it uses a Hive / Spark SQL connection class or the legacy port. A workbook that connects through a published data source inherits that source's status when the `.tds`/`.tdsx` is in the same scan; otherwise it is listed as unresolved, with the source names to download.
+
+For each affected file the report lists:
+
+| Finding | Why it matters |
+| --- | --- |
+| `RAWSQL_*` field | Its SQL string is sent to AtScale verbatim. The string arguments — not the surrounding Tableau formula — are checked for HiveQL (`DATE_FORMAT`, `NVL`, `DATEDIFF`, backtick identifiers, `<=>` …) and a PostgreSQL rewrite is suggested |
+| Custom SQL / Initial SQL | Sent verbatim; checked the same way |
+| Depends on a RAWSQL field | e.g. a `FIXED` LOD over a RAWSQL field — breaks with it |
+| Driver-translated date function | `DATEPART`, `DATEDIFF`, `DATETRUNC` … are translated by the new driver; compare results in UAT |
+
+Each finding is mapped to the worksheets and dashboards that use it, and each file gets the validation priority from MIGRATE.md §4.4: 1 = verbatim SQL, 2 = live connection, 3 = extract-based, 4 = no calculated fields.
+
+A HiveQL construct does not always break. Each one is labelled with its behaviour on AtScale's PGWire endpoint, as verified in testing (see [MIGRATE.md](docs/workflows/MIGRATE.md#verified-pgwire-behaviour)): `rejected` (breaks at cutover — `nvl`, backtick identifiers, and `TRIM`, which is standard SQL but rejected by PGWire), `passthrough` (sent to the warehouse on both endpoints, so the migration does not change it — `date_format`), `accepted` (`<=>`) or `unverified`. `TABLEAU_GAP_FILES.csv` counts `may_break` (everything not accepted) and `verified_breaking` (rejected) per file.
 
 ### `generate-sml-from-ssas-multidimensional`
 

@@ -199,6 +199,11 @@
         "category": "PS-Utils"
       },
       {
+        "command": "psUtils.op.analyze-tableau-hive-gaps",
+        "title": "analyze-tableau-hive-gaps",
+        "category": "PS-Utils"
+      },
+      {
         "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
         "title": "generate-sml-from-ssas-multidimensional",
         "category": "PS-Utils"
@@ -624,51 +629,56 @@
           "group": "1_ops@8"
         },
         {
+          "command": "psUtils.op.analyze-tableau-hive-gaps",
+          "group": "1_ops@9",
+          "when": "explorerResourceIsFolder"
+        },
+        {
           "command": "psUtils.op.generate-sml-from-ssas-multidimensional",
-          "group": "1_ops@9"
+          "group": "1_ops@10"
         },
         {
           "command": "psUtils.op.generate-report-from-xml",
-          "group": "1_ops@10",
+          "group": "1_ops@11",
           "when": "!explorerResourceIsFolder"
         },
         {
           "command": "psUtils.op.generate-report-from-sml",
-          "group": "1_ops@11",
-          "when": "explorerResourceIsFolder"
-        },
-        {
-          "command": "psUtils.op.generate-shared-model-plan",
           "group": "1_ops@12",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.apply-shared-model-plan-option",
-          "group": "1_ops@13"
-        },
-        {
-          "command": "psUtils.op.apply-style-to-sml",
-          "group": "1_ops@14",
+          "command": "psUtils.op.generate-shared-model-plan",
+          "group": "1_ops@13",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-sml-docs",
+          "command": "psUtils.op.apply-shared-model-plan-option",
+          "group": "1_ops@14"
+        },
+        {
+          "command": "psUtils.op.apply-style-to-sml",
           "group": "1_ops@15",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.clean-unused-sml-objects",
+          "command": "psUtils.op.generate-sml-docs",
           "group": "1_ops@16",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-ddl-from-atscale",
+          "command": "psUtils.op.clean-unused-sml-objects",
           "group": "1_ops@17",
           "when": "explorerResourceIsFolder"
         },
         {
-          "command": "psUtils.op.generate-metrics-from-model",
+          "command": "psUtils.op.generate-ddl-from-atscale",
           "group": "1_ops@18",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "psUtils.op.generate-metrics-from-model",
+          "group": "1_ops@19",
           "when": "!explorerResourceIsFolder"
         }
       ],

@@ -1,0 +1,1836 @@
+<?xml version='1.0' encoding='utf-8' ?>
+
+<!-- build 10500.17.1226.1925                               -->
+<workbook original-version='10.5' source-build='10.5.0 (10500.17.1226.1925)' source-platform='mac' version='10.5' xmlns:user='http://www.tableausoftware.com/xml/user'>
+  <preferences>
+    <preference name='ui.encoding.shelf.height' value='24' />
+    <preference name='ui.shelf.height' value='26' />
+  </preferences>
+  <datasources>
+    <datasource inline='true' name='Internet Sales Cube (45)' version='10.5'>
+      <connection class='federated'>
+        <named-connections>
+          <named-connection name='Internet Sales Cubeleaf'>
+            <connection authentication='yes' authentication-type='3' class='hadoophive' connection-type='2' dbname='' odbc-connect-string-extras='DisableLimitZero=1;ssl=0' one-time-sql='SET hive.mapred.mode = nonstrict;
+SELECT from_unixtime(unix_timestamp())' port='11111' server='atscale.example.com' sslcert='' sslmode='' tablename='' transport-type='1' username='my_user'>
+              <connection-customization class='hadoophive' enabled='true' version='10.5'>
+                <vendor name='hadoophive' />
+                <driver name='hadoophive' />
+                <customizations>
+                  <customization name='CAP_AUTH_DB_IMPERSONATE' value='yes' />
+                  <customization name='CAP_AUTH_KERBEROS_IMPERSONATE' value='yes' />
+                  <customization name='CAP_CONNECT_STORED_PROCEDURE' value='no' />
+                  <customization name='CAP_CREATE_TEMP_TABLES' value='no' />
+                  <customization name='CAP_DATASERVER_MAGIC_NUMBER' value='no' />
+                  <customization name='CAP_DEFERS_CONNECTION_VERIFICATION' value='no' />
+                  <customization name='CAP_DISABLE_EXTRACT_TABLE_INDEXING' value='no' />
+                  <customization name='CAP_EQUIJOINS_ONLY' value='no' />
+                  <customization name='CAP_FAST_METADATA' value='no' />
+                  <customization name='CAP_GREENPLUM_TRUST_METADATA_CONTAINSNULL' value='no' />
+                  <customization name='CAP_HIVE_FIX_METADATA_NAMES' value='yes' />
+                  <customization name='CAP_INDEX_TEMP_TABLES' value='no' />
+                  <customization name='CAP_INSERT_TEMP_EXEC_STORED_PROCEDURE' value='no' />
+                  <customization name='CAP_LOCAL_ALIASES_CASE_INSENSITIVE' value='no' />
+                  <customization name='CAP_ODBC_ALWAYS_THROW_CONNECT_ERRORS' value='no' />
+                  <customization name='CAP_ODBC_BIND_FORCE_DATETIME_AS_CHAR' value='no' />
+                  <customization name='CAP_ODBC_BIND_FORCE_DATE_AS_CHAR' value='no' />
+                  <customization name='CAP_ODBC_BIND_FORCE_MAX_STRING_BUFFERS' value='no' />
+                  <customization name='CAP_ODBC_BIND_FORCE_MEDIUM_STRING_BUFFERS' value='no' />
+                  <customization name='CAP_ODBC_BIND_FORCE_SIGNED' value='yes' />
+                  <customization name='CAP_ODBC_BIND_FORCE_SMALL_STRING_BUFFERS' value='no' />
+                  <customization name='CAP_ODBC_BIND_SUPPRESS_INT64' value='no' />
+                  <customization name='CAP_ODBC_BIND_SUPPRESS_PREFERRED_TYPES' value='no' />
+                  <customization name='CAP_ODBC_BIND_SUPPRESS_WIDE_CHAR' value='no' />
+                  <customization name='CAP_ODBC_CURSOR_DYNAMIC' value='no' />
+                  <customization name='CAP_ODBC_CURSOR_FORWARD_ONLY' value='yes' />
+                  <customization name='CAP_ODBC_CURSOR_KEYSET_DRIVEN' value='no' />
+                  <customization name='CAP_ODBC_CURSOR_STATIC' value='no' />
+                  <customization name='CAP_ODBC_DRIVER_HIVE_ASSUME_LATEST' value='no' />
+                  <customization name='CAP_ODBC_ERROR_IGNORE_FALSE_ALARM' value='no' />
+                  <customization name='CAP_ODBC_FETCH_BUFFERS_RESIZABLE' value='yes' />
+                  <customization name='CAP_ODBC_FETCH_BUFFERS_SIZE_MASSIVE' value='no' />
+                  <customization name='CAP_ODBC_FETCH_CONTINUE_ON_ERROR' value='no' />
+                  <customization name='CAP_ODBC_FORCE_SINGLE_ROW_BINDING' value='no' />
+                  <customization name='CAP_ODBC_METADATA_STRING_LENGTH_UNKNOWN' value='yes' />
+                  <customization name='CAP_ODBC_METADATA_SUPPRESS_SQLCOLUMNS_API' value='no' />
+                  <customization name='CAP_ODBC_METADATA_SUPPRESS_SQLFOREIGNKEYS_API' value='yes' />
+                  <customization name='CAP_ODBC_METADATA_SUPPRESS_SQLPRIMARYKEYS_API' value='no' />
+                  <customization name='CAP_ODBC_METADATA_SUPPRESS_SQLSTATISTICS_API' value='yes' />
+                  <customization name='CAP_ODBC_REBIND_SKIP_UNBIND' value='no' />
+                  <customization name='CAP_ODBC_TRIM_VARCHAR_PADDING' value='no' />
+                  <customization name='CAP_ODBC_UNBIND_AUTO' value='no' />
+                  <customization name='CAP_ODBC_UNBIND_BATCH' value='no' />
+                  <customization name='CAP_ODBC_UNBIND_EACH' value='yes' />
+                  <customization name='CAP_ODBC_USE_NATIVE_PROTOCOL' value='yes' />
+                  <customization name='CAP_QUERY_ALLOW_PARTIAL_AGGREGATION' value='yes' />
+                  <customization name='CAP_QUERY_ALWAYS_USE_AQ_CACHE' value='no' />
+                  <customization name='CAP_QUERY_BLENDING_ALWAYS_USE_LOCAL_MAPPING_TABLES' value='no' />
+                  <customization name='CAP_QUERY_BLENDING_PREFER_LOCAL_MAPPING_TABLES' value='yes' />
+                  <customization name='CAP_QUERY_BLENDING_REMOTE_MAPPING_TABLES' value='yes' />
+                  <customization name='CAP_QUERY_BOOLEXPR_TO_INTEXPR' value='no' />
+                  <customization name='CAP_QUERY_BOOL_IDENTIFIER_TO_LOGICAL' value='no' />
+                  <customization name='CAP_QUERY_EMPTY_DOMAIN_TOP' value='no' />
+                  <customization name='CAP_QUERY_FORCE_AGGREGATE_MEASURES' value='no' />
+                  <customization name='CAP_QUERY_GROUP_BY_ALIAS' value='no' />
+                  <customization name='CAP_QUERY_GROUP_BY_DEGREE' value='yes' />
+                  <customization name='CAP_QUERY_HAVING_REQUIRES_GROUP_BY' value='yes' />
+                  <customization name='CAP_QUERY_HAVING_UNSUPPORTED' value='no' />
+                  <customization name='CAP_QUERY_INCLUDE_GROUP_BY_COLUMNS_IN_SELECT' value='yes' />
+                  <customization name='CAP_QUERY_JOIN_ACROSS_SCHEMAS' value='yes' />
+                  <customization name='CAP_QUERY_JOIN_ASSUME_CONSTRAINED' value='no' />
+                  <customization name='CAP_QUERY_JOIN_PUSH_DOWN_CONDITION_EXPRESSIONS' value='no' />
+                  <customization name='CAP_QUERY_JOIN_REQUIRES_SCOPE' value='no' />
+                  <customization name='CAP_QUERY_JOIN_REQUIRES_SUBQUERY' value='no' />
+                  <customization name='CAP_QUERY_NULL_REQUIRES_CAST' value='no' />
+                  <customization name='CAP_QUERY_RECOMPILE_FAILED_QUERY' value='no' />
+                  <customization name='CAP_QUERY_SELECT_ALIASES_SORTED' value='no' />
+                  <customization name='CAP_QUERY_SORT_BY' value='yes' />
+                  <customization name='CAP_QUERY_SORT_BY_DEGREE' value='yes' />
+                  <customization name='CAP_QUERY_SUBQUERIES' value='yes' />
+                  <customization name='CAP_QUERY_SUBQUERIES_WITH_TOP' value='yes' />
+                  <customization name='CAP_QUERY_SUBQUERY_QUERY_CONTEXT' value='yes' />
+                  <customization name='CAP_QUERY_SUPPORTS_LODJOINS' value='yes' />
+                  <customization name='CAP_QUERY_SUPPRESS_CHECK_DOMAIN_LITERALS_THRESHOLD' value='no' />
+                  <customization name='CAP_QUERY_SUPPRESS_NULL_CHECK_QUERIES' value='no' />
+                  <customization name='CAP_QUERY_TOPSTYLE_LIMIT' value='yes' />
+                  <customization name='CAP_QUERY_TOPSTYLE_ROWNUM' value='no' />
+                  <customization name='CAP_QUERY_TOPSTYLE_TOP' value='no' />
+                  <customization name='CAP_QUERY_TOP_0_METADATA' value='yes' />
+                  <customization name='CAP_QUERY_TOP_N' value='yes' />
+                  <customization name='CAP_QUERY_USE_DOMAIN_RANGES_OPTIMIZATION' value='yes' />
+                  <customization name='CAP_QUERY_USE_QUERY_FUSION' value='yes' />
+                  <customization name='CAP_QUERY_WHERE_FALSE_METADATA' value='no' />
+                  <customization name='CAP_SELECT_INTO' value='no' />
+                  <customization name='CAP_SELECT_TOP_INTO' value='no' />
+                  <customization name='CAP_STORED_PROCEDURE_PREFER_TEMP_TABLE' value='no' />
+                  <customization name='CAP_STORED_PROCEDURE_REPAIR_TEMP_TABLE_STRINGS' value='no' />
+                  <customization name='CAP_STORED_PROCEDURE_TEMP_TABLE_FROM_BUFFER' value='no' />
+                  <customization name='CAP_STORED_PROCEDURE_TEMP_TABLE_FROM_NEW_PROTOCOL' value='no' />
+                  <customization name='CAP_SUPPRESS_CONNECTION_POOLING' value='yes' />
+                  <customization name='CAP_SUPPRESS_DISCOVERY_QUERIES' value='no' />
+                  <customization name='CAP_SUPPRESS_GET_SERVER_TIME' value='yes' />
+                  <customization name='CAP_SUPPRESS_QUICK_FILTER_ACCELERATION_VIEWS' value='no' />
+                  <customization name='odbc-connect-string-extras' value='DisableLimitZero=1;ssl=0' />
+                </customizations>
+              </connection-customization>
+            </connection>
+          </named-connection>
+        </named-connections>
+        <relation connection='Internet Sales Cubeleaf' name='Internet Sales Cube' table='[sales insights].[internet sales cube]' type='table' />
+        <metadata-records>
+          <metadata-record class='column'>
+            <remote-name>City</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[City]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>City</remote-alias>
+            <ordinal>1</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Color</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Color]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Color</remote-alias>
+            <ordinal>2</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>CountryCity</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[CountryCity]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>CountryCity</remote-alias>
+            <ordinal>3</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>CountryZip</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[CountryZip]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>CountryZip</remote-alias>
+            <ordinal>4</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Customer Name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Customer Name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Customer Name</remote-alias>
+            <ordinal>5</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Gender</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Gender]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Gender</remote-alias>
+            <ordinal>6</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Occupation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Occupation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Occupation</remote-alias>
+            <ordinal>7</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order DayMonth</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order DayMonth]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order DayMonth</remote-alias>
+            <ordinal>8</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order DayWeek</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order DayWeek]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order DayWeek</remote-alias>
+            <ordinal>9</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order Month</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order Month]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order Month</remote-alias>
+            <ordinal>10</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order Quarter</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order Quarter]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order Quarter</remote-alias>
+            <ordinal>11</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order Week</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order Week]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order Week</remote-alias>
+            <ordinal>12</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order YearMonth</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order YearMonth]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order YearMonth</remote-alias>
+            <ordinal>13</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order YearWeek</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order YearWeek]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order YearWeek</remote-alias>
+            <ordinal>14</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_day_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order d_day_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_day_name</remote-alias>
+            <ordinal>15</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_day_of_month</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order d_day_of_month]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_day_of_month</remote-alias>
+            <ordinal>16</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_day_of_week_abbreviation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order d_day_of_week_abbreviation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_day_of_week_abbreviation</remote-alias>
+            <ordinal>17</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_day_of_week_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order d_day_of_week_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_day_of_week_name</remote-alias>
+            <ordinal>18</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_day_of_week_number</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order d_day_of_week_number]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_day_of_week_number</remote-alias>
+            <ordinal>19</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_month_abbreviation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order d_month_abbreviation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_month_abbreviation</remote-alias>
+            <ordinal>20</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_month_of_year</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order d_month_of_year]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_month_of_year</remote-alias>
+            <ordinal>21</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_quarter_number</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order d_quarter_number]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_quarter_number</remote-alias>
+            <ordinal>22</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_week_of_year</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order d_week_of_year]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_week_of_year</remote-alias>
+            <ordinal>23</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order d_weekly_day_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order d_weekly_day_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order d_weekly_day_name</remote-alias>
+            <ordinal>24</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order w_day_of_week_abbreviation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order w_day_of_week_abbreviation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order w_day_of_week_abbreviation</remote-alias>
+            <ordinal>25</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order w_day_of_week_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Order w_day_of_week_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order w_day_of_week_name</remote-alias>
+            <ordinal>26</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Order w_day_of_week_number</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Order w_day_of_week_number]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Order w_day_of_week_number</remote-alias>
+            <ordinal>27</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Product Category</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Product Category]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Product Category</remote-alias>
+            <ordinal>28</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Product Line</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Product Line]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Product Line</remote-alias>
+            <ordinal>29</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Product Name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Product Name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Product Name</remote-alias>
+            <ordinal>30</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship DayMonth</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship DayMonth]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship DayMonth</remote-alias>
+            <ordinal>31</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship DayWeek</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship DayWeek]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship DayWeek</remote-alias>
+            <ordinal>32</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship Month</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship Month]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship Month</remote-alias>
+            <ordinal>33</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship Quarter</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship Quarter]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship Quarter</remote-alias>
+            <ordinal>34</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship Week</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship Week]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship Week</remote-alias>
+            <ordinal>35</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship YearMonth</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship YearMonth]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship YearMonth</remote-alias>
+            <ordinal>36</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship YearWeek</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship YearWeek]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship YearWeek</remote-alias>
+            <ordinal>37</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_day_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship d_day_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_day_name</remote-alias>
+            <ordinal>38</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_day_of_month</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship d_day_of_month]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_day_of_month</remote-alias>
+            <ordinal>39</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_day_of_week_abbreviation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship d_day_of_week_abbreviation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_day_of_week_abbreviation</remote-alias>
+            <ordinal>40</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_day_of_week_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship d_day_of_week_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_day_of_week_name</remote-alias>
+            <ordinal>41</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_day_of_week_number</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship d_day_of_week_number]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_day_of_week_number</remote-alias>
+            <ordinal>42</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_month_abbreviation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship d_month_abbreviation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_month_abbreviation</remote-alias>
+            <ordinal>43</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_month_of_year</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship d_month_of_year]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_month_of_year</remote-alias>
+            <ordinal>44</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_quarter_number</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship d_quarter_number]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_quarter_number</remote-alias>
+            <ordinal>45</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_week_of_year</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship d_week_of_year]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_week_of_year</remote-alias>
+            <ordinal>46</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship d_weekly_day_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship d_weekly_day_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship d_weekly_day_name</remote-alias>
+            <ordinal>47</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship w_day_of_week_abbreviation</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship w_day_of_week_abbreviation]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship w_day_of_week_abbreviation</remote-alias>
+            <ordinal>48</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship w_day_of_week_name</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Ship w_day_of_week_name]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship w_day_of_week_name</remote-alias>
+            <ordinal>49</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Ship w_day_of_week_number</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[Ship w_day_of_week_number]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Ship w_day_of_week_number</remote-alias>
+            <ordinal>50</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Size</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Size]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Size</remote-alias>
+            <ordinal>51</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>State</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[State]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>State</remote-alias>
+            <ordinal>52</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Style</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Style]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Style</remote-alias>
+            <ordinal>53</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Weight</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Weight]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Weight</remote-alias>
+            <ordinal>54</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Zip Code</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Zip Code]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Zip Code</remote-alias>
+            <ordinal>55</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>currency</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[currency]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>currency</remote-alias>
+            <ordinal>56</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>d_city</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[d_city]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>d_city</remote-alias>
+            <ordinal>57</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>d_firstname</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[d_firstname]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>d_firstname</remote-alias>
+            <ordinal>58</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>d_lastname</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[d_lastname]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>d_lastname</remote-alias>
+            <ordinal>59</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>d_postalcode</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[d_postalcode]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>d_postalcode</remote-alias>
+            <ordinal>60</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>d_productsubcategoryId</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[d_productsubcategoryId]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>d_productsubcategoryId</remote-alias>
+            <ordinal>61</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>order</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[order]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>order</remote-alias>
+            <ordinal>62</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>order_line_item</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[order_line_item]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>order_line_item</remote-alias>
+            <ordinal>63</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>typeorder</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[typeorder]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>typeorder</remote-alias>
+            <ordinal>64</ordinal>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag='0' name='binary' />
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_VARCHAR&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_CHAR&quot;</attribute>
+              <attribute datatype='string' name='TypeIsVarchar'>&quot;true&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>List Price</remote-name>
+            <remote-type>4</remote-type>
+            <local-name>[List Price]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>List Price</remote-alias>
+            <ordinal>65</ordinal>
+            <local-type>real</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>7</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_REAL&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_FLOAT&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>calculatedtax1</remote-name>
+            <remote-type>5</remote-type>
+            <local-name>[calculatedtax1]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>calculatedtax1</remote-alias>
+            <ordinal>66</ordinal>
+            <local-type>real</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>15</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_DOUBLE&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_DOUBLE&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>customercount1</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[customercount1]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>customercount1</remote-alias>
+            <ordinal>67</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>19</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_BIGINT&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_SBIGINT&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>customercountestimate1</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[customercountestimate1]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>customercountestimate1</remote-alias>
+            <ordinal>68</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>19</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_BIGINT&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_SBIGINT&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>orderquantity1</remote-name>
+            <remote-type>3</remote-type>
+            <local-name>[orderquantity1]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>orderquantity1</remote-alias>
+            <ordinal>69</ordinal>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>10</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_INTEGER&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_LONG&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>salesamount1</remote-name>
+            <remote-type>4</remote-type>
+            <local-name>[salesamount1]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>salesamount1</remote-alias>
+            <ordinal>70</ordinal>
+            <local-type>real</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>7</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_REAL&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_FLOAT&quot;</attribute>
+            </attributes>
+          </metadata-record>
+          <metadata-record class='column'>
+            <remote-name>Average Sales per Order</remote-name>
+            <remote-type>5</remote-type>
+            <local-name>[Average Sales per Order]</local-name>
+            <parent-name>[Internet Sales Cube]</parent-name>
+            <remote-alias>Average Sales per Order</remote-alias>
+            <ordinal>71</ordinal>
+            <local-type>real</local-type>
+            <aggregation>Sum</aggregation>
+            <precision>15</precision>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype='string' name='DebugRemoteType'>&quot;SQL_DOUBLE&quot;</attribute>
+              <attribute datatype='string' name='DebugWireType'>&quot;SQL_C_DOUBLE&quot;</attribute>
+            </attributes>
+          </metadata-record>
+        </metadata-records>
+      </connection>
+      <aliases enabled='yes' />
+      <column aggregation='Avg' caption='Average Sales per Order' datatype='real' name='[Average Sales per Order]' role='measure' type='quantitative' />
+      <column caption='City' datatype='string' name='[City]' role='dimension' semantic-role='[City].[Name]' type='nominal' />
+      <column caption='Color' datatype='string' name='[Color]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Product Color</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Country' datatype='string' name='[CountryCity]' role='dimension' semantic-role='[Country].[ISO3166_2]' type='nominal' />
+      <column caption='Country' datatype='string' name='[CountryZip]' role='dimension' semantic-role='[Country].[ISO3166_2]' type='nominal' />
+      <column caption='Customer Name' datatype='string' name='[Customer Name]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Customer Key</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Gender' datatype='string' name='[Gender]' role='dimension' type='nominal' />
+      <column caption='List Price' datatype='real' name='[List Price]' role='measure' type='quantitative' />
+      <column caption='Occupation' datatype='string' name='[Occupation]' role='dimension' type='nominal' />
+      <column caption='Order Day' datatype='string' name='[Order DayMonth]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Date as YYYYMMDD or YYYY-MM-DD</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Order Day' datatype='string' name='[Order DayWeek]' role='dimension' type='nominal' />
+      <column caption='Order Month' datatype='string' name='[Order Month]' role='dimension' type='nominal' />
+      <column caption='Order Quarter' datatype='string' name='[Order Quarter]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Calendar Quarter</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Order Week' datatype='string' name='[Order Week]' role='dimension' type='nominal' />
+      <column caption='Order Year' datatype='integer' name='[Order YearMonth]' role='dimension' type='ordinal'>
+        <desc>
+          <formatted-text>
+            <run>Calendar Year for Month Hierarchy</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Order Year' datatype='integer' name='[Order YearWeek]' role='dimension' type='ordinal' />
+      <column caption='Order Day Name' datatype='string' name='[Order d_day_name]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>dd-mm-yyy</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Order Day Of Month' datatype='integer' name='[Order d_day_of_month]' role='dimension' type='ordinal' />
+      <column caption='Order Day Of Week Abbreviation' datatype='string' name='[Order d_day_of_week_abbreviation]' role='dimension' type='nominal' />
+      <column caption='Order Day Of Week Name' datatype='string' name='[Order d_day_of_week_name]' role='dimension' type='nominal' />
+      <column caption='Order Day Of Week Number' datatype='integer' name='[Order d_day_of_week_number]' role='dimension' type='ordinal' />
+      <column caption='Order Month Abbreviation' datatype='string' name='[Order d_month_abbreviation]' role='dimension' type='nominal' />
+      <column caption='Order Month Of Year' datatype='integer' name='[Order d_month_of_year]' role='dimension' type='ordinal' />
+      <column caption='Order Quarter Number' datatype='integer' name='[Order d_quarter_number]' role='dimension' type='ordinal' />
+      <column caption='Order Week Of Year' datatype='integer' name='[Order d_week_of_year]' role='dimension' type='ordinal' />
+      <column caption='Order Weekly Day Name' datatype='string' name='[Order d_weekly_day_name]' role='dimension' type='nominal' />
+      <column caption='Order W Day Of Week Abbreviation' datatype='string' name='[Order w_day_of_week_abbreviation]' role='dimension' type='nominal' />
+      <column caption='Order W Day Of Week Name' datatype='string' name='[Order w_day_of_week_name]' role='dimension' type='nominal' />
+      <column caption='Order W Day Of Week Number' datatype='integer' name='[Order w_day_of_week_number]' role='dimension' type='ordinal' />
+      <column caption='Product Category' datatype='string' name='[Product Category]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Product Sub Category</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Product Line' datatype='string' name='[Product Line]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Product Line</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Product Name' datatype='string' name='[Product Name]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Full Product Name</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Ship Day' datatype='string' name='[Ship DayMonth]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Date as YYYYMMDD or YYYY-MM-DD</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Ship Day' datatype='string' name='[Ship DayWeek]' role='dimension' type='nominal' />
+      <column caption='Ship Month' datatype='string' name='[Ship Month]' role='dimension' type='nominal' />
+      <column caption='Ship Quarter' datatype='string' name='[Ship Quarter]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Calendar Quarter</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Ship Week' datatype='string' name='[Ship Week]' role='dimension' type='nominal' />
+      <column caption='Ship Year' datatype='integer' name='[Ship YearMonth]' role='dimension' type='ordinal'>
+        <desc>
+          <formatted-text>
+            <run>Calendar Year for Month Hierarchy</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Ship Year' datatype='integer' name='[Ship YearWeek]' role='dimension' type='ordinal' />
+      <column caption='Ship Day Name' datatype='string' name='[Ship d_day_name]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>dd-mm-yyy</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Ship Day Of Month' datatype='integer' name='[Ship d_day_of_month]' role='dimension' type='ordinal' />
+      <column caption='Ship Day Of Week Abbreviation' datatype='string' name='[Ship d_day_of_week_abbreviation]' role='dimension' type='nominal' />
+      <column caption='Ship Day Of Week Name' datatype='string' name='[Ship d_day_of_week_name]' role='dimension' type='nominal' />
+      <column caption='Ship Day Of Week Number' datatype='integer' name='[Ship d_day_of_week_number]' role='dimension' type='ordinal' />
+      <column caption='Ship Month Abbreviation' datatype='string' name='[Ship d_month_abbreviation]' role='dimension' type='nominal' />
+      <column caption='Ship Month Of Year' datatype='integer' name='[Ship d_month_of_year]' role='dimension' type='ordinal' />
+      <column caption='Ship Quarter Number' datatype='integer' name='[Ship d_quarter_number]' role='dimension' type='ordinal' />
+      <column caption='Ship Week Of Year' datatype='integer' name='[Ship d_week_of_year]' role='dimension' type='ordinal' />
+      <column caption='Ship Weekly Day Name' datatype='string' name='[Ship d_weekly_day_name]' role='dimension' type='nominal' />
+      <column caption='Ship W Day Of Week Abbreviation' datatype='string' name='[Ship w_day_of_week_abbreviation]' role='dimension' type='nominal' />
+      <column caption='Ship W Day Of Week Name' datatype='string' name='[Ship w_day_of_week_name]' role='dimension' type='nominal' />
+      <column caption='Ship W Day Of Week Number' datatype='integer' name='[Ship w_day_of_week_number]' role='dimension' type='ordinal' />
+      <column caption='Size' datatype='string' name='[Size]' role='dimension' type='nominal' />
+      <column caption='State' datatype='string' name='[State]' role='dimension' semantic-role='[State].[Name]' type='nominal' />
+      <column caption='Style' datatype='string' name='[Style]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Product Style</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Weight' datatype='string' name='[Weight]' role='dimension' type='nominal' />
+      <column caption='Zip Code' datatype='string' name='[Zip Code]' role='dimension' semantic-role='[ZipCode].[Name]' type='nominal' />
+      <column caption='Calculated Tax' datatype='real' default-format='n$#,##0.00' name='[calculatedtax1]' role='measure' type='quantitative' />
+      <column caption='Currency' datatype='string' name='[currency]' role='dimension' type='nominal' />
+      <column aggregation='CountD' caption='Customer Count' datatype='integer' default-format='n' name='[customercount1]' role='measure' type='quantitative' />
+      <column aggregation='CountD' caption='Estimated Customer Count' datatype='integer' default-format='n' name='[customercountestimate1]' role='measure' type='quantitative' />
+      <column caption='City' datatype='string' name='[d_city]' role='dimension' semantic-role='[City].[Name]' type='nominal' />
+      <column caption='First Name' datatype='string' name='[d_firstname]' role='dimension' type='nominal' />
+      <column caption='Last Name' datatype='string' name='[d_lastname]' role='dimension' type='nominal' />
+      <column caption='Postal Code' datatype='string' name='[d_postalcode]' role='dimension' semantic-role='[ZipCode].[Name]' type='nominal' />
+      <column caption='Product Subcategory ID' datatype='integer' name='[d_productsubcategoryId]' role='dimension' type='ordinal'>
+        <desc>
+          <formatted-text>
+            <run>ID of the product category</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Order' datatype='string' name='[order]' role='dimension' type='nominal' />
+      <column caption='Order Line Item' datatype='string' name='[order_line_item]' role='dimension' type='nominal'>
+        <desc>
+          <formatted-text>
+            <run>Order Line Item</run>
+          </formatted-text>
+        </desc>
+      </column>
+      <column caption='Order Quantity' datatype='integer' default-format='n' name='[orderquantity1]' role='measure' type='quantitative' />
+      <column caption='Sales Amount' datatype='real' default-format='n$#,##0.00' name='[salesamount1]' role='measure' type='quantitative' />
+      <column caption='Order Month Label' datatype='string' name='[Calculation_1001]' role='dimension' type='nominal'>
+        <calculation class='tableau' formula='RAWSQL_STR(&quot;date_format(%1, &apos;yyyy-MM&apos;)&quot;, [Order Month])' />
+      </column>
+      <column caption='Safe Sales' datatype='real' name='[Calculation_1002]' role='measure' type='quantitative'>
+        <calculation class='tableau' formula='RAWSQLAGG_REAL(&quot;sum(nvl(%1, 0))&quot;, [salesamount1])' />
+      </column>
+      <column caption='Product Line Code' datatype='string' name='[Calculation_1003]' role='dimension' type='nominal'>
+        <calculation class='tableau' formula='RAWSQL_STR(&quot;regexp_extract(%1, &apos;^([A-Z]+)&apos;, 1)&quot;, [Product Line])' />
+      </column>
+      <column caption='Sales per Line Code (FIXED)' datatype='real' name='[Calculation_1004]' role='measure' type='quantitative'>
+        <calculation class='tableau' formula='{FIXED [Calculation_1003] : SUM([salesamount1])}' />
+      </column>
+      <column caption='Portable Quantity' datatype='integer' name='[Calculation_1005]' role='measure' type='quantitative'>
+        <calculation class='tableau' formula='RAWSQL_INT(&quot;coalesce(%1, 0)&quot;, [orderquantity1])' />
+      </column>
+      <column caption='Days Since Order Month' datatype='integer' name='[Calculation_1006]' role='measure' type='quantitative'>
+        <calculation class='tableau' formula='DATEDIFF(&apos;day&apos;, DATE([Order Month]), TODAY())' />
+      </column>
+      <column caption='Order Type' datatype='string' name='[typeorder]' role='dimension' type='nominal' />
+      <drill-paths>
+        <drill-path name='Geography City'>
+          <field>[CountryCity]</field>
+          <field>[State]</field>
+          <field>[City]</field>
+        </drill-path>
+        <drill-path name='Geography Zip'>
+          <field>[CountryZip]</field>
+          <field>[Zip Code]</field>
+        </drill-path>
+        <drill-path name='Order Date Month Hierarchy'>
+          <field>[Order YearMonth]</field>
+          <field>[Order Quarter]</field>
+          <field>[Order Month]</field>
+          <field>[Order DayMonth]</field>
+          <desc>
+            <formatted-text>
+              <run>Organizes time by Year, Quarter, Month, Day</run>
+            </formatted-text>
+          </desc>
+        </drill-path>
+        <drill-path name='Order Date Week Hierarchy'>
+          <field>[Order YearWeek]</field>
+          <field>[Order Week]</field>
+          <field>[Order DayWeek]</field>
+        </drill-path>
+        <drill-path name='Order Dimension'>
+          <field>[currency]</field>
+          <field>[order]</field>
+          <field>[order_line_item]</field>
+        </drill-path>
+        <drill-path name='Product Hierarchy'>
+          <field>[Product Line]</field>
+          <field>[Product Category]</field>
+          <field>[Product Name]</field>
+        </drill-path>
+        <drill-path name='Ship Date Month Hierarchy'>
+          <field>[Ship YearMonth]</field>
+          <field>[Ship Quarter]</field>
+          <field>[Ship Month]</field>
+          <field>[Ship DayMonth]</field>
+          <desc>
+            <formatted-text>
+              <run>Organizes time by Year, Quarter, Month, Day</run>
+            </formatted-text>
+          </desc>
+        </drill-path>
+        <drill-path name='Ship Date Week Hierarchy'>
+          <field>[Ship YearWeek]</field>
+          <field>[Ship Week]</field>
+          <field>[Ship DayWeek]</field>
+        </drill-path>
+      </drill-paths>
+      <folder name='Customer Attributes' role='dimensions'>
+        <folder-item name='[Customer Name]' type='field' />
+        <folder-item name='[Gender]' type='field' />
+        <folder-item name='[Occupation]' type='field' />
+        <folder-item name='[d_city]' type='field' />
+        <folder-item name='[d_firstname]' type='field' />
+        <folder-item name='[d_lastname]' type='field' />
+        <folder-item name='[d_postalcode]' type='field' />
+        <folder-item name='Geography City' type='drillpath' />
+        <folder-item name='Geography Zip' type='drillpath' />
+      </folder>
+      <folder name='Date Attributes' role='dimensions'>
+        <folder-item name='[Order d_day_name]' type='field' />
+        <folder-item name='[Order d_day_of_month]' type='field' />
+        <folder-item name='[Order d_day_of_week_abbreviation]' type='field' />
+        <folder-item name='[Order d_day_of_week_name]' type='field' />
+        <folder-item name='[Order d_day_of_week_number]' type='field' />
+        <folder-item name='[Order d_month_abbreviation]' type='field' />
+        <folder-item name='[Order d_month_of_year]' type='field' />
+        <folder-item name='[Order d_quarter_number]' type='field' />
+        <folder-item name='[Order d_week_of_year]' type='field' />
+        <folder-item name='[Order d_weekly_day_name]' type='field' />
+        <folder-item name='[Order w_day_of_week_abbreviation]' type='field' />
+        <folder-item name='[Order w_day_of_week_name]' type='field' />
+        <folder-item name='[Order w_day_of_week_number]' type='field' />
+        <folder-item name='[Ship d_day_name]' type='field' />
+        <folder-item name='[Ship d_day_of_month]' type='field' />
+        <folder-item name='[Ship d_day_of_week_abbreviation]' type='field' />
+        <folder-item name='[Ship d_day_of_week_name]' type='field' />
+        <folder-item name='[Ship d_day_of_week_number]' type='field' />
+        <folder-item name='[Ship d_month_abbreviation]' type='field' />
+        <folder-item name='[Ship d_month_of_year]' type='field' />
+        <folder-item name='[Ship d_quarter_number]' type='field' />
+        <folder-item name='[Ship d_week_of_year]' type='field' />
+        <folder-item name='[Ship d_weekly_day_name]' type='field' />
+        <folder-item name='[Ship w_day_of_week_abbreviation]' type='field' />
+        <folder-item name='[Ship w_day_of_week_name]' type='field' />
+        <folder-item name='[Ship w_day_of_week_number]' type='field' />
+        <folder-item name='Order Date Month Hierarchy' type='drillpath' />
+        <folder-item name='Order Date Week Hierarchy' type='drillpath' />
+        <folder-item name='Ship Date Month Hierarchy' type='drillpath' />
+        <folder-item name='Ship Date Week Hierarchy' type='drillpath' />
+      </folder>
+      <folder name='Orders' role='dimensions'>
+        <folder-item name='[typeorder]' type='field' />
+        <folder-item name='Order Dimension' type='drillpath' />
+      </folder>
+      <folder name='Product Attributes' role='dimensions'>
+        <folder-item name='[Color]' type='field' />
+        <folder-item name='[Size]' type='field' />
+        <folder-item name='[Style]' type='field' />
+        <folder-item name='[Weight]' type='field' />
+        <folder-item name='[d_productsubcategoryId]' type='field' />
+        <folder-item name='Product Hierarchy' type='drillpath' />
+      </folder>
+      <folder name='Customer Metrics' role='measures'>
+        <folder-item name='[customercount1]' type='field' />
+        <folder-item name='[customercountestimate1]' type='field' />
+      </folder>
+      <folder name='Product Metrics' role='measures'>
+        <folder-item name='[List Price]' type='field' />
+      </folder>
+      <folder name='Sales Metrics' role='measures'>
+        <folder-item name='[Average Sales per Order]' type='field' />
+        <folder-item name='[calculatedtax1]' type='field' />
+        <folder-item name='[orderquantity1]' type='field' />
+        <folder-item name='[salesamount1]' type='field' />
+      </folder>
+      <layout dim-ordering='alphabetic' dim-percentage='0.388079' measure-ordering='alphabetic' measure-percentage='0.611921' show-structure='false' />
+      <semantic-values>
+        <semantic-value key='[Country].[Name]' value='&quot;United States&quot;' />
+      </semantic-values>
+    </datasource>
+    <datasource caption='Custom SQL Source' inline='true' name='federated.customsql01' version='10.5'>
+      <connection class='federated'>
+        <named-connections>
+          <named-connection caption='AtScale Hive' name='hadoophive.customsql01'>
+            <connection authentication='yes' authentication-type='3' class='hadoophive' connection-type='2' dbname='' odbc-connect-string-extras='DisableLimitZero=1;ssl=0' one-time-sql='' port='11111' server='atscale.example.com' sslcert='' sslmode='' tablename='' transport-type='1' username='my_user' />
+          </named-connection>
+        </named-connections>
+        <relation connection='hadoophive.customsql01' name='Custom SQL Query' type='text'>SELECT `product line`, nvl(salesamount, 0) AS sales
+FROM `sales insights`.`internet sales cube`
+WHERE `product line` &lt;=&gt; 'Road'</relation>
+      </connection>
+    </datasource>
+  </datasources>
+  <worksheets>
+    <worksheet name='Sheet 1'>
+      <table>
+        <view>
+          <datasources>
+            <datasource name='Internet Sales Cube (45)' />
+          </datasources>
+          <datasource-dependencies datasource='Internet Sales Cube (45)'>
+            <column caption='Order Month Label' datatype='string' name='[Calculation_1001]' role='dimension' type='nominal' />
+            <column caption='Sales per Line Code (FIXED)' datatype='real' name='[Calculation_1004]' role='measure' type='quantitative' />
+            <column caption='Product Line' datatype='string' name='[Product Line]' role='dimension' type='nominal'>
+              <desc>
+                <formatted-text>
+                  <run>Product Line</run>
+                </formatted-text>
+              </desc>
+            </column>
+            <column-instance column='[Product Line]' derivation='None' name='[none:Product Line:nk]' pivot='key' type='nominal' />
+            <column caption='Order Quantity' datatype='integer' default-format='n' name='[orderquantity1]' role='measure' type='quantitative' />
+            <column-instance column='[orderquantity1]' derivation='Sum' name='[sum:orderquantity1:qk]' pivot='key' type='quantitative' />
+          </datasource-dependencies>
+          <aggregation value='true' />
+        </view>
+        <style />
+        <panes>
+          <pane selection-relaxation-option='selection-relaxation-allow'>
+            <view>
+              <breakdown value='auto' />
+            </view>
+            <mark class='Automatic' />
+            <encodings>
+              <text column='[Internet Sales Cube (45)].[sum:orderquantity1:qk]' />
+            </encodings>
+            <style>
+              <style-rule element='mark'>
+                <format attr='mark-labels-show' value='true' />
+              </style-rule>
+            </style>
+          </pane>
+        </panes>
+        <rows>[Internet Sales Cube (45)].[none:Product Line:nk]</rows>
+        <cols />
+      </table>
+    </worksheet>
+  </worksheets>
+  <dashboards>
+    <dashboard name='Exec Overview'>
+      <style />
+      <size maxheight='800' maxwidth='1000' minheight='800' minwidth='1000' />
+      <zones>
+        <zone h='100000' id='1' type='layout-basic' w='100000' x='0' y='0'>
+          <zone h='100000' id='2' name='Sheet 1' w='100000' x='0' y='0' />
+        </zone>
+      </zones>
+    </dashboard>
+  </dashboards>
+  <windows source-height='30'>
+    <window class='worksheet' maximized='true' name='Sheet 1'>
+      <cards>
+        <edge name='left'>
+          <strip size='160'>
+            <card type='pages' />
+            <card type='filters' />
+            <card type='marks' />
+          </strip>
+        </edge>
+        <edge name='top'>
+          <strip size='2147483647'>
+            <card type='columns' />
+          </strip>
+          <strip size='2147483647'>
+            <card type='rows' />
+          </strip>
+          <strip size='31'>
+            <card type='title' />
+          </strip>
+        </edge>
+      </cards>
+      <viewpoint>
+        <highlight>
+          <color-one-way>
+            <field>[Internet Sales Cube (45)].[none:Product Line:nk]</field>
+          </color-one-way>
+        </highlight>
+      </viewpoint>
+    </window>
+  </windows>
+  <thumbnails>
+    <thumbnail height='208' name='Sheet 1' width='288'>
+      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
+      RU5ErkJggg==
+    </thumbnail>
+  </thumbnails>
+</workbook>
