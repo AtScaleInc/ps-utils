@@ -4005,11 +4005,17 @@ function buildDimensionYaml(
   }
 
   if (metaSnowflakeRelationships.length > 0) {
+    // Per the SML spec, a relationship's `type` is "snowflake" only when it connects two of
+    // the SAME dimension's own underlying datasets; connecting one dimension to a genuinely
+    // DIFFERENT dimension — which is all resolveSnowflakeRelationship() ever produces, since
+    // it explicitly rejects a target whose dimension equals the host's — is "embedded" (SML
+    // spec: "a secondary relationship... that connects a primary dimension to a secondary
+    // dimension"). Despite its name, this list never contains a same-dimension join.
     obj.relationships = metaSnowflakeRelationships.map((r) => ({
       unique_name: r.uniqueName,
       from: { dataset: r.fromDataset, join_columns: r.fromColumns },
       to: { dimension: r.toDimension, level: r.toLevel },
-      type: "snowflake",
+      type: "embedded",
     }));
   }
 
