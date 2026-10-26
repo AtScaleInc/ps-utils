@@ -28,6 +28,7 @@ flowchart LR
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
+    SML --> P["generate-dc-cube-from-sml"] --> DCC["Data Catalog Cube (SML)"]
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
     SML2B["SML Dir B"] --> H
     PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
@@ -153,6 +154,7 @@ flowchart LR
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
+    - [`generate-dc-cube-from-sml`](#generate-dc-cube-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
@@ -732,6 +734,43 @@ Reads an SML directory (`catalog.yml` plus `datasets/`, `dimensions/`, `metrics/
 | `sml-dir` | Yes | | Path to the SML directory to report on |
 | `output-file` | No | stdout | Output Markdown file path |
 | `title` | No | catalog label / `unique_name` | H1 title for the report |
+
+---
+
+### `generate-dc-cube-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generate-report-from-sml`. Writes `datasets/data_catalog_relationships.yml`, four `dimensions/dc_*.yml`, five `metrics/m_dc_*.yml`, `models/data_catalog_cube.yml` and a CSV of the rows into the SML directory, ready to commit and deploy.
+
+**Requires:** No secrets — the SML directory must be present in the repository or workspace.
+
+#### Using the composite action
+
+```yaml
+- uses: actions/checkout@v4
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-report-from-sml
+    sml-dir: .
+    output-file: data_catalog/sml-report.md
+
+- uses: AtScaleInc/ps-utils@v1
+  with:
+    operation: generate-dc-cube-from-sml
+    sml-dir: .
+    # connection-id: con_warehouse     # optional — defaults to the first fact dataset's connection
+    # dataset-table: data_catalog      # optional — read a physical table instead of the inline query
+```
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `sml-dir` | Yes | | Path to the SML directory to catalog |
+| `output-dir` | No | `sml-dir` | Directory the cube's SML files are written into |
+| `connection-id` | No | first fact dataset's connection | SML connection `unique_name` for the catalog dataset |
+| `dataset-table` | No | | Physical table for the catalog dataset. Omit to embed the rows as an inline `VALUES` query |
+| `csv-output-file` | No | `data_catalog/data_catalog_relationships.csv` | Catalog rows as CSV; relative paths are written inside `output-dir` |
 
 ---
 

@@ -95,6 +95,7 @@ The `inputDirs` parameter normally takes a comma-separated string of paths. When
   - [`generateSMLFromSsasMultidimensional`](#generatesmlfromssasmultidimensional)
   - [`generateReportFromXML`](#generatereportfromxml)
   - [`generateReportFromSML`](#generatereportfromsml)
+  - [`generateDCCubeFromSML`](#generatedccubefromsml)
   - [`generateSharedModelPlan`](#generatesharedmodelplan)
   - [`applySharedModelPlanOption`](#applysharedmodelplanoption)
   - [`applyStyleToSML`](#applystyletosml)
@@ -637,6 +638,36 @@ function generateReportFromSML(
 | `smlDir` | `DirInput` | Yes | | Path to the SML directory to report on, or a `Readable` ZIP of its contents |
 | `outputFile` | `FileOutput` | No | | Output path for the Markdown report, or a `Writable` to receive it (stdout if omitted) |
 | `title` | `string` | No | | H1 title for the report (defaults to the catalog label / `unique_name`) |
+
+---
+
+### `generateDCCubeFromSML`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generateReportFromSML`.
+
+```typescript
+import { generateReportFromSML, generateDCCubeFromSML } from "@atscale-ps/ps-utils";
+
+await generateReportFromSML({ smlDir: "./sml", outputFile: "./sml-report.md" });
+await generateDCCubeFromSML({ smlDir: "./sml" });
+```
+
+```typescript
+function generateDCCubeFromSML(
+  params: GenerateDCCubeFromSMLParams,
+  options?: LibraryOptions
+): Promise<void>
+```
+
+| Key | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `smlDir` | `string` | Yes | | Path to the SML directory to catalog |
+| `outputDir` | `string` | No | `smlDir` | Directory the cube's SML files are written into |
+| `connectionId` | `string` | No | first fact dataset's connection | SML connection `unique_name` for the catalog dataset |
+| `datasetTable` | `string` | No | | Physical table for the catalog dataset. Omit to embed the rows as an inline `VALUES` query |
+| `csvOutputFile` | `string` | No | `"data_catalog/data_catalog_relationships.csv"` | Catalog rows as CSV; relative paths are written inside `outputDir` |
 
 ---
 

@@ -42,6 +42,7 @@ flowchart LR
     SSASMD["SSAS Multidimensional XMLA"] --> O["generate-sml-from-ssas-multidimensional"] --> SML
     XML --> L["generate-report-from-xml"] --> RPT["Report (.md)"]
     SML --> M["generate-report-from-sml"] --> RPT
+    SML --> P["generate-dc-cube-from-sml"] --> DCC["Data Catalog Cube (SML)"]
     SML2A["SML Dir A"] --> H["generate-shared-model-plan"] --> PLAN["RECOMMENDATION.md + option-N.yml"]
     SML2B["SML Dir B"] --> H
     PLAN --> I["apply-shared-model-plan-option"] --> SHARED["shared/dimensions, datasets, models"]
@@ -175,6 +176,7 @@ flowchart LR
     - [`generate-sml-from-ssas-multidimensional`](#generate-sml-from-ssas-multidimensional)
     - [`generate-report-from-xml`](#generate-report-from-xml)
     - [`generate-report-from-sml`](#generate-report-from-sml)
+    - [`generate-dc-cube-from-sml`](#generate-dc-cube-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
     - [`apply-style-to-sml`](#apply-style-to-sml)
@@ -984,6 +986,45 @@ Omit `--output-file` to print the report to stdout:
 | `--sml-dir` | Yes | | Path to the SML directory to report on |
 | `--output-file` | No | stdout | Output Markdown file path |
 | `--title` | No | catalog label / `unique_name` | H1 title for the report |
+
+---
+
+### `generate-dc-cube-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+Reads an SML directory and generates a **Data Catalog Cube**: a small AtScale model whose rows are every model / metric / fact join / dimension / attribute path in the directory. Deployed with the catalog, it lets BI users browse which metrics can be sliced by which attributes, and through which fact join keys, from Tableau, Excel or Power BI. Run it as the next step after `generate-report-from-sml`.
+
+Writes into `--output-dir` (default: `--sml-dir`, so the cube deploys with the catalog it describes):
+
+| File | Contents |
+|---|---|
+| `datasets/data_catalog_relationships.yml` | The catalog rows, as an inline `VALUES` query (no table needed) or a physical table with `--dataset-table` |
+| `dimensions/dc_model.yml`, `dc_measure.yml`, `dc_fact.yml`, `dc_dimension.yml` | Degenerate dimensions: Model; Measure (+ Aggregation, Measure Source Column); Fact Dataset → Fact Join Key (+ Relationship); Dimension → Attribute (+ Dimension Dataset, Attribute Type, Attribute Key Column) |
+| `metrics/m_dc_*.yml` | Relationship Paths, Measure Count, Dimension Count, Fact Dataset Count, Model Count (count distinct) |
+| `models/data_catalog_cube.yml` | The Data Catalog Cube model |
+| `data_catalog/data_catalog_relationships.csv` | The same rows as CSV, for loading a physical table |
+
+A metric reaches a dimension through a relationship whose `from.dataset` is the metric's own dataset; each dimension contributes its hierarchy levels (the relationship's `to.level` is marked **Join Level**) and their secondary attributes. Calculations have no dataset and are not catalogued. Missing metrics, dimensions or level attributes are logged as warnings and skipped, so a half-finished model never blocks the refresh. The cube's own model is excluded, so re-running is idempotent and produces byte-identical output for unchanged SML.
+
+```bash
+./atscale-utils generate-report-from-sml \
+  --sml-dir "./sml" \
+  --output-file "./sml-report.md"
+
+./atscale-utils generate-dc-cube-from-sml \
+  --sml-dir "./sml"
+```
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `--sml-dir` | Yes | | Path to the SML directory to catalog |
+| `--output-dir` | No | `--sml-dir` | Directory the cube's SML files are written into |
+| `--connection-id` | No | first catalogued fact dataset's connection | SML connection `unique_name` for the catalog dataset |
+| `--dataset-table` | No | | Physical table for the catalog dataset (load it from the CSV). Omit to embed the rows as an inline `VALUES` query |
+| `--csv-output-file` | No | `data_catalog/data_catalog_relationships.csv` | Catalog rows as CSV; relative paths are written inside `--output-dir` |
+
+**Note:** the inline query uses `SELECT * FROM (VALUES …) AS t (…)`, which PostgreSQL, Snowflake, Databricks and SQL Server accept; for warehouses that don't (e.g. BigQuery), load the CSV and pass `--dataset-table`.
 
 ---
 

@@ -51,6 +51,7 @@ inputs:
         generate-sml-from-ssas-multidimensional
         generate-report-from-xml
         generate-report-from-sml
+        generate-dc-cube-from-sml
         generate-shared-model-plan
         apply-shared-model-plan-option
         generate-sml-docs
@@ -124,7 +125,8 @@ inputs:
                atscale-deploy-catalog (required),
                atscale-list-model-errors (local mode — provide this OR repo-name/repo-id),
                clean-unused-sml-objects,
-               generate-report-from-sml.
+               generate-report-from-sml,
+               generate-dc-cube-from-sml (required).
     required: false
 
   # ── generate-sml-from-connection / generate-sml-from-ddl ─────────────────
@@ -135,6 +137,7 @@ inputs:
       For generate-data-from-data-shape: CSV output directory (default: data/).
       For analyze-powerbi-dax-gaps: directory for the gap report (required).
       For analyze-tableau-hive-gaps: directory for the gap report (required).
+      For generate-dc-cube-from-sml: directory the Data Catalog Cube SML is written into (default: sml-dir).
     required: false
   schema:
     description: >
@@ -395,6 +398,18 @@ inputs:
       For generate-report-from-sml: Markdown report output file (omit to print to stdout).
       For atscale-list-aggregates: CSV export path (omit to skip the CSV export).
       For atscale-export-aggregates: export JSON output path (default: aggregates-export-<catalog-id>-<model-id>.json).
+    required: false
+  dataset-table:
+    description: >
+      Physical table for the Data Catalog Cube dataset (load it from the generated CSV).
+      Omit to embed the rows as an inline VALUES query.
+      Used by: generate-dc-cube-from-sml.
+    required: false
+  csv-output-file:
+    description: >
+      Path for the Data Catalog Cube rows as CSV; relative paths are written inside output-dir
+      (default: data_catalog/data_catalog_relationships.csv).
+      Used by: generate-dc-cube-from-sml.
     required: false
   apply:
     description: >
@@ -859,8 +874,9 @@ inputs:
   connection-id:
     description: >
       Logical connection ID embedded in SML files.
-      Defaults to new-connection-name when omitted.
-      Used by: atscale-create-data-source.
+      For atscale-create-data-source: defaults to new-connection-name when omitted.
+      For generate-dc-cube-from-sml: connection for the catalog dataset (default: the first fact dataset's connection).
+      Used by: atscale-create-data-source, generate-dc-cube-from-sml.
     required: false
   access-users:
     description: >
@@ -1322,6 +1338,21 @@ runs:
         [[ -n "${{ inputs.output-file }}" ]] && ARGS+=(--output-file "${{ inputs.output-file }}")
         [[ -n "${{ inputs.title }}" ]]       && ARGS+=(--title       "${{ inputs.title }}")
         node "${{ github.action_path }}/dist/cli.js" generate-report-from-sml "${ARGS[@]}"
+      shell: bash
+
+    # ── generate-dc-cube-from-sml ────────────────────────────────────────────
+    - name: Generate Data Catalog Cube from SML
+      if: inputs.operation == 'generate-dc-cube-from-sml'
+      run: |
+        ARGS=(
+          --sml-dir "${{ inputs.sml-dir }}"
+          --verbose true
+        )
+        [[ -n "${{ inputs.output-dir }}" ]]    && ARGS+=(--output-dir    "${{ inputs.output-dir }}")
+        [[ -n "${{ inputs.connection-id }}" ]] && ARGS+=(--connection-id "${{ inputs.connection-id }}")
+        [[ -n "${{ inputs.dataset-table }}" ]] && ARGS+=(--dataset-table "${{ inputs.dataset-table }}")
+        [[ -n "${{ inputs.csv-output-file }}" ]]      && ARGS+=(--csv-output-file      "${{ inputs.csv-output-file }}")
+        node "${{ github.action_path }}/dist/cli.js" generate-dc-cube-from-sml "${ARGS[@]}"
       shell: bash
 
     # ── apply-style-to-sml ──────────────────────────────────────────────

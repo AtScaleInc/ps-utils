@@ -365,6 +365,20 @@ export async function generateReportFromSML(p: GenerateReportFromSMLParams, o: L
   } finally { cleanup(); }
 }
 
+export type GenerateDCCubeFromSMLParams = {
+  smlDir:         string;
+  outputDir?:     string;   // default: smlDir (the cube deploys with the catalog it describes)
+  connectionId?:  string;   // default: connection of the first catalogued fact dataset
+  datasetTable?:  string;   // default: none (rows embedded as an inline VALUES query)
+  csvOutputFile?:       string;   // default: "data_catalog/data_catalog_relationships.csv" (relative → inside outputDir)
+};
+
+export async function generateDCCubeFromSML(p: GenerateDCCubeFromSMLParams, o: LibraryOptions = {}) {
+  await run("generate-dc-cube-from-sml", Object.assign({
+    "csv-output-file": "data_catalog/data_catalog_relationships.csv",
+  }, cc2kebab(p as Record<string, unknown>)), o);
+}
+
 export type GenerateSharedModelPlanParams = {
   /** Comma-separated paths, or a Readable ZIP whose top-level folders are the directories. */
   inputDirs: DirInput;
