@@ -1407,6 +1407,15 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
     for (const attrsSec of arr(cube.attributes)) {
       for (const attrEl of arr(attrsSec.attribute)) {
         if (isQuantileGroupAttribute(attrEl)) continue; // hidden plumbing — see quantileGroupDefs above
+
+        // Resolve the fact-side column — see resolveMeasureBoundTo, shared with the Phase 6
+        // rollup so the Summary's "Measures used by a cube" count matches this table. Skip
+        // an attribute that never resolves to a real binding: it's the same exclusion
+        // generate-sml-from-xml applies, and including it here produced rows the Summary's
+        // own "Measures used by a cube" count didn't account for.
+        const boundTo = resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs);
+        if (!boundTo) continue;
+
         const name = a(attrEl, "name") ?? "?";
         const mProps = first(arr(attrEl.properties)) as El | undefined;
         const caption = mProps ? s(first(arr(mProps.caption))) : undefined;
@@ -1448,10 +1457,6 @@ export async function generateReportFromXml(xmlContent: string, opts: XmlReportO
         } else {
           kind = "unknown";
         }
-
-        // Resolve the fact-side column — see resolveMeasureBoundTo, shared with the Phase 6
-        // rollup so the Summary's "Measures used by a cube" count matches this column.
-        const boundTo = resolveMeasureBoundTo(cube, attrEl, quantileGroupDefs);
 
         measureRows.push([
           code(name),

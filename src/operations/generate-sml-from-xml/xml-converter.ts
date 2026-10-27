@@ -1081,7 +1081,7 @@ export async function convertXmlToSml(
               const fname = safeFilename(altUniqueName);
               output.set(
                 `metrics/${fname}.yml`,
-                buildCalcMemberYaml(altUniqueName, label, rewriteDimensionRefs(rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), dimRefMap), format, folder, visible, description),
+                buildCalcMemberYaml(altUniqueName, label, rewriteDimensionRefs(rewriteMeasureRefs(unescapeHtml(exprEl).replace(/\t/g, "  "), measureRefMap), dimRefMap), format, folder, visible, description),
               );
               logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
               metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
@@ -1106,7 +1106,7 @@ export async function convertXmlToSml(
           // with an unrecognized "formula" key.
           output.set(
             `metrics/${fname}.yml`,
-            buildCalcMemberYaml(uniqueName, label, rewriteDimensionRefs(rewriteMeasureRefs(unescapeHtml(exprEl), measureRefMap), dimRefMap), format, folder, visible, description),
+            buildCalcMemberYaml(uniqueName, label, rewriteDimensionRefs(rewriteMeasureRefs(unescapeHtml(exprEl).replace(/\t/g, "  "), measureRefMap), dimRefMap), format, folder, visible, description),
           );
           logger.log(`  → metrics/${fname}.yml`);
           metricNames.push({ uniqueName, folder: folder || undefined });
@@ -4178,7 +4178,11 @@ function parseCalcMember(cm: Record<string, unknown>): CalcMemberDef | undefined
     visible,
     formatString,
     namedFormat,
-    expression: unescapeHtml(exprRaw),
+    // Tabs replaced with spaces for the same reason dataset SQL text is (see unescapeHtml's
+    // doc comment): a leading/embedded tab forces js-yaml into an escaped double-quoted
+    // scalar instead of a readable `|-` block, and the literal `\n`/`\t` sequences in that
+    // quoted form have been seen surviving into the deployed MDX formula downstream.
+    expression: unescapeHtml(exprRaw).replace(/\t/g, "  "),
     mdxAggregateFunction,
     dimension,
   };
