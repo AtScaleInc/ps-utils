@@ -87,6 +87,7 @@ export async function convertXmlToSml(
   const rptModels: ModelRecord[] = [];
   const rptOmissions: OmissionRecord[] = [];
   const rptUnboundByCube: CubeBindingRecord[] = [];
+  const rptRenamedObjects: RenamedObjectRecord[] = [];
 
   // Structural omissions: check for XML features the converter doesn't handle. Perspectives
   // ARE converted (see Phase 7d, per-cube, below) — individual objects a perspective
@@ -448,7 +449,8 @@ export async function convertXmlToSml(
     // a <dimension name="..."> attribute (seen in production exports); left untrimmed, that
     // space becomes part of unique_name itself — forcing YAML to quote it and producing an
     // identifier that looks syntactically wrong wherever it's referenced.
-    const rawName = a(dim, "name")?.trim();
+    const untrimmedName = a(dim, "name");
+    const rawName = untrimmedName?.trim();
     if (!rawName) return undefined;
     const id = a(dim, "id");
     if (!id) return rawName;
@@ -460,6 +462,19 @@ export async function convertXmlToSml(
       let n = 2;
       while (dimNameClaimedBy.has(`${rawName}_${n}`)) n++;
       finalName = `${rawName}_${n}`;
+      rptRenamedObjects.push({
+        category: "Dimension",
+        original: rawName,
+        renamed: finalName,
+        reason: "Collides with a different dimension of the same name elsewhere in the schema — disambiguated so neither is silently overwritten.",
+      });
+    } else if (untrimmedName && untrimmedName !== rawName) {
+      rptRenamedObjects.push({
+        category: "Dimension",
+        original: untrimmedName,
+        renamed: finalName,
+        reason: "Source name had a leading/trailing space — trimmed so the identifier doesn't require YAML quoting.",
+      });
     }
     dimNameClaimedBy.set(finalName, id);
     dimIdToName.set(id, finalName);
@@ -950,6 +965,12 @@ export async function convertXmlToSml(
               logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
               metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
               rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation, folder: folder || undefined, isHidden: !visible });
+              rptRenamedObjects.push({
+                category: "Measure",
+                original: uniqueName,
+                renamed: altUniqueName,
+                reason: "Collides with a different measure of the same name defined elsewhere in the schema — disambiguated per-cube so neither definition is lost.",
+              });
             } else {
               rptOmissions.push({
                 category: "Metric",
@@ -1033,6 +1054,12 @@ export async function convertXmlToSml(
               logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
               metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
               rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "measure", aggregation: "percentile", folder: folder || undefined, isHidden: !visible });
+              rptRenamedObjects.push({
+                category: "Measure",
+                original: uniqueName,
+                renamed: altUniqueName,
+                reason: "Collides with a different measure of the same name defined elsewhere in the schema — disambiguated per-cube so neither definition is lost.",
+              });
             } else {
               rptOmissions.push({
                 category: "Metric",
@@ -1086,6 +1113,12 @@ export async function convertXmlToSml(
               logger.log(`  → metrics/${fname}.yml (renamed — "${uniqueName}" already denotes a different measure elsewhere)`);
               metricNames.push({ uniqueName: altUniqueName, folder: folder || undefined });
               rptMetrics.push({ name: altUniqueName, label, file: `metrics/${fname}.yml`, metricType: "calculated_measure", folder: folder || undefined, isHidden: !visible });
+              rptRenamedObjects.push({
+                category: "Calculated Measure",
+                original: uniqueName,
+                renamed: altUniqueName,
+                reason: "Collides with a different calculated measure of the same name defined elsewhere in the schema — disambiguated per-cube so neither definition is lost.",
+              });
             } else {
               rptOmissions.push({
                 category: "Metric",
@@ -1596,6 +1629,14 @@ export async function convertXmlToSml(
         ? `  → calculations/${pc.fname}.yml (renamed — "${pc.renamedFrom}" already denotes a different calculated member elsewhere)`
         : `  → calculations/${pc.fname}.yml`,
     );
+    if (pc.renamedFrom) {
+      rptRenamedObjects.push({
+        category: "Calculated Member",
+        original: pc.renamedFrom,
+        renamed: pc.uniqueName,
+        reason: "Collides with a different calculated member of the same name defined elsewhere in the schema — disambiguated per-cube so neither definition is lost.",
+      });
+    }
   }
 
   // ---------------------------------------------------------------
@@ -1961,7 +2002,7 @@ export async function convertXmlToSml(
   const readme = buildReadme(
     catalogName, connName, opts.xmlFileName,
     rptDatasets, rptDimensions, rptMetrics, rptModels, rptOmissions, rptUnboundByCube,
-    rptTruncatedNames,
+    rptTruncatedNames, rptRenamedObjects,
   );
   output.set("README.md", readme);
   logger.log(`  → README.md`);
@@ -2182,6 +2223,20 @@ interface TruncatedNameRecord {
   category: string;
   original: string;
   truncated: string;
+}
+
+/** An object whose unique_name had to be changed from a naive reading of the source XML —
+ *  either trimmed (an accidental leading/trailing space) or suffixed to disambiguate a
+ *  collision with a different, same-named object elsewhere in the schema. Any BI tool
+ *  report or dashboard that references the pre-change name as its query name will need
+ *  updating once a model carrying this change is (re)deployed, which is why this is
+ *  reported separately from Truncated Identifiers (a truncation is driven by a length
+ *  limit, not a collision, but both change what a BI tool sees as the query name). */
+interface RenamedObjectRecord {
+  category: string;
+  original: string;
+  renamed: string;
+  reason: string;
 }
 
 /** Metadata extracted alongside YAML during dimension conversion. */
@@ -4860,6 +4915,7 @@ function buildReadme(
   omissions: OmissionRecord[],
   unboundByCube: CubeBindingRecord[] = [],
   truncatedNames: TruncatedNameRecord[] = [],
+  renamedObjects: RenamedObjectRecord[] = [],
 ): string {
   const date = new Date().toISOString().split("T")[0];
   const measures      = metrics.filter((m) => m.metricType === "measure");
@@ -4901,6 +4957,7 @@ function buildReadme(
   if (structural.length > 0)      lines.push("  - [Structural Omissions](#structural-omissions)");
   if (itemLevel.length > 0)       lines.push("  - [Item-Level Omissions](#item-level-omissions)");
   if (truncatedNames.length > 0)  lines.push("  - [Truncated Identifiers](#truncated-identifiers)");
+  if (renamedObjects.length > 0)  lines.push("  - [Renamed Objects (Name Collisions)](#renamed-objects-name-collisions)");
   lines.push("", "---", "");
 
   // ── Summary ──
@@ -4919,6 +4976,7 @@ function buildReadme(
   if (aggregateTotal > 0) lines.push(`| User Defined Aggregates | ${aggregateTotal} |`);
   lines.push(`| Omissions | ${omissions.length} |`);
   if (truncatedNames.length > 0) lines.push(`| Truncated Identifiers | ${truncatedNames.length} |`);
+  if (renamedObjects.length > 0) lines.push(`| ⚠ Renamed Objects (Name Collisions) | ${renamedObjects.length} |`);
   lines.push("", "---", "");
 
   // ── Successful Conversions ──
@@ -5022,7 +5080,7 @@ function buildReadme(
   // ── Omissions ──
   lines.push("## Omissions and Recommendations", "");
 
-  if (omissions.length === 0 && unboundByCube.length === 0 && truncatedNames.length === 0) {
+  if (omissions.length === 0 && unboundByCube.length === 0 && truncatedNames.length === 0 && renamedObjects.length === 0) {
     lines.push("✅ No omissions detected.", "");
     lines.push("---");
     return lines.join("\n");
@@ -5077,6 +5135,23 @@ function buildReadme(
     lines.push("|----------|----------------|------------------------|");
     for (const t of truncatedNames) {
       lines.push(`| ${t.category} | \`${t.original}\` | \`${t.truncated}\` |`);
+    }
+    lines.push("");
+  }
+
+  if (renamedObjects.length > 0) {
+    lines.push("### Renamed Objects (Name Collisions)", "");
+    lines.push(
+      "The following objects share a name with a different object elsewhere in the schema " +
+      "(or had a leading/trailing space trimmed from their name) and were given a distinct " +
+      "`unique_name` so neither definition is silently lost or merged with the other. " +
+      "**If this model was previously deployed under the original name, any BI tool report " +
+      "or dashboard that references the original name as its query name will need updating " +
+      "to the new one** before or after redeploying this conversion.", "");
+    lines.push("| Category | Original Name | Emitted `unique_name` | Reason |");
+    lines.push("|----------|----------------|------------------------|--------|");
+    for (const r of renamedObjects) {
+      lines.push(`| ${r.category} | \`${r.original}\` | \`${r.renamed}\` | ${r.reason} |`);
     }
     lines.push("");
   }
