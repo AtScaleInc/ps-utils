@@ -5140,6 +5140,14 @@ function buildReadme(
   }
 
   if (renamedObjects.length > 0) {
+    // A renamed object can turn out to never reach the deployed model at all — e.g. the
+    // losing side of a dimension collision is frequently also unreferenced by any cube, so
+    // it's separately excluded as an Item-Level Omission further down. Without this
+    // cross-reference, that fact is only discoverable by noticing the same unique_name in
+    // two unrelated tables; flagging it here means a renamed object that never actually
+    // shipped — and therefore can't be the thing an existing BI report or dashboard broke
+    // on — doesn't have to be chased down by hand.
+    const omittedItemNames = new Set(omissions.map((o) => o.item));
     lines.push("### Renamed Objects (Name Collisions)", "");
     lines.push(
       "The following objects share a name with a different object elsewhere in the schema " +
@@ -5151,7 +5159,11 @@ function buildReadme(
     lines.push("| Category | Original Name | Emitted `unique_name` | Reason |");
     lines.push("|----------|----------------|------------------------|--------|");
     for (const r of renamedObjects) {
-      lines.push(`| ${r.category} | \`${r.original}\` | \`${r.renamed}\` | ${r.reason} |`);
+      const stillShipped = !omittedItemNames.has(r.renamed);
+      const reason = stillShipped
+        ? r.reason
+        : `${r.reason} **This renamed object was itself excluded from output as unused — see Item-Level Omissions — so no BI tool report or dashboard could be referencing it under either name.**`;
+      lines.push(`| ${r.category} | \`${r.original}\` | \`${r.renamed}\` | ${reason} |`);
     }
     lines.push("");
   }
