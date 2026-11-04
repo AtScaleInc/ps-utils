@@ -483,11 +483,45 @@ export async function convertXmlToSml(
 
   // Schema-level shared dimensions (keyed by name)
   const schemaDims = new Map<string, Record<string, unknown>>();
-  for (const dimsSec of arr(schemaEl.dimensions)) {
-    for (const dim of arr(dimsSec.dimension)) {
-      const name = resolveDimName(dim as Record<string, unknown>);
-      if (name) schemaDims.set(name, dim as Record<string, unknown>);
-    }
+  const schemaDimEls = arr(schemaEl.dimensions).flatMap((dimsSec) =>
+    arr(dimsSec.dimension),
+  ) as Record<string, unknown>[];
+  // Prefer a dimension whose name is already clean (no leading/trailing space) over one
+  // that needs trimming, when two elements collide on the same trimmed name — otherwise
+  // which one keeps the plain unique_name is pure document-order luck, and a dimension
+  // actually used by a cube can just as easily lose the plain name to one that isn't
+  // (confirmed on real customer data: a live "Measure Attributes" dimension lost its
+  // plain name to an unused duplicate purely because the unused one happened to appear
+  // first in the file). The reorder below is scoped to exactly the positions a
+  // colliding group already occupies, so every other
+  // dimension's processing order — and therefore its position in schemaDims and in the
+  // generated report — is untouched.
+  const groupPositions = new Map<string, number[]>();
+  schemaDimEls.forEach((dim, i) => {
+    const raw = a(dim, "name")?.trim();
+    if (!raw) return;
+    const positions = groupPositions.get(raw) ?? [];
+    positions.push(i);
+    groupPositions.set(raw, positions);
+  });
+  const isCleanName = (dim: Record<string, unknown>): boolean => {
+    const untrimmed = a(dim, "name");
+    return untrimmed === untrimmed?.trim();
+  };
+  const processingOrder = schemaDimEls.map((_, i) => i);
+  for (const positions of groupPositions.values()) {
+    if (positions.length < 2) continue;
+    // Array.prototype.sort is stable, so this moves clean entries ahead of dirty ones
+    // while preserving each subgroup's original relative order among themselves.
+    const reordered = [...positions].sort(
+      (posA, posB) => Number(isCleanName(schemaDimEls[posB])) - Number(isCleanName(schemaDimEls[posA])),
+    );
+    positions.forEach((pos, k) => { processingOrder[pos] = reordered[k]; });
+  }
+  for (const idx of processingOrder) {
+    const dim = schemaDimEls[idx];
+    const name = resolveDimName(dim);
+    if (name) schemaDims.set(name, dim);
   }
 
   // Per-cube inline dimensions (emitted later, scoped to each cube)
