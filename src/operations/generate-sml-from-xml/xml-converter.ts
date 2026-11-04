@@ -2337,6 +2337,11 @@ function safeName(s: string): string {
     // triggering an unnecessary collision rename for two objects that didn't need one.
     .replace(/%/g, "_pct")
     .replace(/\$/g, "_usd")
+    // Same reasoning again for "." — confirmed on real customer data: "Avg Trade Count" and
+    // "Avg. Trade Count" (an abbreviation-style period, not a decimal) are two different,
+    // never-conflicting calculated members whose names collapse to the same unique_name once
+    // the period is stripped to an indistinguishable "_" between two other underscores.
+    .replace(/\./g, "_dot_")
     .replace(/[^a-zA-Z0-9_\-]/g, "_")
     .replace(/_{2,}/g, "_")
     .replace(/^_|_$/g, "");
