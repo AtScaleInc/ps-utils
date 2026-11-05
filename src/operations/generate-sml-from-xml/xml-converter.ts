@@ -874,22 +874,32 @@ export async function convertXmlToSml(
           // An attribute with no key-ref and no attribute-ref anywhere (a genuinely
           // incomplete/orphaned definition left over in the source schema — see
           // m_MEASURE_B_sum_2 for a representative example) falls back to guessing a column
-          // from the attribute's own name. When the target dataset declares its physical
-          // columns and the guess doesn't match any of them, that guess is worthless —
-          // without this check it manufactures a "phantom" column (string-typed, since
-          // nothing else is known about it) and binds the metric to a column the real table
-          // doesn't have, instead of being reported as unresolved like every other measure
-          // this converter genuinely can't place.
-          const knownColumns = datasetNameToPhysical.get(measureDatasetName)?.columns;
-          const isUnverifiableGuess = !resolvedFromReference && !!knownColumns?.length && !knownColumns.some((c) => c.name === column);
+          // from the attribute's own name. That guess is never trustworthy on its own: the
+          // reference converter treats a measure with no real reference as a dead duplicate
+          // and drops it outright (confirmed directly against its own log output — it
+          // explicitly reports "Removing N measure(s) ... because they are duplicates and
+          // unused" for exactly this shape, by id), not merely something to accept when the
+          // guessed name happens to coincidentally match a column the dataset genuinely
+          // declares for an unrelated reason. Rejecting unconditionally whenever there's no
+          // real reference — rather than only when the guess doesn't match any known column —
+          // closes that loophole: a coincidental name match previously let a dead measure win
+          // a project-wide name collision against the real, live measure it was supposed to
+          // have been replaced by, handing the real one an illegible cube-suffixed name
+          // instead of the plain one it should keep once the dead duplicate is excluded.
+          const isUnverifiableGuess = !resolvedFromReference;
           if (!column || !measureDatasetName || isUnverifiableGuess) {
+            const guessMatchesRealColumn =
+              isUnverifiableGuess &&
+              !!datasetNameToPhysical.get(measureDatasetName)?.columns?.some((c) => c.name === column);
             rptOmissions.push({
               category: "Metric",
               item: attrNameRaw,
               reason: !measureDatasetName
                 ? "No fact dataset could be identified for this cube"
                 : isUnverifiableGuess
-                  ? `Could not resolve a real column reference for this measure (no key-ref or attribute-ref) — guessed column "${column}" from the attribute's own name, but ${measureDatasetName} has no such column`
+                  ? guessMatchesRealColumn
+                    ? `No key-ref or attribute-ref ties this measure to any column — "${column}" (guessed from the attribute's own name) happens to exist on ${measureDatasetName}, but nothing in the schema confirms this specific measure is bound to it, matching the reference converter's own treatment of this shape as a dead duplicate`
+                    : `Could not resolve a real column reference for this measure (no key-ref or attribute-ref) — guessed column "${column}" from the attribute's own name, but ${measureDatasetName} has no such column`
                   : "Could not resolve the measure column reference from attribute-ref mapping",
               recommendation: "Add this measure manually to the appropriate metrics/*.yml file after verifying the fact table column name.",
             });
@@ -2797,14 +2807,13 @@ function collectMeasureColumns(
         // recorded against the wrong dataset, which manufactures a "phantom" column on
         // the cube's first fact dataset instead of the one the measure actually lives on.
         const measureDatasetName = keyRefAuthEntry?.datasetName ?? colRef?.datasetName ?? factDatasetName;
-        // A name-guessed column (no real key-ref/attribute-ref backing it at all) is only
-        // trustworthy when it actually matches a column the dataset declares. Recording an
-        // unverifiable guess here manufactures a phantom column (defaulted to a "string"
-        // data_type, since nothing else is known about it) that the real table doesn't have
-        // — Phase 4 independently rejects the same measure as unresolved, so it shouldn't
-        // leave this phantom column behind for it.
-        const knownColumns = datasetNameToPhysical.get(measureDatasetName)?.columns;
-        const isUnverifiableGuess = !resolvedFromReference && !!knownColumns?.length && !knownColumns.some((c) => c.name === column);
+        // A name-guessed column (no real key-ref/attribute-ref backing it at all) is never
+        // trustworthy, regardless of whether it happens to match a column the dataset
+        // declares — see the matching comment in the Phase 4 measure loop for why a
+        // coincidental name match isn't good enough. Recording it here anyway would
+        // manufacture a phantom column (defaulted to a "string" data_type, since nothing
+        // else is known about it) for a measure Phase 4 independently excludes.
+        const isUnverifiableGuess = !resolvedFromReference;
         if (column && !isUnverifiableGuess) addReferencedColumn(measureDatasetName, column);
       }
     }
