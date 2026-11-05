@@ -2427,6 +2427,20 @@ function safeName(s: string): string {
     .replace(/>=/g, "_ge_")
     .replace(/</g, "_lt_")
     .replace(/>/g, "_gt_")
+    // Same reasoning for % and $: a schema can legitimately define both a percentage and a
+    // dollar-amount variant of the same calc member name (e.g. "Contr Margin %" and
+    // "Contr Margin $", or a plain "Foo" alongside "Foo %") — two objects that were never
+    // actually in conflict. Stripping the symbol to an indistinguishable "_" (which then
+    // collapses away entirely, since it's almost always trailing) makes them collide here
+    // even though neither the product nor the user ever treated them as duplicates,
+    // triggering an unnecessary collision rename for two objects that didn't need one.
+    .replace(/%/g, "_pct")
+    .replace(/\$/g, "_usd")
+    // Same reasoning again for "." — confirmed on real customer data: "Avg Trade Count" and
+    // "Avg. Trade Count" (an abbreviation-style period, not a decimal) are two different,
+    // never-conflicting calculated members whose names collapse to the same unique_name once
+    // the period is stripped to an indistinguishable "_" between two other underscores.
+    .replace(/\./g, "_dot_")
     .replace(/[^a-zA-Z0-9_\-]/g, "_")
     .replace(/_{2,}/g, "_")
     .replace(/^_|_$/g, "");
