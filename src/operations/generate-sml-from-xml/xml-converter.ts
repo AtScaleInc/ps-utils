@@ -2419,6 +2419,13 @@ function toTitleCase(s: string): string {
 /** Convert a name to a safe filesystem/unique_name slug (no special chars). */
 function safeName(s: string): string {
   return s
+    // Trim first, matching resolveDimName()'s handling of dimensions — a leading/trailing
+    // space is the same invisible-duplicate defect documented there (a user dodging the
+    // Design Center's hard-blocked duplicate-name check), not a character this identifier
+    // should actually carry. Trimming here, before the internal space is preserved below,
+    // keeps that defect from reappearing for measures/hierarchies/levels now that a plain
+    // space is no longer swept into the generic "_" catch-all.
+    .trim()
     // Spell out comparison operators before the generic strip below turns them into an
     // indistinguishable "_" — otherwise "X > 1M" and "X < 1M" collapse toward the same
     // unique_name and the direction of the comparison is lost from the identifier entirely
@@ -2441,8 +2448,18 @@ function safeName(s: string): string {
     // never-conflicting calculated members whose names collapse to the same unique_name once
     // the period is stripped to an indistinguishable "_" between two other underscores.
     .replace(/\./g, "_dot_")
-    .replace(/[^a-zA-Z0-9_\-]/g, "_")
+    // A plain internal space is left alone rather than swept into "_" by the generic strip
+    // below — SML tolerates a space in unique_name just fine (confirmed empirically: a
+    // dimension's unique_name already carries one unquoted, since resolveDimName() never ran
+    // it through this function at all). Collapsing to one space mirrors the "_{2,}" collapse
+    // immediately below it, for the same reason: a source name with doubled-up whitespace
+    // shouldn't produce a visually-different unique_name than the same name with single
+    // spaces. Converting every space to "_" here bought nothing but a BI-tool compatibility
+    // break — the deployed query name silently changed for every multi-word measure,
+    // hierarchy, and level name, with no SML requirement forcing that change.
+    .replace(/[^a-zA-Z0-9_\- ]/g, "_")
     .replace(/_{2,}/g, "_")
+    .replace(/ {2,}/g, " ")
     .replace(/^_|_$/g, "");
 }
 

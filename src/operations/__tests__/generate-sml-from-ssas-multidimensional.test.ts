@@ -425,7 +425,7 @@ describe("generate-sml-from-ssas-multidimensional converter", () => {
 
     const stateSecondaryNames = (stateLevel.secondary_attributes ?? []).map((a: any) => a.unique_name);
     const citySecondaryNames = (cityLevel.secondary_attributes ?? []).map((a: any) => a.unique_name);
-    expect(stateSecondaryNames).toContain("State_Abbr");
-    expect(citySecondaryNames).not.toContain("State_Abbr");
+    expect(stateSecondaryNames).toContain("State Abbr");
+    expect(citySecondaryNames).not.toContain("State Abbr");
   });
 });
