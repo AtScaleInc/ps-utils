@@ -2460,7 +2460,12 @@ function safeName(s: string): string {
     // transformation nothing requires, this time working against the stated goal of this
     // function (match the source name exactly) instead of toward it.
     .replace(/[^a-zA-Z0-9_\- ]/g, "_")
-    .replace(/_{2,}/g, "_")
+    // A run of multiple underscores is left alone for the exact same reason, and this one's
+    // confirmed on real customer data too, more seriously: a calculated member's actual
+    // source `name=` was "Paid_Amount_PMPM__Calendar_Year__Current" — a literal double
+    // underscore the authoring tool put there — collapsed to single by this line for every
+    // one of 366 calculated members in that file, destroying their real identifiers rather
+    // than cleaning up an artifact of this function's own substitutions.
     .replace(/^_|_$/g, "");
 }
 
