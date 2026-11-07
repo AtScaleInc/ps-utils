@@ -2459,14 +2459,22 @@ function safeName(s: string): string {
     // space in their source name) — collapsing it would have been yet another invented
     // transformation nothing requires, this time working against the stated goal of this
     // function (match the source name exactly) instead of toward it.
-    .replace(/[^a-zA-Z0-9_\- ]/g, "_")
     // A run of multiple underscores is left alone for the exact same reason, and this one's
     // confirmed on real customer data too, more seriously: a calculated member's actual
     // source `name=` was "Paid_Amount_PMPM__Calendar_Year__Current" — a literal double
     // underscore the authoring tool put there — collapsed to single by this line for every
     // one of 366 calculated members in that file, destroying their real identifiers rather
     // than cleaning up an artifact of this function's own substitutions.
-    .replace(/^_|_$/g, "");
+    //
+    // A leading/trailing underscore that's actually part of the source name is left alone too
+    // — confirmed on real customer data a third time: a calculated member's source `name=`
+    // was literally "_DEMOS__Calendar_Year__Trend", and stripping the leading "_" here
+    // silently dropped a character that was never an artifact of this function's own
+    // substitutions in the first place. There's no SML requirement an identifier can't start
+    // or end with "_" — this was the same unverified "cleanup" mistake as the two above it,
+    // just not yet caught on real data until now.
+    .replace(/[^a-zA-Z0-9_\- ]/g, "_");
+    ;
 }
 
 /** SML unique_name values must not exceed this length. */
