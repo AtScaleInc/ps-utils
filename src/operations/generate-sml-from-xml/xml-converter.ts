@@ -2451,15 +2451,16 @@ function safeName(s: string): string {
     // A plain internal space is left alone rather than swept into "_" by the generic strip
     // below — SML tolerates a space in unique_name just fine (confirmed empirically: a
     // dimension's unique_name already carries one unquoted, since resolveDimName() never ran
-    // it through this function at all). Collapsing to one space mirrors the "_{2,}" collapse
-    // immediately below it, for the same reason: a source name with doubled-up whitespace
-    // shouldn't produce a visually-different unique_name than the same name with single
-    // spaces. Converting every space to "_" here bought nothing but a BI-tool compatibility
-    // break — the deployed query name silently changed for every multi-word measure,
-    // hierarchy, and level name, with no SML requirement forcing that change.
+    // it through this function at all). Converting every space to "_" here bought nothing but
+    // a BI-tool compatibility break — the deployed query name silently changed for every
+    // multi-word measure, hierarchy, and level name, with no SML requirement forcing that
+    // change. A run of multiple spaces is left alone too, for the same reason: confirmed on
+    // real customer data (11 "IP Allowed/Paid Amount Excluded" measures with a genuine double
+    // space in their source name) — collapsing it would have been yet another invented
+    // transformation nothing requires, this time working against the stated goal of this
+    // function (match the source name exactly) instead of toward it.
     .replace(/[^a-zA-Z0-9_\- ]/g, "_")
     .replace(/_{2,}/g, "_")
-    .replace(/ {2,}/g, " ")
     .replace(/^_|_$/g, "");
 }
 
