@@ -2419,6 +2419,13 @@ function toTitleCase(s: string): string {
 /** Convert a name to a safe filesystem/unique_name slug (no special chars). */
 function safeName(s: string): string {
   return s
+    // Trim first, matching resolveDimName()'s handling of dimensions — a leading/trailing
+    // space is the same invisible-duplicate defect documented there (a user dodging the
+    // Design Center's hard-blocked duplicate-name check), not a character this identifier
+    // should actually carry. Trimming here, before the internal space is preserved below,
+    // keeps that defect from reappearing for measures/hierarchies/levels now that a plain
+    // space is no longer swept into the generic "_" catch-all.
+    .trim()
     // Spell out comparison operators before the generic strip below turns them into an
     // indistinguishable "_" — otherwise "X > 1M" and "X < 1M" collapse toward the same
     // unique_name and the direction of the comparison is lost from the identifier entirely
@@ -2441,9 +2448,33 @@ function safeName(s: string): string {
     // never-conflicting calculated members whose names collapse to the same unique_name once
     // the period is stripped to an indistinguishable "_" between two other underscores.
     .replace(/\./g, "_dot_")
-    .replace(/[^a-zA-Z0-9_\-]/g, "_")
-    .replace(/_{2,}/g, "_")
-    .replace(/^_|_$/g, "");
+    // A plain internal space is left alone rather than swept into "_" by the generic strip
+    // below — SML tolerates a space in unique_name just fine (confirmed empirically: a
+    // dimension's unique_name already carries one unquoted, since resolveDimName() never ran
+    // it through this function at all). Converting every space to "_" here bought nothing but
+    // a BI-tool compatibility break — the deployed query name silently changed for every
+    // multi-word measure, hierarchy, and level name, with no SML requirement forcing that
+    // change. A run of multiple spaces is left alone too, for the same reason: confirmed on
+    // real customer data (11 "IP Allowed/Paid Amount Excluded" measures with a genuine double
+    // space in their source name) — collapsing it would have been yet another invented
+    // transformation nothing requires, this time working against the stated goal of this
+    // function (match the source name exactly) instead of toward it.
+    // A run of multiple underscores is left alone for the exact same reason, and this one's
+    // confirmed on real customer data too, more seriously: a calculated member's actual
+    // source `name=` was "Paid_Amount_PMPM__Calendar_Year__Current" — a literal double
+    // underscore the authoring tool put there — collapsed to single by this line for every
+    // one of 366 calculated members in that file, destroying their real identifiers rather
+    // than cleaning up an artifact of this function's own substitutions.
+    //
+    // A leading/trailing underscore that's actually part of the source name is left alone too
+    // — confirmed on real customer data a third time: a calculated member's source `name=`
+    // was literally "_DEMOS__Calendar_Year__Trend", and stripping the leading "_" here
+    // silently dropped a character that was never an artifact of this function's own
+    // substitutions in the first place. There's no SML requirement an identifier can't start
+    // or end with "_" — this was the same unverified "cleanup" mistake as the two above it,
+    // just not yet caught on real data until now.
+    .replace(/[^a-zA-Z0-9_\- ]/g, "_");
+    ;
 }
 
 /** SML unique_name values must not exceed this length. */
