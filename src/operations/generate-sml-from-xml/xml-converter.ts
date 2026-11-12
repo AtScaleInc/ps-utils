@@ -3332,20 +3332,18 @@ function resolveSnowflakeRelationship(
   const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
   if (!entries || entries.length < 2) return undefined;
 
-  // Exactly two redeclarations is the ordinary host/target pairing this function has always
-  // handled — keep requiring the target side to be both complete AND unique there, since with
-  // only two candidates there's no other signal to rule out a non-unique "target" that would
-  // fan out the join. Only when the abstract key-ref has been redeclared by MORE than two
-  // datasets (the same key concept reused by other, unrelated host-side tables — see the
-  // comment above) is completeness alone used to single out the one real target, because at
-  // that point requiring uniqueness too would just as often reject the genuine target as a
-  // spurious one, and the host is already pinned down by hostDatasetName instead of by process
-  // of elimination.
+  // The host side is always just whichever redeclaration actually belongs to this level's
+  // own dataset — known for certain regardless of how many other datasets redeclare the same
+  // abstract key. The target is whichever OTHER redeclaration is complete; this used to also
+  // require the target be unique, but only when there were exactly two redeclarations — and
+  // that extra requirement rejected a real, confirmed-correct target on real customer data: a
+  // key-ref can be legitimately non-unique (more than one row on the target side can share a
+  // key value) and still be exactly the join this embedded relationship represents. The
+  // >2-entries case had already dropped the uniqueness requirement for this same reason, but
+  // there was never a reason the count of OTHER redeclarations should change whether
+  // uniqueness is required, since hostEntry is found the same way regardless of count.
   const hostEntry = entries.find((e) => e.datasetName === hostDatasetName);
-  const targetEntry =
-    entries.length === 2
-      ? entries.find((e) => e.complete === "true" && e.unique)
-      : entries.find((e) => e.complete === "true" && e !== hostEntry);
+  const targetEntry = entries.find((e) => e.complete === "true" && e !== hostEntry);
   if (!targetEntry || !hostEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
