@@ -11,7 +11,7 @@ import { DBSQLClient } from "@databricks/sql";
 import path from "path";
 import fs from "fs";
 import net from "net";
-import { createPrivateKey } from "crypto";
+import { createPrivateKey, type PrivateKeyInput } from "crypto";
 import { ServiceProvider } from "./ServiceProvider.js";
 import { isBundled } from "../assets.js";
 import type { Logger } from "../logging.js";
@@ -407,11 +407,13 @@ export class SqlService extends ServiceProvider {
     // auth so existing JWT-based connections keep working unchanged.
     const token = userEntry?.token ?? userEntry?.pat;
 
-    if (privateKeyPath || privateKeyBase64) {
+    if (privateKeyPath) {
       connConfig.authenticator = "SNOWFLAKE_JWT";
-      connConfig.privateKey = privateKeyPath
-        ? this.readPrivateKeyAsPem(privateKeyPath)
-        : Buffer.from(privateKeyBase64!, "base64").toString("utf8");
+      // readPrivateKeyAsPem decrypts the key, so the driver needs no privateKeyPass.
+      connConfig.privateKey = this.readPrivateKeyAsPem(privateKeyPath, userEntry?.privateKeyPassword);
+    } else if (privateKeyBase64) {
+      connConfig.authenticator = "SNOWFLAKE_JWT";
+      connConfig.privateKey = Buffer.from(privateKeyBase64, "base64").toString("utf8");
       if (userEntry?.privateKeyPassword) {
         connConfig.privateKeyPass = userEntry.privateKeyPassword;
       }
@@ -941,16 +943,36 @@ export class SqlService extends ServiceProvider {
     return undefined;
   }
 
-  private readPrivateKeyAsPem(filePath: string): string {
+  /**
+   * Reads a PEM or DER private key (PKCS#8 or PKCS#1, encrypted or not) and
+   * returns it as an unencrypted PKCS#8 PEM string for the Snowflake driver.
+   */
+  private readPrivateKeyAsPem(filePath: string, passphrase?: string): string {
     const raw = fs.readFileSync(filePath);
     const text = raw.toString("utf8");
+    const isPem = text.includes("-----BEGIN");
+
+    // Node reports a missing passphrase on an encrypted PEM only as
+    // "interrupted or cancelled", so check for it up front.
+    if (isPem && text.includes("ENCRYPTED") && !passphrase) {
+      throw new Error(`Private key ${filePath} is encrypted; set privateKeyPassword.`);
+    }
+
+    const opts: PrivateKeyInput = isPem
+      ? { key: raw, format: "pem" }
+      : { key: raw, format: "der", type: "pkcs8" };
+    if (passphrase) opts.passphrase = passphrase;
+
     let keyObject;
     try {
-      keyObject = text.includes("BEGIN")
-        ? createPrivateKey({ key: text, format: "pem" })
-        : createPrivateKey({ key: raw, format: "der", type: "pkcs8" });
-    } catch {
-      keyObject = createPrivateKey({ key: raw, format: "der", type: "pkcs8" });
+      keyObject = createPrivateKey(opts);
+    } catch (err: any) {
+      if (err?.code === "ERR_MISSING_PASSPHRASE") {
+        throw new Error(`Private key ${filePath} is encrypted; set privateKeyPassword.`);
+      }
+      throw new Error(
+        `Could not read private key ${filePath} (${isPem ? "PEM" : "DER"}): ${err?.message ?? err}`,
+      );
     }
     return keyObject.export({ format: "pem", type: "pkcs8" }) as string;
   }
