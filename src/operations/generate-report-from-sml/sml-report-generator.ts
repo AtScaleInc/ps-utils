@@ -22,9 +22,17 @@
  *
  * Kept local and independent from generate-sml-docs's loader/renderer so this
  * report never depends on, or risks destabilizing, the docs generator.
+ *
+ * After the libraries, a Model Mapping section lays out each model's metrics,
+ * fact-to-dimension relationships, dimension attributes and metric coverage,
+ * followed by catalog-wide Issues and Recommendations. Both come from
+ * sml-model-mapping.ts, the same tables generate-dc-cube-from-sml writes as
+ * SQL/CSV, so the report and the Data Catalog Cube always agree.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { buildModelMapping, CATALOG_SCOPE, type ModelMapping } from "../sml-model-mapping.js";
+import { DEFAULT_DC_CUBE_NAMES } from "../generate-dc-cube-from-sml/dc-cube-builder.js";
 type Raw = Record<string, any>;
 
 /** One parsed SML object plus the file it came from (relative to the sml-dir). */
@@ -274,7 +282,21 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
 
   // ── Table of contents ──────────────────────────────────────────────────────
 
+  // The Data Catalog Cube describes the other models; mapping it would only describe itself.
+  const mapping = buildModelMapping(
+    {
+      models: c.models.map((m) => m.raw),
+      metrics: c.metrics.map((m) => m.raw),
+      dimensions: c.dimensions.map((d) => d.raw),
+      datasets: c.datasets.map((d) => d.raw),
+      calculations: c.calculations.map((cc) => cc.raw),
+    },
+    { excludeModels: [DEFAULT_DC_CUBE_NAMES.modelName] },
+  );
+
   const sections = ["Connections", "Datasets", "Dimensions", "Models", "Metrics", "Calculations"];
+  if (mapping.metrics.length) sections.push("Model Mapping");
+  sections.push("Issues and Recommendations");
   if (perspectives.length) sections.push("Perspectives");
   sections.push("Security");
   if (c.other.length) sections.push("Other Objects");
@@ -357,6 +379,11 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
     out.push("_No calculations defined._", "");
   }
 
+  // ── Model mapping + issues ───────────────────────────────────────────────────
+
+  renderModelMapping(out, mapping);
+  renderIssues(out, mapping);
+
   // ── Perspectives ─────────────────────────────────────────────────────────────
 
   if (perspectives.length) {
@@ -389,6 +416,88 @@ export function generateReportFromSml(c: SmlCollection, opts: SmlReportOptions =
   // ============================================================
   // Section renderers (closures over the cross-reference maps above)
   // ============================================================
+
+  function renderModelMapping(o: string[], m: ModelMapping): void {
+    if (!m.metrics.length) return;
+    o.push("## Model Mapping", "");
+    o.push(
+      "For each model: its metrics, the fact-to-dimension joins they travel, every attribute they can be sliced by, and how many attributes each metric reaches per dimension. The same tables back `generate-dc-cube-from-sml`'s SQL and CSV output.",
+      "",
+    );
+    const modelNames = [...new Set(m.metrics.map((r) => r.model_name))];
+    for (const name of modelNames) {
+      const modelObj = c.models.find((x) => String(x.raw.unique_name) === name);
+      const metrics = m.metrics.filter((r) => r.model_name === name);
+      const rels = m.relationships.filter((r) => r.model_name === name);
+      const attrs = m.attributes.filter((r) => r.model_name === name);
+      const cov = m.coverage.filter((r) => r.model_name === name);
+      const facts = [...new Set(metrics.map((r) => r.fact_dataset))];
+      const dims = [...new Set(rels.map((r) => r.dimension_name))];
+      const paths = cov.reduce((n, r) => n + r.attribute_count, 0);
+
+      o.push(`### ${modelObj ? label(modelObj) : name}`, "");
+      o.push(
+        `${metrics.length} metric(s) from ${facts.length} fact dataset(s) (${facts.map(code).join(", ")}), joined to ${dims.length} dimension(s) through ${rels.length} relationship(s): ${attrs.length} attribute(s) and ${paths} metric-to-attribute path(s).`,
+        "",
+      );
+
+      o.push("#### Metrics", "");
+      o.push(
+        ...table(
+          ["Metric", "Unique name", "Aggregation", "Fact dataset", "Fact table", "Source column", "Format", "Folder"],
+          metrics.map((r) => [cell(r.metric_label), code(r.metric_name), cell(r.aggregation), code(r.fact_dataset), code(r.fact_table), code(r.source_column), code(r.format), cell(r.folder)]),
+        ),
+      );
+
+      o.push("#### Fact-to-Dimension Relationships", "");
+      o.push(
+        ...table(
+          ["Relationship", "Fact dataset", "Fact join column", "Dimension", "Join level", "Dimension dataset", "Dimension key column"],
+          rels.map((r) => [code(r.relationship_name), code(r.fact_dataset), code(r.fact_join_column), cell(r.dimension_label), cell(r.join_level), code(r.dimension_dataset), code(r.dimension_key_column)]),
+        ),
+      );
+
+      o.push("#### Dimension Attributes", "");
+      o.push(
+        ...table(
+          ["Dimension", "Hierarchy", "Level", "Attribute", "Unique name", "Type", "Dataset", "Key column", "Name column"],
+          attrs.map((r) => [cell(r.dimension_label), cell(r.hierarchy_name), `${r.level_number} ${cell(r.level_name)}`, cell(r.attribute_label), code(r.attribute_name), r.attribute_type === "Join Level" ? "**Join Level**" : r.attribute_type, code(r.dataset), code(r.key_column), code(r.name_column)]),
+        ),
+      );
+
+      o.push("#### Metric Coverage", "");
+      o.push("Attributes each metric can be sliced by, per dimension.", "");
+      const dimLabels = dims.map((d) => rels.find((r) => r.dimension_name === d)?.dimension_label ?? d);
+      o.push(
+        ...table(
+          ["Metric", ...dimLabels.map(cell), "Total"],
+          metrics.map((mr) => {
+            const counts = dims.map((d) => cov.find((r) => r.metric_name === mr.metric_name && r.dimension_name === d)?.attribute_count ?? 0);
+            return [cell(mr.metric_label), ...counts.map(String), String(counts.reduce((a, b) => a + b, 0))];
+          }),
+        ),
+      );
+    }
+  }
+
+  function renderIssues(o: string[], m: ModelMapping): void {
+    o.push("## Issues and Recommendations", "");
+    if (!m.issues.length) {
+      o.push("_No structural issues found._", "");
+      return;
+    }
+    const counts = (["error", "warning", "info"] as const).map((sev) => `${m.issues.filter((i) => i.severity === sev).length} ${sev}(s)`);
+    o.push(
+      `${m.issues.length} issue(s): ${counts.join(", ")}. These are structural checks on the SML; run \`atscale-list-model-errors\` for engine-level validation.`,
+      "",
+    );
+    o.push(
+      ...table(
+        ["#", "Severity", "Model", "Object", "Issue", "Impact", "Recommendation"],
+        m.issues.map((i) => [String(i.issue_number), i.severity, i.model_name === CATALOG_SCOPE ? "_catalog_" : cell(i.model_name), code(i.object_name), cell(i.issue), cell(i.impact), cell(i.recommendation)]),
+      ),
+    );
+  }
 
   function renderDataset(o: string[], d: SmlObject, kind: string): void {
     const raw = d.raw;
