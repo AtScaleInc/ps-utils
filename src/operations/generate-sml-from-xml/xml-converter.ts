@@ -3363,19 +3363,29 @@ function resolveSnowflakeRelationship(
   const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
   if (!entries || entries.length < 2) return undefined;
 
-  // The host side is always just whichever redeclaration actually belongs to this level's
-  // own dataset — known for certain regardless of how many other datasets redeclare the same
-  // abstract key. The target is whichever OTHER redeclaration is complete; this used to also
-  // require the target be unique, but only when there were exactly two redeclarations — and
-  // that extra requirement rejected a real, confirmed-correct target on real customer data: a
-  // key-ref can be legitimately non-unique (more than one row on the target side can share a
-  // key value) and still be exactly the join this embedded relationship represents. The
-  // >2-entries case had already dropped the uniqueness requirement for this same reason, but
-  // there was never a reason the count of OTHER redeclarations should change whether
-  // uniqueness is required, since hostEntry is found the same way regardless of count.
-  const hostEntry = entries.find((e) => e.datasetName === hostDatasetName);
-  const targetEntry = entries.find((e) => e.complete === "true" && e !== hostEntry);
-  if (!targetEntry || !hostEntry) return undefined;
+  // unique="true"/"false" turns out not to carry any real signal here — real customer data
+  // has shown confirmed-correct joins on both sides of that flag, so this no longer looks at
+  // it at all. completeness is the only thing that matters:
+  //
+  // The host's own dataset can redeclare this abstract key more than once — confirmed on real
+  // data as two entries for the exact same dataset, one complete (a real column) and one not
+  // (just a <ref-path> pointer carrying no new information, there only to attach the ref-id
+  // this function was asked to resolve). When the host's own dataset has ANY complete
+  // redeclaration, that one is self-sufficient — it already has everything fromColumns needs,
+  // and nothing from a different dataset is required to "confirm" it.
+  //
+  // Only when every one of the host's own redeclarations is incomplete (no column of its own
+  // at all — confirmed on different real data, a different dataset's complete redeclaration
+  // of the same key) does this fall back to borrowing a DIFFERENT dataset's complete entry.
+  // fromColumns still comes from the host's own (incomplete-looking but column-bearing) entry
+  // in that case — the other dataset's entry is only ever used to confirm the key concept is
+  // real, never as the actual column source.
+  const hostCandidates = entries.filter((e) => e.datasetName === hostDatasetName);
+  const hostEntry = hostCandidates.find((e) => e.complete === "true") ?? hostCandidates[0];
+  if (!hostEntry) return undefined;
+  const targetEntry =
+    hostEntry.complete === "true" ? hostEntry : entries.find((e) => e.complete === "true" && e !== hostEntry);
+  if (!targetEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
   if (!targetDimName || targetDimName === hostDimName) return undefined;
