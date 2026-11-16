@@ -28,6 +28,7 @@
     - [`generate-report-from-sml`](#generate-report-from-sml)
     - [`generate-shared-model-plan`](#generate-shared-model-plan)
     - [`apply-shared-model-plan-option`](#apply-shared-model-plan-option)
+    - [`generate-dc-cube-from-sml`](#generate-dc-cube-from-sml)
     - [`apply-style-to-sml`](#apply-style-to-sml)
     - [`generate-sml-docs`](#generate-sml-docs)
     - [`clean-unused-sml-objects`](#clean-unused-sml-objects)
@@ -773,6 +774,34 @@ curl -X POST http://localhost:4000/rest/apply-shared-model-plan-option \
 curl -X POST http://localhost:4000/rest/apply-shared-model-plan-option \
   -F "planFileUpload=@/path/to/file" \
   -F "sharedDir=value"
+```
+
+---
+
+### `generate-dc-cube-from-sml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate a Data Catalog Cube — an AtScale model of every metric → fact → dimension → attribute path — plus the model mapping tables as SQL, CSV and SML datasets
+
+**Endpoint:** `POST /rest/generate-dc-cube-from-sml`  |  **GraphQL:** `generateDcCubeFromSml`
+
+| Field (JSON key) | Type | Required | Description |
+|-----------------|------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to catalog (contains datasets/, dimensions/, metrics/, models/) |
+| `connectionId` | `String` | No | SML connection unique_name for the catalog datasets. Defaults to the connection of the first catalogued fact dataset. |
+| `schema` | `String` | No | Schema the SQL load script creates its tables in. Defaults to the connection's schema; tables are unqualified if it has none. |
+| `datasetTable` | `String` | No | Physical table for the catalog dataset (load it with the SQL script or CSV). Omit to embed the rows as an inline VALUES query, which needs no table. |
+| `includeMappingDatasets` | `Boolean` | No | Also write the five mapping tables (model_metrics, model_relationships, model_dimension_attributes, model_metric_coverage, model_issues) as SML query datasets. |
+
+**curl (JSON):**
+
+```bash
+curl -X POST http://localhost:4000/rest/generate-dc-cube-from-sml \
+  -H "Content-Type: application/json" \
+  -d '{
+      "smlDir": "value"
+  }'
 ```
 
 ---
