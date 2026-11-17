@@ -627,6 +627,7 @@ export async function convertXmlToSml(
       item: r.dimName,
       reason: r.reason,
       recommendation: "Review this dimension's fact-table bindings manually — some levels may need a relationship instead of a direct column, or the source data types must be reconciled before it can be modeled as a shared degenerate dimension.",
+      included: true,
     });
   }
 
@@ -931,6 +932,7 @@ export async function convertXmlToSml(
                   item: attrNameRaw,
                   reason: `Semi-additive aggregation function "${aggFnText}" has no SML equivalent, or its non-summarized attribute could not be identified — converted as a plain ${aggregation} metric instead.`,
                   recommendation: "Verify whether this measure needs a manually-added semi_additive block after conversion.",
+                  included: true,
                 });
               }
             }
@@ -1550,6 +1552,7 @@ export async function convertXmlToSml(
           item: pm.uniqueName,
           reason: "Semi-additive metric's non-summarized dimension level matches more than one relationship in this cube (likely a role-played dimension) — which specific role was intended can't be determined, so it was converted without a semi_additive block rather than risk attaching it to the wrong one.",
           recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, choosing the correct role-played relationship.`,
+          included: true,
         });
         continue;
       }
@@ -1559,6 +1562,7 @@ export async function convertXmlToSml(
           item: pm.uniqueName,
           reason: "Semi-additive metric's non-summarized dimension level could not be resolved to a model relationship or a degenerate dimension — converted without a semi_additive block.",
           recommendation: `Manually add a semi_additive block (position: ${pm.position}) to metrics/${pm.fname}.yml, using relationships or degenerate_dimensions as appropriate.`,
+          included: true,
         });
         continue;
       }
@@ -2259,6 +2263,13 @@ interface OmissionRecord {
   item: string;
   reason: string;
   recommendation: string;
+  /** True when the item is actually present in the generated output, just without some
+   *  optimization or enhancement this converter couldn't safely apply (e.g. a semi-additive
+   *  override, or a shared_degenerate_columns merge) — as opposed to the default/undefined
+   *  case, where the item was left out of the output entirely. Read by buildReadme() to
+   *  report these under a separate "flagged for review" heading instead of alongside items
+   *  that never shipped, so a customer doesn't mistake "included with a caveat" for "missing." */
+  included?: boolean;
 }
 
 /** An identifier long enough to need truncateUniqueName's interior-hash shortening — logged
@@ -5051,7 +5062,9 @@ function buildReadme(
   const calcMeasures  = metrics.filter((m) => m.metricType === "calculated_measure");
   const calcMembers   = metrics.filter((m) => m.metricType === "calculated_member");
   const structural    = omissions.filter((o) => o.category === "Structural");
-  const itemLevel     = omissions.filter((o) => o.category !== "Structural");
+  const itemLevelAll  = omissions.filter((o) => o.category !== "Structural");
+  const itemLevel     = itemLevelAll.filter((o) => !o.included);
+  const itemLevelFlagged = itemLevelAll.filter((o) => o.included);
 
   const lines: string[] = [];
 
@@ -5085,6 +5098,7 @@ function buildReadme(
   if (unboundByCube.length > 0)   lines.push("  - [Unbound Datasets](#unbound-datasets)");
   if (structural.length > 0)      lines.push("  - [Structural Omissions](#structural-omissions)");
   if (itemLevel.length > 0)       lines.push("  - [Item-Level Omissions](#item-level-omissions)");
+  if (itemLevelFlagged.length > 0) lines.push("  - [Flagged for Review (Included in Output)](#flagged-for-review-included-in-output)");
   if (truncatedNames.length > 0)  lines.push("  - [Truncated Identifiers](#truncated-identifiers)");
   if (renamedObjects.length > 0)  lines.push("  - [Renamed Objects (Name Collisions)](#renamed-objects-name-collisions)");
   lines.push("", "---", "");
@@ -5103,7 +5117,8 @@ function buildReadme(
   lines.push(`| Models | ${models.length} |`);
   const aggregateTotal = models.reduce((sum, m) => sum + m.aggregateCount, 0);
   if (aggregateTotal > 0) lines.push(`| User Defined Aggregates | ${aggregateTotal} |`);
-  lines.push(`| Omissions | ${omissions.length} |`);
+  lines.push(`| Omissions (excluded from output) | ${structural.length + itemLevel.length} |`);
+  if (itemLevelFlagged.length > 0) lines.push(`| Flagged for Review (included in output) | ${itemLevelFlagged.length} |`);
   if (truncatedNames.length > 0) lines.push(`| Truncated Identifiers | ${truncatedNames.length} |`);
   if (renamedObjects.length > 0) lines.push(`| ⚠ Renamed Objects (Name Collisions) | ${renamedObjects.length} |`);
   lines.push("", "---", "");
@@ -5245,9 +5260,25 @@ function buildReadme(
 
   if (itemLevel.length > 0) {
     lines.push("### Item-Level Omissions", "");
+    lines.push("**These items were excluded from the generated output entirely** — nothing for them was written to any SML file.", "");
     lines.push("| Category | Item | Reason | Recommendation |");
     lines.push("|----------|------|--------|----------------|");
     for (const o of itemLevel) {
+      lines.push(`| ${o.category} | \`${o.item}\` | ${o.reason} | ${o.recommendation} |`);
+    }
+    lines.push("");
+  }
+
+  if (itemLevelFlagged.length > 0) {
+    lines.push("### Flagged for Review (Included in Output)", "");
+    lines.push(
+      "**These items ARE present in the generated output** — they converted successfully, " +
+      "just without some optimization or enhancement this converter couldn't safely apply " +
+      "automatically. Nothing here needs fixing before the output is usable; review these " +
+      "only if you want the specific enhancement each one describes.", "");
+    lines.push("| Category | Item | Reason | Recommendation |");
+    lines.push("|----------|------|--------|----------------|");
+    for (const o of itemLevelFlagged) {
       lines.push(`| ${o.category} | \`${o.item}\` | ${o.reason} | ${o.recommendation} |`);
     }
     lines.push("");
@@ -5275,8 +5306,10 @@ function buildReadme(
     // cross-reference, that fact is only discoverable by noticing the same unique_name in
     // two unrelated tables; flagging it here means a renamed object that never actually
     // shipped — and therefore can't be the thing an existing BI report or dashboard broke
-    // on — doesn't have to be chased down by hand.
-    const omittedItemNames = new Set(omissions.map((o) => o.item));
+    // on — doesn't have to be chased down by hand. Only items actually excluded from output
+    // count here — an item.included === true row (see Flagged for Review above) did ship,
+    // so it can't be the explanation for a renamed object never reaching the deployed model.
+    const omittedItemNames = new Set(itemLevel.map((o) => o.item).concat(structural.map((o) => o.item)));
     lines.push("### Renamed Objects (Name Collisions)", "");
     lines.push(
       "The following objects share a name with a different object elsewhere in the schema " +
