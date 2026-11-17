@@ -3331,16 +3331,23 @@ function collectAttributeDimensionOwnership(
  *
  * `refId` names the ref-path (not a key-ref id directly) — refPathIdToKeyRefId bridges it to
  * the key-ref id that actually carries it, which keyMap then resolves to every dataset bound
- * to that id. `to.level` names a level of THIS (host) dimension, not the target's — confirmed
- * against the reference `dim_room.yml`/`dim-property` example in resources/verticals: the
- * live engine looks it up as one of the host dimension's own attributes and rejects the
- * relationship outright if it isn't. The keyed-attribute-ref's own enclosing level is exactly
- * that — the host-side grain this snowflake join attaches to — so the caller passes it in
- * rather than this function trying to derive one from the target side.
+ * to that id. `to.level` names a level of the TARGET dimension, not the host's — confirmed by
+ * a live validation error on real customer data ("the dimension 'Client' has no attribute:
+ * 'Membership'") after this function spent a while emitting the host's own enclosing level
+ * name instead. The resources/verticals `dim_room.yml`/`dim-property` reference example this
+ * was originally read from doesn't actually distinguish the two: its target level
+ * (`la_property_id`) happens to be named identically on both the host and target dimensions,
+ * so either interpretation produced the same string there. attrId is itself some level's own
+ * primary-attribute in the target dimension (that's how attrIdToDimName learns the target
+ * dimension in the first place) — primaryAttrIdToLevelRef, already computed once for exactly
+ * this id by collectAttributeDimensionOwnership, gives that level's own disambiguated
+ * unique_name directly, so there's no reason to re-derive it here.
  *
  * Returns undefined (caller reports an omission) when the join can't be traced end to end: no
  * bridging key-ref, no entry for the host dataset itself, no complete counterpart, the target
- * attribute's owning dimension is unknown, or it resolves back to this same dimension.
+ * attribute's owning dimension is unknown, it resolves back to this same dimension, or attrId
+ * isn't itself a level's primary-attribute anywhere (e.g. it's only ever a secondary
+ * attribute) — there's no single target level to name in that case.
  *
  * A key-ref id names an abstract <attribute-key>, not a join-specific pairing, so it can be
  * redeclared by other, unrelated datasets elsewhere in the schema — keyMap.get(hostKeyRefId)
@@ -3353,15 +3360,18 @@ function resolveSnowflakeRelationship(
   refId: string,
   attrId: string,
   hostDimName: string,
-  hostLevelUniqueName: string,
   hostDatasetName: string,
   keyMap: Map<string, KeyRefEntry[]>,
   refPathIdToKeyRefId: Map<string, string>,
   attrIdToDimName: Map<string, string>,
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): DimMeta["snowflakeRelationships"][number] | undefined {
   const hostKeyRefId = refPathIdToKeyRefId.get(refId);
   const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
   if (!entries || entries.length < 2) return undefined;
+
+  const targetLevelRef = primaryAttrIdToLevelRef.get(attrId);
+  if (!targetLevelRef) return undefined;
 
   // unique="true"/"false" turns out not to carry any real signal here — real customer data
   // has shown confirmed-correct joins on both sides of that flag, so this no longer looks at
@@ -3388,14 +3398,14 @@ function resolveSnowflakeRelationship(
   if (!targetEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
-  if (!targetDimName || targetDimName === hostDimName) return undefined;
+  if (!targetDimName || targetDimName === hostDimName || targetLevelRef.dimName !== targetDimName) return undefined;
 
   return {
     uniqueName: `${hostDimName.replace(/\s+/g, "")}_${targetDimName.replace(/\s+/g, "")}`,
     fromDataset: `${hostEntry.datasetName}.dataset`,
     fromColumns: hostEntry.columns,
     toDimension: targetDimName,
-    toLevel: hostLevelUniqueName,
+    toLevel: targetLevelRef.levelUniqueName,
   };
 }
 
@@ -3782,30 +3792,17 @@ function buildDimensionYaml(
         const refId = a(kref, "ref-id");
         if (!attrId) continue;
         if (refId) {
-          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName, primaryAttrIdToLevelRef);
           if (resolved) {
-            // The engine requires a relationship's to.level key to have the same column
-            // count as its own join_columns. That holds when the enclosing level's key IS
-            // the join key (e.g. a single-attribute level joining on its own one column),
-            // but not when the level is keyed on something else entirely (e.g. a
-            // composite-keyed bridge level hosting several unrelated single-column FKs as
-            // secondary attributes) — there the containing level's key arity never matches
-            // any individual FK's. Give the join its own single-purpose level, keyed by the
-            // same columns the join itself uses, so the two arities always agree.
-            if (resolved.fromColumns.length !== keyColumns.length) {
-              const kaDef = attrDef.get(attrId);
-              const ownLevelName = truncateUniqueName(safeName(kaDef?.name ?? attrId));
-              if (!levelAttrMap.has(ownLevelName)) {
-                levelAttrMap.set(ownLevelName, {
-                  uniqueName: ownLevelName,
-                  label: kaDef?.caption ?? kaDef?.name ?? ownLevelName,
-                  dataset: resolved.fromDataset,
-                  keyColumns: resolved.fromColumns,
-                  nameColumn: resolved.fromColumns[resolved.fromColumns.length - 1],
-                });
-              }
-              resolved.toLevel = ownLevelName;
-            }
+            // Previously this block overwrote resolved.toLevel with a level created on the
+            // HOST side whenever the join's own column count didn't match the enclosing
+            // host level's key arity — built on the same incorrect assumption the
+            // resolveSnowflakeRelationship doc comment describes above (that to.level names
+            // a host-side level). Now that toLevel correctly names the TARGET dimension's
+            // own level (from primaryAttrIdToLevelRef, built from the target's own key
+            // definition), there's no host-side arity to reconcile it with — the target
+            // level's arity already agrees with fromColumns by construction, since both
+            // trace back to the same abstract key-ref.
             if (!metaSnowflakeRelationships.some((r) => r.uniqueName === resolved.uniqueName)) {
               metaSnowflakeRelationships.push(resolved);
             }
