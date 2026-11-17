@@ -2440,14 +2440,17 @@ function safeName(s: string): string {
     .replace(/>=/g, "_ge_")
     .replace(/</g, "_lt_")
     .replace(/>/g, "_gt_")
-    // Same reasoning for % and $: a schema can legitimately define both a percentage and a
-    // dollar-amount variant of the same calc member name (e.g. "Contr Margin %" and
-    // "Contr Margin $", or a plain "Foo" alongside "Foo %") — two objects that were never
+    // $ still gets spelled out for the same reason "%" used to: a schema can legitimately
+    // define both a dollar-amount and a non-dollar variant of the same calc member name
+    // (e.g. "Contr Margin $" alongside a plain "Contr Margin") — two objects that were never
     // actually in conflict. Stripping the symbol to an indistinguishable "_" (which then
     // collapses away entirely, since it's almost always trailing) makes them collide here
     // even though neither the product nor the user ever treated them as duplicates,
-    // triggering an unnecessary collision rename for two objects that didn't need one.
-    .replace(/%/g, "_pct")
+    // triggering an unnecessary collision rename for two objects that didn't need one. "%" is
+    // left alone instead and allowed through the generic strip below, for the same reason a
+    // plain space is: no SML requirement forces it to become anything else, and spelling it
+    // out as "_pct" changed the deployed query name for every percentage-named measure with
+    // no corresponding benefit.
     .replace(/\$/g, "_usd")
     // Same reasoning again for "." — confirmed on real customer data: "Avg Trade Count" and
     // "Avg. Trade Count" (an abbreviation-style period, not a decimal) are two different,
@@ -2479,8 +2482,7 @@ function safeName(s: string): string {
     // substitutions in the first place. There's no SML requirement an identifier can't start
     // or end with "_" — this was the same unverified "cleanup" mistake as the two above it,
     // just not yet caught on real data until now.
-    .replace(/[^a-zA-Z0-9_\- ]/g, "_");
-    ;
+    .replace(/[^a-zA-Z0-9_\-% ]/g, "_");
 }
 
 /** SML unique_name values must not exceed this length. */
@@ -2655,10 +2657,22 @@ function rewriteDimensionRefs(text: string, dimRefMap: Map<string, Map<string, s
   });
 }
 
-/** Convert a name to a safe filename (lowercase, hyphens). */
+/**
+ * Convert a name to a safe filename (lowercase, hyphens).
+ *
+ * Unlike safeName(), "%" is spelled out here rather than left alone: safeName() preserves a
+ * literal "%" in unique_name because two calculated members like "Contr Margin %" and "Contr
+ * Margin" are genuinely distinct objects that were never in conflict (see safeName()'s
+ * comment). But a filename can't represent "%" at all — the generic strip below collapses it
+ * to "-", which then trims away as a trailing/duplicate separator, so both names land on the
+ * identical path calculations/contr-margin.yml and the second one silently overwrites the
+ * first in the output map. Spelling it out here keeps the filenames distinct while leaving
+ * unique_name itself untouched.
+ */
 function safeFilename(s: string): string {
   return s
     .toLowerCase()
+    .replace(/%/g, "pct")
     .replace(/[^a-z0-9\-_.]/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^-|-$/g, "");
