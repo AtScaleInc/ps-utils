@@ -2298,6 +2298,12 @@ interface DimMeta {
     uniqueName: string;
     fromDataset: string;
     fromColumns: string[];
+    /** The HOST's own hierarchy/level this relationship originates from — required by the
+     *  live engine for an embedded relationship (confirmed by a real "Non-existing hierarchy
+     *  named 'undefined'" validation error when these were omitted); the SML reference docs
+     *  mark both optional, but that's only true for type: snowflake. */
+    fromHierarchy: string;
+    fromLevel: string;
     toDimension: string;
     toLevel: string;
   }>;
@@ -2434,14 +2440,17 @@ function safeName(s: string): string {
     .replace(/>=/g, "_ge_")
     .replace(/</g, "_lt_")
     .replace(/>/g, "_gt_")
-    // Same reasoning for % and $: a schema can legitimately define both a percentage and a
-    // dollar-amount variant of the same calc member name (e.g. "Contr Margin %" and
-    // "Contr Margin $", or a plain "Foo" alongside "Foo %") — two objects that were never
+    // $ still gets spelled out for the same reason "%" used to: a schema can legitimately
+    // define both a dollar-amount and a non-dollar variant of the same calc member name
+    // (e.g. "Contr Margin $" alongside a plain "Contr Margin") — two objects that were never
     // actually in conflict. Stripping the symbol to an indistinguishable "_" (which then
     // collapses away entirely, since it's almost always trailing) makes them collide here
     // even though neither the product nor the user ever treated them as duplicates,
-    // triggering an unnecessary collision rename for two objects that didn't need one.
-    .replace(/%/g, "_pct")
+    // triggering an unnecessary collision rename for two objects that didn't need one. "%" is
+    // left alone instead and allowed through the generic strip below, for the same reason a
+    // plain space is: no SML requirement forces it to become anything else, and spelling it
+    // out as "_pct" changed the deployed query name for every percentage-named measure with
+    // no corresponding benefit.
     .replace(/\$/g, "_usd")
     // Same reasoning again for "." — confirmed on real customer data: "Avg Trade Count" and
     // "Avg. Trade Count" (an abbreviation-style period, not a decimal) are two different,
@@ -2473,8 +2482,7 @@ function safeName(s: string): string {
     // substitutions in the first place. There's no SML requirement an identifier can't start
     // or end with "_" — this was the same unverified "cleanup" mistake as the two above it,
     // just not yet caught on real data until now.
-    .replace(/[^a-zA-Z0-9_\- ]/g, "_");
-    ;
+    .replace(/[^a-zA-Z0-9_\-% ]/g, "_");
 }
 
 /** SML unique_name values must not exceed this length. */
@@ -2649,10 +2657,22 @@ function rewriteDimensionRefs(text: string, dimRefMap: Map<string, Map<string, s
   });
 }
 
-/** Convert a name to a safe filename (lowercase, hyphens). */
+/**
+ * Convert a name to a safe filename (lowercase, hyphens).
+ *
+ * Unlike safeName(), "%" is spelled out here rather than left alone: safeName() preserves a
+ * literal "%" in unique_name because two calculated members like "Contr Margin %" and "Contr
+ * Margin" are genuinely distinct objects that were never in conflict (see safeName()'s
+ * comment). But a filename can't represent "%" at all — the generic strip below collapses it
+ * to "-", which then trims away as a trailing/duplicate separator, so both names land on the
+ * identical path calculations/contr-margin.yml and the second one silently overwrites the
+ * first in the output map. Spelling it out here keeps the filenames distinct while leaving
+ * unique_name itself untouched.
+ */
 function safeFilename(s: string): string {
   return s
     .toLowerCase()
+    .replace(/%/g, "pct")
     .replace(/[^a-z0-9\-_.]/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^-|-$/g, "");
@@ -3331,16 +3351,23 @@ function collectAttributeDimensionOwnership(
  *
  * `refId` names the ref-path (not a key-ref id directly) — refPathIdToKeyRefId bridges it to
  * the key-ref id that actually carries it, which keyMap then resolves to every dataset bound
- * to that id. `to.level` names a level of THIS (host) dimension, not the target's — confirmed
- * against the reference `dim_room.yml`/`dim-property` example in resources/verticals: the
- * live engine looks it up as one of the host dimension's own attributes and rejects the
- * relationship outright if it isn't. The keyed-attribute-ref's own enclosing level is exactly
- * that — the host-side grain this snowflake join attaches to — so the caller passes it in
- * rather than this function trying to derive one from the target side.
+ * to that id. `to.level` names a level of the TARGET dimension, not the host's — confirmed by
+ * a live validation error on real customer data ("the dimension 'Client' has no attribute:
+ * 'Membership'") after this function spent a while emitting the host's own enclosing level
+ * name instead. The resources/verticals `dim_room.yml`/`dim-property` reference example this
+ * was originally read from doesn't actually distinguish the two: its target level
+ * (`la_property_id`) happens to be named identically on both the host and target dimensions,
+ * so either interpretation produced the same string there. attrId is itself some level's own
+ * primary-attribute in the target dimension (that's how attrIdToDimName learns the target
+ * dimension in the first place) — primaryAttrIdToLevelRef, already computed once for exactly
+ * this id by collectAttributeDimensionOwnership, gives that level's own disambiguated
+ * unique_name directly, so there's no reason to re-derive it here.
  *
  * Returns undefined (caller reports an omission) when the join can't be traced end to end: no
  * bridging key-ref, no entry for the host dataset itself, no complete counterpart, the target
- * attribute's owning dimension is unknown, or it resolves back to this same dimension.
+ * attribute's owning dimension is unknown, it resolves back to this same dimension, or attrId
+ * isn't itself a level's primary-attribute anywhere (e.g. it's only ever a secondary
+ * attribute) — there's no single target level to name in that case.
  *
  * A key-ref id names an abstract <attribute-key>, not a join-specific pairing, so it can be
  * redeclared by other, unrelated datasets elsewhere in the schema — keyMap.get(hostKeyRefId)
@@ -3353,39 +3380,56 @@ function resolveSnowflakeRelationship(
   refId: string,
   attrId: string,
   hostDimName: string,
+  hostHierUniqueName: string,
   hostLevelUniqueName: string,
   hostDatasetName: string,
   keyMap: Map<string, KeyRefEntry[]>,
   refPathIdToKeyRefId: Map<string, string>,
   attrIdToDimName: Map<string, string>,
+  primaryAttrIdToLevelRef: Map<string, { dimName: string; hierUniqueName: string; levelUniqueName: string }>,
 ): DimMeta["snowflakeRelationships"][number] | undefined {
   const hostKeyRefId = refPathIdToKeyRefId.get(refId);
   const entries = hostKeyRefId ? keyMap.get(hostKeyRefId) : undefined;
   if (!entries || entries.length < 2) return undefined;
 
-  // The host side is always just whichever redeclaration actually belongs to this level's
-  // own dataset — known for certain regardless of how many other datasets redeclare the same
-  // abstract key. The target is whichever OTHER redeclaration is complete; this used to also
-  // require the target be unique, but only when there were exactly two redeclarations — and
-  // that extra requirement rejected a real, confirmed-correct target on real customer data: a
-  // key-ref can be legitimately non-unique (more than one row on the target side can share a
-  // key value) and still be exactly the join this embedded relationship represents. The
-  // >2-entries case had already dropped the uniqueness requirement for this same reason, but
-  // there was never a reason the count of OTHER redeclarations should change whether
-  // uniqueness is required, since hostEntry is found the same way regardless of count.
-  const hostEntry = entries.find((e) => e.datasetName === hostDatasetName);
-  const targetEntry = entries.find((e) => e.complete === "true" && e !== hostEntry);
-  if (!targetEntry || !hostEntry) return undefined;
+  const targetLevelRef = primaryAttrIdToLevelRef.get(attrId);
+  if (!targetLevelRef) return undefined;
+
+  // unique="true"/"false" turns out not to carry any real signal here — real customer data
+  // has shown confirmed-correct joins on both sides of that flag, so this no longer looks at
+  // it at all. completeness is the only thing that matters:
+  //
+  // The host's own dataset can redeclare this abstract key more than once — confirmed on real
+  // data as two entries for the exact same dataset, one complete (a real column) and one not
+  // (just a <ref-path> pointer carrying no new information, there only to attach the ref-id
+  // this function was asked to resolve). When the host's own dataset has ANY complete
+  // redeclaration, that one is self-sufficient — it already has everything fromColumns needs,
+  // and nothing from a different dataset is required to "confirm" it.
+  //
+  // Only when every one of the host's own redeclarations is incomplete (no column of its own
+  // at all — confirmed on different real data, a different dataset's complete redeclaration
+  // of the same key) does this fall back to borrowing a DIFFERENT dataset's complete entry.
+  // fromColumns still comes from the host's own (incomplete-looking but column-bearing) entry
+  // in that case — the other dataset's entry is only ever used to confirm the key concept is
+  // real, never as the actual column source.
+  const hostCandidates = entries.filter((e) => e.datasetName === hostDatasetName);
+  const hostEntry = hostCandidates.find((e) => e.complete === "true") ?? hostCandidates[0];
+  if (!hostEntry) return undefined;
+  const targetEntry =
+    hostEntry.complete === "true" ? hostEntry : entries.find((e) => e.complete === "true" && e !== hostEntry);
+  if (!targetEntry) return undefined;
 
   const targetDimName = attrIdToDimName.get(attrId);
-  if (!targetDimName || targetDimName === hostDimName) return undefined;
+  if (!targetDimName || targetDimName === hostDimName || targetLevelRef.dimName !== targetDimName) return undefined;
 
   return {
     uniqueName: `${hostDimName.replace(/\s+/g, "")}_${targetDimName.replace(/\s+/g, "")}`,
     fromDataset: `${hostEntry.datasetName}.dataset`,
     fromColumns: hostEntry.columns,
+    fromHierarchy: hostHierUniqueName,
+    fromLevel: hostLevelUniqueName,
     toDimension: targetDimName,
-    toLevel: hostLevelUniqueName,
+    toLevel: targetLevelRef.levelUniqueName,
   };
 }
 
@@ -3635,6 +3679,13 @@ function buildDimensionYaml(
 
   for (const hierEl of arr(dimEl.hierarchy)) {
     const hierName = a(hierEl, "name") ?? "Hierarchy";
+    // This dimension's own hierarchy unique_name, already disambiguated once by
+    // collectAttributeDimensionOwnership — needed below as the host side of an embedded
+    // relationship's from.hierarchy, so it has to agree with the SAME name buildDimensionYaml
+    // itself gives this hierarchy later in this function (the hierarchies: array below).
+    const hierId = a(hierEl, "id");
+    const hostHierUniqueName =
+      (hierId && hierarchyIdToRef.get(hierId)?.hierUniqueName) || truncateUniqueName(safeName(hierName));
     const hierProps = first(arr(hierEl.properties)) as Record<string, unknown> | undefined;
     const hierCaption = hierProps ? s(first(arr(hierProps.caption))) : undefined;
     const hierFolder = hierProps ? s(first(arr(hierProps.folder))) : undefined;
@@ -3772,30 +3823,17 @@ function buildDimensionYaml(
         const refId = a(kref, "ref-id");
         if (!attrId) continue;
         if (refId) {
-          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, levelUniqueName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName);
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, hostHierUniqueName, levelUniqueName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName, primaryAttrIdToLevelRef);
           if (resolved) {
-            // The engine requires a relationship's to.level key to have the same column
-            // count as its own join_columns. That holds when the enclosing level's key IS
-            // the join key (e.g. a single-attribute level joining on its own one column),
-            // but not when the level is keyed on something else entirely (e.g. a
-            // composite-keyed bridge level hosting several unrelated single-column FKs as
-            // secondary attributes) — there the containing level's key arity never matches
-            // any individual FK's. Give the join its own single-purpose level, keyed by the
-            // same columns the join itself uses, so the two arities always agree.
-            if (resolved.fromColumns.length !== keyColumns.length) {
-              const kaDef = attrDef.get(attrId);
-              const ownLevelName = truncateUniqueName(safeName(kaDef?.name ?? attrId));
-              if (!levelAttrMap.has(ownLevelName)) {
-                levelAttrMap.set(ownLevelName, {
-                  uniqueName: ownLevelName,
-                  label: kaDef?.caption ?? kaDef?.name ?? ownLevelName,
-                  dataset: resolved.fromDataset,
-                  keyColumns: resolved.fromColumns,
-                  nameColumn: resolved.fromColumns[resolved.fromColumns.length - 1],
-                });
-              }
-              resolved.toLevel = ownLevelName;
-            }
+            // Previously this block overwrote resolved.toLevel with a level created on the
+            // HOST side whenever the join's own column count didn't match the enclosing
+            // host level's key arity — built on the same incorrect assumption the
+            // resolveSnowflakeRelationship doc comment describes above (that to.level names
+            // a host-side level). Now that toLevel correctly names the TARGET dimension's
+            // own level (from primaryAttrIdToLevelRef, built from the target's own key
+            // definition), there's no host-side arity to reconcile it with — the target
+            // level's arity already agrees with fromColumns by construction, since both
+            // trace back to the same abstract key-ref.
             if (!metaSnowflakeRelationships.some((r) => r.uniqueName === resolved.uniqueName)) {
               metaSnowflakeRelationships.push(resolved);
             }
@@ -4154,7 +4192,12 @@ function buildDimensionYaml(
     // dimension"). Despite its name, this list never contains a same-dimension join.
     obj.relationships = metaSnowflakeRelationships.map((r) => ({
       unique_name: r.uniqueName,
-      from: { dataset: r.fromDataset, join_columns: r.fromColumns },
+      from: {
+        dataset: r.fromDataset,
+        join_columns: r.fromColumns,
+        hierarchy: r.fromHierarchy,
+        level: r.fromLevel,
+      },
       to: { dimension: r.toDimension, level: r.toLevel },
       type: "embedded",
     }));
