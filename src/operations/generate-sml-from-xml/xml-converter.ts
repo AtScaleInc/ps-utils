@@ -2298,6 +2298,12 @@ interface DimMeta {
     uniqueName: string;
     fromDataset: string;
     fromColumns: string[];
+    /** The HOST's own hierarchy/level this relationship originates from — required by the
+     *  live engine for an embedded relationship (confirmed by a real "Non-existing hierarchy
+     *  named 'undefined'" validation error when these were omitted); the SML reference docs
+     *  mark both optional, but that's only true for type: snowflake. */
+    fromHierarchy: string;
+    fromLevel: string;
     toDimension: string;
     toLevel: string;
   }>;
@@ -3360,6 +3366,8 @@ function resolveSnowflakeRelationship(
   refId: string,
   attrId: string,
   hostDimName: string,
+  hostHierUniqueName: string,
+  hostLevelUniqueName: string,
   hostDatasetName: string,
   keyMap: Map<string, KeyRefEntry[]>,
   refPathIdToKeyRefId: Map<string, string>,
@@ -3404,6 +3412,8 @@ function resolveSnowflakeRelationship(
     uniqueName: `${hostDimName.replace(/\s+/g, "")}_${targetDimName.replace(/\s+/g, "")}`,
     fromDataset: `${hostEntry.datasetName}.dataset`,
     fromColumns: hostEntry.columns,
+    fromHierarchy: hostHierUniqueName,
+    fromLevel: hostLevelUniqueName,
     toDimension: targetDimName,
     toLevel: targetLevelRef.levelUniqueName,
   };
@@ -3655,6 +3665,13 @@ function buildDimensionYaml(
 
   for (const hierEl of arr(dimEl.hierarchy)) {
     const hierName = a(hierEl, "name") ?? "Hierarchy";
+    // This dimension's own hierarchy unique_name, already disambiguated once by
+    // collectAttributeDimensionOwnership — needed below as the host side of an embedded
+    // relationship's from.hierarchy, so it has to agree with the SAME name buildDimensionYaml
+    // itself gives this hierarchy later in this function (the hierarchies: array below).
+    const hierId = a(hierEl, "id");
+    const hostHierUniqueName =
+      (hierId && hierarchyIdToRef.get(hierId)?.hierUniqueName) || truncateUniqueName(safeName(hierName));
     const hierProps = first(arr(hierEl.properties)) as Record<string, unknown> | undefined;
     const hierCaption = hierProps ? s(first(arr(hierProps.caption))) : undefined;
     const hierFolder = hierProps ? s(first(arr(hierProps.folder))) : undefined;
@@ -3792,7 +3809,7 @@ function buildDimensionYaml(
         const refId = a(kref, "ref-id");
         if (!attrId) continue;
         if (refId) {
-          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName, primaryAttrIdToLevelRef);
+          const resolved = resolveSnowflakeRelationship(refId, attrId, dimName, hostHierUniqueName, levelUniqueName, authEntry.datasetName, keyMap, refPathIdToKeyRefId, attrIdToDimName, primaryAttrIdToLevelRef);
           if (resolved) {
             // Previously this block overwrote resolved.toLevel with a level created on the
             // HOST side whenever the join's own column count didn't match the enclosing
@@ -4161,7 +4178,12 @@ function buildDimensionYaml(
     // dimension"). Despite its name, this list never contains a same-dimension join.
     obj.relationships = metaSnowflakeRelationships.map((r) => ({
       unique_name: r.uniqueName,
-      from: { dataset: r.fromDataset, join_columns: r.fromColumns },
+      from: {
+        dataset: r.fromDataset,
+        join_columns: r.fromColumns,
+        hierarchy: r.fromHierarchy,
+        level: r.fromLevel,
+      },
       to: { dimension: r.toDimension, level: r.toLevel },
       type: "embedded",
     }));
