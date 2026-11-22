@@ -32,6 +32,7 @@
         "generate-report-from-sml",
         "generate-shared-model-plan",
         "apply-shared-model-plan-option",
+        "generate-dc-cube-from-sml",
         "apply-style-to-sml",
         "generate-sml-docs",
         "clean-unused-sml-objects",
@@ -1138,6 +1139,90 @@
           "role": "scalar",
           "required": false,
           "default": null
+        }
+      ]
+    },
+    "generate-dc-cube-from-sml": {
+      "description": "Read an SML directory and generate a Data Catalog Cube — an AtScale model of every metric → fact → dimension → attribute path — plus the model mapping tables as SQL, CSV and SML datasets",
+      "group": "SML Creation and Manipulation",
+      "contexts": [
+        "folder"
+      ],
+      "targetParam": {
+        "folder": "sml-dir"
+      },
+      "params": [
+        {
+          "name": "sml-dir",
+          "description": "Path to the SML directory to catalog (contains datasets/, dimensions/, metrics/, models/)",
+          "type": "string",
+          "role": "input-dir",
+          "required": true,
+          "default": null
+        },
+        {
+          "name": "output-dir",
+          "description": "Directory the Data Catalog Cube's SML files are written into. Defaults to --sml-dir, so the cube deploys with the catalog it describes.",
+          "type": "string",
+          "role": "output-dir",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "connection-id",
+          "description": "SML connection unique_name for the catalog datasets. Defaults to the connection of the first catalogued fact dataset.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "schema",
+          "description": "Schema the SQL load script creates its tables in. Defaults to the connection's schema; tables are unqualified if it has none.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "dataset-table",
+          "description": "Physical table for the catalog dataset (load it with the SQL script or CSV). Omit to embed the rows as an inline VALUES query, which needs no table.",
+          "type": "string",
+          "role": "scalar",
+          "required": false,
+          "default": null
+        },
+        {
+          "name": "include-mapping-datasets",
+          "description": "Also write the five mapping tables (model_metrics, model_relationships, model_dimension_attributes, model_metric_coverage, model_issues) as SML query datasets.",
+          "type": "boolean",
+          "role": "scalar",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "csv-output-file",
+          "description": "Path for the catalog rows as CSV. Relative paths are written inside --output-dir.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": "data_catalog/data_catalog_relationships.csv"
+        },
+        {
+          "name": "mapping-output-dir",
+          "description": "Directory for the mapping tables as CSV, one file per table. Relative paths are written inside --output-dir.",
+          "type": "string",
+          "role": "output-dir",
+          "required": false,
+          "default": "data_catalog/mapping"
+        },
+        {
+          "name": "sql-output-file",
+          "description": "Path for the SQL script that creates and loads the catalog and mapping tables. Relative paths are written inside --output-dir.",
+          "type": "string",
+          "role": "output-file",
+          "required": false,
+          "default": "data_catalog/data_catalog.sql"
         }
       ]
     },

@@ -19,6 +19,7 @@ import { GenerateReportFromSMLOperation } from "./generate-report-from-sml/Gener
 import { ApplyStyleToSMLOperation } from "./apply-style-to-sml/ApplyStyleToSMLOperation.js";
 import { GenerateSMLDocsOperation } from "./generate-sml-docs/GenerateSMLDocsOperation.js";
 import { CleanUnusedSMLObjectsOperation } from "./clean-unused-sml-objects/CleanUnusedSMLObjectsOperation.js";
+import { GenerateDCCubeFromSMLOperation } from "./generate-dc-cube-from-sml/GenerateDCCubeFromSMLOperation.js";
 import { ExtractModelFromSMLOperation } from "./extract-model-from-sml/ExtractModelFromSMLOperation.js";
 import { GenerateNamespaceFromModelOperation } from "./generate-namespace-from-model/GenerateNamespaceFromModelOperation.js";
 import { GenerateMetricsFromModelOperation } from "./generate-metrics-from-model/GenerateMetricsFromModelOperation.js";
@@ -84,6 +85,7 @@ export async function buildRegistry(
   registry.register(new GenerateSMLFromSsasMultidimensionalOperation(services, logger));
   registry.register(new GenerateReportFromXMLOperation(services, logger));
   registry.register(new GenerateReportFromSMLOperation(services, logger));
+  registry.register(new GenerateDCCubeFromSMLOperation(services, logger));
   registry.register(new ApplyStyleToSMLOperation(services, logger));
   registry.register(new GenerateSMLDocsOperation(services, logger));
   registry.register(new CleanUnusedSMLObjectsOperation(services, logger));

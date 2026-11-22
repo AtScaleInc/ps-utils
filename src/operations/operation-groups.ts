@@ -48,6 +48,7 @@ export const OPERATION_GROUPS: OperationGroup[] = [
       "generate-report-from-sml",
       "generate-shared-model-plan",
       "apply-shared-model-plan-option",
+      "generate-dc-cube-from-sml",
       "apply-style-to-sml",
       "generate-sml-docs",
       "clean-unused-sml-objects",

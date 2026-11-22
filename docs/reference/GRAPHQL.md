@@ -29,6 +29,7 @@
     - [`generateReportFromSml`](#generatereportfromsml)
     - [`generateSharedModelPlan`](#generatesharedmodelplan)
     - [`applySharedModelPlanOption`](#applysharedmodelplanoption)
+    - [`generateDcCubeFromSml`](#generatedccubefromsml)
     - [`applyStyleToSml`](#applystyletosml)
     - [`generateSmlDocs`](#generatesmldocs)
     - [`cleanUnusedSmlObjects`](#cleanunusedsmlobjects)
@@ -959,6 +960,49 @@ curl -X POST http://localhost:4000/graphql \
   -F 'operations={"query":"mutation($f:Upload!){applySharedModelPlanOption(input:{planFileUpload:$f,sharedDir:\"value\"}){success output error}}","variables":{"f":null}}' \
   -F 'map={"f":["variables.f"]}' \
   -F 'f=@/path/to/file'
+```
+
+---
+
+### `generateDcCubeFromSml`
+
+[↑ Table of Contents](#table-of-contents)
+
+> Read an SML directory and generate a Data Catalog Cube — an AtScale model of every metric → fact → dimension → attribute path — plus the model mapping tables as SQL, CSV and SML datasets
+
+**CLI name:** `generate-dc-cube-from-sml`  |  **REST:** `POST /rest/generate-dc-cube-from-sml`
+
+| Input field | GraphQL type | Required | Description |
+|-------------|-------------|----------|-------------|
+| `smlDir` | `String` | Yes | Path to the SML directory to catalog (contains datasets/, dimensions/, metrics/, models/) |
+| `outputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `connectionId` | `String` | No | SML connection unique_name for the catalog datasets. Defaults to the connection of the first catalogued fact dataset. |
+| `schema` | `String` | No | Schema the SQL load script creates its tables in. Defaults to the connection's schema; tables are unqualified if it has none. |
+| `datasetTable` | `String` | No | Physical table for the catalog dataset (load it with the SQL script or CSV). Omit to embed the rows as an inline VALUES query, which needs no table. |
+| `includeMappingDatasets` | `Boolean` | No | Also write the five mapping tables (model_metrics, model_relationships, model_dimension_attributes, model_metric_coverage, model_issues) as SML query datasets. |
+| `csvOutputFile` | `String` | — | *Server-managed output path — do not pass* |
+| `mappingOutputDir` | `String` | — | *Server-managed output path — do not pass* |
+| `sqlOutputFile` | `String` | — | *Server-managed output path — do not pass* |
+
+**GraphQL:**
+
+```graphql
+mutation {
+  generateDcCubeFromSml(input: {
+    smlDir: "value"
+  }) {
+    success output error
+    file { filename content mimeType }
+  }
+}
+```
+
+**curl:**
+
+```bash
+curl -X POST http://localhost:4000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query":"mutation{generateDcCubeFromSml(input:{smlDir: \"value\"}){success output error file{filename content mimeType}}}"}'
 ```
 
 ---
@@ -3368,6 +3412,28 @@ input GenerateReportFromSmlInput {
   title: String
 }
 
+"""Read an SML directory and generate a Data Catalog Cube — an AtScale model of every metric → fact → dimension → attribute path — plus the model mapping tables as SQL, CSV and SML datasets"""
+input GenerateDcCubeFromSmlInput {
+  """Path to the SML directory to catalog (contains datasets/, dimensions/, metrics/, models/)"""
+  smlDir: String!
+  """Directory the Data Catalog Cube's SML files are written into. Defaults to --sml-dir, so the cube deploys with the catalog it describes."""
+  outputDir: String
+  """SML connection unique_name for the catalog datasets. Defaults to the connection of the first catalogued fact dataset."""
+  connectionId: String
+  """Schema the SQL load script creates its tables in. Defaults to the connection's schema; tables are unqualified if it has none."""
+  schema: String
+  """Physical table for the catalog dataset (load it with the SQL script or CSV). Omit to embed the rows as an inline VALUES query, which needs no table."""
+  datasetTable: String
+  """Also write the five mapping tables (model_metrics, model_relationships, model_dimension_attributes, model_metric_coverage, model_issues) as SML query datasets."""
+  includeMappingDatasets: Boolean
+  """Path for the catalog rows as CSV. Relative paths are written inside --output-dir."""
+  csvOutputFile: String
+  """Directory for the mapping tables as CSV, one file per table. Relative paths are written inside --output-dir."""
+  mappingOutputDir: String
+  """Path for the SQL script that creates and loads the catalog and mapping tables. Relative paths are written inside --output-dir."""
+  sqlOutputFile: String
+}
+
 """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
 input ApplyStyleToSmlInput {
   """Path to the SML output directory to update (must contain datasets/, dimensions/, metrics/ subdirectories)"""
@@ -4258,6 +4324,8 @@ type Mutation {
   generateReportFromXml(input: GenerateReportFromXmlInput): OperationResult!
   """Read an SML directory and generate a complete, human-readable Markdown report of every object — connections, datasets, joins, dimensions, hierarchies, levels, attributes, models, metrics, calculations, and more"""
   generateReportFromSml(input: GenerateReportFromSmlInput): OperationResult!
+  """Read an SML directory and generate a Data Catalog Cube — an AtScale model of every metric → fact → dimension → attribute path — plus the model mapping tables as SQL, CSV and SML datasets"""
+  generateDcCubeFromSml(input: GenerateDcCubeFromSmlInput): OperationResult!
   """Re-apply display labels to an existing SML directory using a style config; outputs STYLE.md and STYLE_CHANGES.md"""
   applyStyleToSml(input: ApplyStyleToSmlInput): OperationResult!
   """Read an SML directory and generate Markdown documentation (default README.md) of every SML object — models, dimensions, joins, datasets, metrics, calculations, and more"""
