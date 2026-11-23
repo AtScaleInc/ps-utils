@@ -281,13 +281,17 @@ export async function convertXmlToSml(
   // <keyed-attribute-ref>, which is always a secondary attribute).
   const metricalAttrDef = new Map<string, MetricalAttrDef>();
   // A plain <attribute> can instead carry <properties><dynamic-constraint><user-constraint
-  // enabled="true"/></dynamic-constraint></properties> — AtScale's row-level-security
-  // binding, wiring a hidden dimension/table pair to the engine's per-user constraint
-  // system rather than to a normal fact-to-dimension join. It has no measure/count/sum
-  // type, so the loop below never builds a metricalAttrDef entry for it, but it is still
-  // real, active content — recorded here so the schema-level dimension it's attached to
-  // (checked further down, once schemaDims/referencedDimNames exist) isn't misclassified
-  // as dead schema cruft just because no cube ever joins to it.
+  // enabled="true"/></dynamic-constraint></properties> (or <group-constraint>, AtScale's
+  // group-scoped equivalent — same mechanism, same SML row_security id_type: user | group
+  // distinction) — AtScale's row-level-security binding, wiring a hidden dimension/table pair
+  // to the engine's per-user or per-group constraint system rather than to a normal
+  // fact-to-dimension join. It has no measure/count/sum type, so the loop below never builds
+  // a metricalAttrDef entry for it, but it is still real, active content — recorded here so
+  // the schema-level dimension it's attached to (checked further down, once
+  // schemaDims/referencedDimNames exist) isn't misclassified as dead schema cruft just
+  // because no cube ever joins to it. Confirmed on real customer data missing group-scoped
+  // security dimensions entirely (e.g. "Buyer Security") until this checked both constraint
+  // kinds — checking only user-constraint silently dropped every group-constraint one.
   const rlsBoundAttrIds = new Set<string>();
   function ingestMetricalAttrs(attrsEl: Record<string, unknown>): void {
     for (const attrEl of arr(attrsEl.attribute)) {
@@ -299,10 +303,11 @@ export async function convertXmlToSml(
         | undefined;
       if (!props) continue;
       const dynamicConstraintEl = first(arr(props["dynamic-constraint"])) as Record<string, unknown> | undefined;
-      const userConstraintEl = dynamicConstraintEl
-        ? (first(arr(dynamicConstraintEl["user-constraint"])) as Record<string, unknown> | undefined)
+      const constraintEl = dynamicConstraintEl
+        ? ((first(arr(dynamicConstraintEl["user-constraint"])) ??
+            first(arr(dynamicConstraintEl["group-constraint"]))) as Record<string, unknown> | undefined)
         : undefined;
-      if (userConstraintEl && a(userConstraintEl, "enabled") !== "false") rlsBoundAttrIds.add(id);
+      if (constraintEl && a(constraintEl, "enabled") !== "false") rlsBoundAttrIds.add(id);
       const typeEl = first(arr(props.type)) as Record<string, unknown> | undefined;
       if (!typeEl) continue;
 
