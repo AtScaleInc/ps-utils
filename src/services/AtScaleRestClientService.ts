@@ -323,23 +323,16 @@ export class AtScaleEnvironment extends KeycloakEnvironment {
 
     // Step 4: GET /signin/callback?code=… → session cookie(s).
     // 2026.5.x: Set-Cookie: auth_session=…
-    // 2026.7.x: better-auth cookies — __Secure-better-auth.session_token when the instance
-    // is served over https (the "__Secure-" prefix requires the cookie's Secure attribute,
-    // which only better-auth sets on an https connection); plain better-auth.session_token,
-    // no prefix, on an http-only instance such as a local dev stack. Confirmed on a real
-    // local AtScale instance reachable only via http://localhost (its :443 listener doesn't
-    // terminate TLS) — the prefixed-only check here made every cookie-auth deploy to it fail
-    // with a misleading "Keycloak code exchange may have failed", even though the exchange
-    // succeeded and the cookie was right there under its unprefixed name.
+    // 2026.7.x: better-auth cookies (__Secure-better-auth.session_token, …)
     const r4 = await req({ url: callbackUrl, headers: { Cookie: cookieHdr() } });
     addCookies(r4.headers);
 
-    const sessionCookieName = ["auth_session", "__Secure-better-auth.session_token", "better-auth.session_token"]
+    const sessionCookieName = ["auth_session", "__Secure-better-auth.session_token"]
       .find((n) => cookies[n]);
     if (!sessionCookieName) {
       throw new Error(
         `[REST:Auth] /signin/callback did not set a session cookie ` +
-        `(expected auth_session, __Secure-better-auth.session_token, or better-auth.session_token; status ${r4.status}). ` +
+        `(expected auth_session or __Secure-better-auth.session_token; status ${r4.status}). ` +
         `The Keycloak code exchange may have failed.`,
       );
     }
